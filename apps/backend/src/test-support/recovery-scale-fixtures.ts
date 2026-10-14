@@ -30,7 +30,11 @@ export type ScaleActor = { id: string; externalId: string; systems: string[] };
 export type ScaleFixture = Awaited<ReturnType<typeof seedRecoveryScale>>;
 
 /** Logical manifest and row ordering are identical across reset baseline/candidate runs. */
-export async function seedRecoveryScale(db: DbHandle, workspaceId: string) {
+export async function seedRecoveryScale(
+  db: DbHandle,
+  workspaceId: string,
+  options: { analyticsAreas?: boolean } = {},
+) {
   const systems: string[] = [];
   const actors: ScaleActor[] = [];
   for (const [label, roleLevel] of [
@@ -173,6 +177,28 @@ export async function seedRecoveryScale(db: DbHandle, workspaceId: string) {
         );
       }
     }
+    if (options.analyticsAreas) {
+      const areas: string[] = [];
+      for (let n = 0; n < 10; n++) {
+        const id = scaleId(`area-${s}-${n}`);
+        await db.pool.query(
+          `insert into core.analytics_areas(id,workspace_id,managed_system_id,slug,name)
+             values($1,$2,$3,$4,$5)`,
+          [id, workspaceId, system, `${SCALE_PREFIX}-${s}-${n}`, `Scale Area ${n}`],
+        );
+        areas.push(id);
+      }
+      // Eleven buckets per owner: ten Areas and null. Opt-in never changes existing runs.
+      for (const table of ['voc.vocs', 'finding.findings', 'task.tasks', 'survey.surveys']) {
+        await db.pool.query(
+          `with classified as (select id, (row_number() over(order by id) % 11)::int bucket
+               from ${table} where primary_managed_system_id=$1)
+             update ${table} source set analytics_area_id=($2::uuid[])[classified.bucket]
+             from classified where classified.id=source.id`,
+          [system, areas],
+        );
+      }
+    }
     manifest.push({
       label: `system-${s}`,
       id: system,
@@ -285,6 +311,10 @@ export async function cleanupRecoveryScale(db: DbHandle, workspaceId: string) {
   }
   await db.pool.query(
     `delete from permission.permission_requests where requester_actor_id in (${actors})`,
+    args,
+  );
+  await db.pool.query(
+    `delete from core.analytics_areas where managed_system_id in (${systems})`,
     args,
   );
   await deleteRecoveryFixtureParents(

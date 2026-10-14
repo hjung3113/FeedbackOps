@@ -1,8 +1,9 @@
-import { recoveryHistoryQuerySchema, recoveryListQuerySchema, recoveryPresentationPatchSchema } from '@fops/shared';
+import { dashboardAreaReportQuerySchema, recoveryHistoryQuerySchema, recoveryListQuerySchema, recoveryPresentationPatchSchema } from '@fops/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { hasElevatedFindingRole } from '../findings/authorization.js';
 
-import { fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -48,6 +49,35 @@ export const dashboardRoutes: FastifyPluginAsync<{
       actor_id: session.actor_id, workspace_id: session.workspace_id, role_level: session.role_level,
     }, parsed.data));
   });
+  app.get(
+    '/dashboard/analytics-areas',
+    {
+      preHandler: [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)],
+      ...(opts.rateLimitConfig?.read
+        ? { config: { rateLimit: opts.rateLimitConfig.read as never } }
+        : {}),
+    },
+    async (req, reply) => {
+      const session = req.session;
+      if (!session) throw new Error('session missing after middleware');
+      const actor = {
+        actor_id: session.actor_id,
+        workspace_id: session.workspace_id,
+        role_level: session.role_level,
+      };
+      if (!hasElevatedFindingRole(actor))
+        throw new HttpError('permission.denied', 'elevated role required');
+      const parsed = dashboardAreaReportQuerySchema.safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-cache')
+        .send(await opts.dashboardService.getAreaReport(actor, parsed.data));
+    },
+  );
+
   app.get('/dashboard/summary', {
     preHandler: [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)],
     ...(opts.rateLimitConfig?.read ? { config: { rateLimit: opts.rateLimitConfig.read as never } } : {}),

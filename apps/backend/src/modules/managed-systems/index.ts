@@ -12,3 +12,5 @@ export { lockManagedSystem, type LockedManagedSystem } from './repo.js';
 
 export { recordResponsibilityDefaultFailure } from './default-diagnostics.js';
 export { readManagedSystemState } from './repo.js';
+
+export { readManagedSystemMetadata } from './report-metadata.js';

@@ -253,10 +253,11 @@ counts, query plans and recorder multi-VOC fanout latency. Batch labels/readabil
 avoid per-item queries/unbounded rows. UI median `readyMs` threshold and visual checks
 follow ADR-0067. These are adopted requirements, not measured PASS evidence.
 
-## Analytics Area Report Contract — accepted, proposed/new (ADR-0069)
+## Analytics Area Report Contract — implemented by #1078 (ADR-0069)
 
 Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
-Not implemented by #1071. This is a sibling read, not a replacement for the summary's VOC-only
+Backend/shared implemented by #1078; integration and scale verification remain conductor-owned.
+This is a sibling read, not a replacement for the summary's VOC-only
 `analytics_areas` projection. Metric definitions and destinations: FR-DASH-002 in
 `docs/design/08-dashboard-system.md`.
 
@@ -271,7 +272,7 @@ Unexpected backing-read failures fail the request rather than converting failure
 Use the configured read rate tier and `Cache-Control: private, no-cache`. No source mutation or
 report-read domain audit event; personal source navigation retains its existing audit contract.
 
-Proposed strict query:
+Strict query (`dashboardAreaReportQuerySchema`):
 
 | Key | Accepted value / default |
 | --- | --- |
@@ -287,7 +288,7 @@ empty results for syntactically valid nonmatching selections. Stable report row 
 Managed System UUID, then Area UUID, with null after assigned Areas. A scope/filter change starts
 paging again; an invalid or incompatible continuation is rejected as `invalid_cursor`.
 
-Proposed response contract (new wire keys; shared schema to be added to
+Strict response contract (`dashboardAreaReportSchema` in
 `packages/shared/src/dashboard.ts`):
 
 - `computed_at`: ISO timestamp for this authorized snapshot; `as_of_date`: UTC ISO date used by overdue predicates.
@@ -300,7 +301,7 @@ Proposed response contract (new wire keys; shared schema to be added to
 - `classification_context`: per-Managed-System entries with independently available VOC/Finding/Task/Survey
   `{ classified, total }` counts before Area filter and paging, under the same source eligibility/read
   predicates as report rows. Across all Area pages including unset, domain totals reconcile exactly.
-- Row domain groups are proposed `voc`, `finding`, `task`, `survey`; keys are independently omitted,
+- Row domain groups are `voc`, `finding`, `task`, `survey`; keys are independently omitted,
   including cross-source metrics within a readable group. Counts are nonnegative integers counting
   distinct source objects. Each actionable positive count carries a typed internal next-action link
   with source route and exact scope/Area/filter search; zero has no repair CTA. Ratios expose
@@ -315,5 +316,41 @@ answer text, respondent metadata, timestamp, response-derived bucket or personal
 happens inside the Survey-owned classifier; personal-read grants never enlarge this response.
 
 Use a fixed set of authorized grouped owner reads plus batch catalog metadata. No loop of personal
-Survey reads or per-Area source-service fanout. New grouped read interfaces are proposed/new owner
+Survey reads or per-Area source-service fanout. Grouped read interfaces are owner barrel
 exports, not permission to import foreign repositories or grant raw Survey-table access.
+
+### Shipped Area report DTO keys (#1078)
+
+Each count is `{ count, link? }`; `link` is emitted only for a positive count and is
+`{ pathname: '/vocs' | '/findings' | '/tasks' | '/surveys', search: Record<string, string> }`.
+`areaReportLink` is the shared source of destination keys. Every link has `managedSystem`
+and `filter.analytics_area` (`unset` for null) plus the exact metric filter in the destination contract.
+Ratios are `{ value, total, link? }`; the optional link opens the complement only when `total > value`.
+No percentage/status fields are emitted, including for a zero denominator.
+
+| Optional group | Exact members |
+| --- | --- |
+| `voc` | `total`, `unassigned`, `high_no_followup` counts; `task_link` ratio (`with_task / total`). |
+| `finding` | `active`, `no_execution` counts; `execution` ratio (`active with execution / active`). |
+| `task` | `by_status` counts for `backlog`, `todo`, `doing`, `review`, `done`, `released`, `reopened`; `in_flight`, `overdue` counts; independently optional `released_update` ratio, `public_update_missing`, `reporter_update_needed` counts. |
+| `survey` | `open`, `follow_up_needed` counts only. |
+
+The three cross-source Task fields are absent unless the actor's VOC read scope covers the row's
+Managed System. Released-update numerator/denominator count Tasks, using active `evidence_of`
+links to non-archived VOCs and existing non-skipped Public Updates. Survey classification stays
+behind the authorized MATERIALIZED set and its aggregate-only classifier; no personal read/audit.
+Classification context totals count all eligible owner-list records, including non-active Findings,
+all seven Task statuses and all Survey statuses, before Area filtering or paging.
+
+Availability uses each owner's point decision per union Managed System, memoized per request;
+zero Surveys still yield an authorized empty Survey group, and an explicit Admin Survey deny omits it.
+Grouped reads have no Area parameter. The Task grouped read returns `as_of_date` from the same
+UTC database clock expression as overdue, even when its source population is empty.
+Cursor binding covers workspace, actor, role, normalized owner scopes/availability and both filters;
+keyset order is System UUID then Area UUID with null last. Invalid cursors have
+`fields: [{ path: ['cursor'], code: 'invalid_cursor' }]` in the standard 422 envelope.
+
+The opt-in `RECOVERY_SCALE=1 AREA_REPORT_SCALE=1` scenario in
+`dashboard/__tests__/recovery-scale.integration.test.ts` records p95, query counts, authorization
+query count and EXPLAIN artifacts with ten Areas plus null per Managed System. Default scale
+fixtures remain unchanged. No report storage, cache, migration or new index is added.

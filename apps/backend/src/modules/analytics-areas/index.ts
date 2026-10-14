@@ -15,3 +15,5 @@ export {
   assertActiveAnalyticsAreaForManagedSystem,
   type AssertActiveAnalyticsAreaOptions,
 } from './assertions.js';
+
+export { readAnalyticsAreaMetadata } from './report-metadata.js';

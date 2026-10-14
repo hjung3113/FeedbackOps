@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
+import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 
 import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
 
@@ -298,6 +299,42 @@ interface ListInput {
   cursor?: ListCursor;
 }
 
+function releasedWithVocPredicate() {
+  return sql`status = 'released' AND EXISTS (
+        SELECT 1
+        FROM core.entity_links_app link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        WHERE link.workspace_id = task.tasks.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = task.tasks.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+      )`;
+}
+function releasedWithPublicUpdatePredicate() {
+  return sql`EXISTS (
+        SELECT 1
+        FROM core.entity_links_app link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        JOIN voc.voc_public_updates public_update
+          ON public_update.voc_id = voc.id
+         AND public_update.skip_public_update = false
+        WHERE link.workspace_id = task.tasks.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = task.tasks.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+      )`;
+}
+
 function listPredicates(input: ListInput) {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
   if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
@@ -325,43 +362,8 @@ function listPredicates(input: ListInput) {
     predicates.push(
       sql`status = 'released' AND ${releasedTaskUnresolvedVocPredicate(input.workspaceId, sql`task.tasks.id`)}`,
     );
-  // Gap side of countReleasedTasksWithPublicUpdate (dashboard/repo.ts):
-  // released, in that denominator, and not in that numerator. Do not import it.
   if (input.publicUpdate === 'missing') {
-    predicates.push(sql`
-      status = 'released'
-      AND EXISTS (
-        SELECT 1
-        FROM core.entity_links_app link
-        JOIN voc.vocs voc
-          ON voc.id = link.source_id
-         AND voc.workspace_id = link.workspace_id
-         AND voc.archived_at IS NULL
-        WHERE link.workspace_id = task.tasks.workspace_id
-          AND link.source_type = 'voc'
-          AND link.target_type = 'task'
-          AND link.target_id = task.tasks.id
-          AND link.relation_type = 'evidence_of'
-          AND link.status = 'active'
-      )
-      AND NOT EXISTS (
-        SELECT 1
-        FROM core.entity_links_app link
-        JOIN voc.vocs voc
-          ON voc.id = link.source_id
-         AND voc.workspace_id = link.workspace_id
-         AND voc.archived_at IS NULL
-        JOIN voc.voc_public_updates public_update
-          ON public_update.voc_id = voc.id
-         AND public_update.skip_public_update = false
-        WHERE link.workspace_id = task.tasks.workspace_id
-          AND link.source_type = 'voc'
-          AND link.target_type = 'task'
-          AND link.target_id = task.tasks.id
-          AND link.relation_type = 'evidence_of'
-          AND link.status = 'active'
-      )
-    `);
+    predicates.push(sql`${releasedWithVocPredicate()} AND NOT (${releasedWithPublicUpdatePredicate()})`);
   }
   if (input.milestoneId !== undefined) {
     predicates.push(sql`milestone_id = ${input.milestoneId}`);
@@ -551,3 +553,59 @@ export async function updateTaskResponsibility(
   if (!row) throw new Error('updateTaskResponsibility returned no row');
   return mapTaskRow(row);
 }
+
+export type TaskReportGroup = {
+  managed_system_id: string;
+  analytics_area_id: string | null;
+  total: number;
+  backlog: number;
+  todo: number;
+  doing: number;
+  review: number;
+  done: number;
+  released: number;
+  reopened: number;
+  in_flight: number;
+  overdue: number;
+  released_total: number;
+  released_updated: number;
+  public_update_missing: number;
+  reporter_update_needed: number;
+};
+export async function countGroupedTasksForReport(
+  db: Db,
+  args: { actor: ScopeActorContext; readScope: Scope; managedSystemId?: string },
+): Promise<{ as_of_date: string; rows: TaskReportGroup[] }> {
+  const base: ListInput = {
+    workspaceId: args.actor.workspace_id,
+    ...(args.managedSystemId === undefined ? {} : { managedSystemId: args.managedSystemId }),
+    ...(args.readScope.kind === 'all' ? {} : { allowedSystemIds: args.readScope.managedSystemIds }),
+  };
+  const filter = (extra: Partial<ListInput>) =>
+    sql.join(listPredicates({ ...base, ...extra }), sql` AND `);
+  const result = await db.execute<{ as_of_date: string; groups: TaskReportGroup[] }>(sql`
+    WITH grouped AS (
+      SELECT primary_managed_system_id AS managed_system_id, analytics_area_id, count(*)::int AS total,
+        count(*) FILTER (WHERE status='backlog')::int AS backlog,
+        count(*) FILTER (WHERE status='todo')::int AS todo,
+        count(*) FILTER (WHERE status='doing')::int AS doing,
+        count(*) FILTER (WHERE status='review')::int AS review,
+        count(*) FILTER (WHERE status='done')::int AS done,
+        count(*) FILTER (WHERE status='released')::int AS released,
+        count(*) FILTER (WHERE status='reopened')::int AS reopened,
+        count(*) FILTER (WHERE ${filter({ statusGroup: 'in-flight' })})::int AS in_flight,
+        count(*) FILTER (WHERE ${filter({ overdue: 'true' })})::int AS overdue,
+        count(*) FILTER (WHERE ${releasedWithVocPredicate()})::int AS released_total,
+        count(*) FILTER (WHERE ${releasedWithVocPredicate()} AND ${releasedWithPublicUpdatePredicate()})::int AS released_updated,
+        count(*) FILTER (WHERE ${filter({ publicUpdate: 'missing' })})::int AS public_update_missing,
+        count(*) FILTER (WHERE ${filter({ reporterUpdate: 'needed' })})::int AS reporter_update_needed
+      FROM task.tasks WHERE ${filter({})}
+      GROUP BY primary_managed_system_id, analytics_area_id
+    ) SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS as_of_date,
+      coalesce(jsonb_agg(grouped), '[]'::jsonb) AS groups FROM grouped
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('Task report clock missing');
+  return { as_of_date: row.as_of_date, rows: row.groups };
+}
+

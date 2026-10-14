@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import {
   RECOVERY_CATEGORIES,
+  dashboardAreaReportSchema,
   dashboardSummarySchema,
   recoveryDetailSchema,
   recoveryHistorySchema,
@@ -246,7 +247,9 @@ describe.skipIf(
       },
     });
     migrate = createDb(DATABASE_URL_MIGRATE);
-    fixture = await seedRecoveryScale(migrate, WORKSPACE_ID);
+    fixture = await seedRecoveryScale(migrate, WORKSPACE_ID, {
+      analyticsAreas: process.env.AREA_REPORT_SCALE === '1',
+    });
     artifact.seed = fixture;
     artifact.runtime = {
       node: process.version,
@@ -587,6 +590,56 @@ describe.skipIf(
         }
       }
       artifact.status = 'completed';
+      await persist();
+    },
+    TIMEOUT,
+  );
+
+  it.skipIf(process.env.AREA_REPORT_SCALE !== '1')(
+    'measures Area report p95, authorization queries, grouped plans and page-size independence',
+    async () => {
+      artifact.areaReportStatus = 'incomplete';
+      try {
+        for (const actor of [0, 1, 2]) {
+          const label = `area-report/actor-${actor}`;
+          const captured = await measure(
+            label,
+            actor,
+            '/dashboard/analytics-areas?limit=50',
+            (raw) => {
+              const body = dashboardAreaReportSchema.parse(raw);
+              expect(body.items.length).toBeGreaterThan(1);
+              expect(body.items.length).toBeLessThanOrEqual(50);
+              expect(body.items.some((row) => row.analytics_area_id === null)).toBe(true);
+            },
+            true,
+          );
+          measurements[`${label}/authorization`] = {
+            queryCount: captured.filter((query) =>
+              /permission_grants|permission_denies/.test(query.sql),
+            ).length,
+            systemCount: required(fixture.actors[actor]).systems.length,
+          };
+          const counts = [];
+          for (const limit of [1, 50]) {
+            await reset(actor);
+            const result = await request(actor, {
+              method: 'GET',
+              url: `/dashboard/analytics-areas?limit=${limit}`,
+            });
+            dashboardAreaReportSchema.parse(result.body);
+            counts.push(result.sample.queryCount);
+          }
+          expect(counts[0]).toBe(counts[1]);
+          measurements[`${label}/page-size-query-bound`] = { limits: [1, 50], counts };
+        }
+        artifact.areaReportStatus = 'completed';
+      } catch (error) {
+        artifact.areaReportStatus = 'failed';
+        errors.push({ scenario: 'area-report', error: String(error) });
+        await persist();
+        throw error;
+      }
       await persist();
     },
     TIMEOUT,

@@ -10,15 +10,14 @@ import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { HttpError } from '../../lib/errors.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
-import { memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockTaskById } from '../tasks/index.js';
+import { actorFindingListScope } from './list-scope.js';
 import {
   countListRows,
   findCreatedFindingSourceLink,
   findFindingById,
   findFindingIdByDisplayId,
   listFindingsByWorkspace,
-  listPrimaryManagedSystemIds,
 } from './repo-read.js';
 import {
   insertFindingComment,
@@ -111,21 +110,13 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     }
 
     const cursor = args.cursor === undefined ? undefined : decodeListCursor(args.cursor);
-    const memo = memoizeCapabilityChecks(deps.checkService);
-    const systems =
-      args.actor.role_level === 'admin'
-        ? undefined
-        : await listPrimaryManagedSystemIds(deps.db, {
-            workspaceId: args.actor.workspace_id,
-            ...(args.managedSystemId === undefined
-              ? {}
-              : { managedSystemId: args.managedSystemId }),
-          });
-    const allowedSystemIds: string[] | undefined = systems === undefined ? undefined : [];
-    for (const systemId of systems ?? []) {
-      if (await canReadFinding({ checkService: memo }, args.actor, systemId))
-        allowedSystemIds?.push(systemId);
-    }
+    const scope = await actorFindingListScope(
+      deps.db,
+      deps.checkService,
+      args.actor,
+      args.managedSystemId,
+    );
+    const allowedSystemIds = scope.kind === 'all' ? undefined : scope.managedSystemIds;
     const input = {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
