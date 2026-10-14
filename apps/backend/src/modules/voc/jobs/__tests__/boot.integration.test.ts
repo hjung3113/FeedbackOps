@@ -19,8 +19,8 @@ import {
   registerVocClusterAutogenShadow,
 } from '../cluster-autogen-shadow.js';
 import {
-  VOC_CLUSTER_SUGGESTIONS_QUEUE,
   VOC_CLUSTER_SUGGESTIONS_CRON,
+  VOC_CLUSTER_SUGGESTIONS_QUEUE,
   registerVocClusterSuggestions,
 } from '../cluster-suggestions.js';
 import { VOC_EMBED_QUEUE } from '../embed-voc.js';
