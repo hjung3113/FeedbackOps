@@ -458,25 +458,63 @@ describe.skipIf(!workspaceId || !appUrl || !migrateUrl)('paid draft preview rout
       expect(calls).toBe(1);
     },
   );
-  it('filters stale, archived, other-MS and below-cut candidates before deterministic top three', async () => {
+  it.each(['below-cut', 'archived', 'stale watermark', 'other-MS'] as const)(
+    'excludes %s candidates before the top-three cap',
+    async (kind) => {
+      const excluded = await seed(
+        kind === 'other-MS' ? otherMs : ms,
+        adminId,
+        kind === 'below-cut' ? [0.6, 0.8, 0] : [1, 0, 0],
+      );
+      if (kind === 'archived')
+        await ops.pool.query('update voc.vocs set archived_at=now() where id=$1', [excluded]);
+      if (kind === 'stale watermark')
+        await ops.pool.query(
+          "update voc.voc_embeddings set updated_at=updated_at-interval '1 second' where voc_id=$1",
+          [excluded],
+        );
+      const res = await request();
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ available: true });
+      expect(res.json().items.map((i: { id: string }) => i.id)).toEqual([candidate]);
+      expect(calls).toBe(1);
+    },
+  );
+  it('ranks distinct scores descending ahead of UUID order', async () => {
+    const ids = [
+      candidate,
+      await seed(ms, adminId, [1, 0, 0]),
+      await seed(ms, adminId, [1, 0, 0]),
+    ].sort();
+    // UUID ASC is the reverse of score DESC (0.8, 0.9, 1.0).
+    const vectors = [
+      [0.8, 0.6, 0],
+      [0.9, Math.sqrt(0.19), 0],
+      [1, 0, 0],
+    ];
+    for (const [index, id] of ids.entries()) {
+      await db.pool.query('update voc.voc_embeddings set embedding=$2::vector where voc_id=$1', [
+        id,
+        JSON.stringify(vectors[index]),
+      ]);
+    }
+    const res = await request();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ available: true });
+    expect(res.json().items.map((i: { id: string }) => i.id)).toEqual([ids[2], ids[1], ids[0]]);
+    expect(calls).toBe(1);
+  });
+  it('orders equal scores by UUID ASC and returns only the top three', async () => {
     const ties = [
       candidate,
       await seed(ms, adminId, [1, 0, 0]),
       await seed(ms, adminId, [1, 0, 0]),
       await seed(ms, adminId, [1, 0, 0]),
     ].sort();
-    await seed(ms, adminId, [0.6, 0.8, 0]);
-    await seed(otherMs, adminId, [1, 0, 0]);
-    const archived = await seed(ms, adminId, [1, 0, 0]);
-    await ops.pool.query('update voc.vocs set archived_at=now() where id=$1', [archived]);
-    const stale = await seed(ms, adminId, [1, 0, 0]);
-    await ops.pool.query(
-      "update voc.voc_embeddings set updated_at=updated_at-interval '1 second' where voc_id=$1",
-      [stale],
-    );
-    expect((await request()).json().items.map((i: { id: string }) => i.id)).toEqual(
-      ties.slice(0, 3),
-    );
+    const res = await request();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ available: true });
+    expect(res.json().items.map((i: { id: string }) => i.id)).toEqual(ties.slice(0, 3));
     expect(calls).toBe(1);
   });
   it('hides same-MS non-reporter duplicates while retaining a reporter-owned control', async () => {

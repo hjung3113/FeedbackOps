@@ -9,7 +9,8 @@ export async function registerSimilarityPreviewCleanup(
   boss: PgBoss,
   deps: { db: Db; log: JobLog },
 ): Promise<void> {
-  if (!(await boss.getQueues([VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE])).length) {
+  const queues = await boss.getQueues();
+  if (!queues.some((queue) => queue.name === VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE)) {
     throw new Error(
       `pg-boss queue '${VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE}' is not pre-created. Run migrations (ADR-0009).`,
     );
