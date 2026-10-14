@@ -1,3 +1,4 @@
+import { similarityPreviewResponseSchema } from '@fops/shared';
 import { z } from 'zod';
 
 export const VOC_CREATE_IDS = {
@@ -123,3 +124,16 @@ export const vocCreatePeersByManagedSystem = new Map<
       }),
   ],
 ]);
+
+// An older semantic candidate outside the recent-peer fixture.
+export const vocCreateSimilarityPreview = similarityPreviewResponseSchema.parse({
+  available: true,
+  items: [
+    {
+      id: '11000000-0000-4000-8000-000000000001',
+      display_id: 'VOC-1100',
+      title: '이전 대시보드 갱신 오류',
+      created_at: '2026-07-01T08:00:00.000Z',
+    },
+  ],
+});

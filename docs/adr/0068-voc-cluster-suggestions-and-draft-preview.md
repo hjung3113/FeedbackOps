@@ -351,11 +351,11 @@ existing coverage; no mock internal-call assertions substitute for public seams.
    without retry; TTL and revocation/in-flight config rechecks; honest quota,
    provider and empty states; no VOC/Cluster/decision/domain-audit writes.
    Hand-authored vectors verify cut/rank/filter; fake hashes do not prove value.
-5. **Optional semantic check on VOC create — FE.** Depends on 4. Existing seams:
+5. **Optional semantic check on VOC create — FE (implemented by #1100).** Depends on 4. Existing seams:
    `apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx`,
    `apps/frontend/src/features/voc/components/create/SimilarVocPanel.tsx`,
    `apps/frontend/src/lib/copy/voc.ts`, `apps/frontend/tests/visual/`.
-   Proposed feature-local semantic panel/hook. Acceptance: explicit button alone
+   Shipped feature-local `SemanticVocPanel`/`useVocSimilarityPreview`. Acceptance: explicit button alone
    calls preview; edits clear results and late replies cannot resurrect them;
    recent/semantic headings and quota/provider/empty states remain distinct;
    submit stays usable; UUID navigation preserves dirty-form guard and sends no

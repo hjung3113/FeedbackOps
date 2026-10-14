@@ -61,14 +61,15 @@ It does not own Task status, Survey Response conversion, Finding persistence, or
   Ordinary reporter create has no owner override; assigned VOC remains untriaged and optional
   triage owner stays valid. Render safe creation routing metadata and retain source workflow.
 
-## Optional draft preview (ADR-0068; proposed/new)
+## Optional draft preview (ADR-0068; implemented by #1099/#1100)
 
 The create screen owns a feature-local semantic panel/hook under `유사 VOC 추천`;
 keep the zero-paid-call `같은 Managed System의 최근 VOC` panel separate. Only
-`유사 VOC 확인` with provider-transmission disclosure calls the proposed preview
-route. Typing/refocus/render/automatic retries never do; text/MS changes clear
-results and ignore late responses. Distinguish quota/provider/empty states,
-leave submit usable, and preserve UUID navigation's unsaved-change blocker.
+`유사 VOC 확인` with provider-transmission disclosure calls the merged
+`POST /vocs/similarity-preview` route. Typing/refocus/render/automatic retries never
+do; actual text/MS changes clear pending/results/errors, abort and ignore late
+responses. Unchanged values and unrelated rerenders preserve the check; each explicit click gets a fresh key.
+Distinguish quota/provider/empty states, leave submit usable, and preserve UUID navigation's unsaved-change blocker.
 No draft VOC, dismiss/confirm/join or extra continue step. Use existing copy module
-and typed `apiRequest` schemas when implementing. Saved recommendation states
-above remain distinct from the preview union in `docs/implementation/api/voc.md`.
+and shared similarity-preview schemas with typed `apiRequest`. Saved recommendation
+states above remain distinct from the preview union in `docs/implementation/api/voc.md`.
