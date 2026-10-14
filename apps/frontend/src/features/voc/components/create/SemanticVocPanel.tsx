@@ -39,7 +39,9 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          <p className="break-keep text-xs text-text-muted">{SEMANTIC_VOC_PREVIEW_COPY.disclosure}</p>
+          <p className="break-keep text-xs text-text-muted">
+            {SEMANTIC_VOC_PREVIEW_COPY.disclosure}
+          </p>
           <Button
             type="button"
             variant="secondary"
