@@ -23,7 +23,7 @@ import { recoveryIdentity } from '../../../dashboard/identity.js';
 import type { EmbeddingProvider } from '../../embedding/port.js';
 import { deriveVocEmbeddingInput } from '../../embedding/text.js';
 import { runVocClusterSuggestions } from '../../jobs/cluster-suggestions.js';
-import type { SuggestionRow } from '../repo.js';
+import { type SuggestionRow, pendingPage } from '../repo.js';
 
 const testIdentity = { provider: 'test', model: 'suggestions', dimensions: 3 };
 const testProvider: EmbeddingProvider = {
@@ -426,6 +426,17 @@ describe.skipIf(!runIntegration)(
         [old.id, currentMs],
       );
       const current = inserted.rows[0];
+      // Deterministic seek check: the page after the old tied row must reach the current row (higher id).
+      const afterOld = await db.db.transaction((tx) =>
+        pendingPage(
+          tx,
+          ws,
+          { score: old.score, voc_a_id: old.voc_a_id, voc_b_id: old.voc_b_id, id: old.id },
+          undefined,
+          1,
+        ),
+      );
+      expect(afterOld.map((r) => r.id)).toEqual([current.id]);
       const bounded = await buildServer({
         dbHandle: db,
         config: { ...loadConfig(), WORKSPACE_ID: ws, EMBEDDING_PROVIDER: 'fake' },
