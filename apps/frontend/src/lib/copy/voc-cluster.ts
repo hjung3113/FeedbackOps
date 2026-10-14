@@ -22,5 +22,6 @@ export const CLUSTER_SUGGESTION_COPY = {
   optInLabel: 'Cluster 제안 생성',
   enabled: '사용',
   disabled: '사용 안 함',
-  optInHelp: '켜면 매시간 유사한 VOC 두 건을 Cluster 제안으로 만듭니다. 끄면 새 제안만 멈추고 이미 만든 제안은 계속 검토할 수 있습니다.',
+  optInHelp:
+    '켜면 매시간 유사한 VOC 두 건을 Cluster 제안으로 만듭니다. 끄면 새 제안만 멈추고 이미 만든 제안은 계속 검토할 수 있습니다.',
 };

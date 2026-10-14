@@ -62,7 +62,9 @@ test('renders the available suggestion opt-in in the viewport', async ({ page })
     await document.fonts.ready;
     const section = document.querySelector('[data-testid="cluster-suggestions-setting"]');
     // This lookup depends on PageShell's direct scroll-region child.
-    const scrollRoot = section?.closest('[data-shell="page"]')?.querySelector<HTMLElement>(':scope > .overflow-y-auto');
+    const scrollRoot = section
+      ?.closest('[data-shell="page"]')
+      ?.querySelector<HTMLElement>(':scope > .overflow-y-auto');
     if (!scrollRoot) throw new Error('Settings scroll region missing');
     scrollRoot.scrollTop = scrollRoot.scrollHeight;
   });

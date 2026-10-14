@@ -73,7 +73,9 @@ export function VocClusterListShell({
       setActiveTab('all');
       setSelectionPaused(true);
     }
-    onSuggestionModeChange?.(suggestionMode, { preserveSelection: automaticExit || selectionPaused });
+    onSuggestionModeChange?.(suggestionMode, {
+      preserveSelection: automaticExit || selectionPaused,
+    });
   }, [automaticExit, selectionPaused, suggestionMode, onSuggestionModeChange]);
   const receiveSuggestionSlots = React.useCallback(
     (slots: { panel: React.ReactNode; count: number | undefined }) => {
