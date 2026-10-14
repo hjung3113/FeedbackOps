@@ -565,7 +565,8 @@ No grants change.
 
 Generation uses watermark freshness as a SQL prefilter and TypeScript derived
 hash checks before admitting/refreshing. Pair provider/model/dimensions/version
-must match; dimensions are filtered before `<=>`. The independent
+must match the active provider identity and embedding version; dimensions are
+filtered before `<=>`. The independent
 `VOC_CLUSTER_SUGGESTION_CUT = 0.85` does not alter saved recommendation cuts.
 Each workspace/MS transaction scans up to 200 incremental embedding sources
 ordered by `(updated_at, voc_id)` and 200 reconciliation sources ordered by UUID.
@@ -584,7 +585,10 @@ up to ten bounded candidate pages recover peers behind stale hashes. Thus at mos
 transaction. Statement timeout starts at 30s, shrinking with remaining transaction
 time at scan/admission boundaries; lock timeout is at most 5s. Workspace occupancy
 is recomputed over all pending rows, in pages, without actor visibility/read-ceiling
-truncation. Timeout rollback leaves cursors/counters/admissions unchanged.
+truncation. Read and occupancy keysets order by score DESC, sorted VOC UUIDs ASC,
+then suggestion ID ASC, preserving ties across Managed Systems. The read ceiling
+counts only rows passing elevated Finding scope and both canonical VOC visibility
+predicates in SQL. Timeout rollback leaves cursors/counters/admissions unchanged.
 New admission caps are five/MS/UTC hour and twenty eligible pending/workspace;
 pending metadata refresh and identical retries spend no slot. Generation writes
 no domain audit, Cluster/member, saved decision or Entity Link.

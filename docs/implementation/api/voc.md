@@ -451,14 +451,16 @@ C6 first requires both active-version embeddings' source-row watermarks to be
 at least the current VOC `updated_at`. Generation/read/confirm/restore recompute
 `deriveVocEmbeddingInput(...).sourceHash` in TypeScript and compare both hashes
 to scoring rows; provider/model/dimensions/version must match the pair and the
-stored metadata. Incompatible dimensions are filtered before cosine distance.
+stored metadata and the active provider identity. Incompatible dimensions are
+filtered before cosine distance.
 Generation pins the independent `VOC_CLUSTER_SUGGESTION_CUT = 0.85`; saved
 recommendations retain 0.75. Metadata refresh increments revision once, identical
 retry changes nothing and spends no admission.
 
-Reads use deterministic score DESC/sorted UUID keyset pages of 100 candidates,
-checking Finding scope, complete-pair VOC visibility and C6 on each page. They
-continue until 20 visible eligible pairs or exhaustion, stopping after 10,000
+Reads filter elevated Finding scope and both canonical VOC visibility predicates
+in SQL before ordering or paging. They use score DESC/sorted VOC UUID ASC/suggestion
+ID ASC keyset pages of 100 visible candidates, checking C6 on each page, and
+continue until 20 eligible pairs or exhaustion, stopping after 10,000 visible
 candidates and returning only complete pairs found. This read ceiling never
 limits whole-workspace occupancy calculation. No total is returned.
 

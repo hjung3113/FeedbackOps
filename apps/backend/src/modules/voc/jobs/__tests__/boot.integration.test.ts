@@ -160,6 +160,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
         db: dbHandle.db,
         embeddingVersion: 1,
         embeddingEnabled: false,
+        embeddingIdentity: { provider: 'fake', model: 'fake-hash-v1', dimensions: 1024 },
         log: { info: () => {}, warn: () => {}, error: () => {} },
       }),
     ).rejects.toThrow(`pg-boss queue '${VOC_CLUSTER_SUGGESTIONS_QUEUE}' is not pre-created`);

@@ -119,6 +119,8 @@ import {
 export interface BuildServerOptions {
   embeddingProvider?: EmbeddingProvider;
   similarityPreviewDeadlineMs?: number;
+  suggestionPageSize?: number;
+  suggestionReadScanCeiling?: number;
   similarityPreviewClock?: () => Date;
   recoveryClock?: () => Date;
   config: AppConfig;
@@ -159,6 +161,7 @@ export interface BuildServerOptions {
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
+  const embeddingProvider = opts.embeddingProvider ?? createEmbeddingProvider(opts.config);
   const { config, dbHandle, boss } = opts;
 
   if (!config.WORKSPACE_ID) {
@@ -806,7 +809,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     embeddingEnabled: isEmbeddingEnabled(config),
     createClustersService: (db) =>
       createVocClustersService({
-    recoveryRecorder,
+        recoveryRecorder,
         db,
         auditService,
         checkService,
@@ -827,6 +830,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     idempotencyService,
     embeddingVersion: config.EMBEDDING_VERSION,
     embeddingEnabled: isEmbeddingEnabled(config),
+    embeddingIdentity: embeddingProvider.identity(),
+    ...(opts.suggestionPageSize !== undefined
+      ? { suggestionPageSize: opts.suggestionPageSize }
+      : {}),
+    ...(opts.suggestionReadScanCeiling !== undefined
+      ? { suggestionReadScanCeiling: opts.suggestionReadScanCeiling }
+      : {}),
     createClustersService: (db) =>
       createVocClustersService({
         db,
@@ -851,7 +861,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     service: createSimilarityPreviewService({
       db: dbHandle.db,
       config,
-      provider: opts.embeddingProvider ?? createEmbeddingProvider(config),
+      provider: embeddingProvider,
       log: toJobLog(app.log),
       ...(opts.similarityPreviewDeadlineMs !== undefined
         ? { deadlineMs: opts.similarityPreviewDeadlineMs }

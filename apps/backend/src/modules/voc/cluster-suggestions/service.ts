@@ -20,6 +20,7 @@ import { lockManagedSystem } from '../../managed-systems/index.js';
 import type { CheckService } from '../../permissions/check-service.js';
 import type { VocClustersService } from '../../voc-clusters/index.js';
 import { type ActorContextLite, actorReadScope, isVocVisibleToActor } from '../authorization.js';
+import type { EmbeddingProvider } from '../embedding/port.js';
 import { selectVocForUpdate } from '../repo.js';
 import {
   type PagePosition,
@@ -44,6 +45,9 @@ export interface SuggestionDeps {
   checkService: CheckService;
   embeddingVersion: number;
   embeddingEnabled: boolean;
+  embeddingIdentity: ReturnType<EmbeddingProvider['identity']>;
+  suggestionPageSize?: number;
+  suggestionReadScanCeiling?: number;
   createClustersService: (db: Db) => VocClustersService;
 }
 export function createVocClusterSuggestionsService(deps: SuggestionDeps) {
@@ -98,8 +102,18 @@ export function createVocClusterSuggestionsService(deps: SuggestionDeps) {
     const readScope = await actorReadScope(deps.db, args.actor);
     const items: VocClusterSuggestionItem[] = [];
     let after: PagePosition | undefined;
-    for (let scanned = 0; scanned < SUGGESTION_READ_SCAN_CEILING; scanned += SUGGESTION_PAGE_SIZE) {
-      const page = await pendingPage(deps.db, args.actor.workspace_id, after, args.managedSystemId);
+    const pageSize = deps.suggestionPageSize ?? SUGGESTION_PAGE_SIZE;
+    const ceiling = deps.suggestionReadScanCeiling ?? SUGGESTION_READ_SCAN_CEILING;
+    for (let scanned = 0; scanned < ceiling; ) {
+      const page = await pendingPage(
+        deps.db,
+        args.actor.workspace_id,
+        after,
+        args.managedSystemId,
+        Math.min(pageSize, ceiling - scanned),
+        { actor: args.actor, findingScope, readScope },
+      );
+      scanned += page.length;
       for (const row of page) {
         if (!isFindingInReadScope(findingScope, row.primary_managed_system_id)) continue;
         const vocs = await pairVocs(deps.db, row);
@@ -108,7 +122,10 @@ export function createVocClusterSuggestionsService(deps: SuggestionDeps) {
           vocs.some((v) => !isVocVisibleToActor(readScope, args.actor.actor_id, v))
         )
           continue;
-        if (!(await eligiblePair(deps.db, row, deps.embeddingVersion, vocs))) continue;
+        if (
+          !(await eligiblePair(deps.db, row, deps.embeddingVersion, deps.embeddingIdentity, vocs))
+        )
+          continue;
         const [a, b] = vocs;
         if (!a || !b) continue;
         items.push({
@@ -121,7 +138,7 @@ export function createVocClusterSuggestionsService(deps: SuggestionDeps) {
         });
         if (items.length === SUGGESTION_PENDING_CAP) return { available: true, items };
       }
-      if (page.length < SUGGESTION_PAGE_SIZE) break;
+      if (page.length < pageSize) break;
       after = page[page.length - 1];
     }
     return { available: true, items };
@@ -251,8 +268,16 @@ export function createVocClusterSuggestionsService(deps: SuggestionDeps) {
             if (new Date(currentTime.now).getTime() >= discardTime(row).getTime() + 300_000)
               return stale(row);
           } else if (row.state !== 'pending') return stale(row);
-          if (!(await eligiblePair(tx, row, deps.embeddingVersion, vocs))) return stale(row);
-          const pending = await eligiblePending(tx, args.actor.workspace_id, deps.embeddingVersion);
+          if (!(await eligiblePair(tx, row, deps.embeddingVersion, deps.embeddingIdentity, vocs)))
+            return stale(row);
+          const pending = await eligiblePending(
+            tx,
+            args.actor.workspace_id,
+            deps.embeddingVersion,
+            deps.embeddingIdentity,
+            undefined,
+            deps.suggestionPageSize,
+          );
           if (
             pending.some(
               (p) =>
@@ -301,7 +326,16 @@ export function createVocClusterSuggestionsService(deps: SuggestionDeps) {
         await writeCounter(
           tx,
           args.actor.workspace_id,
-          (await eligiblePending(tx, args.actor.workspace_id, deps.embeddingVersion)).length,
+          (
+            await eligiblePending(
+              tx,
+              args.actor.workspace_id,
+              deps.embeddingVersion,
+              deps.embeddingIdentity,
+              undefined,
+              deps.suggestionPageSize,
+            )
+          ).length,
         );
       }
       await deps.idempotencyService.record(

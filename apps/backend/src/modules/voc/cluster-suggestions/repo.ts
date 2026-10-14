@@ -2,6 +2,12 @@ import { type SQL, sql } from 'drizzle-orm';
 import { sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
 import { managedSystemIsLiveSql } from '../../managed-systems/read-projections.js';
+import {
+  type ActorContextLite,
+  type Scope,
+  similarVocVisibilityPredicate,
+} from '../authorization.js';
+import type { EmbeddingProvider } from '../embedding/port.js';
 import { deriveVocEmbeddingInput } from '../embedding/text.js';
 
 export const VOC_CLUSTER_SUGGESTION_CUT = 0.85;
@@ -94,10 +100,14 @@ export async function eligiblePair(
   tx: Tx,
   row: SuggestionRow,
   version: number,
+  identity: ReturnType<EmbeddingProvider['identity']>,
   vocs?: PairVoc[],
 ): Promise<boolean> {
   if (
     row.embedding_version !== version ||
+    row.provider !== identity.provider ||
+    row.model !== identity.model ||
+    row.dimensions !== identity.dimensions ||
     row.cut !== VOC_CLUSTER_SUGGESTION_CUT ||
     row.score < row.cut
   )
@@ -145,21 +155,44 @@ export async function eligiblePair(
 }
 
 export interface PagePosition {
+  id: string;
   score: number;
   voc_a_id: string;
   voc_b_id: string;
 }
-export async function pendingPage(tx: Tx, ws: string, after?: PagePosition, ms?: string) {
-  const result = await tx.execute<SuggestionRow>(sql`SELECT * FROM voc.voc_cluster_suggestions
-    WHERE workspace_id = ${ws} AND state = 'pending'
-      ${ms ? sql`AND primary_managed_system_id = ${ms}` : sql``}
+export async function pendingPage(
+  tx: Tx,
+  ws: string,
+  after?: PagePosition,
+  ms?: string,
+  pageSize = SUGGESTION_PAGE_SIZE,
+  visibility?: { actor: ActorContextLite; findingScope: Scope; readScope: Scope },
+) {
+  const finding =
+    !visibility || visibility.findingScope.kind === 'all'
+      ? sql`true`
+      : sql`s.primary_managed_system_id = ANY(${sqlUuidArray(visibility.findingScope.managedSystemIds)})`;
+  const result = await tx.execute<SuggestionRow>(sql`SELECT s.* FROM voc.voc_cluster_suggestions s
+    WHERE s.workspace_id = ${ws} AND s.state = 'pending'
+      ${ms ? sql`AND s.primary_managed_system_id = ${ms}` : sql``}
+      AND ${finding}
       ${
-        after
-          ? sql`AND (score < ${after.score} OR (score = ${after.score}
-        AND (voc_a_id, voc_b_id) > (${after.voc_a_id}::uuid, ${after.voc_b_id}::uuid)))`
+        visibility
+          ? sql`AND EXISTS (SELECT 1 FROM voc.vocs a
+        WHERE a.workspace_id=s.workspace_id AND a.id=s.voc_a_id
+          AND ${similarVocVisibilityPredicate(visibility.readScope, visibility.actor.actor_id, sql`a`)})
+        AND EXISTS (SELECT 1 FROM voc.vocs b
+        WHERE b.workspace_id=s.workspace_id AND b.id=s.voc_b_id
+          AND ${similarVocVisibilityPredicate(visibility.readScope, visibility.actor.actor_id, sql`b`)})`
           : sql``
       }
-    ORDER BY score DESC, voc_a_id, voc_b_id LIMIT ${SUGGESTION_PAGE_SIZE}`);
+      ${
+        after
+          ? sql`AND (s.score < ${after.score} OR (s.score = ${after.score}
+        AND (s.voc_a_id, s.voc_b_id, s.id) > (${after.voc_a_id}::uuid, ${after.voc_b_id}::uuid, ${after.id}::uuid)))`
+          : sql``
+      }
+    ORDER BY s.score DESC, s.voc_a_id, s.voc_b_id, s.id LIMIT ${pageSize}`);
   return result.rows;
 }
 /** Occupancy is workspace-wide, with no actor scope or read scan ceiling. */
@@ -167,17 +200,19 @@ export async function eligiblePending(
   tx: Tx,
   ws: string,
   version: number,
+  identity: ReturnType<EmbeddingProvider['identity']>,
   budget?: () => Promise<void>,
+  pageSize = SUGGESTION_PAGE_SIZE,
 ): Promise<SuggestionRow[]> {
   const eligible: SuggestionRow[] = [];
   let after: PagePosition | undefined;
   for (;;) {
-    const page = await pendingPage(tx, ws, after);
+    const page = await pendingPage(tx, ws, after, undefined, pageSize);
     for (const row of page) {
       await budget?.();
-      if (await eligiblePair(tx, row, version)) eligible.push(row);
+      if (await eligiblePair(tx, row, version, identity)) eligible.push(row);
     }
-    if (page.length < SUGGESTION_PAGE_SIZE) break;
+    if (page.length < pageSize) break;
     after = page[page.length - 1];
   }
   return eligible;

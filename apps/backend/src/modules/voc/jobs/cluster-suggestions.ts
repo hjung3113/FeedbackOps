@@ -22,6 +22,7 @@ import {
   sqlUuidArray,
   writeCounter,
 } from '../cluster-suggestions/repo.js';
+import type { EmbeddingProvider } from '../embedding/port.js';
 import { deriveVocEmbeddingInput } from '../embedding/text.js';
 
 export const VOC_CLUSTER_SUGGESTIONS_QUEUE = 'voc.cluster_suggestions';
@@ -35,6 +36,8 @@ interface Deps {
   db: Db;
   embeddingVersion: number;
   embeddingEnabled: boolean;
+  embeddingIdentity: ReturnType<EmbeddingProvider['identity']>;
+  suggestionPageSize?: number;
   statementTimeoutMs?: number;
   log?: JobLog;
 }
@@ -90,7 +93,14 @@ async function generate(deps: Deps, payload: Payload, ws: string, ms: string) {
     if (!(await lockLiveManagedSystemForShare(tx, ws, ms)))
       return { admitted: 0, refreshed: 0, scanned: 0 };
     await budget();
-    const pending = await eligiblePending(tx, ws, deps.embeddingVersion, budget);
+    const pending = await eligiblePending(
+      tx,
+      ws,
+      deps.embeddingVersion,
+      deps.embeddingIdentity,
+      budget,
+      deps.suggestionPageSize,
+    );
     let occupancy = pending.length;
     const cursorResult =
       await tx.execute<Cursor>(sql`SELECT *, embedding_watermark::text AS watermark
@@ -133,6 +143,8 @@ async function generate(deps: Deps, payload: Payload, ws: string, ms: string) {
             ON v.id=e.voc_id AND v.workspace_id=e.workspace_id
           WHERE e.voc_id=${source} AND e.workspace_id=${ws} AND e.embedding_version=${deps.embeddingVersion}
             AND v.primary_managed_system_id=${ms} AND v.archived_at IS NULL AND e.updated_at>=v.updated_at
+            AND e.provider=${deps.embeddingIdentity.provider} AND e.model=${deps.embeddingIdentity.model}
+            AND e.dimensions=${deps.embeddingIdentity.dimensions}
         ), compatible AS MATERIALIZED (
           SELECT e.*,v.primary_managed_system_id FROM voc.voc_embeddings e JOIN voc.vocs v
             ON v.id=e.voc_id AND v.workspace_id=e.workspace_id
@@ -163,7 +175,14 @@ async function generate(deps: Deps, payload: Payload, ws: string, ms: string) {
         for (const candidate of neighbours.rows) {
           if (
             Number.isFinite(candidate.score) &&
-            (await hashesMatch(tx, ws, ms, deps.embeddingVersion, candidate))
+            (await hashesMatch(
+              tx,
+              ws,
+              ms,
+              deps.embeddingVersion,
+              deps.embeddingIdentity,
+              candidate,
+            ))
           ) {
             candidates.set(`${candidate.a}:${candidate.b}`, candidate);
             found++;
@@ -197,7 +216,8 @@ async function generate(deps: Deps, payload: Payload, ws: string, ms: string) {
     );
     for (const p of sorted) {
       await budget();
-      if (!(await hashesMatch(tx, ws, ms, deps.embeddingVersion, p))) continue;
+      if (!(await hashesMatch(tx, ws, ms, deps.embeddingVersion, deps.embeddingIdentity, p)))
+        continue;
       const original = pending.find((r) => r.voc_a_id === p.a && r.voc_b_id === p.b);
       if (!original && (occupied.has(p.a) || occupied.has(p.b))) continue;
       const existing =
@@ -259,7 +279,20 @@ async function generate(deps: Deps, payload: Payload, ws: string, ms: string) {
     return { admitted, refreshed, scanned: sources.length };
   });
 }
-async function hashesMatch(tx: Tx, ws: string, ms: string, version: number, p: Candidate) {
+async function hashesMatch(
+  tx: Tx,
+  ws: string,
+  ms: string,
+  version: number,
+  identity: ReturnType<EmbeddingProvider['identity']>,
+  p: Candidate,
+) {
+  if (
+    p.provider !== identity.provider ||
+    p.model !== identity.model ||
+    p.dimensions !== identity.dimensions
+  )
+    return false;
   const result = await tx.execute<
     PairVoc & {
       source_hash: string;

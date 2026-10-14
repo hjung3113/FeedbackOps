@@ -50,6 +50,7 @@ export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<v
     db: deps.db,
     embeddingVersion: deps.embeddingVersion,
     embeddingEnabled: deps.embeddingEnabled,
+    embeddingIdentity: deps.provider.identity(),
     log: deps.log,
   });
   await registerReleasedReviewCandidates(boss, {

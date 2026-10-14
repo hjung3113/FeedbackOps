@@ -10,6 +10,7 @@ import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
 import {
   grantCapability,
   insertPermissionRequestRow,
+  revokeCapabilityGrant,
 } from '../../../../test-support/permissions-fixtures.js';
 import { waitForRecoveryCommandWaiters } from '../../../../test-support/recovery-command-barrier.js';
 import {
@@ -19,9 +20,18 @@ import {
 } from '../../../../test-support/voc-cluster-fixtures.js';
 import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
 import { recoveryIdentity } from '../../../dashboard/identity.js';
+import type { EmbeddingProvider } from '../../embedding/port.js';
 import { deriveVocEmbeddingInput } from '../../embedding/text.js';
 import { runVocClusterSuggestions } from '../../jobs/cluster-suggestions.js';
 import type { SuggestionRow } from '../repo.js';
+
+const testIdentity = { provider: 'test', model: 'suggestions', dimensions: 3 };
+const testProvider: EmbeddingProvider = {
+  identity: () => testIdentity,
+  embed: async () => {
+    throw new Error('Hand-vector suggestion fixtures must not call a provider');
+  },
+};
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -78,6 +88,7 @@ describe.skipIf(!runIntegration)(
       process.env.NODE_ENV = 'test';
       app = await buildServer({
         dbHandle: db,
+        embeddingProvider: testProvider,
         config: {
           ...loadConfig(),
           WORKSPACE_ID: ws,
@@ -148,9 +159,22 @@ describe.skipIf(!runIntegration)(
       );
       return v.id;
     }
-    async function run(version = 1, enabled = true, handle = db) {
+    async function run(
+      version = 1,
+      enabled = true,
+      handle = db,
+      identity = {
+        ...testIdentity,
+        model: version === 2 ? 'v2' : testIdentity.model,
+      },
+    ) {
       return runVocClusterSuggestions(
-        { db: handle.db, embeddingVersion: version, embeddingEnabled: enabled },
+        {
+          db: handle.db,
+          embeddingVersion: version,
+          embeddingEnabled: enabled,
+          embeddingIdentity: identity,
+        },
         { correlation_id: randomUUID(), workspace_id: ws },
       );
     }
@@ -340,6 +364,116 @@ describe.skipIf(!runIntegration)(
         expect(response.json()).toEqual({ available: true, items: [] });
       },
     );
+    it.each(['finding scope', 'VOC A', 'VOC B'])(
+      'hidden higher-score rows do not consume the read ceiling: %s',
+      async (guard) => {
+        const hiddenMs = await newMs();
+        const p = await persona('developer', true);
+        for (let i = 0; i < 4; i++) {
+          const hidden = await seedPair(hiddenMs);
+          if (guard !== 'finding scope')
+            await ops.pool.query('update voc.vocs set reporter_id=$2 where id=$1', [
+              guard === 'VOC A' ? hidden.voc_b_id : hidden.voc_a_id,
+              p.id,
+            ]);
+        }
+        const visible = await seedPair(ms, 0.99);
+        const capability = guard === 'finding scope' ? 'voc.read' : 'finding.read';
+        grantIds.push(await grantCapability(ops, ws, p.id, capability, hiddenMs, admin));
+        const bounded = await buildServer({
+          dbHandle: db,
+          config: { ...loadConfig(), WORKSPACE_ID: ws, EMBEDDING_PROVIDER: 'fake' },
+          embeddingProvider: testProvider,
+          suggestionPageSize: 2,
+          suggestionReadScanCeiling: 2,
+        });
+        try {
+          const response = await bounded.inject({
+            method: 'GET',
+            url: '/voc-cluster-suggestions',
+            headers: headers(p.cookie),
+          });
+          expect(response.statusCode).toBe(200);
+          expect(response.json().items.map((r: { id: string }) => r.id)).toEqual([visible.id]);
+        } finally {
+          await bounded.close();
+        }
+      },
+    );
+    it('pages tied pairs across MSs and counts the eligible tie at the workspace cap', async () => {
+      const old = await seedPair(ms);
+      const currentMs = await newMs();
+      await ops.pool.query(
+        'update voc.vocs set primary_managed_system_id=$2 where id=any($1::uuid[])',
+        [[old.voc_a_id, old.voc_b_id], currentMs],
+      );
+      await ops.pool.query(
+        `update voc.voc_embeddings e set updated_at=v.updated_at from voc.vocs v
+         where e.voc_id=v.id and v.id=any($1::uuid[])`,
+        [[old.voc_a_id, old.voc_b_id]],
+      );
+      const inserted = await ops.pool.query(
+        `insert into voc.voc_cluster_suggestions
+        (id,workspace_id,primary_managed_system_id,voc_a_id,voc_b_id,provider,model,dimensions,
+         embedding_version,source_hash_a,source_hash_b,embedding_watermark_a,embedding_watermark_b,score,cut,run_correlation_id)
+        select 'ffffffff-ffff-4fff-bfff-ffffffffffff'::uuid,s.workspace_id,$2,s.voc_a_id,s.voc_b_id,
+         s.provider,s.model,s.dimensions,s.embedding_version,s.source_hash_a,s.source_hash_b,
+         e.updated_at,f.updated_at,s.score,s.cut,s.run_correlation_id
+        from voc.voc_cluster_suggestions s
+        join voc.voc_embeddings e on e.voc_id=s.voc_a_id and e.embedding_version=s.embedding_version
+        join voc.voc_embeddings f on f.voc_id=s.voc_b_id and f.embedding_version=s.embedding_version
+        where s.id=$1 returning *`,
+        [old.id, currentMs],
+      );
+      const current = inserted.rows[0];
+      const bounded = await buildServer({
+        dbHandle: db,
+        config: { ...loadConfig(), WORKSPACE_ID: ws, EMBEDDING_PROVIDER: 'fake' },
+        embeddingProvider: testProvider,
+        suggestionPageSize: 1,
+      });
+      try {
+        const response = await bounded.inject({
+          method: 'GET',
+          url: '/voc-cluster-suggestions',
+          headers: headers(),
+        });
+        expect(response.json().items.map((r: { id: string }) => r.id)).toEqual([current.id]);
+      } finally {
+        await bounded.close();
+      }
+      for (let i = 0; i < 19; i++) await seedPair(await newMs());
+      await pair(await newMs());
+      await runVocClusterSuggestions(
+        {
+          db: db.db,
+          embeddingVersion: 1,
+          embeddingEnabled: true,
+          embeddingIdentity: testIdentity,
+          suggestionPageSize: 1,
+        },
+        { correlation_id: randomUUID(), workspace_id: ws },
+      );
+      expect(await rows()).toHaveLength(21); // 20 eligible plus retained old scope.
+      const counter = await ops.pool.query(
+        'select eligible_pending_count from voc.voc_cluster_suggestion_counters where workspace_id=$1',
+        [ws],
+      );
+      expect(counter.rows[0].eligible_pending_count).toBe(20);
+    });
+    it.each(['developer without Finding read', 'user with both reads'])(
+      'requires elevated Finding read independently: %s',
+      async (kind) => {
+        await pending();
+        const p = await persona(kind.startsWith('user') ? 'user' : 'developer');
+        grantIds.push(await grantCapability(ops, ws, p.id, 'voc.read', ms, admin));
+        if (kind.startsWith('user'))
+          grantIds.push(await grantCapability(ops, ws, p.id, 'finding.read', ms, admin));
+        const response = await list(p.cookie);
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({ available: true, items: [] });
+      },
+    );
     it('pages past more than 20 stale rows and applies the visible limit after C6', async () => {
       for (let i = 0; i < 105; i++) {
         const row = await seedPair(ms, 1);
@@ -413,9 +547,9 @@ describe.skipIf(!runIntegration)(
           [ids, vector],
         );
       }
-      await run();
+      await run(1, true, db, { ...testIdentity, dimensions: 8 });
       expect(await rows()).toHaveLength(5);
-      await run();
+      await run(1, true, db, { ...testIdentity, dimensions: 8 });
       expect(await rows()).toHaveLength(5);
       // Admission identity is immutable (0062 trigger): move the bucket to the previous hour by delete + insert.
       await ops.pool.query(
@@ -427,7 +561,7 @@ describe.skipIf(!runIntegration)(
          select workspace_id, primary_managed_system_id, window_start - interval '1 hour', new_admissions from old`,
         [ws],
       );
-      await run();
+      await run(1, true, db, { ...testIdentity, dimensions: 8 });
       expect(await rows()).toHaveLength(6);
       expect(
         (
@@ -521,6 +655,86 @@ describe.skipIf(!runIntegration)(
       expect([403, 404]).toContain((await action('confirm', row, {}, p.cookie, key)).statusCode);
       expect(await domainCounts()).toEqual(before);
     });
+    it.each([
+      ['finding.manage', 403, 'permission.denied'],
+      ['voc.read', 404, 'not_found.record'],
+    ] as const)('confirm replay reauthorizes only-revoked %s', async (capability, status, code) => {
+      const row = await pending();
+      const p = await persona('developer');
+      const grants = new Map<string, string>();
+      for (const cap of ['voc.read', 'finding.read', 'finding.manage']) {
+        const id = await grantCapability(ops, ws, p.id, cap, ms, admin);
+        grantIds.push(id);
+        grants.set(cap, id);
+      }
+      const key = randomUUID();
+      const confirmed = await action('confirm', row, {}, p.cookie, key);
+      expect(confirmed.statusCode, confirmed.body).toBe(201);
+      const revokedGrant = grants.get(capability);
+      if (!revokedGrant) throw new Error('Replay grant missing');
+      await revokeCapabilityGrant(ops, revokedGrant, admin);
+      const before = await domainCounts();
+      const stored = await rows();
+      const replay = await action('confirm', row, {}, p.cookie, key);
+      expect(replay.statusCode, replay.body).toBe(status);
+      expect(replay.json().code).toBe(code);
+      expect(await domainCounts()).toEqual(before);
+      expect(await rows()).toEqual(stored);
+    });
+    it.each(['provider', 'model', 'dimensions'] as const)(
+      'rejects mutually compatible embeddings with inactive %s',
+      async (field) => {
+        const row = await pending();
+        const other = {
+          ...testIdentity,
+          [field]: field === 'dimensions' ? 4 : 'inactive',
+        };
+        await ops.pool.query(
+          `update voc.voc_embeddings set provider=$2,model=$3,dimensions=$4,
+          embedding=$5::vector where workspace_id=$1`,
+          [
+            ws,
+            other.provider,
+            other.model,
+            other.dimensions,
+            field === 'dimensions' ? '[1,0,0,0]' : '[1,0,0]',
+          ],
+        );
+        // Stored metadata agrees too: pair compatibility alone cannot reject this fixture.
+        await ops.pool.query(
+          'update voc.voc_cluster_suggestions set provider=$2,model=$3,dimensions=$4 where id=$1',
+          [row.id, other.provider, other.model, other.dimensions],
+        );
+        await pair(await newMs());
+        await ops.pool.query(
+          `update voc.voc_embeddings set provider=$2,model=$3,dimensions=$4,
+          embedding=$5::vector where workspace_id=$1`,
+          [
+            ws,
+            other.provider,
+            other.model,
+            other.dimensions,
+            field === 'dimensions' ? '[1,0,0,0]' : '[1,0,0]',
+          ],
+        );
+        const before = await domainCounts();
+        await run();
+        expect(await rows()).toHaveLength(1);
+        expect((await list()).json()).toEqual({ available: true, items: [] });
+        const confirm = await action('confirm', row);
+        expect(confirm.statusCode).toBe(409);
+        expect(confirm.json().code).toBe('conflict.stale_write');
+        expect(await domainCounts()).toEqual(before);
+        expect((await action('discard', row)).statusCode).toBe(200);
+        const discarded = (await rows())[0];
+        const afterDiscard = await domainCounts();
+        const restore = await action('restore', discarded);
+        expect(restore.statusCode).toBe(409);
+        expect(restore.json().code).toBe('conflict.stale_write');
+        expect((await rows())[0]).toEqual(discarded);
+        expect(await domainCounts()).toEqual(afterDiscard);
+      },
+    );
     it.each(['revision', 'hash', 'version', 'text', 'membership'])(
       'rejects stale confirm %s without domain effects',
       async (kind) => {
@@ -1044,7 +1258,13 @@ describe.skipIf(!runIntegration)(
           [ws],
         );
         const run = runVocClusterSuggestions(
-          { db: db.db, embeddingEnabled: true, embeddingVersion: 1, statementTimeoutMs: 50 },
+          {
+            db: db.db,
+            embeddingEnabled: true,
+            embeddingVersion: 1,
+            embeddingIdentity: testIdentity,
+            statementTimeoutMs: 50,
+          },
           { workspace_id: ws, correlation_id: randomUUID() },
         );
         request = run;
