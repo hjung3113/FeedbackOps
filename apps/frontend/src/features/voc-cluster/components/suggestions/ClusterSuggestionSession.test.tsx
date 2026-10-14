@@ -57,21 +57,31 @@ function json(body: unknown, status = 200) {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+function testRouter() {
+  const root = createRootRoute();
+  const vocs = createRoute({ getParentRoute: () => root, path: '/vocs' });
+  return createRouter({
+    routeTree: root.addChildren([vocs]),
+    history: createMemoryHistory({ initialEntries: ['/vocs'] }),
+  });
+}
 function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const view = render(
     <QueryClientProvider client={client}>
-      <ClusterSuggestionSession>
-        {({ list, panel, count }) => (
-          <>
-            <span data-testid="count">{count}</span>
-            {list}
-            {panel}
-          </>
-        )}
-      </ClusterSuggestionSession>
+      <RouterContextProvider router={testRouter()}>
+        <ClusterSuggestionSession>
+          {({ list, panel, count }) => (
+            <>
+              <span data-testid="count">{count}</span>
+              {list}
+              {panel}
+            </>
+          )}
+        </ClusterSuggestionSession>
+      </RouterContextProvider>
     </QueryClientProvider>,
   );
   return { client, ...view };
@@ -528,9 +538,12 @@ it.each([403, 404])(
         </>
       );
     }
+    const router = testRouter();
     const view = (active: boolean) => (
       <QueryClientProvider client={client}>
-        <Host active={active} />
+        <RouterContextProvider router={router}>
+          <Host active={active} />
+        </RouterContextProvider>
       </QueryClientProvider>
     );
     let release!: (response: Response) => void;
@@ -611,9 +624,12 @@ it.each(
         </ClusterSuggestionSession>
       );
     }
+    const router = testRouter();
     const view = (scope: string | undefined) => (
       <QueryClientProvider client={client}>
-        <Host scope={scope} />
+        <RouterContextProvider router={router}>
+          <Host scope={scope} />
+        </RouterContextProvider>
       </QueryClientProvider>
     );
     const { rerender } = render(view(pair.primary_managed_system_id));
