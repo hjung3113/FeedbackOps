@@ -284,6 +284,10 @@ VOC and Task export `permissionVocSourceSummary` and
 and explicit metadata allowlists stay inside those owners. Opaque Survey sources
 have no summary and cause no response reads. Permission owns active-deny overlap
 and selected risk calculation; collection reads do not invoke selected projections.
+Admin-only Permission Request recovery sources use
+Auth's public `workspaceActorDisplayNameSql` bounded workspace-matched display-name projection;
+it exposes no email/Role Level and adds no per-row application lookup. Actor-independent
+Permission recovery truth and discovery do not invoke that display projection.
 
 ## Responsibility and recovery seams (ADR-0067; implemented)
 

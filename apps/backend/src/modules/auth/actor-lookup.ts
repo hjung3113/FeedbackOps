@@ -5,7 +5,7 @@
 // actor id import through '../auth/index.js' — never a repo, and never their
 // own copy of the SQL.
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { type SQL, and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { actors } from '../../db/schema/core.js';
@@ -105,4 +105,10 @@ export async function findWorkspaceActorDisplay(
   }
   // Callers place this projection in strict DTOs: keep it to the shipped identity fields.
   return { id: row.id, role_level: row.role_level, display_name: row.display_name };
+}
+
+/** Bounded display-only SQL for authorized projections; caller owns disclosure gating. */
+export function workspaceActorDisplayNameSql(workspaceId: SQL, actorId: SQL): SQL {
+  return sql`(SELECT requester.display_name FROM core.actors requester
+    WHERE requester.workspace_id = ${workspaceId} AND requester.id = ${actorId} LIMIT 1)`;
 }

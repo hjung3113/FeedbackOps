@@ -145,6 +145,9 @@ route. An authorized safe Survey jump alone is never this action. No Dashboard r
 or duplicated source workflow is introduced.
 
 Source and affected summaries contain only independently readable IDs/display IDs/titles/routes.
+Admin-only Permission Request recovery sources use the workspace-matched requester's display name
+as `source.title` (fallback `Permission Request` when empty), with `source.display_id = null`.
+The source UUID remains unchanged for routing and recovery identity; the queue does not display it.
 Recovery `source.route`, affected routes and action targets use mounted frontend selection URLs:
 VOC `/vocs?selected=:id`, Task `/tasks?param=:id`, Finding `/findings?selected=:id`,
 Permission Request `/admin/permissions/requests?selected=:id`, and Survey

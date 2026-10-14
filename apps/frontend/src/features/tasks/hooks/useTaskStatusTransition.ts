@@ -1,6 +1,7 @@
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { updateTaskStatus } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { TaskDto, TaskStatus } from '@fops/shared';
 import { type QueryKey, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -62,6 +63,9 @@ export function useTaskStatusTransition(tasksKey: QueryKey) {
         return;
       }
       toast.error(mapUnknownError(error).message);
+    },
+    onSuccess: () => {
+      void invalidateRecovery(client);
     },
     onSettled: (_data, _error, _variables, context) => {
       if (!context || mutationTokens.current.get(context.taskId) === context.token) {
