@@ -311,17 +311,31 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     });
   }
 
-  it.each(['owner', 'team', 'aa', 'queue', 'revoked', 'expired', 'denied', 'system'] as const)(
+  it.each([
+    'owner',
+    'team',
+    'aa',
+    'queue',
+    'invalid_reviewer_owner',
+    'revoked',
+    'expired',
+    'denied',
+    'system',
+  ] as const)(
     'resolves reviewer through %s with discoverable skipped rules and no replay diagnostic duplication',
     async (mode) => {
       const seeded = await seedVocSource();
       const teamId = await insertTeamDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
       teamIds.push(teamId);
-      if (['owner', 'team'].includes(mode)) {
+      if (['owner', 'team', 'invalid_reviewer_owner'].includes(mode)) {
         await migrateHandle.pool.query(
           `update core.managed_systems set default_owner_actor_id = $1::uuid,
           default_owner_team_id = $2::uuid where id = $3::uuid`,
-          [mode === 'owner' ? adminActorId : null, mode === 'team' ? teamId : null, seeded.msId],
+          [
+            ['owner', 'invalid_reviewer_owner'].includes(mode) ? adminActorId : null,
+            mode === 'team' ? teamId : null,
+            seeded.msId,
+          ],
         );
       }
       if (mode === 'aa') {
@@ -335,7 +349,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
           seeded.id,
         ]);
       }
-      if (mode === 'system') {
+      if (mode === 'system' || mode === 'invalid_reviewer_owner') {
         const sys = await dbHandle.pool.query<{ id: string }>(
           `select id from core.actors
             where external_id = 'system' and workspace_id = $1`,
@@ -377,11 +391,13 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       const key = randomUUID();
       const first = await requestTask(adminCookie, 'voc', seeded.id, key);
       expect(first.statusCode).toBe(201);
-      const resolved = ['owner', 'team', 'aa'].includes(mode);
+      const resolved = ['owner', 'team', 'aa', 'invalid_reviewer_owner'].includes(mode);
       expect(first.json()).toMatchObject({
         status: 'pending_review',
         reviewer_actor_id: null,
-        assigned_reviewer_actor_id: mode === 'owner' ? adminActorId : null,
+        assigned_reviewer_actor_id: ['owner', 'invalid_reviewer_owner'].includes(mode)
+          ? adminActorId
+          : null,
         assigned_reviewer_team_id: ['team', 'aa'].includes(mode) ? teamId : null,
         default_resolved: resolved,
         source_rule:
@@ -397,8 +413,35 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
         'select rule, category from core.responsibility_default_failures where managed_system_id = $1 order by rule',
         [seeded.msId],
       );
-      expect(diagnostics.rows).toHaveLength(resolved ? (mode === 'aa' ? 2 : 1) : 3);
+      expect(diagnostics.rows).toHaveLength(
+        resolved ? (mode === 'invalid_reviewer_owner' ? 1 : 0) : 3,
+      );
       expect(new Set(diagnostics.rows.map((row) => row.rule)).size).toBe(diagnostics.rows.length);
+      if (mode === 'owner' || mode === 'team') {
+        const warnings = await app.inject({
+          method: 'GET',
+          url: '/managed-systems/default-diagnostics',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        });
+        expect(warnings.statusCode).toBe(200);
+        expect(
+          warnings
+            .json()
+            .items.filter(
+              (item: { managed_system_id: string }) => item.managed_system_id === seeded.msId,
+            ),
+        ).toEqual([]);
+      }
+      if (mode === 'queue')
+        expect(diagnostics.rows).toEqual([
+          { rule: 'analytics_area_owner', category: 'missing' },
+          { rule: 'managed_system_owner', category: 'missing' },
+          { rule: 'managed_system_reviewer', category: 'missing' },
+        ]);
+      if (mode === 'invalid_reviewer_owner')
+        expect(diagnostics.rows).toEqual([
+          { rule: 'managed_system_reviewer', category: 'ineligible_actor' },
+        ]);
       if (['revoked', 'expired', 'denied', 'system'].includes(mode))
         expect(diagnostics.rows).toContainEqual({
           rule: 'managed_system_reviewer',

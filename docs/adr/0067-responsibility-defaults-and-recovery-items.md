@@ -108,8 +108,10 @@ operator → creator rule and validation/audit stay unchanged.
 
 Creation responses and existing creation audits carry safe proposed/new `default_resolved`,
 `source_rule`, `managed_system_id`, and persisted responsibility. A valid automatic target
-sets `default_resolved=true`; explicit/null/fallback sets false. Record skipped-rule failure
-categories and the fallback outcome without leaking private candidate IDs to a Reporter.
+sets `default_resolved=true`; explicit/null/fallback sets false. Record a configured-but-invalid
+skipped candidate regardless of the final outcome; record an empty (`missing`) skipped
+candidate only when creation ends at `workspace_fallback_queue`. Record the fallback
+outcome without leaking private candidate IDs to a Reporter.
 Admin diagnostics must make failed defaults discoverable alongside registry configuration;
 null-and-forgotten is not an acceptable fallback. Source fields remain current truth.
 Wire VOC create, VOC/Cluster/Survey-response Finding creation, Finding/VOC/Cluster Task

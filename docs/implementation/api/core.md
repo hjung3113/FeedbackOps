@@ -154,8 +154,9 @@ not order these operations. Historical audits without this optional marker retai
 Current configuration is always rechecked, so a revoked Actor or archived team remains
 visible. Admin Registry invalidates/refetches diagnostics after successful configuration
 edits; a failed read shows a red shared Callout and retry, never an empty healthy result.
-Each warning explains the skipped automatic assignment, opens that system's settings, and
-marks the affected registry row. Reviewer field help explains the owner fallback; owner
+Each warning distinguishes a current configuration problem from a past skipped-default
+observation; neither proves final unassignment. It opens that system's settings and marks
+the affected registry row. Reviewer field help explains the owner fallback; owner
 and reviewer pairs render side by side to preserve registry density.
 
 `recordResponsibilityDefaultFailure(tx, input)` is the Core-owned append seam in
@@ -163,9 +164,10 @@ and reviewer pairs render side by side to preserve registry density.
 Its strict shared input schema accepts only workspace/system, workflow/responsibility,
 rule and category above. It validates system workspace and uses the caller transaction;
 rollback removes the input. Runtime has SELECT/INSERT only on the new diagnostic table,
-without UPDATE/DELETE or any new bootstrap role. #1090/#1091 supply successful automatic-
-resolution failures in their source transaction, once per skipped rule, and own replay/
-fallback/creation end-to-end evidence. They must recheck destination eligibility, keep
+without UPDATE/DELETE or any new bootstrap role. #1090/#1091 record configured-but-invalid
+skipped candidates regardless of the final outcome, and empty (`missing`) skipped candidates
+only when creation ends at `workspace_fallback_queue`, in their source transaction. They own
+replay/fallback/creation end-to-end evidence. They must recheck destination eligibility, keep
 explicit-null versus omitted semantics, and never call this seam on replay or rejected
 creation. #1089 supplies and tests the seam/read/UI with real fixtures; it does not install
 creation-time producers itself. #1090 wires VOC and all three Finding source producers.

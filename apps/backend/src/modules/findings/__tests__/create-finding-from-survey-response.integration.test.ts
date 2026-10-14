@@ -562,7 +562,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
             [source.msId],
           )
         ).rows,
-      ).toHaveLength(variant === 'aa' ? 1 : variant === 'fallback' ? 2 : 0);
+      ).toHaveLength(variant === 'fallback' ? 2 : 0); // #1146: an empty MS owner skipped before a resolving AA rule is not recorded
     },
   );
 

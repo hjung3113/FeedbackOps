@@ -31,6 +31,7 @@ import { useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
+import { formatDateTime } from '@/lib/format/datetime';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 import { scopeMark } from '../lib/scopeMark.js';
@@ -181,12 +182,23 @@ function ManagedSystemsBody({
                 {systems.find((system) => system.id === warning.managed_system_id)?.name ??
                   'Managed System'}
                 {' · '}
-                {MANAGED_SYSTEM_COPY.workflows[warning.workflow]}
-                {' · '}
-                {MANAGED_SYSTEM_COPY.roles[warning.responsibility]}
+                {warning.origin === 'configuration' ? (
+                  MANAGED_SYSTEM_COPY.roles[warning.responsibility]
+                ) : (
+                  <>
+                    {MANAGED_SYSTEM_COPY.workflows[warning.workflow]}
+                    {' · '}
+                    {MANAGED_SYSTEM_COPY.rules[warning.rule]}
+                  </>
+                )}
                 {' · '}
                 <span>{MANAGED_SYSTEM_COPY.categories[warning.category]}</span>
-                {warning.origin === 'creation_failure' ? ` (${warning.count})` : ''}
+                {' · '}
+                <span>
+                  {warning.origin === 'configuration'
+                    ? MANAGED_SYSTEM_COPY.currentConfiguration
+                    : `${MANAGED_SYSTEM_COPY.creationFailure(warning.count)} · ${MANAGED_SYSTEM_COPY.lastFailure} ${warning.last_failed_at ? formatDateTime(warning.last_failed_at) : '—'}`}
+                </span>
                 <Button
                   variant="subtle"
                   size="sm"

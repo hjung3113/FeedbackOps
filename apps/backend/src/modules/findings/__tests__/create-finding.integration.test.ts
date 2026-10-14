@@ -403,7 +403,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
           variant === 'denied_admin'
           ? 0
           : variant === 'aa'
-            ? 1
+            ? 0
             : 2,
       );
       if (variant === 'revoked' || variant === 'expired')

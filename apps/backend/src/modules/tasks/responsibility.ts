@@ -112,17 +112,20 @@ export async function resolveTaskResponsibility<W extends Workflow>(args: {
     actorId: system.default_owner_actor_id,
     teamId: system.default_owner_team_id,
   });
+  const missingFailures: ResponsibilityDefaultFailure[] = [];
   for (const candidate of candidates) {
     const category = await failure(candidate.actorId, candidate.teamId);
     if (!category) return result(candidate.actorId, candidate.teamId, candidate.rule, true);
-    await recordResponsibilityDefaultFailure(tx, {
+    const diagnostic: ResponsibilityDefaultFailure = {
       workspace_id: workspaceId,
       managed_system_id: managedSystemId,
       workflow: args.workflow,
       responsibility: args.workflow === 'task_request' ? 'reviewer' : 'owner',
       rule: candidate.rule,
       category,
-    });
+    };
+    if (category === 'missing') missingFailures.push(diagnostic);
+    else await recordResponsibilityDefaultFailure(tx, diagnostic);
   }
   const area = args.analyticsAreaId
     ? await lockAnalyticsArea(tx, workspaceId, args.analyticsAreaId)
@@ -133,13 +136,16 @@ export async function resolveTaskResponsibility<W extends Workflow>(args: {
       : null;
   const category = await failure(null, teamId);
   if (!category) return result(null, teamId, 'analytics_area_owner', true);
-  await recordResponsibilityDefaultFailure(tx, {
+  const diagnostic: ResponsibilityDefaultFailure = {
     workspace_id: workspaceId,
     managed_system_id: managedSystemId,
     workflow: args.workflow,
     responsibility: args.workflow === 'task_request' ? 'reviewer' : 'owner',
     rule: 'analytics_area_owner',
     category,
-  });
+  };
+  if (category === 'missing') missingFailures.push(diagnostic);
+  else await recordResponsibilityDefaultFailure(tx, diagnostic);
+  for (const missing of missingFailures) await recordResponsibilityDefaultFailure(tx, missing);
   return result(null, null, 'workspace_fallback_queue', false);
 }
