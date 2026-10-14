@@ -61,7 +61,8 @@ is MVP close-out scope, not a post-MVP deferral or a requirement to wait for sno
 | Automatic idle/debounced preview, durable/shared drafts and draft dismiss/confirm/join | Unintended transmission and unbounded paid attempts; no persisted source decision identity. | Observed duplicate-check friction justifies new consent, budget and source-identity contracts. |
 | Generic AI billing platform or new vector service/process | Existing Postgres, VOC ownership and in-process pg-boss fit the internal corpus. | Multiple real consumers require shared billing, or bounded/indexed Postgres work fails measured operational budgets. |
 
-Bounded incremental scanning remains implementation work. Real-provider
+Bounded incremental/reconciliation scanning with transactional cursors and time
+bounds shipped in #1097; its 5k-corpus timing is part of the deferred evidence. Real-provider
 calibration/value, 5k-corpus activation evidence (#1101/#1152), and the 58-5
 two-week preview allowance review are post-MVP under the 2026-10-14 amendment.
 Generation remains off and unconfigured preview/suggestion surfaces are not

@@ -14,9 +14,11 @@ ADR-0015 for preview budgets and privacy-safe replay. ADR-0009's runner remains.
 
 Storage/settings/audit schemas (#1096) and item 2's backend suggestion
 generation/review commands and shared DTOs (#1097) and the paid-preview
-backend (#1099) are implemented. The suggestion and preview UI remain
-proposed/new here; implementation of item 2
-is not activation evidence. Generation remains default off pending #1152.
+backend (#1099) are implemented, as are the suggestion review UI and Admin
+opt-in (#1098) and the VOC create semantic check (#1100). Under the 2026-10-14
+amendment both UIs render only while an embedding provider is configured.
+Implementation is not activation evidence; generation remains default off
+pending #1152.
 
 ## Amendment — 2026-10-14: provider-free MVP
 
@@ -291,8 +293,8 @@ cancel/ignore stale responses. Render, typing, refocus, query retries and submit
 never trigger preview egress. All states keep submit usable. Candidate UUID
 navigation uses the existing unsaved-change blocker; no extra continue-anyway
 step, duplicate decision or forced recommendation workflow. Canonical copy
-will be implemented in existing `apps/frontend/src/lib/copy/voc.ts` and
-`apps/frontend/src/lib/copy/voc-cluster.ts` in the corresponding FE chunks.
+lives in `apps/frontend/src/lib/copy/voc.ts` (#1100) and
+`apps/frontend/src/lib/copy/voc-cluster.ts` (#1098).
 
 ## Alternatives rejected and non-goals
 

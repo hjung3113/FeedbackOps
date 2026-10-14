@@ -775,8 +775,10 @@ voc.voc_cluster_suggestion_cursors
 ```
 
 Cursor UUIDs are scan positions, not retained entity references. Counters/cursors
-are shared across pods and only generator commands spend/advance them,
-atomically with committed writes. Policy toggles never materialize or update them.
+are shared across pods. Only generator commands spend admissions and advance
+cursors; generation and the human confirm/discard/restore commands recompute the
+workspace occupancy counter, atomically with their committed writes. Policy
+toggles never materialize or update them.
 Only ended hour admission buckets may be reclaimed by the app; durable suggestions,
 workspace occupancy and cursors have no app DELETE/TRUNCATE. Migration guards enforce
 write-time workspace/MS reference integrity, immutable pair/initial timestamp and
