@@ -39,7 +39,7 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-text-muted">{SEMANTIC_VOC_PREVIEW_COPY.disclosure}</p>
+          <p className="break-keep text-xs text-text-muted">{SEMANTIC_VOC_PREVIEW_COPY.disclosure}</p>
           <Button
             type="button"
             variant="secondary"
@@ -54,7 +54,7 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
             {SEMANTIC_VOC_PREVIEW_COPY.check}
           </Button>
           {!canCheck && (
-            <p id={hintId} className="text-xs text-text-muted">
+            <p id={hintId} className="break-keep text-xs text-text-muted">
               {SEMANTIC_VOC_PREVIEW_COPY.required}
             </p>
           )}
