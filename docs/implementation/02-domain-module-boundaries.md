@@ -285,7 +285,7 @@ and explicit metadata allowlists stay inside those owners. Opaque Survey sources
 have no summary and cause no response reads. Permission owns active-deny overlap
 and selected risk calculation; collection reads do not invoke selected projections.
 
-## Responsibility and recovery seams (ADR-0067; implementation pending)
+## Responsibility and recovery seams (ADR-0067; implemented)
 
 Core-owned Managed Systems/Analytics Areas export locked transaction-aware routing inputs;
 #1090 extends the existing AA lock with `owner_team_id` and consumes the Core-owned
@@ -295,14 +295,14 @@ destination VOC/Finding/Task Request/Task application services decide eligibilit
 only owned assignments. Extend `lockManagedSystem`/approved readers; shared contains DTOs,
 not runtime resolution. Survey's independent operator rule stays intact.
 
-Dashboard owns proposed/new identity/occurrence/history/personal presentation projections.
+Dashboard owns identity/occurrence/history/personal presentation projections.
 Inject its transaction-aware recorder into relevant source/link commands; approved reads
 reevaluate authoritative predicates and same-transaction transitions are deduplicated.
 Avoid runtime cycles through command barrels; Core never imports domain/Dashboard commands.
 Generic GETs write no projection/source state. Existing pg-boss handles discovery/reconciliation.
 Survey owns response decisions and personal-gated presentation/history adapter; Dashboard
 may reference it without bypassing privacy or duplicating decision state. Integration owns
-proposed/new shared recovery UI/public seam consumed by Home; full workflows remain on sources.
+the shared recovery UI/public seam consumed by Home; full workflows remain on sources.
 
 ## Analytics Area report composition (ADR-0069; implementation pending)
 
@@ -387,6 +387,4 @@ Finding's public authorization and `analytics-areas/index.ts` locked owner-team 
 Core's `core/read-projections.ts` exports `readResponsibilityTeam` for transaction-aware
 same-workspace active-team input; destinations retain eligibility and all assignment writes.
 The Analytics Area lock preserves its prior signature and adds `owner_team_id` for both
-source workers. Cluster has no direct Area and no member-derived rule. The conductor must
-check this shared reader against parallel #1090 at integration; this worker touches no
-VOC/Finding creation command.
+source workers. Cluster has no direct Area and no member-derived rule.

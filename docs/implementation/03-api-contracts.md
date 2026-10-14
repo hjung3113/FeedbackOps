@@ -108,14 +108,13 @@ the idempotent run, and mismatch returns authorized current_revision only. See
 
 ## Default Owner / Reviewer Resolution
 
-Accepted, implementation pending: ADR-0067 supersedes ADR-0059 D1 and the former
+Accepted and implemented: ADR-0067 supersedes ADR-0059 D1 and the former
 required-reviewer/automatic-default creation rejection. Use the destination service to
 persist actual responsibility for VOC, all three Finding sources, all three Task Request
 sources, and approved-request Task conversion.
 
 Order: permitted explicit Actor/team → Managed System target → active same-system
-Analytics Area owner team → existing scoped fallback queue. Task Request tries the
-proposed/new Managed System reviewer pair before eligible general owner. Authorized explicit
+Analytics Area owner team → existing scoped fallback queue. Task Request tries the Managed System reviewer pair before eligible general owner. Authorized explicit
 null skips defaults; omission requests them. Reject invalid explicit values with
 `validation.failed`; skip invalid automatic candidates and create unassigned with an
 Admin configuration warning. Preserve owning capability, Admin-bypass and explicit-deny

@@ -781,11 +781,17 @@ async function stepOutcomeFollowUp(survey) {
       }
       requestId = createdRequest.body?.id;
     }
+    // Decisions carry optimistic concurrency (#1080); only the Admin detail returns the revision.
+    const detail = await request(`/permissions/requests/${requestId}`, { persona: 'mock-admin-2' });
+    if (!detail.ok) {
+      recordFailed(step, detail.status, detail.code);
+      return;
+    }
     const approved = await request(`/permissions/requests/${requestId}/approve`, {
       method: 'POST',
       persona: 'mock-admin-2',
       idempotency: true,
-      body: { reason: TITLE.personalRead },
+      body: { expected_revision: detail.body?.revision, reason: TITLE.personalRead },
     });
     if (!approved.ok) {
       recordFailed(step, approved.status, approved.code);

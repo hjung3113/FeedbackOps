@@ -123,7 +123,7 @@ List-filter meaning of managed_system_id=all: docs/implementation/05-permission-
 
 ## Default Owner / Reviewer Resolution
 
-Accepted close-out contract, implementation pending: ADR-0067 supersedes ADR-0059 D1
+Accepted close-out contract, implemented: ADR-0067 supersedes ADR-0059 D1
 and the earlier rule rejecting creation when automatic defaults cannot resolve.
 
 VOC, Finding, Task Request, and converted Task destination application services resolve:
@@ -140,8 +140,8 @@ for Task Request/Task), including its Admin bypass/explicit-deny semantics. Acti
 same-workspace teams can be persisted without selecting a member or granting access.
 Ordinary VOC reporters cannot supply owner fields; privileged overrides require `voc.triage`.
 
-Persist actual fields, not a suggestion: VOC owner pair, proposed/new Finding owner pair,
-proposed/new Task Request assigned-reviewer pair, and Task assignee Actor/proposed team pair.
+Persist actual fields, not a suggestion: VOC owner pair, Finding owner pair,
+Task Request assigned-reviewer pair, and Task assignee Actor/`assignee_team_id` pair.
 `reviewer_actor_id` remains the actual decision Actor. Untriaged/pending-review/Backlog
 states and optional VOC owner (ADR-0045) remain valid. Assignment grants neither exclusive
 review nor self-approval. Creation responses/audits include safe `default_resolved`,

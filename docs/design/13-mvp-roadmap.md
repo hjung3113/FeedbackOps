@@ -12,7 +12,7 @@ This document groups release scope and includes short shipped/open notes for par
 ```text
 - VOC Cluster Candidate 자동 생성 (shadow measurement shipped; unattended cluster writes remain open per ADR-0054)
 - 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester withdrawal / pending edit, revision-safe narrowed approval, governed direct grant and four explained server risk indicators are accepted close-out work, not built (ADR-0066); active grant revoke and deny lifting shipped in #762 per ADR-0061; single-object authorization is post-MVP)
-- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; five editable bands/neutral empty state accepted by ADR-0067, implementation pending)
+- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; five editable bands/neutral empty state accepted by ADR-0067, shipped in #1087/#1088)
 
 - VOC Cluster 제안 자동 생성 (shadow measurement shipped; human-confirmed suggestions, ADR-0054 choice b, accepted by ADR-0068; implementation pending)
 - 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester cancel / pending edit undecided, see `docs/research/permission-request-cancel-edit.md`; active grant revoke and deny lifting ship with the Admin "활성 권한" screen in #762 per ADR-0061; direct grant without a request and risk scoring are not built)
@@ -41,7 +41,7 @@ Scope:
 ```text
 - Open issues and filed follow-ups, including the ones deferred by the value gate (#739, #740, #816, #340, #1015, #1012)
 - Phase 1 remainder: Evidence route, unattended VOC Cluster writes (ADR-0054 choice c), requester cancel / pending edit, direct grant, risk indicators, editable coverage thresholds, Analytics Area report
-- ADR-0059 D2: Survey templates; ADR-0067 supersedes D1/D3 deferrals with accepted responsibility defaults and bounded Dashboard recovery, implementation pending
+- ADR-0059 D2: Survey templates; ADR-0067 supersedes D1/D3 deferrals with accepted responsibility defaults and bounded Dashboard recovery, shipped (#1088–#1094)
 
 - Phase 1 remainder: Evidence route, VOC Cluster suggestions with human creation (ADR-0054 choice b, superseding choice c by the 2026-10-13 owner decision in ADR-0068), requester cancel / pending edit, direct grant, risk indicators, editable coverage thresholds, Analytics Area report
 - ADR-0059 D1-D3: default owner and reviewer resolution, Survey templates, Dashboard recovery-item model

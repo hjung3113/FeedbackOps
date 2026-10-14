@@ -28,7 +28,7 @@ projection for Permission requester detail. Keep storage reads inside Core and
 return only the allowed question metadata. Permission supplies authorization and
 owns requester lifecycle/risk; Core must not import Permission or decide access.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; implemented)
 
 - ADR-0067 Managed System reviewer Actor/team inputs alongside owner are implemented by #1089.
   Core-owned registry/Analytics Area seams provide transaction-aware inputs, not destination

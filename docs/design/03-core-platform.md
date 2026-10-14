@@ -98,7 +98,7 @@ Managed System may be used as:
 - Analytics Area grouping context
 ```
 
-Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (Survey operator and ADR-0067 VOC/Finding owner defaults are built; Task Request/Task routing remains the separate 56-F item); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
+Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (Survey operator and ADR-0067 VOC/Finding owner defaults are built, as is ADR-0067 Task Request/Task routing); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
 
 Project language in older docs is superseded for MVP. If needed later, use Work Initiative for execution grouping instead of scope, permissions, and defaults.
 

@@ -55,9 +55,9 @@ It does not own Task status, Survey Response conversion, Finding persistence, or
 
 - Test route restore, selected detail panels, triage filters, public update flows, forbidden Survey Response-to-VOC affordances, and reporter/internal status separation when touched.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; implemented)
 
-- ADR-0067 accepts real source owner display/edit/filter with defaults (implementation pending).
+- ADR-0067 accepts real source owner display/edit/filter with defaults.
   Ordinary reporter create has no owner override; assigned VOC remains untriaged and optional
   triage owner stays valid. Render safe creation routing metadata and retain source workflow.
 

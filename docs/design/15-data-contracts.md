@@ -30,7 +30,7 @@ core.managed_systems
 - external_key: text, nullable
 - default_owner_actor_id: uuid, nullable
 - default_owner_team_id: uuid, nullable; at most one of default_owner_actor_id and default_owner_team_id is set
-- default_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
+- default_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing shipped in #1090/#1091)
 - default_reviewer_team_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067); XOR-or-both-null with reviewer Actor
 - default_survey_operator_actor_id: uuid, nullable
 - archived_at: timestamp, nullable
@@ -378,7 +378,7 @@ Rules:
 - Reviewer may be Admin or Developer within the same Managed System scope.
 - Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
-- ADR-0067 accepts default resolution into the proposed assigned-reviewer pair, implementation pending. `reviewer_actor_id` remains actual decision attribution.
+- ADR-0067 default resolution into the assigned-reviewer pair is implemented. `reviewer_actor_id` remains actual decision attribution.
 ```
 
 ## Task
@@ -640,7 +640,7 @@ Checks, scope resolution, active lists, revoke validation and seed existence che
 exclude superseded rows. An old/expired grant ID remains non-revocable (409).
 See `docs/implementation/04-database-and-migrations.md` for rollout and rollback limits.
 
-## Coverage settings and recovery projections (ADR-0067; proposed/new)
+## Coverage settings and recovery projections (ADR-0067; implemented)
 
 `core.workspace_settings.coverage_thresholds` (BE/shared #1087; editor and rendered
 consumers shipped #1088 in the same PR): JSON object with exactly `voc-task`,

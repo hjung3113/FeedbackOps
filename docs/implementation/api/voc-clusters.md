@@ -49,10 +49,10 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 | Linked Findings visibility | `linked_findings` on both list and detail contains every active `created_finding` or `evidence_of` Finding link that is readable under Admin or `finding.read` on that Finding's own Primary Managed System. Unreadable targets are omitted entirely, including from list projections. |
 | Audit events | `voc_cluster_created`, `voc_cluster_updated`, `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `finding_linked_to_voc_cluster`, `finding_unlinked_from_voc_cluster`, `entity_link.created`, `entity_link.detached`, `task_request_created_from_voc_cluster`. |
 
-## Close-out responsibility (ADR-0067; implementation pending)
+## Close-out responsibility (ADR-0067; implemented)
 
 Cluster-origin Finding and Task Request commands use their destination responsibility
-resolvers and proposed/new owner/assigned-reviewer DTOs. Cluster routes remain source-shaped;
+resolvers and owner/assigned-reviewer DTOs. Cluster routes remain source-shaped;
 they never write target responsibility tables themselves. Preserve same-Managed-System
 compatibility, source visibility, links/audit and idempotent replay; explicit/null/default/
 fallback behavior follows ADR-0067. Assignment display/edit/filter belongs to the target

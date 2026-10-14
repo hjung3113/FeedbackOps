@@ -71,9 +71,9 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 
 - Test Task Request review flows, backlog/board selected detail restore, Managed System filters, linked evidence summaries, and reporter-facing status review candidates when touched.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; implemented)
 
-- ADR-0067 accepts proposed/new assigned-reviewer Actor/team display/edit/filter distinct from
+- ADR-0067 accepts assigned-reviewer Actor/team display/edit/filter distinct from
   actual decision Actor, and Task team assignee. Personal Home requests use reviewer=me;
   full authorized review remains available and assignment grants no self-approval.
 - Explicit null opts out, omission requests defaults; preserve Backlog, source links and

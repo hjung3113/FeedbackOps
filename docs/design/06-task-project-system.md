@@ -441,18 +441,18 @@ Developer discussion from the Gantt.
 - Automatic priority decision
 ```
 
-## Responsibility routing (ADR-0067; implementation pending)
+## Responsibility routing (ADR-0067; implemented)
 
-Proposed/new assigned-reviewer Actor/team fields on Task Request route pending work;
+Assigned-reviewer Actor/team fields on Task Request route pending work;
 `reviewer_actor_id` remains the actual deciding Actor. Reviewer default → eligible owner
 → same-system Analytics Area team → shared authorized review queue never grants exclusive
 review or self-approval. Authorized explicit null opts out; invalid automatic candidates
 fall through with Admin warning, invalid explicit assignments reject `validation.failed`.
 
-Converted Task gains proposed/new `assignee_team_id` paired with `assignee_actor_id`.
+Converted Task has `assignee_team_id` paired with `assignee_actor_id`.
 Use the owner resolver on omission, explicit Actor/team/null when permitted, retain Backlog,
 links/audit/idempotency, and notify only a concrete Actor once. Defaults change no existing
-assignments. Source-owned display/edit/filter and Home assigned-reviewer filter ship with
+assignments. Source-owned display/edit/filter and Home assigned-reviewer filter shipped with
 fields; personal views do not invent team membership or narrow operational totals.
 The older conversion assignee validation/status text describes shipped behavior; ADR-0067
 supersedes it only for explicit responsibility validation and default/null routing.

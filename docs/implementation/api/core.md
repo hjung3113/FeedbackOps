@@ -67,7 +67,7 @@ lists yield empty arrays. Response:
 }
 ```
 
-## Close-out settings and registry inputs (ADR-0067; settings editor shipped #1088, registry inputs pending)
+## Close-out settings and registry inputs (ADR-0067; settings editor shipped #1088, registry inputs shipped #1089)
 
 The BE contract includes `coverage_thresholds` in the full resolved settings response and
 strict nonempty partial PATCH (#1087). The Settings editor and rendered consumer compatibility
