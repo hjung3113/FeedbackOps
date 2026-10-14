@@ -96,8 +96,8 @@ voc
 - voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
 - voc_recommendation_decisions
 - voc_cluster_autogen_shadow_candidates (non-domain pairwise measurements; ADR-0054)
-- voc_cluster_suggestions (inert retained pair history; ADR-0068)
-- voc_cluster_suggestion_counters / voc_cluster_suggestion_admissions / voc_cluster_suggestion_cursors (inert admission/scan state; ADR-0068)
+- voc_cluster_suggestions (retained suggestion lifecycle; ADR-0068, #1097)
+- voc_cluster_suggestion_counters / voc_cluster_suggestion_admissions / voc_cluster_suggestion_cursors (admission/scan state; ADR-0068, #1097)
 - voc_public_updates
 - public_update_review_candidates
 - voc_reporter_replies
@@ -521,12 +521,13 @@ Execution and combined #739/#740 verification are still required.
 - This closes direct-table paths, not SQL-level unlinkability against stolen app
   credentials: permitted definers remain trusted application tools.
 
-## Close-out assistance storage (ADR-0068; inert suggestions #1096, preview shipped #1099)
+## Close-out assistance storage (ADR-0068; suggestions shipped #1096/#1097, preview shipped #1099)
 
 Generated migration `0062_cluster_suggestion_storage.sql` (journal + snapshot) adds
 `voc.voc_cluster_suggestions`, the three VOC-owned counter/cursor tables in
 `docs/design/15-data-contracts.md`, and the default-off workspace policy. No Cluster
-schema, queue registration, generation/review commands or Admin editor are added.
+schema or Admin editor is added by storage #1096. Item 2 (#1097) adds the
+bounded hourly queue and human review commands.
 Shadow measurements and saved recommendations stay separate and unchanged.
 
 DB checks enforce sorted/distinct pairs, positive revision/version/dimensions,
@@ -535,9 +536,9 @@ The pair unique key excludes version/state, so retained terminal identities supp
 recreation across model changes. NO ACTION FKs retain VOC/Actor/Cluster references;
 write guards check workspace/MS integrity without adding domain Cluster columns or
 keys, freeze initial identity/timestamp and make confirmed rows immutable. Source
-archive/text/MS changes still require future current-eligibility checks. Freshness,
+archive/text/MS changes require application current-eligibility checks. Freshness,
 disjoint/cap admission, revision advancement, legal review transitions and five-minute
-restore belong to item 2's commands, not this inert item.
+restore belong to item 2's shipped commands, not the storage guards.
 
 `fops_app` has SELECT/INSERT/UPDATE on suggestions, occupancy and cursors, and
 SELECT/INSERT/UPDATE/DELETE on hourly admissions. An invoker guard permits app DELETE
@@ -556,6 +557,42 @@ vector expiry, and invoker retention triggers restrict app DELETE to expired
 24h tombstones/ended counters. SELECT/INSERT/UPDATE/DELETE is granted only on
 these two operational tables, never Cluster, member or audit tables. Provider
 I/O remains outside short reservation/completion transactions.
+
+Migration `0071_voc_cluster_suggestion_generation.sql` (Drizzle journal/snapshot)
+adds `(workspace_id, embedding_version, updated_at, voc_id)` on embeddings and
+precreates `voc.cluster_suggestions` with the existing pg-boss retry policy.
+No grants change.
+
+Generation uses watermark freshness as a SQL prefilter and TypeScript derived
+hash checks before admitting/refreshing. Pair provider/model/dimensions/version
+must match the active provider identity and embedding version; dimensions are
+filtered before `<=>`. The independent
+`VOC_CLUSTER_SUGGESTION_CUT = 0.85` does not alter saved recommendation cuts.
+Each workspace/MS transaction scans up to 200 incremental embedding sources
+ordered by `(updated_at, voc_id)` and 200 reconciliation sources ordered by UUID.
+The active version resets both cursor positions; initial watermark is year 0001
+with the zero UUID and reconciliation starts before the first UUID. Empty
+incremental pages retain their last position. A short/empty reconciliation page
+wraps to the start and stamps `reconciled_at`; late old-watermark embeddings are
+therefore recovered on a later sweep. Timestamp cursor strings preserve database
+microseconds. Sorted pairs are deduplicated before score DESC/UUID greedy admission.
+
+Neighbour queries apply SQL scope/archive/watermark/metadata/membership/dismissal/
+terminal-pair/other-eligible-pair vetoes before distance ordering and LIMIT 10.
+TypeScript hashes are checked before retaining at most ten neighbours per source;
+up to ten bounded candidate pages recover peers behind stale hashes. Thus at most
+400 sources, 40,000 candidate rows and 4,000 retained pairs are considered per MS
+transaction. Statement timeout starts at 30s, shrinking with remaining transaction
+time at scan/admission boundaries; lock timeout is at most 5s. Workspace occupancy
+is recomputed over all pending rows, in pages, without actor visibility/read-ceiling
+truncation. Read and occupancy keysets order by score DESC, sorted VOC UUIDs ASC,
+then suggestion ID ASC, preserving ties across Managed Systems. The read ceiling
+counts only rows passing elevated Finding scope and both canonical VOC visibility
+predicates in SQL. Timeout rollback leaves cursors/counters/admissions unchanged.
+New admission caps are five/MS/UTC hour and twenty eligible pending/workspace;
+pending metadata refresh and identical retries spend no slot. Generation writes
+no domain audit, Cluster/member, saved decision or Entity Link.
+
 
 ## Responsibility storage (#1089 / ADR-0067 56-D)
 

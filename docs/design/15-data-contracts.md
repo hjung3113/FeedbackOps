@@ -724,7 +724,7 @@ SELECT is revoked. #816 approval selection IDs are safe selection references,
 not response IDs; candidate suppression counts response subjects/answers, never
 approval rows. Its proposed/new DTO/API shapes are owned by the API contracts.
 
-## VOC Cluster Suggestion (ADR-0068; inert storage #1096)
+## VOC Cluster Suggestion (ADR-0068; storage #1096, BE/shared shipped #1097)
 
 Owner: VOC. Separate from both domain Clusters and shadow measurements.
 
@@ -754,13 +754,13 @@ saved-dismissal state before reads or occupancy counts. Ineligible pending rows
 release cap/disjoint occupancy without becoming human rejection. Proposal UUID
 is not a CLU display ID; no status/origin fields are added to domain Clusters.
 
-Proposed suggestion read DTO is the complete-pair shape in
+Suggestion read DTO is the complete-pair shape in
 `docs/implementation/api/voc.md`: current authorized titles/prose, reviewed
 hashes/version/revision, no partial pair, hidden total, score or execution fields.
 Human-confirmed Cluster uses existing DTO/status/provenance fields. Suggestion
 confirm writes no saved directional recommendation decision.
 
-VOC-owned operational storage (inert; no generator registered):
+VOC-owned operational storage (hourly bounded generator registered by #1097):
 
 ```text
 voc.voc_cluster_suggestion_counters
@@ -775,14 +775,14 @@ voc.voc_cluster_suggestion_cursors
 ```
 
 Cursor UUIDs are scan positions, not retained entity references. Counters/cursors
-are shared across pods and only future generator commands spend/advance them,
+are shared across pods and only generator commands spend/advance them,
 atomically with committed writes. Policy toggles never materialize or update them.
 Only ended hour admission buckets may be reclaimed by the app; durable suggestions,
 workspace occupancy and cursors have no app DELETE/TRUNCATE. Migration guards enforce
 write-time workspace/MS reference integrity, immutable pair/initial timestamp and
 confirmed history; NO ACTION FKs retain referenced VOC/Actor/Cluster rows.
 Current eligibility, disjointness/caps, revision increments and five-minute restore
-validation belong to future application commands (ADR item 2), not these DB checks.
+validation belong to the shipped application commands (ADR item 2), not these DB checks.
 Existing source changes may make pending pairs ineligible; reads must recheck them.
 
 ## Draft Similar-VOC Preview operational data (ADR-0068; shipped by #1099)

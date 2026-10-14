@@ -12,10 +12,11 @@ Supersedes ADR-0046 D4's paid-preview deferral only for #340; #293's shipped
 heuristic and navigation-only decision remain valid. Extends ADR-0012 and
 ADR-0015 for preview budgets and privacy-safe replay. ADR-0009's runner remains.
 
-All new tables, settings, routes, DTOs, events and module subdirectories below
-are **proposed/new, not implemented by this docs-only decision**. Existing
-source files named in Implementation issues are integration seams, not evidence
-that the new behavior ships.
+Storage/settings/audit schemas (#1096) and item 2's backend suggestion
+generation/review commands and shared DTOs (#1097) and the paid-preview
+backend (#1099) are implemented. The suggestion and preview UI remain
+proposed/new here; implementation of item 2
+is not activation evidence. Generation remains default off pending #1152.
 
 ## Context
 
@@ -53,7 +54,7 @@ not empirical conclusions.
 
 ### Cluster suggestions: memo C1–C10 adapted to choice (b)
 
-1. **C1 — Opt-in.** Proposed `voc_cluster_suggestions_enabled=false` is one
+1. **C1 — Opt-in.** `voc_cluster_suggestions_enabled=false` is one
    workspace policy through existing Admin `PATCH /workspace/settings` and the
    resolved-settings barrel. Effective changes alone are audited; preserve
    other policies. No per-MS switch, schedule UI or configurable cut. Generation
@@ -119,9 +120,9 @@ not empirical conclusions.
    members, sets Cluster status `confirmed` with the human's provenance, records
    the suggestion's confirmed state and Cluster reference, and writes existing
    `voc_cluster_created`, `voc_cluster_member_added`, `voc_cluster_updated`
-   events plus proposed `voc_cluster_suggestion_confirmed`. Human discard and
-   successful restore use proposed `voc_cluster_suggestion_discarded` and
-   `voc_cluster_suggestion_restored`. Proposed audit subject is
+   events plus `voc_cluster_suggestion_confirmed`. Human discard and
+   successful restore use `voc_cluster_suggestion_discarded` and
+   `voc_cluster_suggestion_restored`. audit subject is
    `voc_cluster_suggestion/<suggestion UUID>`; detail schemas contain pair IDs,
    MS, revision/version/hashes, score/cut and Cluster ID when confirmed, never
    bodies or copied titles. No audit for reads, replay or no-op.
@@ -134,11 +135,11 @@ not empirical conclusions.
 **Storage/ownership.** VOC owns proposed
 `voc.voc_cluster_suggestions`, separate from the existing measurement table
 `voc.voc_cluster_autogen_shadow_candidates`. A permanent unique key is
-workspace/MS/sorted pair, independent of embedding version; proposed lifecycle
+workspace/MS/sorted pair, independent of embedding version; lifecycle
 is `pending|discarded|confirmed`, with ineligibility derived rather than a new
 Cluster status. Use one durable row/revision and append-only human audit history.
 No Cluster provenance/backfill/discard columns or new Cluster states are needed.
-VOC's proposed `cluster-suggestions/` service calls only VOC Clusters' exported
+VOC's `cluster-suggestions/` service calls only VOC Clusters' exported
 application commands, never a foreign repository. Do not materialize the saved
 recommendation read resource or expose raw shadow rows as suggestions.
 
@@ -147,16 +148,33 @@ migration-precreated `voc.cluster_suggestions` queue. One bounded transaction
 per workspace/MS, incremental embedding-revision scan with periodic reconciliation,
 not another unrestricted quadratic sweep. Cursor advances only on committed
 work; replays cannot duplicate pairs or bypass caps. Coordinate generation,
-confirm/restore and manual/saved membership writers through this lock order:
-workspace suggestion/cap advisory lock → resolved-settings singleton → active
-MS owner lock → VOC locks in UUID order → suggestion row → Cluster commands.
-Existing membership paths must acquire the same admission locks before Cluster
-locks; serialize mutations that could introduce conflicting membership. Disable
-serializes through the settings row and never acquires those locks in reverse.
+confirm/discard/restore through the dated matrix below. Existing manual/saved
+membership paths retain their recovery-first locking; they do not acquire new
+suggestion admission locks. Disable serializes through the settings row and
+never acquires those locks in reverse.
 Use approved owner barrels/projections. Provider I/O never holds a DB transaction.
 At ~5k VOCs the conductor measures scan/query time and queue growth; if bounded
 incremental work is still too slow, keep generation off and justify indexed
 neighbor search separately, without a new vector service/process.
+
+**2026-10-14 concurrency amendment (#1097 brief check).** Every suggestion
+writer takes the workspace recovery advisory lock first. This serializes with
+existing membership and permission writers and prevents the generation/settings,
+manual createCluster/MS/actor-FK, permission-approval/recovery/actor/settings cycle.
+Reacquiring recovery inside Cluster commands is safe in the same transaction.
+
+| Writer | Lock order after entering its transaction |
+| --- | --- |
+| Generation | recovery → suggestion advisory → settings FOR UPDATE → active MS FOR SHARE → VOCs FOR SHARE in UUID order → suggestion rows |
+| Confirm | recovery → authorization → idempotency → suggestion advisory → MS FOR UPDATE → VOCs FOR UPDATE in UUID order → suggestion row → Cluster commands |
+| Discard / restore | recovery → authorization → idempotency → suggestion advisory → MS FOR UPDATE → VOCs FOR SHARE in UUID order → suggestion row; restore also rechecks C6 |
+
+Generation pins scoring embeddings after VOC locks. Existing membership writers
+stay unchanged; recovery serialization makes an earlier membership stale for
+confirm, while manual multi-membership after confirmation remains allowed.
+Confirm/restore do not lock settings: disabling generation never blocks review.
+Authorization is checked before cached-key lookup; only a new confirmation
+returns 201, replay/already-confirmed return 200 after access/key validation.
 
 **Read/UI boundary.** Suggestion read requires elevated `finding.read` on the
 pair's MS and both VOCs readable via the existing VOC scope-or-reporter rule.
@@ -293,12 +311,12 @@ existing coverage; no mock internal-call assertions substitute for public seams.
    Acceptance: permanent sorted-pair uniqueness, lifecycle/retention constraints,
    migration grants as both roles; missing policy defaults off; Admin-only PATCH,
    no-op audit suppression and preservation of unrelated settings.
-2. **Bounded suggestion generation and human review commands — BE/shared.**
+2. **Bounded suggestion generation and human review commands — BE/shared (shipped #1097).**
    Depends on 1. Existing seams: `apps/backend/src/modules/voc/jobs/index.ts`,
    `apps/backend/src/modules/voc/jobs/cluster-autogen-shadow.ts`,
    `apps/backend/src/modules/voc/recommendations/`,
    `apps/backend/src/modules/voc-clusters/` and `packages/shared/src/vocs/`.
-   New proposed `voc/cluster-suggestions/` service/repo/routes and generation job;
+   Implemented `voc/cluster-suggestions/` service/repo/routes and generation job;
    exported Cluster commands and coordinated membership locks. Acceptance:
    off/disabled/stale/cross-scope/archived/member/dismissed inputs produce no
    suggestion; retries/final-slot races obey caps/disjointness; reads filter both

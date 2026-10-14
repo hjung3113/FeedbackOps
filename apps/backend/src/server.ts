@@ -1,3 +1,5 @@
+import { createVocClusterSuggestionsService } from './modules/voc/cluster-suggestions/service.js';
+import { vocClusterSuggestionsRoutes } from './modules/voc/cluster-suggestions/routes.js';
 import { createOutcomeRecoveryRecorder } from './modules/surveys/recovery-presentation.js';
 import { createOwnerRecoveryRecorder } from './modules/dashboard/truth.js';
 import type { NotificationSubjectReference } from '@fops/shared';
@@ -117,6 +119,8 @@ import {
 export interface BuildServerOptions {
   embeddingProvider?: EmbeddingProvider;
   similarityPreviewDeadlineMs?: number;
+  suggestionPageSize?: number;
+  suggestionReadScanCeiling?: number;
   similarityPreviewClock?: () => Date;
   recoveryClock?: () => Date;
   config: AppConfig;
@@ -157,6 +161,7 @@ export interface BuildServerOptions {
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
+  const embeddingProvider = opts.embeddingProvider ?? createEmbeddingProvider(opts.config);
   const { config, dbHandle, boss } = opts;
 
   if (!config.WORKSPACE_ID) {
@@ -804,7 +809,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     embeddingEnabled: isEmbeddingEnabled(config),
     createClustersService: (db) =>
       createVocClustersService({
-    recoveryRecorder,
+        recoveryRecorder,
         db,
         auditService,
         checkService,
@@ -818,6 +823,36 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     workspaceId,
     rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
+  const clusterSuggestionsService = createVocClusterSuggestionsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+    embeddingVersion: config.EMBEDDING_VERSION,
+    embeddingEnabled: isEmbeddingEnabled(config),
+    embeddingIdentity: embeddingProvider.identity(),
+    ...(opts.suggestionPageSize !== undefined
+      ? { suggestionPageSize: opts.suggestionPageSize }
+      : {}),
+    ...(opts.suggestionReadScanCeiling !== undefined
+      ? { suggestionReadScanCeiling: opts.suggestionReadScanCeiling }
+      : {}),
+    createClustersService: (db) =>
+      createVocClustersService({
+        db,
+        auditService,
+        checkService,
+        idempotencyService,
+        recoveryRecorder,
+        postPublicUpdate: conversationService.postPublicUpdate,
+      }),
+  });
+  await app.register(vocClusterSuggestionsRoutes, {
+    service: clusterSuggestionsService,
+    sessionService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
+  });
   const preSubmitVocPeersService = createPreSubmitVocPeersService({ db: dbHandle.db });
   await app.register(similarityPreviewRoutes, {
     sessionService,
@@ -826,7 +861,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     service: createSimilarityPreviewService({
       db: dbHandle.db,
       config,
-      provider: opts.embeddingProvider ?? createEmbeddingProvider(config),
+      provider: embeddingProvider,
       log: toJobLog(app.log),
       ...(opts.similarityPreviewDeadlineMs !== undefined
         ? { deadlineMs: opts.similarityPreviewDeadlineMs }

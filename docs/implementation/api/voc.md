@@ -419,7 +419,7 @@ this extension does not implement its storage or a second recovery lifecycle. Co
 Report links include the source Managed System UUID and Area UUID/unset. Existing Triage's archived
 Managed System exclusions remain; report links use Inbox so retained context is still readable.
 
-## VOC Cluster suggestions (ADR-0068; proposed/new, not shipped)
+## VOC Cluster suggestions (ADR-0068; BE/shared shipped #1097; UI #1098 pending)
 
 Requirement: FOP-VOC-003/004, FOP-OUT-004. VOC owns the separate non-domain
 suggestion resource. Its read/generation never writes a Cluster or saved
@@ -438,7 +438,7 @@ Finding-read MS scope, requires elevated `finding.read` and both active VOCs
 readable through the existing VOC predicate, then C6 eligibility before ordering
 and limit. Optional UUID MS filter grants no authority. Read tier; response
 `200 { items }`, maximum 20 eligible pending pairs, score DESC/sorted UUID ASC.
-Each proposed item is `{ id, primary_managed_system_id, revision,
+Each item is `{ id, primary_managed_system_id, revision,
 embedding_version, source_hashes:[hash_a,hash_b],
 vocs:[{id,display_id,title,description_rich_content}, {...}] }`, in sorted UUID
 order. Both bodies are current authorized VOC prose, not cached shadow text.
@@ -446,6 +446,23 @@ No partial pairs, unfiltered total, score/confidence, severity or Cluster ID.
 Provider disabled returns `200 { available:false, reason:'provider_disabled',
 items:[] }`; enabled reads return `200 { available:true, items }` (possibly
 empty). This availability union is separate from saved recommendations/preview.
+
+C6 first requires both active-version embeddings' source-row watermarks to be
+at least the current VOC `updated_at`. Generation/read/confirm/restore recompute
+`deriveVocEmbeddingInput(...).sourceHash` in TypeScript and compare both hashes
+to scoring rows; provider/model/dimensions/version must match the pair and the
+stored metadata and the active provider identity. Incompatible dimensions are
+filtered before cosine distance.
+Generation pins the independent `VOC_CLUSTER_SUGGESTION_CUT = 0.85`; saved
+recommendations retain 0.75. Metadata refresh increments revision once, identical
+retry changes nothing and spends no admission.
+
+Reads filter elevated Finding scope and both canonical VOC visibility predicates
+in SQL before ordering or paging. They use score DESC/sorted VOC UUID ASC/suggestion
+ID ASC keyset pages of 100 visible candidates, checking C6 on each page, and
+continue until 20 eligible pairs or exhaustion, stopping after 10,000 visible
+candidates and returning only complete pairs found. This read ceiling never
+limits whole-workspace occupancy calculation. No total is returned.
 
 Mutation tier; required UUIDv4 `Idempotency-Key` and strict body:
 `{ expected_revision, embedding_version, source_hashes:[hash_a,hash_b] }` for
@@ -467,7 +484,7 @@ Cluster/audit. Terminal confirmed replay still requires current pair read/manage
 access, but does not rerun pending-membership eligibility against its own result.
 Concurrent membership acquisition returns stale instead of joining. It writes
 suggestion state/reference, existing Cluster creation/member/confirmation audits
-and proposed `voc_cluster_suggestion_confirmed`, all in one transaction. It
+and `voc_cluster_suggestion_confirmed`, all in one transaction. It
 writes no saved recommendation decision or Entity Link and creates no execution
 work. Existing domain Cluster APIs apply afterwards.
 
@@ -480,7 +497,7 @@ disjointness/pending-cap rechecks it clears that discard's veto and returns
 `200 { id, revision }`; repeat successful restore with current revision is a
 no-op. Same-key replay returns the original command result after authorization,
 without mutating or renewing grace. Confirmed suggestions cannot be discarded
-or restored. Changed human actions write proposed suggestion discard/restore
+or restored. Changed human actions write suggestion discard/restore
 audit events; no-op/replay/reads write none. These actions cannot delete or undo
 Cluster/member/link/audit work, and affect no Dashboard/coverage queues.
 

@@ -493,7 +493,7 @@ audits; actual personal-data reads keep existing per-row audits. Raw audit SELEC
 is revoked at #740 cutover without deleting Actor/detail history (ADR-0008).
 Endpoint authority: `api/surveys.md` and `api/findings.md`.
 
-## Cluster suggestions and paid preview (ADR-0068; proposed/new)
+## Cluster suggestions and paid preview (ADR-0068; BE shipped #1097/#1099)
 
 Suggestion list/read: elevated `finding.read` on the pair's MS **and both VOCs**
 readable through VOC's canonical scope-or-reporter rule. Suggestion mutations:
@@ -508,7 +508,7 @@ Shared human event schemas registered by #1096 are `voc_cluster_suggestion_confi
 `voc_cluster_suggestion_discarded`, `voc_cluster_suggestion_restored`, subject
 `voc_cluster_suggestion/<UUID>`. The shared event registry/barrel exports all three
 strict detail schemas; audit subjects remain strings (no new Core subject enum).
-Human command producers are deferred to ADR item 2. Future confirm also emits
+Human command producers ship in ADR item 2 (#1097). Confirm also emits
 existing human Cluster create/member/update events in the same transaction;
 no-op/replay writes no second event. Details contain pair/MS/revision/version/
 hashes/score/cut and resulting Cluster reference, never prose/titles. Automatic

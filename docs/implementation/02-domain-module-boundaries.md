@@ -335,20 +335,36 @@ no Survey/Finding mutation ownership. #816 reuses the approved Survey projection
 and Finding-owned attachment command rather than granting personal-response
 access to safe result readers.
 
-## Cluster suggestion and draft-preview ownership (ADR-0068; proposed/new)
+## Cluster suggestion and draft-preview ownership (ADR-0068; suggestions shipped #1097, preview shipped #1099)
 
 VOC owns the non-domain suggestion lifecycle, generation job/cursor/caps and
-paid-preview ledger/budgets/cleanup (#1099 implemented); subdirectories are
+paid-preview ledger/budgets/cleanup (#1097 suggestions and #1099 preview implemented); subdirectories are
 `apps/backend/src/modules/voc/cluster-suggestions/` and
-`apps/backend/src/modules/voc/similarity-preview/` (shipped #1099). Cluster suggestions
-remain proposed. They are not a generic Core
+`apps/backend/src/modules/voc/similarity-preview/` (shipped #1099). They are not a generic Core
 AI service. VOC Clusters alone writes its existing Cluster/member tables through
 exported application commands, called only on human suggestion confirmation.
 Automatic generation calls no Cluster mutation service. Saved recommendations
-and shadow measurements remain separate. Workspace Settings owns the proposed
+and shadow measurements remain separate. Workspace Settings owns the shipped
 `voc_cluster_suggestions_enabled` policy; VOC consumes its exported resolved
-settings seam. Human confirmation, generation and existing membership writers
-coordinate the ADR-0068 lock order; no foreign repository imports.
+settings seam. Managed Systems exports `lockLiveManagedSystemForShare` and
+`managedSystemIsLiveSql` through its read projections for generation/C6.
+No foreign repository imports.
+
+2026-10-14 ADR-0068 concurrency amendment (#1097): all suggestion writers
+acquire workspace recovery first, serializing with unchanged manual/saved
+membership and permission commands. They do not add suggestion locks to those
+existing paths. Reacquisition by Cluster commands is allowed in the transaction.
+
+| Writer | Lock sequence |
+| --- | --- |
+| Generation | recovery → suggestion advisory → settings FOR UPDATE → active MS FOR SHARE → VOCs FOR SHARE (UUID order) → suggestion rows |
+| Confirm | recovery → authorization → idempotency → suggestion advisory → MS FOR UPDATE → VOCs FOR UPDATE (UUID order) → suggestion row → Cluster commands |
+| Discard / restore | recovery → authorization → idempotency → suggestion advisory → MS FOR UPDATE → VOCs FOR SHARE (UUID order) → suggestion row |
+
+This avoids the generation/settings → manual createCluster/MS/actor-FK →
+permission approval/recovery/actor/settings cycle. Restore adds C6/cap/disjoint
+checks; confirm/restore never lock settings. Permission checks precede replay;
+confirmation's injected per-transaction Cluster factory retains recoveryRecorder.
 
 Frontend `features/voc-cluster/` owns suggestion review on `/voc-clusters`,
 `features/voc/` owns optional preview on the create screen and Admin owns the

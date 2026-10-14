@@ -18,6 +18,11 @@ import {
   VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
   registerVocClusterAutogenShadow,
 } from '../cluster-autogen-shadow.js';
+import {
+  VOC_CLUSTER_SUGGESTIONS_CRON,
+  VOC_CLUSTER_SUGGESTIONS_QUEUE,
+  registerVocClusterSuggestions,
+} from '../cluster-suggestions.js';
 import { VOC_EMBED_QUEUE } from '../embed-voc.js';
 import {
   VOC_EMBEDDING_BACKFILL_CRON,
@@ -45,6 +50,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     // anything. Clear it first so the assertion is about *this* boot.
     await boss.unschedule(VOC_EMBEDDING_BACKFILL_QUEUE).catch(() => {});
     await boss.unschedule(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
+    await boss.unschedule(VOC_CLUSTER_SUGGESTIONS_QUEUE).catch(() => {});
     await registerVocJobs(boss, {
       db: dbHandle.db,
       provider: createFakeEmbeddingProvider({ dimensions: 8, embeddingVersion: 1 }),
@@ -136,5 +142,27 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
         log: { info: () => {}, warn: () => {}, error: () => {} },
       }),
     ).rejects.toThrow(`pg-boss queue '${VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE}' is not pre-created`);
+  });
+  it('precreates and registers the hourly suggestion queue even when provider is disabled', async () => {
+    const schedules = await boss.getSchedules(VOC_CLUSTER_SUGGESTIONS_QUEUE);
+    expect(schedules.find((s) => s.name === VOC_CLUSTER_SUGGESTIONS_QUEUE)?.cron).toBe(
+      VOC_CLUSTER_SUGGESTIONS_CRON,
+    );
+    const row = await dbHandle.pool.query(
+      'select retry_limit,retry_delay,retry_backoff from pgboss.queue where name=$1',
+      [VOC_CLUSTER_SUGGESTIONS_QUEUE],
+    );
+    expect(row.rows).toEqual([{ retry_limit: 5, retry_delay: 30, retry_backoff: true }]);
+  });
+  it('refuses to register without a migration-precreated suggestion queue', async () => {
+    await expect(
+      registerVocClusterSuggestions({ getQueues: async () => [] } as unknown as PgBoss, {
+        db: dbHandle.db,
+        embeddingVersion: 1,
+        embeddingEnabled: false,
+        embeddingIdentity: { provider: 'fake', model: 'fake-hash-v1', dimensions: 1024 },
+        log: { info: () => {}, warn: () => {}, error: () => {} },
+      }),
+    ).rejects.toThrow(`pg-boss queue '${VOC_CLUSTER_SUGGESTIONS_QUEUE}' is not pre-created`);
   });
 });

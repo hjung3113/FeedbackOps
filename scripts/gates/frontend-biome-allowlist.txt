@@ -473,3 +473,4 @@ apps/backend/src/modules/voc/recommendations/__tests__/recommendations.integrati
 apps/backend/src/modules/voc/embedding/voyage.ts format -- pre-existing on develop (measured 2026-10-14); #1099 adds identity() and the abort signal only
 apps/backend/migrations/meta/0070_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1099, 2026-10-14)
 apps/backend/src/modules/voc/embedding/__tests__/voyage.test.ts format -- pre-existing on develop (measured 2026-10-14); #1099 adds identity and signal cases
+apps/backend/migrations/meta/0071_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1097, 2026-10-14)
