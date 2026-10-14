@@ -33,6 +33,9 @@ vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
 }));
 vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({ useManagedSystemNamesResult }));
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors }));
+vi.mock('@/lib/useAnalyticsAreaFilterLabel', () => ({
+  useAnalyticsAreaFilterLabel: () => undefined,
+}));
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   useNavigate: () => vi.fn(),
