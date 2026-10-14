@@ -11,6 +11,7 @@ import type { FastifyRequest } from 'fastify';
 export function buildRateLimitTiers(
   keyGenerator: (req: FastifyRequest) => Promise<string>,
 ): {
+  similarityPreview: Record<string, unknown>;
   mutation: Record<string, unknown>;
   sensitive: Record<string, unknown>;
   read: Record<string, unknown>;
@@ -20,6 +21,7 @@ export function buildRateLimitTiers(
   attachmentMutation: Record<string, unknown>;
 } {
   return {
+    similarityPreview: { max: 10, timeWindow: '1 minute', keyGenerator, routeGroup: 'similarity_preview' },
     mutation: {
       max: 10,
       timeWindow: '1 minute',

@@ -86,7 +86,11 @@ import {
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
 import { createTasksService, taskRecoveryProjection, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
-import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import type { EmbeddingProvider } from './modules/voc/embedding/port.js';
+import { createSimilarityPreviewService } from './modules/voc/similarity-preview/service.js';
+import { similarityPreviewRoutes } from './modules/voc/similarity-preview/routes.js';
+import { toJobLog } from './lib/job-log.js';
 import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
@@ -111,6 +115,9 @@ import {
 } from './modules/workspace-settings/index.js';
 
 export interface BuildServerOptions {
+  embeddingProvider?: EmbeddingProvider;
+  similarityPreviewDeadlineMs?: number;
+  similarityPreviewClock?: () => Date;
   recoveryClock?: () => Date;
   config: AppConfig;
   dbHandle: DbHandle;
@@ -812,6 +819,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
   const preSubmitVocPeersService = createPreSubmitVocPeersService({ db: dbHandle.db });
+  await app.register(similarityPreviewRoutes, {
+    sessionService,
+    workspaceId,
+    rateLimitConfig: app.rateLimitConfig.similarityPreview,
+    service: createSimilarityPreviewService({
+      db: dbHandle.db,
+      config,
+      provider: opts.embeddingProvider ?? createEmbeddingProvider(config),
+      log: toJobLog(app.log),
+      ...(opts.similarityPreviewDeadlineMs !== undefined
+        ? { deadlineMs: opts.similarityPreviewDeadlineMs }
+        : {}),
+      ...(opts.similarityPreviewClock ? { clock: opts.similarityPreviewClock } : {}),
+    }),
+  });
+
   await app.register(preSubmitVocPeersRoutes, {
     sessionService,
     preSubmitVocPeersService,

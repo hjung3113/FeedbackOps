@@ -14,3 +14,4 @@ export * from './pre-submit-peers.js';
 export * from './recommendations.js';
 export * from './reporter-reply-request.js';
 export * from './rich-content.js';
+export * from './similarity-preview.js';

@@ -60,6 +60,7 @@ const envSchema = z.object({
   SMTP_USERNAME: optionalEnvString,
   SMTP_PASSWORD: optionalEnvString,
   SMTP_FROM: optionalEnvString,
+  VOC_SIMILARITY_PREVIEW: z.enum(['enabled', 'disabled']).default('enabled'),
   EMBEDDING_PROVIDER: z.enum(['voyage', 'fake', 'disabled']).default('disabled'),
   EMBEDDING_API_KEY: optionalEnvString,
   EMBEDDING_VERSION: z.coerce.number().int().positive().default(1),

@@ -484,7 +484,7 @@ or restored. Changed human actions write proposed suggestion discard/restore
 audit events; no-op/replay/reads write none. These actions cannot delete or undo
 Cluster/member/link/audit work, and affect no Dashboard/coverage queues.
 
-## Draft Similar-VOC Preview (ADR-0068; proposed/new, not shipped)
+## Draft Similar-VOC Preview (ADR-0068; shipped by #1099)
 
 Requirement: FOP-VOC-001/004, #340. `POST /vocs/similarity-preview`; strict body
 `{ primary_managed_system_id:uuid, title, description_rich_content }`, existing
@@ -498,7 +498,7 @@ validation/rich-content errors use existing envelopes. Missing/foreign MS is
 A distinct preview-abuse bucket is 10 requests/minute/actor, independent of
 submit and paid budgets. Atomic Postgres paid reservation is actor 2/minute and
 20/UTC day, workspace 10/minute and 100/UTC day across all roles/pods. If denied,
-roll back all reservations; `429 rate_limited.actor` or proposed
+roll back all reservations; `429 rate_limited.actor` or
 `rate_limited.workspace`, `{ budget_period:'minute'|'day', retry_after_seconds }`
 and `Retry-After`. Fail storage with `500 internal.unexpected`, zero egress.
 Disabled/invalid/unauthenticated/no-authorized-active-version-candidate inputs
@@ -526,7 +526,7 @@ reason = provider_disabled | provider_failed | provider_timeout |
 ```
 
 Candidate query: same current workspace/MS, unarchived, compatible active-version
-embeddings whose hashes match current prose, `similarVocVisibilityPredicate`
+embeddings with `e.updated_at >= v.updated_at`, `similarVocVisibilityPredicate`
 before score ordering/limit; cosine >= 0.75, top three, score DESC/UUID ASC.
 Recheck visibility and provider/model/version/dimensions after completion and
 on replay. A true empty result is `available:true`; quota/unavailable is never
@@ -534,4 +534,33 @@ empty-success or heuristic fallback. No score/severity/private fields/total.
 No VOC, Cluster/member, recommendation decision, domain audit, Entity Link or
 Dashboard mutation. Operational budget/ledger writes and sanitized logs only.
 Submission and saved embedding enqueue remain independent. Preview admission
-can be disabled operationally without a new workspace settings UI.
+is controlled by `VOC_SIMILARITY_PREVIEW=enabled|disabled` (default enabled),
+independently of submission and saved embedding enqueue; no workspace settings UI.
+
+Implementation details (#1099): sanitize first, derive text, then enforce
+`VOC_SIMILARITY_PREVIEW_MAX_TEXT_BYTES = 16 * 1024` UTF-8 bytes. Over the ceiling
+returns `422 validation.failed` with `fields:[{path:['description_rich_content'],
+code:'too_big'}]` before reservation. Before a new reservation, an EXISTS query
+uses the same visibility, MS, unarchived, active-version, provider/model/dimensions
+and watermark filters as ranking. No compatible readable candidate returns
+`{available:true,items:[]}` with no ledger, budget or paid transport writes.
+The watermark is a conservative freshness signal, not a recomputed source hash.
+Provider identity is read without I/O via `identity()`; one provider instance is
+shared by route and saved ingestion jobs. A preview-owned AbortController covers
+the call and response body read; an aborted signal is a timeout regardless of
+the provider error wrapper. No retry is dispatched.
+
+Resolve an existing actor-scoped key before disable/existence/budget shortcuts:
+changed canonical MS/text hash conflicts; reserved/outcome_unknown returns unknown;
+current disable returns provider_disabled; succeeded with incompatible identity/version
+returns unknown, then an expired vector returns preview_expired; failed/timed_out
+replay their reason; otherwise requery current readable candidates. A budget denial
+or duplicate claim rolls back all four increments and rereads the committed ledger
+before returning a denial. Replays never renew vector/tombstone TTLs.
+
+Migration `0070_voc_similarity_preview.sql` precreates
+`voc.similarity_preview_cleanup`, registered unconditionally every ten minutes.
+Cleanup nulls expired vectors while preserving vector_expires_at, deletes request
+tombstones only after 24h, and deletes only ended UTC budget windows. New app
+SELECT/INSERT/UPDATE/DELETE grants are confined to these two operational tables;
+invoker triggers deny fops_app DELETE of live tombstones/windows.

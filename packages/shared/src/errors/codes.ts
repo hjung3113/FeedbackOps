@@ -15,6 +15,7 @@ export const ERROR_CODES = [
   'permission.denied',
   // rate_limited.* → 429
   'rate_limited.actor',
+  'rate_limited.workspace',
   'rate_limited.ip',
   // validation.* → 422
   'validation.failed',
@@ -96,3 +97,12 @@ export interface ErrorEnvelope {
     reason_required?: boolean;
   };
 }
+
+/** Fixed UTC paid-preview budget denial (separate from abuse throttling). */
+export const similarityPreviewBudgetDetailSchema = z
+  .object({
+    budget_period: z.enum(['minute', 'day']),
+    retry_after_seconds: z.number().int().positive(),
+  })
+  .strict();
+export type SimilarityPreviewBudgetDetail = z.infer<typeof similarityPreviewBudgetDetailSchema>;

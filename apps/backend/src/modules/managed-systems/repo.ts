@@ -50,3 +50,16 @@ export async function lockManagedSystem(
       }
     : null;
 }
+
+/** Active-parent validation projection only; confers no VOC read scope. */
+export async function readManagedSystemState(
+  db: Tx,
+  workspaceId: string,
+  managedSystemId: string,
+): Promise<{ id: string; archived_at: Date | null } | null> {
+  const result = await db.execute<{ id: string; archived_at: Date | null }>(sql`
+    SELECT id, archived_at FROM ${managedSystems}
+    WHERE workspace_id = ${workspaceId} AND id = ${managedSystemId}
+  `);
+  return result.rows[0] ?? null;
+}

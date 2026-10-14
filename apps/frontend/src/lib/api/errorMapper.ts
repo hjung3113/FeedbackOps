@@ -1,5 +1,10 @@
 import type { ErrorCode } from '@fops/shared';
-import { formatRetryAfter, ipRateLimitedMessage, rateLimitedMessage } from '../copy/rate-limit';
+import {
+  formatRetryAfter,
+  ipRateLimitedMessage,
+  previewRateLimitedMessage,
+  rateLimitedMessage,
+} from '../copy/rate-limit';
 import { UnauthenticatedError } from './auth';
 import { ApiError, type ApiErrorEnvelope, type MappedError, type Tone } from './types';
 
@@ -25,9 +30,14 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'rate_limited.actor': {
     tone: 'warning',
     message: (detail) => {
+      if (detail?.budget_period) return previewRateLimitedMessage('actor', detail);
       const wait = formatRetryAfter(detail);
       return rateLimitedMessage(wait);
     },
+  },
+  'rate_limited.workspace': {
+    tone: 'warning',
+    message: (detail) => previewRateLimitedMessage('workspace', detail),
   },
   'rate_limited.ip': {
     tone: 'warning',

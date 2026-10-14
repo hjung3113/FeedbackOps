@@ -11,6 +11,7 @@ import type { PublicUpdateReviewCandidatesService } from '../public-update-revie
 import { registerVocClusterAutogenShadow } from './cluster-autogen-shadow.js';
 import { registerEmbedVoc } from './embed-voc.js';
 import { registerVocEmbeddingBackfill } from './embedding-backfill.js';
+import { registerSimilarityPreviewCleanup } from '../similarity-preview/cleanup.js';
 import { registerReleasedReviewCandidates } from './released-review-candidates.js';
 
 export interface VocJobDeps {
@@ -24,6 +25,7 @@ export interface VocJobDeps {
 }
 
 export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<void> {
+  await registerSimilarityPreviewCleanup(boss, { db: deps.db, log: deps.log });
   await registerEmbedVoc(boss, {
     db: deps.db,
     provider: deps.provider,

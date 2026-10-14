@@ -19,6 +19,7 @@ import {
   VOC_EMBEDDING_BACKFILL_CRON,
   VOC_EMBEDDING_BACKFILL_QUEUE,
 } from '../embedding-backfill.js';
+import { VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE, VOC_SIMILARITY_PREVIEW_CLEANUP_CRON } from '../../similarity-preview/cleanup.js';
 import { registerVocJobs } from '../index.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -40,6 +41,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     // would make this suite pass even if registration stopped scheduling
     // anything. Clear it first so the assertion is about *this* boot.
     await boss.unschedule(VOC_EMBEDDING_BACKFILL_QUEUE).catch(() => {});
+    await boss.unschedule(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
     await registerVocJobs(boss, {
       db: dbHandle.db,
       provider: createFakeEmbeddingProvider({ dimensions: 8, embeddingVersion: 1 }),
@@ -59,6 +61,13 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     await dbHandle?.close();
   });
 
+  it('registers preview cleanup even while embeddings are disabled', async () => {
+    const schedules = await boss.getSchedules(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
+    expect(schedules.find(s => s.name === VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE)?.cron).toBe(VOC_SIMILARITY_PREVIEW_CLEANUP_CRON);
+    const queues = await boss.getQueues([VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE]);
+    expect(queues).toHaveLength(1);
+  });
+
   it('registers the backfill cron in pgboss.schedule', async () => {
     const schedules = await boss.getSchedules(VOC_EMBEDDING_BACKFILL_QUEUE);
     const ours = schedules.find((s: { name: string }) => s.name === VOC_EMBEDDING_BACKFILL_QUEUE);
@@ -66,7 +75,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     expect(ours?.cron).toBe(VOC_EMBEDDING_BACKFILL_CRON);
   });
 
-  for (const queue of [VOC_EMBED_QUEUE, VOC_EMBEDDING_BACKFILL_QUEUE]) {
+  for (const queue of [VOC_EMBED_QUEUE, VOC_EMBEDDING_BACKFILL_QUEUE, VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE]) {
     it(`records ${queue} in pgboss.queue with ADR-0009 retry config`, async () => {
       const row = await dbHandle.pool.query<{
         retry_limit: number;

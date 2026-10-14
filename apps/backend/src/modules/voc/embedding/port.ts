@@ -16,5 +16,6 @@ export interface EmbeddingResult {
  * external provider call.
  */
 export interface EmbeddingProvider {
-  embed(texts: string[]): Promise<EmbeddingResult>;
+  identity(): { provider: string; model: string; dimensions: number };
+  embed(texts: string[], options?: { signal?: AbortSignal }): Promise<EmbeddingResult>;
 }

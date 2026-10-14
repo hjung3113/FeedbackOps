@@ -36,3 +36,17 @@ export function formatRetryAfter(detail?: Record<string, unknown>): string | und
   if (secs < 60) return `${secs}초`;
   return `${Math.ceil(secs / 60)}분`;
 }
+
+export function previewRateLimitedMessage(
+  scope: 'actor' | 'workspace',
+  detail?: Record<string, unknown>,
+): string {
+  if (detail?.budget_period === 'day') {
+    return scope === 'actor'
+      ? '오늘 유사 VOC 조회 한도를 사용했습니다'
+      : '이 워크스페이스의 유사 VOC 조회 한도를 사용했습니다';
+  }
+  const wait = formatRetryAfter(detail);
+  if (scope === 'actor') return rateLimitedMessage(wait);
+  return `이 워크스페이스의 유사 VOC 조회 요청이 너무 많습니다. ${wait ? `${wait} 후` : '잠시 후'} 다시 시도해 주세요.`;
+}

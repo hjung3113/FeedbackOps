@@ -147,6 +147,8 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'voc.voc_cluster_suggestions': ['SELECT', 'INSERT', 'UPDATE'],
   'voc.voc_cluster_suggestion_counters': ['SELECT', 'INSERT', 'UPDATE'],
   'voc.voc_cluster_suggestion_admissions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'voc.voc_similarity_preview_requests': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'voc.voc_similarity_preview_budgets': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   'voc.voc_cluster_suggestion_cursors': ['SELECT', 'INSERT', 'UPDATE'],
   // Migration 0052 (ADR-0055): the current follow-up decision is updated in
   // place, never deleted. UPDATE is column-scoped and asserted below.

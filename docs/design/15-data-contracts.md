@@ -785,17 +785,18 @@ Current eligibility, disjointness/caps, revision increments and five-minute rest
 validation belong to future application commands (ADR item 2), not these DB checks.
 Existing source changes may make pending pairs ineligible; reads must recheck them.
 
-## Draft Similar-VOC Preview operational data (ADR-0068; proposed/new)
+## Draft Similar-VOC Preview operational data (ADR-0068; shipped by #1099)
 
 ```text
-voc.voc_similarity_preview_requests (new)
+voc.voc_similarity_preview_requests
+- id: UUID attempt identity (operational logs only)
 - workspace_id, actor_id, idempotency_key(UUIDv4): unique required identity
 - request_hash, primary_managed_system_id, provider/model/dimensions/version: required
 - outcome: reserved | succeeded | failed | timed_out | outcome_unknown
 - reserved_at, completed_at(nullable), expires_at: timestamptz; tombstone TTL 24h
 - vector(nullable), vector_expires_at(nullable): successful retry vector, at most ten minutes
-voc.voc_similarity_preview_budgets (new)
-- workspace_id, scope(actor|workspace), actor_id(actor scope only), period(minute|day), window_start
+voc.voc_similarity_preview_budgets
+- workspace_id, scope(actor|workspace), actor_id(actor scope only), scope_key(non-null), period(minute|day), window_start
 - used_attempts: non-negative integer
 - unique: workspace/scope/actor-or-workspace/period/UTC window
 ```
