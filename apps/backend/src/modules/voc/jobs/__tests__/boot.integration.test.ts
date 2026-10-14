@@ -10,6 +10,10 @@ import { type DbHandle, createDb } from '../../../../db/client.js';
 import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
 import {
+  VOC_SIMILARITY_PREVIEW_CLEANUP_CRON,
+  VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE,
+} from '../../similarity-preview/cleanup.js';
+import {
   VOC_CLUSTER_AUTOGEN_SHADOW_CRON,
   VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
   registerVocClusterAutogenShadow,
@@ -19,7 +23,6 @@ import {
   VOC_EMBEDDING_BACKFILL_CRON,
   VOC_EMBEDDING_BACKFILL_QUEUE,
 } from '../embedding-backfill.js';
-import { VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE, VOC_SIMILARITY_PREVIEW_CLEANUP_CRON } from '../../similarity-preview/cleanup.js';
 import { registerVocJobs } from '../index.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -63,9 +66,11 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
 
   it('registers preview cleanup even while embeddings are disabled', async () => {
     const schedules = await boss.getSchedules(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
-    expect(schedules.find(s => s.name === VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE)?.cron).toBe(VOC_SIMILARITY_PREVIEW_CLEANUP_CRON);
+    expect(schedules.find((s) => s.name === VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE)?.cron).toBe(
+      VOC_SIMILARITY_PREVIEW_CLEANUP_CRON,
+    );
     const queues = await boss.getQueues([VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE]);
-    expect(queues.map(q => q.name)).toContain(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
+    expect(queues.map((q) => q.name)).toContain(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
   });
 
   it('registers the backfill cron in pgboss.schedule', async () => {
@@ -75,7 +80,11 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     expect(ours?.cron).toBe(VOC_EMBEDDING_BACKFILL_CRON);
   });
 
-  for (const queue of [VOC_EMBED_QUEUE, VOC_EMBEDDING_BACKFILL_QUEUE, VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE]) {
+  for (const queue of [
+    VOC_EMBED_QUEUE,
+    VOC_EMBEDDING_BACKFILL_QUEUE,
+    VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE,
+  ]) {
     it(`records ${queue} in pgboss.queue with ADR-0009 retry config`, async () => {
       const row = await dbHandle.pool.query<{
         retry_limit: number;
