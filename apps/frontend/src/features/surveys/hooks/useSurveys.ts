@@ -1,6 +1,7 @@
 import { type ApiError, ApiParseError, apiClient, apiRequest } from '@/lib/api';
 import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import type { ListSurveysQuery } from '@fops/shared';
 import {
   type AnswerableSurveysResponse,
   type MySurveyResponsesResponse,
@@ -118,16 +119,28 @@ export function useSubmitSurveyResponse(surveyId: string) {
 // param (uuid | 'all' on the wire; 'all' resolves to no filter = the caller's
 // effective scope union). The scoped key extends surveyKeys.list, so the
 // existing `['surveys']` invalidations still cover it.
-export function useSurveys(managedSystemId?: string) {
+export function useSurveys(
+  managedSystemId?: string,
+  filters: Omit<ListSurveysQuery, 'managed_system_id'> = {},
+) {
+  const query = new URLSearchParams();
+  if (managedSystemId) query.set('managed_system_id', managedSystemId);
+  if (filters.analytics_area_id !== undefined)
+    query.set('analytics_area_id', filters.analytics_area_id);
+  if (filters.status !== undefined) query.set('status', filters.status);
+  if (filters.follow_up !== undefined) query.set('follow_up', filters.follow_up);
+  const baseKey = managedSystemId ? surveyKeys.listScoped(managedSystemId) : surveyKeys.list;
+  const hasFilters =
+    filters.analytics_area_id !== undefined ||
+    filters.status !== undefined ||
+    filters.follow_up !== undefined;
   return useQuery({
-    queryKey: managedSystemId ? surveyKeys.listScoped(managedSystemId) : surveyKeys.list,
+    queryKey: hasFilters ? [...baseKey, filters] : baseKey,
     queryFn: async ({ signal }) =>
       (
         await apiRequest(
           'GET',
-          managedSystemId
-            ? `/surveys?managed_system_id=${encodeURIComponent(managedSystemId)}`
-            : '/surveys',
+          query.size > 0 ? `/surveys?${query.toString()}` : '/surveys',
           listSurveysResponseSchema,
           { signal },
         )

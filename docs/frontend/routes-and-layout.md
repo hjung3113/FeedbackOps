@@ -507,8 +507,8 @@ inferred. Source assignment display/edit/filter stays VOC/Finding/Tasks-owned.
 ## Coverage Analytics Area tab and report destinations (ADR-0069)
 
 Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
-The `/vocs` and `/findings` destination filters and active-filter controls are implemented by
-#1077 (part a). Coverage, `/tasks` and `/surveys` extensions below remain **proposed/new**. FR-DASH-002 in
+The `/vocs`, `/findings`, `/tasks` and `/surveys` destination filters and active-filter controls are
+implemented by #1077 (parts a/b). Coverage extensions below remain **proposed/new**. FR-DASH-002 in
 `docs/design/08-dashboard-system.md` owns metric meanings and UI acceptance.
 
 - `/integration/coverage`: existing PageShell; overview is the default (omit `view`),
@@ -519,21 +519,27 @@ The `/vocs` and `/findings` destination filters and active-filter controls are i
   Back/Forward/refresh restore tab, filters and page. No new rail or Admin report route.
 - Integration's Coverage card gets a secondary link to `view=areas` preserving Managed System;
   Home's existing Coverage entry still reaches the same page. Catalog administration remains separate.
-- Implemented: `/vocs` and `/findings` accept `filter.analytics_area=<uuid|unset>` in their
+- Implemented: `/vocs`, `/findings`, `/tasks` and `/surveys` accept `filter.analytics_area=<uuid|unset>` in their
   strict browser schemas and typed clients. VOC forwards the same dot key; the other clients map
-  it to backend `analytics_area_id`. The same `/tasks` and `/surveys` support remains proposed.
+  it to backend `analytics_area_id`.
   Report links always retain the row's Managed System UUID.
   For these destinations, switching to a specific Managed System clears a UUID
   `filter.analytics_area`; switching to all/unscoped keeps it. `unset` always remains.
 - VOC total/unassigned/high-follow-up/unlinked inspection use `view=inbox`, with omitted tab,
   `tab=unassigned`, `tab=high-no-link`, or `tab=no-task` respectively.
-- Implemented Finding links carry `status=active` or `execution=none`. Proposed Task links carry `view=backlog`
+- Implemented Finding links carry `status=active` or `execution=none`. Implemented Task links carry `view=backlog`
   plus single `status`, `status_group=in-flight`, `overdue=true`, `public_update=missing`, or
   `reporter_update=needed`; Survey links carry `status=open` or `follow_up=needed`.
+  Task backlog/my lists apply all six filters; the board keeps only its existing `public_update` behavior.
   These are source membership filters, not `action=` intents. All combinations intersect.
-- VOC/Finding render `ActiveFilterBar` below the list toolbar. Area UUID labels resolve through
+- VOC/Finding/Task/Survey render `ActiveFilterBar` below the list toolbar. Area UUID labels resolve through
   the paged authorized catalog including archived Areas; unresolved labels disclose no existence.
   VOC removal/reset drops only Area; Finding reset drops Area/status/execution/assignment.
+  Task reset drops Area/status/status_group/overdue/public_update/reporter_update;
+  Survey reset drops Area/status/follow_up. Each chip removes its own key; resets keep
+  scope, view and selection. Survey's local status/search filters intersect the server
+  filters and tab counts use the fetched array. URL-filtered empty states name active
+  conditions and use the filter bar as the sole reset control.
   Show active filters with explicit clear actions. Selection and panel close preserve them;
   restore them with navigation history. Counts reevaluate on arrival and after owning repair.
   A count must not link to a destination that drops its filter during strict validation.

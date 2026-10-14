@@ -7,10 +7,13 @@ import {
   useSurveyManageGate,
 } from '@/features/surveys/routes/SurveyPermissionGate';
 export { CreateSurveyDialog } from '@/features/surveys/components/create/CreateSurveyDialog';
+import { surveyStatusLabel } from '@/features/surveys/components/SurveyStatusBadge';
+import { SURVEY_REPORT_FILTER_COPY as FILTER_COPY } from '@/lib/copy/surveys';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
+import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
 import { ListShell } from '@fops/ui';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
@@ -27,6 +30,9 @@ export const surveysSearchSchema = z
   .object({
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
+    'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    status: z.literal('open').optional(),
+    follow_up: z.literal('needed').optional(),
   })
   .strict();
 
@@ -50,7 +56,35 @@ export function SurveysIndexRoute() {
   const search = useSearch({ strict: false }) as SurveysSearch;
   const navigate = useNavigate({ from: '/surveys/' });
   const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
-  const query = useSurveys(managedSystemId);
+  const query = useSurveys(managedSystemId, {
+    ...(search['filter.analytics_area'] === undefined
+      ? {}
+      : { analytics_area_id: search['filter.analytics_area'] }),
+    ...(search.status === undefined ? {} : { status: search.status }),
+    ...(search.follow_up === undefined ? {} : { follow_up: search.follow_up }),
+  });
+  const areaLabel = useAnalyticsAreaFilterLabel(search['filter.analytics_area'], managedSystemId);
+  const filterKeys = ['filter.analytics_area', 'status', 'follow_up'] as const;
+  const removeFilters = (keys: readonly (typeof filterKeys)[number][]) => {
+    void navigate({
+      to: '/surveys',
+      search: (previous) => {
+        const next = { ...previous };
+        for (const key of keys) delete next[key];
+        return next;
+      },
+    });
+  };
+  const labels = {
+    'filter.analytics_area': areaLabel,
+    status: FILTER_COPY.status(surveyStatusLabel('open')),
+    follow_up: FILTER_COPY.followUp,
+  };
+  const activeFilters = filterKeys.flatMap((key) =>
+    search[key] === undefined
+      ? []
+      : [{ key, label: labels[key], onRemove: () => removeFilters([key]) }],
+  );
   // Creation entry follows the survey.manage capability scope (ADR-0033): the
   // workspace-wide check stays only for the empty-state request-access
   // recovery; a scoped Developer with one granted system may create (#1075).
@@ -117,6 +151,8 @@ export function SurveysIndexRoute() {
         list={
           <SurveyList
             surveys={query.data ?? []}
+            urlFilters={activeFilters}
+            onClearUrlFilters={() => removeFilters(filterKeys)}
             // #706 — isPending keeps the skeleton up through the whole
             // no-data window (incl. the retry delay), so tabs never render
             // unknown counts as 0.
