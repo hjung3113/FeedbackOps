@@ -79,3 +79,13 @@ test.describe('/voc-clusters visual harness', () => {
     await expectVisual(page, dialog, 'cluster-add-member-already-included.png');
   });
 });
+
+test('renders the available Cluster suggestion pair', async ({ page }) => {
+  await installMockApi(page, { clusterSuggestions: 'populated' });
+  await page.goto('/voc-clusters');
+  await page.getByRole('tab', { name: /^Cluster 제안/ }).click();
+  await page.getByRole('button', { name: /VOC-12/ }).click();
+  const panel = page.getByTestId('cluster-suggestion-panel');
+  await expect(panel.getByRole('button', { name: '확인 후 Cluster 생성' })).toBeVisible();
+  await expectVisual(page, panel, 'voc-cluster-suggestions-populated.png');
+});

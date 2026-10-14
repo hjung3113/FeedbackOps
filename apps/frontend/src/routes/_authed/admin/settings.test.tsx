@@ -18,6 +18,7 @@ const resolvedSettings = {
   permission_self_approval: 'forbidden' as const,
   survey_anonymity_threshold: 9,
   coverage_thresholds: resolveCoverageThresholds(),
+  voc_cluster_suggestions_enabled: false,
 };
 
 type PermissionResponse =

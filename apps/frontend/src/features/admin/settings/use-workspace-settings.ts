@@ -7,6 +7,7 @@ import { type ApiError, apiClient } from '../../../lib/api';
 export type PermissionSelfApproval = 'allowed' | 'forbidden';
 
 export interface WorkspaceSettings {
+  voc_cluster_suggestions_enabled: boolean;
   coverage_thresholds: CoverageThresholds;
   permission_self_approval: PermissionSelfApproval;
   survey_anonymity_threshold: number;

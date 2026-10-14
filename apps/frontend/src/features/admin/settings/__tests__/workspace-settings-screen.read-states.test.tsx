@@ -18,6 +18,7 @@ describe('WorkspaceSettingsScreen read retry (#609)', () => {
       status: 200,
       data: {
         coverage_thresholds: resolveCoverageThresholds(),
+        voc_cluster_suggestions_enabled: false,
         permission_self_approval: 'allowed',
         survey_anonymity_threshold: 5,
       },

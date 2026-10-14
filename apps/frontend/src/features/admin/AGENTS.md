@@ -67,10 +67,15 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - Surface safe automatic-default configuration warnings. Known teams may render; no team
   CRUD/candidate listing or automatic reassignment is introduced.
 
-## Suggestion opt-in (ADR-0068; proposed/new)
+## Suggestion opt-in (ADR-0068; shipped #1098)
 
 The existing `/admin/settings` surface owns the single default-off Cluster
-suggestion switch. Preserve existing policies and permission gates. Disabling
+suggestion option row (`사용` / `사용 안 함`). Preserve existing policies and permission gates. Disabling
 stops new suggestions while pending review remains available; explain that
 boundary with Korean chrome. Suggestion review stays in `features/voc-cluster/`;
 preview quota/model/scheduling consoles are not part of this addition.
+
+Render the section only after `GET /voc-cluster-suggestions` returns `available:true`;
+loading, errors and provider-disabled reads preserve the shipped settings layout.
+The required boolean remains in resolved settings. Hidden saved values are preserved,
+and only an edited field enters the existing partial PATCH/save bar.

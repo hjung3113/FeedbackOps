@@ -208,6 +208,11 @@ Link endpoints, Finding/Task Request/bulk-update sources, or execution,
 coverage/recovery records. This separation removes all memo pre-accept Cluster
 use guards while leaving manual drafts fully usable. Preserve existing Cluster
 URLs; new suggestion selection is feature-local and is not a Cluster route.
+The owner update (2026-10-14) hides the suggestion tab and Admin opt-in until
+`GET /voc-cluster-suggestions` succeeds with `available:true`. Loading, error and
+provider-disabled reads preserve the existing surfaces. Availability loss returns
+to the default Cluster tab without changing its URL selection; hidden saved opt-in
+values are never patched unless edited. The MVP uses disabled embeddings.
 
 ### Paid draft preview: #340 Q1–Q4
 
@@ -345,12 +350,12 @@ existing coverage; no mock internal-call assertions substitute for public seams.
    five-minute restore rechecks conflicts, and accepted pairs never recreate.
    Same-key replay checks permissions; changed body conflicts. Existing saved
    join-newest and shadow/recommendation no-write tests remain green.
-3. **Cluster proposal review and Admin opt-in — FE.** Depends on 2. Existing
+3. **Cluster proposal review and Admin opt-in — FE (shipped #1098).** Depends on 2. Existing
    seams: `apps/frontend/src/features/voc-cluster/components/detail/`,
    `apps/frontend/src/features/voc-cluster/hooks/`,
    `apps/frontend/src/features/admin/settings/`,
    `apps/frontend/src/lib/copy/voc-cluster.ts`, `apps/frontend/tests/visual/`.
-   Proposed feature-local suggestion panel/hooks. Acceptance: 1440 keyboard,
+   Implemented feature-local suggestion panel/hooks. Acceptance: 1440 keyboard,
    focus/loading/denied/stale/off states, two authorized texts, explicit confirm,
    discard/undo and invalidation; no pre-confirm execution/link actions; revoked
    access hides complete pair/count; existing URLs/manual drafts unchanged.

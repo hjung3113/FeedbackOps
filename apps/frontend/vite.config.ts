@@ -43,6 +43,7 @@ export default defineConfig({
       // forward them unconditionally in development.
       '/workspace': 'http://127.0.0.1:3011',
       // Slice 2 / Slice 3 data endpoints (root-level, no /api prefix).
+      '/voc-cluster-suggestions': 'http://127.0.0.1:3011',
       '/entity-links': 'http://127.0.0.1:3011',
       // `/vocs` overlaps with the FE route of the same name, so we bypass the
       // proxy for browser HTML navigations and only forward JSON/XHR requests.

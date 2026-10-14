@@ -24,6 +24,7 @@ import type {
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstallOptions {
+  clusterSuggestions?: 'populated' | 'empty' | 'unavailable';
   recovery?: RecoveryVisualScenario;
   evidence?: EvidenceVisualScenario;
   permissionScenario?: PermissionScenarioName;

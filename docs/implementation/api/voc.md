@@ -419,7 +419,7 @@ this extension does not implement its storage or a second recovery lifecycle. Co
 Report links include the source Managed System UUID and Area UUID/unset. Existing Triage's archived
 Managed System exclusions remain; report links use Inbox so retained context is still readable.
 
-## VOC Cluster suggestions (ADR-0068; BE/shared shipped #1097; UI #1098 pending)
+## VOC Cluster suggestions (ADR-0068; BE/shared shipped #1097; UI shipped #1098)
 
 Requirement: FOP-VOC-003/004, FOP-OUT-004. VOC owns the separate non-domain
 suggestion resource. Its read/generation never writes a Cluster or saved
