@@ -64,11 +64,14 @@ It does not own Task status, Survey Response conversion, Finding persistence, or
 ## Optional draft preview (ADR-0068; implemented by #1099/#1100)
 
 The create screen owns a feature-local semantic panel/hook under `유사 VOC 추천`;
+query `GET /vocs/similarity-preview/availability` once with a long stale time and no retries.
+Keep hooks unconditional; render no card/placeholder until available, or after a click reports `provider_disabled`.
 keep the zero-paid-call `같은 Managed System의 최근 VOC` panel separate. Only
 `유사 VOC 확인` with provider-transmission disclosure calls the merged
 `POST /vocs/similarity-preview` route. Typing/refocus/render/automatic retries never
 do; actual text/MS changes clear pending/results/errors, abort and ignore late
 responses. Unchanged values and unrelated rerenders preserve the check; each explicit click gets a fresh key.
+Disable checking while loading (including double-clicks); enable it again after settlement when the draft is valid.
 Distinguish quota/provider/empty states, leave submit usable, and preserve UUID navigation's unsaved-change blocker.
 No draft VOC, dismiss/confirm/join or extra continue step. Use existing copy module
 and shared similarity-preview schemas with typed `apiRequest`. Saved recommendation

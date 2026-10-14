@@ -39,9 +39,9 @@ export function formatSameManagedSystemVocCount(count: number): string {
 
 export const SEMANTIC_VOC_PREVIEW_COPY = {
   disclosure:
-    '버튼을 누르면 제목과 설명 텍스트가 임베딩 제공자에게 전송됩니다. 첨부파일은 전송되지 않습니다.',
+    '버튼을 누르면 제목과 설명이 AI 임베딩 서비스로 전송됩니다. 첨부파일은 전송되지 않습니다.',
   check: '유사 VOC 확인',
-  required: 'Managed System을 선택하고 제목(1–200자)과 상세 설명을 입력해 주세요.',
+  required: 'Managed System을 선택하고 제목과 상세 설명을 입력해 주세요.',
   loading: '확인 중…',
   empty: '비슷한 VOC를 찾지 못했습니다',
   providerDisabled: '지금은 유사 VOC 확인을 사용할 수 없습니다',

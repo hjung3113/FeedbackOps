@@ -12,7 +12,17 @@ export const similarityPreviewRoutes: FastifyPluginAsync<{
   workspaceId: string;
   service: SimilarityPreviewService;
   rateLimitConfig: Record<string, unknown>;
+  readRateLimitConfig: Record<string, unknown>;
 }> = async (app, opts) => {
+  app.get(
+    '/vocs/similarity-preview/availability',
+    {
+      preHandler: [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)],
+      config: { rateLimit: opts.readRateLimitConfig as never },
+    },
+    async (_req, reply) =>
+      reply.header('cache-control', 'private, no-cache').send(opts.service.availability()),
+  );
   app.post(
     '/vocs/similarity-preview',
     {

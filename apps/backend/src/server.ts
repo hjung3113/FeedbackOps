@@ -858,6 +858,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     workspaceId,
     rateLimitConfig: app.rateLimitConfig.similarityPreview,
+    readRateLimitConfig: app.rateLimitConfig.read,
     service: createSimilarityPreviewService({
       db: dbHandle.db,
       config,

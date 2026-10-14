@@ -11,6 +11,7 @@ import {
 import {
   vocCreateAnalyticsAreas,
   vocCreatePeersByManagedSystem,
+  vocCreatePreviewAvailability,
   vocCreateSimilarityPreview,
 } from '../../fixtures/voc-create';
 import {
@@ -119,6 +120,11 @@ export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
 
   if (options.vocCreate) {
     handlers.push(
+      {
+        method: 'GET',
+        path: '/vocs/similarity-preview/availability',
+        handle: (route) => json(route, 200, vocCreatePreviewAvailability),
+      },
       {
         method: 'POST',
         path: '/vocs/similarity-preview',

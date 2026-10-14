@@ -1,3 +1,4 @@
+import { similarityPreviewAvailabilityResponseSchema } from '@fops/shared';
 import { expect, test } from './support/visual-test';
 
 import { VOC_CREATE_IDS } from './fixtures/voc-create';
@@ -5,6 +6,45 @@ import { installMockApi } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
 
 test.describe('VOC create pre-submit similar VOC visual harness (#293)', () => {
+  test('unconfigured preview keeps only the develop create right-column cards', async ({
+    page,
+  }) => {
+    const previewPosts: string[] = [];
+    page.on('request', (request) => {
+      if (
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === '/vocs/similarity-preview'
+      )
+        previewPosts.push(request.url());
+    });
+    await installMockApi(page, { vocCreate: true, role: 'user' });
+    await page.route('**/vocs/similarity-preview/availability', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          similarityPreviewAvailabilityResponseSchema.parse({
+            available: false,
+            reason: 'provider_disabled',
+          }),
+        ),
+      }),
+    );
+    const availabilityResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/vocs/similarity-preview/availability',
+    );
+    await page.goto(`/vocs?action=create&managedSystem=${VOC_CREATE_IDS.managedSystem}`);
+    expect((await availabilityResponse).status()).toBe(200);
+    const peer = page.getByTestId('similar-voc-panel');
+    await expect(peer).toContainText('Tableau 새로고침 실패');
+    // This is the existing create right column: Reporter / heuristic / severity, with no placeholder.
+    const rightColumn = peer.locator('..');
+    await expect(rightColumn.locator(':scope > *')).toHaveCount(3);
+    await expect(rightColumn).toContainText('제출자');
+    await expect(rightColumn).toContainText('심각도 안내');
+    await expect(page.getByTestId('semantic-voc-panel')).toHaveCount(0);
+    expect(previewPosts).toHaveLength(0);
+  });
   test('shows selected Managed System peers in the create right column', async ({ page }) => {
     const previewPosts: string[] = [];
     page.on('request', (request) => {

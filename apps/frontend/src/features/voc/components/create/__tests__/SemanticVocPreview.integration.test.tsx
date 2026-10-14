@@ -78,6 +78,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 let preview: () => Promise<Response>;
+let availability: () => Promise<Response>;
 let requests: Array<{ method: string; path: string; init: RequestInit }>;
 const previewRequests = () =>
   requests.filter(({ method, path }) => method === 'POST' && path === '/vocs/similarity-preview');
@@ -91,6 +92,7 @@ const createRequests = () =>
 beforeEach(() => {
   requests = [];
   preview = async () => json(result);
+  availability = async () => json({ available: true });
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -98,6 +100,8 @@ beforeEach(() => {
       const method = init.method ?? 'GET';
       requests.push({ method, path, init });
       if (method === 'POST' && path === '/vocs/similarity-preview') return preview();
+      if (method === 'GET' && path === '/vocs/similarity-preview/availability')
+        return availability();
       if (method === 'POST' && path === '/vocs')
         return json({ id: CREATED, display_id: 'VOC-NEW' }, 201);
       if (path === '/managed-systems')
@@ -198,18 +202,90 @@ test('render, all field edits, focus, blur and submit never send preview; only e
   expect(previewRequests()).toHaveLength(2);
 });
 
+test.each(['loading', 'unavailable', 'error'])(
+  'availability %s leaves the create right column without a semantic card or preview POST',
+  async (state) => {
+    const pending = deferred();
+    availability =
+      state === 'loading'
+        ? () => pending.promise
+        : async () =>
+            state === 'error'
+              ? json({}, 500)
+              : json({ available: false, reason: 'provider_disabled' });
+    mount();
+    await fill();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('semantic-voc-panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '유사 VOC 확인' })).not.toBeInTheDocument();
+    assertHeuristic();
+    const rightColumn = screen.getByTestId('similar-voc-panel').parentElement;
+    expect(rightColumn?.children).toHaveLength(3);
+    expect(within(rightColumn as HTMLElement).getByText('제출자')).toBeInTheDocument();
+    expect(within(rightColumn as HTMLElement).getByText('심각도 안내')).toBeInTheDocument();
+    expect(previewRequests()).toHaveLength(0);
+    expect(
+      requests.filter(
+        ({ method, path }) => method === 'GET' && path === '/vocs/similarity-preview/availability',
+      ),
+    ).toHaveLength(1);
+    if (state === 'loading') {
+      await act(async () => {
+        pending.resolve(json({ available: true }));
+      });
+      await screen.findByTestId('semantic-voc-panel');
+      expect(previewRequests()).toHaveLength(0);
+    }
+  },
+);
+
+test('available preview renders its card; a provider-disabled click hides it through later edits', async () => {
+  preview = async () => json(unavailable('provider_disabled'));
+  mount();
+  await fill();
+  await screen.findByTestId('semantic-voc-panel');
+  expect(previewRequests()).toHaveLength(0);
+  fireEvent.click(checkButton());
+  await waitFor(() => expect(screen.queryByTestId('semantic-voc-panel')).not.toBeInTheDocument());
+  edit('title');
+  expect(screen.queryByTestId('semantic-voc-panel')).not.toBeInTheDocument();
+  assertHeuristic();
+  expect(previewRequests()).toHaveLength(1);
+});
+
+test('double-click sends one preview POST and disables checking only until it settles', async () => {
+  const pending = deferred();
+  preview = () => pending.promise;
+  mount();
+  await fill();
+  await act(async () => {
+    fireEvent.click(checkButton());
+    fireEvent.click(checkButton());
+  });
+  expect(previewRequests()).toHaveLength(1);
+  expect(checkButton()).toBeDisabled();
+  expect(semanticPanel().getByText('확인 중…')).toHaveClass('text-text-secondary');
+  expect(screen.getByRole('button', { name: 'VOC 제출' })).toBeEnabled();
+  await act(async () => {
+    pending.resolve(json(result));
+  });
+  expect(semanticPanel().getAllByRole('link')).toHaveLength(3);
+  expect(checkButton()).toBeEnabled();
+});
+
 test('preview enablement is local and requires a valid MS, trimmed title and non-blank description', async () => {
   mount();
   const title = await screen.findByRole('textbox', { name: /제목/ });
+  await screen.findByTestId('semantic-voc-panel');
   expect(checkButton()).toBeDisabled();
   expect(
-    semanticPanel().getByText(
-      'Managed System을 선택하고 제목(1–200자)과 상세 설명을 입력해 주세요.',
-    ),
+    semanticPanel().getByText('Managed System을 선택하고 제목과 상세 설명을 입력해 주세요.'),
   ).toBeInTheDocument();
   expect(
     semanticPanel().getByText(
-      '버튼을 누르면 제목과 설명 텍스트가 임베딩 제공자에게 전송됩니다. 첨부파일은 전송되지 않습니다.',
+      '버튼을 누르면 제목과 설명이 AI 임베딩 서비스로 전송됩니다. 첨부파일은 전송되지 않습니다.',
     ),
   ).toBeInTheDocument();
   fireEvent.change(title, { target: { value: '제목' } });
@@ -239,7 +315,6 @@ const quota = (scope: string, period: string) => ({
 });
 test.each([
   ['empty', { available: true, items: [] }, 200, '비슷한 VOC를 찾지 못했습니다'],
-  ['disabled', unavailable('provider_disabled'), 200, '지금은 유사 VOC 확인을 사용할 수 없습니다'],
   ...['provider_failed', 'provider_timeout', 'provider_outcome_unknown'].map(
     (reason) =>
       [
@@ -277,7 +352,13 @@ test.each([
     mount();
     await fill();
     fireEvent.click(checkButton());
-    await semanticPanel().findByText(message);
+    const outcome = await semanticPanel().findByText(message);
+    expect(outcome).toHaveClass(
+      status >= 400 ||
+        ['provider_failed', 'provider_timeout', 'provider_outcome_unknown'].includes(_name)
+        ? 'text-text-danger'
+        : 'text-text-secondary',
+    );
     expect(semanticPanel().queryAllByRole('link')).toHaveLength(0);
     expect(semanticPanel().getByText('유사 VOC 추천')).toBeInTheDocument();
     assertHeuristic();
@@ -357,7 +438,7 @@ test.each(['title', 'description', 'MS', 'empty MS'])(
 );
 
 test.each(['resolve', 'reject'])(
-  'click B replaces click A; late A %s cannot clear B loading or show stale content',
+  'edit then check B; late A %s cannot clear B loading or show stale content',
   async (outcome) => {
     const a = deferred();
     const b = deferred();
@@ -368,6 +449,7 @@ test.each(['resolve', 'reject'])(
     mount();
     await fill();
     fireEvent.click(checkButton());
+    edit('title');
     fireEvent.click(checkButton());
     expect(previewRequest().init.signal?.aborted).toBe(true);
     await act(async () => {
@@ -377,9 +459,13 @@ test.each(['resolve', 'reject'])(
     expect(semanticPanel().getByText('확인 중…')).toBeInTheDocument();
     expect(semanticPanel().queryAllByRole('link')).toHaveLength(0);
     await act(async () => {
-      b.resolve(json({ available: true, items: [] }));
+      b.resolve(json(result));
     });
-    expect(semanticPanel().getByText('비슷한 VOC를 찾지 못했습니다')).toBeInTheDocument();
+    expect(semanticPanel().getAllByRole('link')).toHaveLength(3);
+    expect(semanticPanel().getByText('이전 중복 1')).toBeInTheDocument();
+    expect(
+      semanticPanel().queryByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).not.toBeInTheDocument();
   },
 );
 
@@ -390,20 +476,51 @@ test.each(['resolve', 'reject'])(
     preview = vi
       .fn()
       .mockImplementationOnce(() => a.promise)
-      .mockImplementationOnce(async () => json({ available: true, items: [] }));
+      .mockImplementationOnce(async () => json(result));
     mount();
     await fill();
     fireEvent.click(checkButton());
     edit('description');
     fireEvent.click(checkButton());
-    await screen.findByText('비슷한 VOC를 찾지 못했습니다');
+    await screen.findByText('이전 중복 1');
     await act(async () => {
-      if (outcome === 'resolve') a.resolve(json(result));
+      if (outcome === 'resolve') a.resolve(json({ available: true, items: [] }));
       else a.reject(new Error('late failure'));
     });
-    expect(semanticPanel().getByText('비슷한 VOC를 찾지 못했습니다')).toBeInTheDocument();
-    expect(semanticPanel().queryAllByRole('link')).toHaveLength(0);
+    expect(semanticPanel().getAllByRole('link')).toHaveLength(3);
+    expect(semanticPanel().getByText('이전 중복 1')).toBeInTheDocument();
+    expect(
+      semanticPanel().queryByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).not.toBeInTheDocument();
     expect(previewRequests()).toHaveLength(2);
+  },
+);
+
+test.each(['Error', 'AbortError'])(
+  'edit returns to mounted idle and ignores a late %s without another check',
+  async (name) => {
+    const pending = deferred();
+    preview = () => pending.promise;
+    mount();
+    await fill();
+    fireEvent.click(checkButton());
+    edit('description');
+    expect(previewRequest().init.signal?.aborted).toBe(true);
+    expect(checkButton()).toBeEnabled();
+    await act(async () => {
+      pending.reject(
+        name === 'AbortError'
+          ? new DOMException('Aborted', 'AbortError')
+          : new Error('late failure'),
+      );
+    });
+    expect(semanticPanel().getByRole('status')).toBeEmptyDOMElement();
+    expect(semanticPanel().queryAllByRole('link')).toHaveLength(0);
+    expect(
+      semanticPanel().queryByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).not.toBeInTheDocument();
+    expect(checkButton()).toBeEnabled();
+    expect(previewRequests()).toHaveLength(1);
   },
 );
 
@@ -508,6 +625,7 @@ test.each(['resolve', 'reject'])(
     expect(previewRequest().init.signal?.aborted).toBe(true);
     mount();
     await screen.findByRole('textbox', { name: /제목/ });
+    await screen.findByTestId('semantic-voc-panel');
     await act(async () => {
       if (outcome === 'resolve') pending.resolve(json(result));
       else pending.reject(new Error('late failure'));

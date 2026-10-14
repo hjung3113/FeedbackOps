@@ -2,9 +2,11 @@ import {
   type CreateVocRequest,
   type SimilarityPreviewRequest,
   type SimilarityPreviewResponse,
+  similarityPreviewAvailabilityResponseSchema,
   similarityPreviewRequestSchema,
   similarityPreviewResponseSchema,
 } from '@fops/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
@@ -12,6 +14,7 @@ import { apiRequest, mapUnknownError } from '@/lib/api';
 import { mintIdempotencyKey } from '@/lib/api/idempotency';
 
 const DRAFT_FIELDS = ['title', 'description_rich_content', 'primary_managed_system_id'] as const;
+const AVAILABILITY_QUERY_KEY = ['voc-similarity-preview-availability'] as const;
 
 function readDraft(form: UseFormReturn<CreateVocRequest>): SimilarityPreviewRequest {
   const { primary_managed_system_id, title, description_rich_content } = form.getValues();
@@ -40,6 +43,23 @@ function equalDraftValue(left: unknown, right: unknown): boolean {
 }
 
 export function useVocSimilarityPreview(form: UseFormReturn<CreateVocRequest>) {
+  const queryClient = useQueryClient();
+  const availability = useQuery({
+    queryKey: AVAILABILITY_QUERY_KEY,
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest(
+        'GET',
+        '/vocs/similarity-preview/availability',
+        similarityPreviewAvailabilityResponseSchema,
+        { signal },
+      );
+      return response.data;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
   const [title, description_rich_content, primary_managed_system_id] = useWatch({
     control: form.control,
     name: DRAFT_FIELDS,
@@ -79,10 +99,10 @@ export function useVocSimilarityPreview(form: UseFormReturn<CreateVocRequest>) {
   }, [form]);
 
   async function check(): Promise<void> {
+    if (controller.current) return;
     const draft = readDraft(form);
     const parsed = similarityPreviewRequestSchema.safeParse(draft);
     if (!parsed.success) return;
-    controller.current?.abort();
     const requestId = ++sequence.current;
     const abortController = new AbortController();
     controller.current = abortController;
@@ -101,7 +121,15 @@ export function useVocSimilarityPreview(form: UseFormReturn<CreateVocRequest>) {
           signal: abortController.signal,
         },
       );
-      if (sequence.current === requestId) setResult(response.data);
+      if (sequence.current === requestId) {
+        setResult(response.data);
+        if (!response.data.available && response.data.reason === 'provider_disabled') {
+          queryClient.setQueryData(AVAILABILITY_QUERY_KEY, {
+            available: false,
+            reason: 'provider_disabled',
+          });
+        }
+      }
     } catch (cause) {
       if (sequence.current === requestId && !abortController.signal.aborted) {
         setError(mapUnknownError(cause).message);
@@ -114,5 +142,12 @@ export function useVocSimilarityPreview(form: UseFormReturn<CreateVocRequest>) {
     }
   }
 
-  return { canCheck, loading, result, error, check };
+  return {
+    available: availability.isSuccess && availability.data.available,
+    canCheck,
+    loading,
+    result,
+    error,
+    check,
+  };
 }

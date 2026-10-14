@@ -10,6 +10,14 @@ export const similarityPreviewRequestSchema = createVocRequestSchema
   .strict();
 export type SimilarityPreviewRequest = z.infer<typeof similarityPreviewRequestSchema>;
 
+export const similarityPreviewAvailabilityResponseSchema = z.discriminatedUnion('available', [
+  z.object({ available: z.literal(true) }).strict(),
+  z.object({ available: z.literal(false), reason: z.literal('provider_disabled') }).strict(),
+]);
+export type SimilarityPreviewAvailabilityResponse = z.infer<
+  typeof similarityPreviewAvailabilityResponseSchema
+>;
+
 export const similarityPreviewItemSchema = z
   .object({
     id: z.string().uuid(),

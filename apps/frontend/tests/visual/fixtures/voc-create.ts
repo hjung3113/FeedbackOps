@@ -1,5 +1,12 @@
-import { similarityPreviewResponseSchema } from '@fops/shared';
+import {
+  similarityPreviewAvailabilityResponseSchema,
+  similarityPreviewResponseSchema,
+} from '@fops/shared';
 import { z } from 'zod';
+
+export const vocCreatePreviewAvailability = similarityPreviewAvailabilityResponseSchema.parse({
+  available: true,
+});
 
 export const VOC_CREATE_IDS = {
   workspace: '29300000-0000-4000-8000-000000000001',

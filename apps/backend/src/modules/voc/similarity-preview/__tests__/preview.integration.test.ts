@@ -154,6 +154,53 @@ describe.skipIf(!workspaceId || !appUrl || !migrateUrl)('paid draft preview rout
     );
     return rows.rows[0];
   }
+  it.each(['Admin', 'Developer', 'User'])(
+    'availability is enabled for %s without provider calls or paid writes',
+    async (role) => {
+      const externalId =
+        role === 'Developer'
+          ? (await insertDevActor(ops, workspaceId, `preview-${randomUUID()}`)).externalId
+          : role === 'Admin'
+            ? 'mock-admin-1'
+            : 'mock-user-1';
+      const session = await loginAs(app, externalId);
+      const before = await paidState();
+      const res = await app.inject({
+        method: 'GET',
+        url: '/vocs/similarity-preview/availability',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${session}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ available: true });
+      expect(res.headers['cache-control']).toBe('private, no-cache');
+      expect(calls).toBe(0);
+      expect(await paidState()).toEqual(before);
+    },
+  );
+  it.each(['preview disabled', 'provider disabled'])(
+    'availability reports %s without provider calls or paid writes',
+    async (kind) => {
+      if (kind === 'preview disabled') config.VOC_SIMILARITY_PREVIEW = 'disabled';
+      else config.EMBEDDING_PROVIDER = 'disabled';
+      const before = await paidState();
+      const res = await app.inject({
+        method: 'GET',
+        url: '/vocs/similarity-preview/availability',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ available: false, reason: 'provider_disabled' });
+      expect(calls).toBe(0);
+      expect(await paidState()).toEqual(before);
+    },
+  );
+  it('availability requires a session without provider calls or paid writes', async () => {
+    const res = await app.inject({ method: 'GET', url: '/vocs/similarity-preview/availability' });
+    expect(res.statusCode).toBe(401);
+    expect(calls).toBe(0);
+    expect(await paidState()).toEqual({ requests: 0, attempts: 0 });
+  });
+
   it('finds an older readable duplicate with one paid request', async () => {
     const res = await request();
     expect(res.statusCode).toBe(200);

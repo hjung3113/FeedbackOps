@@ -1,5 +1,5 @@
 import type { CreateVocRequest } from '@fops/shared';
-import { Button, Card, CardContent } from '@fops/ui';
+import { Button, Card, CardContent, cn } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import { useId } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
@@ -9,8 +9,9 @@ import { formatRelativeTime } from '@/lib/format/datetime';
 import { useVocSimilarityPreview } from '../../hooks/useVocSimilarityPreview';
 
 export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocRequest> }) {
-  const { canCheck, loading, result, error, check } = useVocSimilarityPreview(form);
+  const { available, canCheck, loading, result, error, check } = useVocSimilarityPreview(form);
   const hintId = useId();
+  if (!available) return null;
   let message = error;
   if (loading) message = SEMANTIC_VOC_PREVIEW_COPY.loading;
   else if (result?.available && result.items.length === 0)
@@ -23,6 +24,11 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
           ? SEMANTIC_VOC_PREVIEW_COPY.expired
           : SEMANTIC_VOC_PREVIEW_COPY.providerFailed;
   }
+  const isError =
+    !!error ||
+    (result &&
+      !result.available &&
+      ['provider_failed', 'provider_timeout', 'provider_outcome_unknown'].includes(result.reason));
 
   return (
     <Card padding="compact" data-testid="semantic-voc-panel">
@@ -38,7 +44,7 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
             type="button"
             variant="secondary"
             size="sm"
-            disabled={!canCheck}
+            disabled={!canCheck || loading}
             aria-describedby={canCheck ? undefined : hintId}
             onClick={() => void check()}
           >
@@ -50,7 +56,11 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
             </p>
           )}
           <output aria-live="polite" className="flex flex-col gap-1">
-            {message && <span className="text-xs text-text-muted">{message}</span>}
+            {message && (
+              <span className={cn('text-xs', isError ? 'text-text-danger' : 'text-text-secondary')}>
+                {message}
+              </span>
+            )}
             {result?.available &&
               result.items.map((item) => (
                 <Link
