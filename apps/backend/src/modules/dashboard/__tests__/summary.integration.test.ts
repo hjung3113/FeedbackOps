@@ -879,26 +879,16 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   it('1077: canonical Task/Task Request links agree across list, recovery and summary despite the Task projection', async () => {
     const seed = await createDashboardScope();
     const before = (await get(seed.devCookie, seed.msA)).json<Summary>();
-    const rows = [];
-    for (const title of [
-      'Direct active Task, null column',
-      'Active Task Request',
-      'Inactive Task, column set',
-    ]) {
-      rows.push(
-        await insertFindingRow(migrateHandle, {
-          workspaceId: WORKSPACE_ID,
-          primaryManagedSystemId: seed.msA,
-          sourceId: randomUUID(),
-          createdBy: adminActorId,
-          status: 'active',
-          title,
-        }),
-      );
-    }
-    const direct = required(rows[0]);
-    const request = required(rows[1]);
-    const gap = required(rows[2]);
+    const insertFinding = (title: string) =>
+      insertFindingRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: seed.msA,
+        sourceId: randomUUID(),
+        createdBy: adminActorId,
+        status: 'active',
+        title,
+      });
+    const direct = await insertFinding('Direct active Task, null column');
     const task = await insertTaskRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: seed.msA,
@@ -906,6 +896,17 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       createdBy: adminActorId,
     });
     await link('finding', direct.id, 'task', task.id, 'requested_task', seed.msA);
+    // Assert before the column-only fixture can cancel the old predicate's error.
+    const afterDirect = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    expectQueueDelta(afterDirect, before, 'actionable-finding-no-execution', 0);
+    expectCoverageDelta(afterDirect, before, 'finding-execution', 1, 1);
+    expect(systemRow(afterDirect, seed.msA)?.coverage?.['finding-execution']).toMatchObject({
+      value: 1,
+      total: 1,
+    });
+
+    const request = await insertFinding('Active Task Request');
+    const gap = await insertFinding('Inactive Task, column set');
     await link('finding', request.id, 'task_request', randomUUID(), 'requested_task', seed.msA);
     await link('finding', gap.id, 'task', task.id, 'requested_task', seed.msA);
     await migrateHandle.pool.query(

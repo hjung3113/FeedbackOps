@@ -482,6 +482,8 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           onSelect={handleRowSelect}
           view={view}
           searching={isSearching}
+          areaFiltered={view === 'inbox' && area !== undefined}
+          areaLabel={areaLabel}
           onRetry={() => {
             void vocList.refetch();
           }}

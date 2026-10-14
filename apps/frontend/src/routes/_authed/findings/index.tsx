@@ -291,8 +291,8 @@ function FindingsListShell({
             selectedLinks.data?.items.some(
               (link) =>
                 link.source_type === 'finding' &&
-                'source_id' in link &&
-                link.source_id === item.id &&
+                // This read is source-scoped; restricted stubs omit endpoint IDs.
+                (!('source_id' in link) || link.source_id === item.id) &&
                 (link.target_type === 'task_request' || link.target_type === 'task') &&
                 link.relation_type === 'requested_task' &&
                 link.status === 'active',

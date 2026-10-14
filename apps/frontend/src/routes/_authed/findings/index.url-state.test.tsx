@@ -296,6 +296,53 @@ describe('/findings URL state', () => {
     expect(router.state.location.search.selected).toBe(F1_ID);
   });
 
+  test.each(['hidden', 'denied'] as const)(
+    'reconciles a selected Finding with an active %s direct Task stub',
+    async (visibilityState) => {
+      const requested: string[] = [];
+      const router = renderUrlState({ requested }, `/findings?execution=none&selected=${F1_ID}`);
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        requested.push(String(input));
+        if (url.pathname === '/findings')
+          return jsonResponse({
+            items: [FINDINGS[1]],
+            page: { has_more: true, total: 2, cursor: 'next' },
+          });
+        if (url.pathname === `/findings/${F1_ID}`) return jsonResponse(F1);
+        if (url.pathname === '/entity-links')
+          return jsonResponse({
+            items: [
+              {
+                id: STALE_ID,
+                source_type: 'finding',
+                target_type: 'task',
+                relation_type: 'requested_task',
+                status: 'active',
+                visibility_state: visibilityState,
+                managed_system_id: MS_1,
+                created_by: F1.created_by,
+                created_at: F1.created_at,
+                updated_at: null,
+              },
+            ],
+          });
+        if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+        return jsonResponse({ code: 'not_found.record' }, 404);
+      });
+      expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+      await waitFor(() => expect(router.state.location.search.selected).toBeUndefined());
+      expect(
+        requested.some((raw) => {
+          const url = new URL(raw, 'http://localhost');
+          return url.pathname === '/entity-links' && url.searchParams.get('source_id') === F1_ID;
+        }),
+      ).toBe(true);
+      expect(router.state.location.search.execution).toBe('none');
+      expect(screen.queryByTestId('finding-detail-panel')).not.toBeInTheDocument();
+    },
+  );
+
   test.each(['task', 'task_request'] as const)(
     'reconciles a later-page selection with an active canonical %s link',
     async (targetType) => {

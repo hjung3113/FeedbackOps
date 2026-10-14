@@ -523,6 +523,8 @@ The `/vocs` and `/findings` destination filters and active-filter controls are i
   strict browser schemas and typed clients. VOC forwards the same dot key; the other clients map
   it to backend `analytics_area_id`. The same `/tasks` and `/surveys` support remains proposed.
   Report links always retain the row's Managed System UUID.
+  For these destinations, switching to a specific Managed System clears a UUID
+  `filter.analytics_area`; switching to all/unscoped keeps it. `unset` always remains.
 - VOC total/unassigned/high-follow-up/unlinked inspection use `view=inbox`, with omitted tab,
   `tab=unassigned`, `tab=high-no-link`, or `tab=no-task` respectively.
 - Implemented Finding links carry `status=active` or `execution=none`. Proposed Task links carry `view=backlog`

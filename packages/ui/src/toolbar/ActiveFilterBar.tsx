@@ -34,6 +34,7 @@ export function ActiveFilterBar({ items, onClearAll, className }: ActiveFilterBa
                   type="button"
                   variant="subtle"
                   size="icon-xs"
+                  className="text-current hover:bg-accent-primary/10"
                   aria-label={`${label} 필터 제거`}
                   onClick={onRemove}
                 >

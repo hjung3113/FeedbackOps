@@ -16,7 +16,11 @@
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
-import { VOC_LIST_LOAD_ERROR_LABELS, VOC_SEARCH_EMPTY_LABEL } from '@/lib/copy/voc';
+import {
+  VOC_AREA_FILTER_EMPTY_COPY,
+  VOC_LIST_LOAD_ERROR_LABELS,
+  VOC_SEARCH_EMPTY_LABEL,
+} from '@/lib/copy/voc';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -110,6 +114,8 @@ export interface VocListProps {
    * the search empty state instead of the queue/my-VOC copy.
    */
   searching?: boolean;
+  areaFiltered?: boolean;
+  areaLabel?: string;
   /** Retry handler for error variant. */
   onRetry?: () => void;
   /** Opens the route-owned VOC create flow from an empty list state. */
@@ -149,6 +155,8 @@ function VocListContent({
   onSelect,
   view,
   searching,
+  areaFiltered,
+  areaLabel,
   onRetry,
   onCreate,
 }: VocListProps) {
@@ -216,6 +224,15 @@ function VocListContent({
 
   // 3. Empty list
   if (!loading && items.length === 0) {
+    if (view === 'inbox' && areaFiltered && areaLabel !== undefined) {
+      return (
+        <ListStateMessage
+          variant="filtered"
+          title={VOC_AREA_FILTER_EMPTY_COPY.title}
+          body={VOC_AREA_FILTER_EMPTY_COPY.body(areaLabel)}
+        />
+      );
+    }
     // #821: an active server search owns the empty state — the queue/my-VOC
     // copy would wrongly imply there is nothing to find.
     if (searching) {

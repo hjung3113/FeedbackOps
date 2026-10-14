@@ -302,6 +302,31 @@ describe('useInboxRoute', () => {
     expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute('aria-selected', 'false');
   });
 
+  it.each([
+    ['11111111-1111-4111-8111-111111111111', 'Analytics Area: 선택한 Area'],
+    ['unset', 'Analytics Area: 미지정'],
+  ])(
+    'shows filtered-empty Inbox copy for Area %s with a single reset control',
+    async (area, label) => {
+      useVocListMock.mockReturnValue({
+        data: { items: [], next_cursor: undefined },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      searchState = { view: 'inbox', 'filter.analytics_area': area };
+      render(<InboxTestHarness view="inbox" />);
+
+      expect(await screen.findByText('현재 조건에 맞는 VOC가 없습니다')).toBeInTheDocument();
+      expect(screen.getByText(`${label} 조건으로 표시 중입니다.`)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '+ 새 VOC 작성' })).not.toBeInTheDocument();
+      expect(screen.queryByText('큐가 비었습니다')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '필터 초기화' })).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+      expect(navigateMock.mock.calls.at(-1)?.[0].search(searchState)).toEqual({ view: 'inbox' });
+    },
+  );
+
   it('renders 3 VocList rows for inbox view', async () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);

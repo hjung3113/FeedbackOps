@@ -73,9 +73,10 @@ Admin sees the workspace population. Developer visibility uses the existing
 point `finding.read` checks once per distinct Primary Managed System, including
 explicit denies, before the SQL page limit and counts. Empty allowed scope
 returns no rows and a first-page total of zero. The same SQL visibility
-predicate applies in full-set mode. `execution=none` currently keeps the active, no-linked-Task, no-active-requested-Task-Request
-predicate. Its convenience-column test is superseded for implementation by the accepted ADR-0069
-canonical-link predicate in the extension below (implementation pending).
+predicate applies in full-set mode. `execution=none` keeps active Findings with no active
+canonical `(finding, task_request, requested_task)` or `(finding, task, requested_task)` link.
+This implemented ADR-0069 complement ignores the convenience `linked_task_id` column;
+inactive links do not count as execution. See the destination extension below.
 
 Saved Finding views reject both `cursor` and `limit`; paging is transient list
 state and is never persisted as a saved filter.
