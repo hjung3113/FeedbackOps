@@ -2795,7 +2795,11 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
 describe.skipIf(!runIntegration)('dashboard authorization absence', () => {
   it('propagates a non-authorization downstream failure rather than omitting an entry', async () => {
     const service = createDashboardService({
-      db: { execute: async () => ({ rows: [] }) } as never,
+      // Scope reads (#1170) see no grants or denies; the Admin role satisfies voc.read.
+      db: {
+        execute: async () => ({ rows: [] }),
+        select: () => ({ from: () => ({ where: async () => [] }) }),
+      } as never,
       checkService: { checkCapability: async () => ({ allow: true, via: 'role' }) } as never,
       requestService: { listAllActive: async () => ({ count: 0, requests: [] }) },
       vocReadService: {
