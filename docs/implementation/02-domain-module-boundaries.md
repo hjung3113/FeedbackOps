@@ -435,3 +435,16 @@ source workers. Cluster has no direct Area and no member-derived rule.
 non-locking ID/archive state within the workspace, solely for draft-preview parent
 validation. It grants no candidate read permission; VOC resolves scope via
 `actorReadScope` and uses `similarVocVisibilityPredicate` for every candidate read.
+
+### Finding execution projection after generic detach (#1174a)
+
+Findings exports `reconcileFindingExecution` and the type-only injected
+`FindingExecutionReconciler` from its public barrel. Server composition injects
+it into Entity Links; generic detach calls it after the canonical
+`finding -> task requested_task` link update and before recovery finish, inside
+the same transaction under the workspace recovery lock. The seam locks the
+Finding and clears its convenience `linked_task_id` only when no active Task
+`requested_task` link remains. Entity Links owns links; Findings owns its table.
+Finding link-task reads active canonical links through the Entity Links command
+read seam before deciding no-op, conflict or insertion. Task Request execution
+predicates and existing command permissions remain unchanged.

@@ -240,12 +240,17 @@ Slice 4.2 detach lifecycle (#113):
 PATCH /entity-links/:id
 - request body: { reason: string } where reason is required, trimmed, and non-empty
 - supported transition: active -> detached only
-- authz: actor must have the same voc.read capability used by link creation on
-  both source and target VOC Managed Systems
-- not found / cross-workspace / missing scope on either endpoint: 404
+- authz: both endpoints must be readable through their providers, and detach
+  requires the same mutation capability as creation for the generic tuple:
+  target canCreateTarget when defined, otherwise target read; source read
+- command-only tuples remain excluded from generic detach
+- not found / cross-workspace / unreadable endpoint / missing creation capability /
+  command-only tuple: the same non-disclosing 404 not_found.record
 - already detached, revoked, stale, or lost update race: 409
 - side effects in one transaction: update status/detach metadata and append
-  audit_log event_type entity_link.detached
+  audit_log event_type entity_link.detached; detaching finding -> task requested_task
+  calls the Findings-owned execution projection seam in that transaction to clear
+  linked_task_id when no active requested_task link to a Task remains
 - hard delete is forbidden; after ADR-0064 cutover fops_app UPDATE uses the filtered
   canonical-link view (proposed/new), not the raw core.entity_links table; no DELETE
 ```

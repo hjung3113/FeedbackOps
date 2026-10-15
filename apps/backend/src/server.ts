@@ -54,6 +54,7 @@ import {
   findingRecoveryProjection,
   findingRecoveryRepairScope,
   findingsRoutes,
+  reconcileFindingExecution,
 } from './modules/findings/index.js';
 import {
   createManagedSystemService,
@@ -500,6 +501,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Entity Links module — Slice 4.1 issue #112 ────────────────────────────
   const entityLinksService = createEntityLinksService({
+    reconcileFindingExecution,
     recoveryRecorder,
     db: dbHandle.db,
     checkService,

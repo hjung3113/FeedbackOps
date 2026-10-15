@@ -12,6 +12,16 @@ PATCH /entity-links/:id
 
 Link detach/revoke is represented by `PATCH /entity-links/:id` status
 transition. There is no hard-delete endpoint for entity links as of Slice 6.
+Generic detach requires both-endpoint readability and the same mutation
+capability creation requires for that tuple: source read and the target
+provider's `canCreateTarget` when defined, otherwise target read. Missing
+readability or creation capability returns the same non-disclosing
+`404 not_found.record` as an absent link. Command-only tuples stay excluded.
+Detaching `(finding, task, requested_task)` invokes the Findings-owned execution
+projection seam inside the detach transaction; it clears `linked_task_id` when
+no active `requested_task` link to a Task remains. Entity Links never writes
+Finding tables directly. Link history, recovery capture and detach audit stay atomic.
+
 The command-only `(voc_cluster, finding, evidence_of)` tuple is unavailable on
 every generic entity-link surface: POST, both GET/list modes, and PATCH/detach.
 Generic PATCH treats that tuple exactly as an absent link, returning the same
