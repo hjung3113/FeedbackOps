@@ -131,12 +131,17 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 function makePanelRouter() {
   const requests: RouterRequest[] = [];
+  // Deferred reads: `held` queues responses made while a gate flag is on;
+  // releaseGated() serves them FIFO with a response built at release time.
+  const held: Array<{ make: () => Response; resolve: (response: Response) => void }> = [];
   const config = {
     taskResponses: {
       [TASK_A_ID]: taskA,
       [TASK_B_ID]: taskB,
     } as Record<string, TaskDetailDto>,
     gatePost: false,
+    gateTaskGets: false,
+    gateMilestoneDetailGets: false,
   };
   let releasePost: ((response: Response) => void) | null = null;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -161,7 +166,13 @@ function makePanelRouter() {
     }
     if (method === 'GET' && /^\/tasks\/[^/]+$/.test(path)) {
       const taskId = path.split('/')[2];
-      return jsonResponse(config.taskResponses[taskId ?? ''] ?? taskA);
+      const make = () => jsonResponse(config.taskResponses[taskId ?? ''] ?? taskA);
+      if (config.gateTaskGets) {
+        return new Promise<Response>((resolve) => {
+          held.push({ make, resolve });
+        });
+      }
+      return make();
     }
     if (method === 'GET' && path === `/milestones?managed_system_id=${SYSTEM_ID}`) {
       return jsonResponse({ items: [AM, MS2, BM] });
@@ -169,7 +180,15 @@ function makePanelRouter() {
     const detailMatch = path.match(/^\/milestones\/([0-9a-f-]+)$/);
     if (method === 'GET' && detailMatch) {
       const found = [AM, MS2, BM].find((row) => row.id === detailMatch[1]);
-      if (found) return jsonResponse(milestoneDetail(found));
+      if (found) {
+        const make = () => jsonResponse(milestoneDetail(found));
+        if (config.gateMilestoneDetailGets) {
+          return new Promise<Response>((resolve) => {
+            held.push({ make, resolve });
+          });
+        }
+        return make();
+      }
     }
     return jsonResponse({ code: 'not_found.record', message: 'unrouted' }, 404);
   });
@@ -178,6 +197,10 @@ function makePanelRouter() {
     fetchMock,
     config,
     releasePost: (response?: Response) => releasePost?.(response ?? jsonResponse(taskB)),
+    releaseGated: () => {
+      const next = held.shift();
+      if (next) next.resolve(next.make());
+    },
   };
 }
 
@@ -214,13 +237,106 @@ function switchTask(view: RenderResult, client: QueryClient, taskId: string) {
 }
 
 async function pickMilestoneAndSave() {
-  fireEvent.click(await screen.findByRole('button', { name: '수정' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Milestone 수정' }));
   fireEvent.click(await screen.findByRole('combobox', { name: 'Milestone 선택' }));
   fireEvent.click(await screen.findByRole('option', { name: MS2_OPTION }));
   fireEvent.click(screen.getByRole('button', { name: '저장' }));
   await act(async () => {
     await Promise.resolve();
   });
+}
+
+interface StoredMilestonePost {
+  ifMatch: string;
+  body: unknown;
+  response: Response;
+}
+
+interface IdempotentRouter {
+  requests: RouterRequest[];
+  fetchMock: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  config: {
+    taskResponses: Record<string, TaskDetailDto>;
+    postMode: 'commit' | 'lost' | 'stale';
+  };
+}
+
+// Server-rule mirror (routes.ts request hash, idempotency-service lookup): a
+// stored key replayed with a different If-Match or body is
+// conflict.idempotency_key_reuse; the same key + If-Match + body replays the
+// stored 200; a stale_write rejection is thrown before the record, so it
+// stores nothing. postMode 'lost' commits but answers 502.
+function makeIdempotentRouter(): IdempotentRouter {
+  const requests: RouterRequest[] = [];
+  const stored = new Map<string, StoredMilestonePost>();
+  const config = {
+    taskResponses: {
+      [TASK_A_ID]: taskA,
+    } as Record<string, TaskDetailDto>,
+    postMode: 'commit' as 'commit' | 'lost' | 'stale',
+  };
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    const method = init?.method ?? 'GET';
+    const headers = Object.fromEntries(new Headers(init?.headers));
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+    requests.push({ method, path, headers, body });
+    if (method === 'POST' && /\/tasks\/[^/]+\/milestone$/.test(path)) {
+      const key = headers['idempotency-key'] ?? '';
+      const ifMatch = headers['if-match'] ?? '';
+      const hit = stored.get(key);
+      if (hit) {
+        if (hit.ifMatch !== ifMatch || JSON.stringify(hit.body) !== JSON.stringify(body)) {
+          return jsonResponse(
+            {
+              code: 'conflict.idempotency_key_reuse',
+              message: 'Idempotency-Key reused with a different request body',
+            },
+            409,
+          );
+        }
+        return hit.response.clone();
+      }
+      const parsed = assignTaskMilestoneRequestSchema.parse(body);
+      if (config.postMode === 'stale') {
+        return jsonResponse(
+          {
+            code: 'conflict.stale_write',
+            message: 'task updated_at does not match If-Match',
+            detail: { current_updated_at: config.taskResponses[TASK_A_ID]?.updated_at },
+          },
+          409,
+        );
+      }
+      const response = jsonResponse({
+        ...taskADto,
+        milestone_id: parsed.milestone_id,
+        updated_at: UPDATED_AT_NEXT,
+      });
+      stored.set(key, { ifMatch, body, response });
+      if (config.postMode === 'lost') {
+        return jsonResponse({ code: 'upstream.unavailable', message: 'response lost' }, 502);
+      }
+      return response.clone();
+    }
+    if (method === 'GET' && /^\/tasks\/[^/]+\/comments/.test(path)) {
+      return jsonResponse({ items: [], page: { has_more: false } });
+    }
+    if (method === 'GET' && /^\/tasks\/[^/]+$/.test(path)) {
+      const taskId = path.split('/')[2];
+      return jsonResponse(config.taskResponses[taskId ?? ''] ?? taskA);
+    }
+    if (method === 'GET' && path === `/milestones?managed_system_id=${SYSTEM_ID}`) {
+      return jsonResponse({ items: [AM, MS2, BM] });
+    }
+    const detailMatch = path.match(/^\/milestones\/([0-9a-f-]+)$/);
+    if (method === 'GET' && detailMatch) {
+      const found = [AM, MS2, BM].find((row) => row.id === detailMatch[1]);
+      if (found) return jsonResponse(milestoneDetail(found));
+    }
+    return jsonResponse({ code: 'not_found.record', message: 'unrouted' }, 404);
+  });
+  return { requests, fetchMock, config };
 }
 
 describe('Task detail Milestone row', () => {
@@ -278,7 +394,7 @@ describe('Task detail Milestone row', () => {
     expect(post?.headers['if-match']).toBe(UPDATED_AT);
     // ['task'] invalidation refetches A; milestone_id flips to MS-2 and the row follows.
     await waitFor(() => expect(screen.getByText('MS-2 릴리스')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: '수정' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Milestone 수정' })).toHaveFocus();
     expect(screen.queryByText('MS-A01 A 마일스톤')).not.toBeInTheDocument();
   });
 
@@ -288,6 +404,162 @@ describe('Task detail Milestone row', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(['task', TASK_A_ID], taskA);
     renderPanel(client, TASK_A_ID);
-    expect(await screen.findByRole('button', { name: '수정' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Milestone 수정' })).toBeInTheDocument();
   });
+
+  it('holds the submitted choice label in the row until the Task and new Milestone refetches settle', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['task', TASK_A_ID], taskA);
+    renderPanel(client, TASK_A_ID);
+    expect(await screen.findByText('MS-A01 A 마일스톤')).toBeInTheDocument();
+    // The commit changed the Task; both follow-up reads are served only on release.
+    router.config.taskResponses[TASK_A_ID] = taskDetail({
+      id: TASK_A_ID,
+      title: 'A 작업',
+      milestone_id: MS2_ID,
+      updated_at: UPDATED_AT_NEXT,
+    });
+    router.config.gateTaskGets = true;
+    router.config.gateMilestoneDetailGets = true;
+    await pickMilestoneAndSave();
+    // Editor closed; the row keeps the submitted label — no old value, no —.
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'Milestone 선택' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('MS-2 릴리스')).toBeInTheDocument();
+    expect(screen.queryByText('MS-A01 A 마일스톤')).not.toBeInTheDocument();
+    // Task settles to the saved state while the new Milestone detail is gated.
+    router.releaseGated();
+    await waitFor(() =>
+      expect(
+        router.requests.some(
+          (request) => request.method === 'GET' && request.path === `/milestones/${MS2_ID}`,
+        ),
+      ).toBe(true),
+    );
+    expect(screen.getByText('MS-2 릴리스')).toBeInTheDocument();
+    expect(screen.queryByText('MS-A01 A 마일스톤')).not.toBeInTheDocument();
+    // Detail settles; the row serves the refetched truth.
+    router.releaseGated();
+    await waitFor(() => expect(screen.getByText('MS-2 릴리스')).toBeInTheDocument());
+  });
+});
+
+describe('Task detail Milestone save retries', () => {
+  let idemRouter: IdempotentRouter;
+
+  beforeEach(() => {
+    idemRouter = makeIdempotentRouter();
+    globalThis.fetch = idemRouter.fetchMock as typeof fetch;
+  });
+
+  const postsToMilestone = () =>
+    idemRouter.requests.filter(
+      (request) => request.method === 'POST' && /\/tasks\/[^/]+\/milestone$/.test(request.path),
+    );
+
+  it('replays the committed save on retry after a lost response instead of resending the key with a new If-Match', async () => {
+    idemRouter.config.postMode = 'lost';
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['task', TASK_A_ID], taskA);
+    renderPanel(client, TASK_A_ID);
+    expect(await screen.findByText('MS-A01 A 마일스톤')).toBeInTheDocument();
+    await pickMilestoneAndSave();
+    // The POST committed but the response was lost.
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    // A background Task refetch observes the committed state (new updated_at).
+    idemRouter.config.taskResponses[TASK_A_ID] = taskDetail({
+      id: TASK_A_ID,
+      title: 'A 작업',
+      milestone_id: MS2_ID,
+      updated_at: UPDATED_AT_NEXT,
+    });
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['task', TASK_A_ID], exact: true });
+    });
+    // The panel caught up with the committed state: it reads the new
+    // Milestone detail (the commit that fired this GET carries the moved
+    // updated_at into the editor's If-Match source).
+    await waitFor(() =>
+      expect(
+        idemRouter.requests.some(
+          (request) => request.method === 'GET' && request.path === `/milestones/${MS2_ID}`,
+        ),
+      ).toBe(true),
+    );
+    await act(async () => {});
+    // Retrying the unchanged choice replays the stored 200.
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'Milestone 선택' })).not.toBeInTheDocument(),
+    );
+    const posts = postsToMilestone();
+    expect(posts).toHaveLength(2);
+    expect(posts[1]?.headers['idempotency-key']).toBe(posts[0]?.headers['idempotency-key']);
+    expect(posts[1]?.headers['if-match']).toBe(UPDATED_AT);
+    expect(posts[1]?.body).toEqual({ milestone_id: MS2_ID });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('starts a new attempt after a 409 stale write with a new key and the refreshed If-Match', async () => {
+    idemRouter.config.postMode = 'stale';
+    idemRouter.config.taskResponses[TASK_A_ID] = taskDetail({
+      id: TASK_A_ID,
+      title: 'A 작업',
+      milestone_id: BM_ID,
+      updated_at: UPDATED_AT_NEXT,
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['task', TASK_A_ID], taskA);
+    renderPanel(client, TASK_A_ID);
+    expect(await screen.findByText('MS-A01 A 마일스톤')).toBeInTheDocument();
+    await pickMilestoneAndSave();
+    expect(await screen.findByRole('alert')).toHaveTextContent('다른 사용자가 먼저 변경했습니다.');
+    // The refetched Task has settled once the current-value line shows up.
+    expect(await screen.findByText('현재: MS-B01 B 마일스톤')).toBeInTheDocument();
+    idemRouter.config.postMode = 'commit';
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'Milestone 선택' })).not.toBeInTheDocument(),
+    );
+    const posts = postsToMilestone();
+    expect(posts).toHaveLength(2);
+    expect(posts[1]?.headers['idempotency-key']).not.toBe(posts[0]?.headers['idempotency-key']);
+    expect(posts[1]?.headers['if-match']).toBe(UPDATED_AT_NEXT);
+    expect(posts[1]?.body).toEqual({ milestone_id: MS2_ID });
+  });
+
+  it.each([
+    {
+      scenario: 'another Milestone',
+      milestoneId: BM_ID as string | null,
+      current: '현재: MS-B01 B 마일스톤',
+    },
+    { scenario: 'no Milestone', milestoneId: null, current: '현재: Milestone 없음' },
+  ])(
+    'shows the refreshed current value under the stale-write alert: $scenario',
+    async ({ milestoneId, current }) => {
+      idemRouter.config.postMode = 'stale';
+      idemRouter.config.taskResponses[TASK_A_ID] = taskDetail({
+        id: TASK_A_ID,
+        title: 'A 작업',
+        milestone_id: milestoneId,
+        updated_at: UPDATED_AT_NEXT,
+      });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(['task', TASK_A_ID], taskA);
+      renderPanel(client, TASK_A_ID);
+      expect(await screen.findByText('MS-A01 A 마일스톤')).toBeInTheDocument();
+      await pickMilestoneAndSave();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        '다른 사용자가 먼저 변경했습니다.',
+      );
+      // The user's choice stays selected, and the refreshed current value from
+      // the refetched Task/Milestone is spelled out under the alert.
+      expect(screen.getByRole('combobox', { name: 'Milestone 선택' })).toHaveTextContent(
+        /MS-2 릴리스/,
+      );
+      expect(await screen.findByText(current)).toBeInTheDocument();
+    },
+  );
 });

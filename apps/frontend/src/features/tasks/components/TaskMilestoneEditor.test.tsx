@@ -92,7 +92,10 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 function makeRouter(items: MilestoneDto[]) {
   const requests: RouterRequest[] = [];
-  const config: { postResponse: Response | null } = { postResponse: null };
+  const config: { postResponse: Response | null; listResponse: Response | null } = {
+    postResponse: null,
+    listResponse: null,
+  };
   let postSeen = false;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -111,6 +114,7 @@ function makeRouter(items: MilestoneDto[]) {
       });
     }
     if (method === 'GET' && path === `/milestones?managed_system_id=${SYSTEM_ID}`) {
+      if (config.listResponse) return config.listResponse.clone();
       return jsonResponse({ items: items.map((row) => (postSeen ? withPercent(row, 71) : row)) });
     }
     const detailMatch = path.match(/^\/milestones\/([0-9a-f-]+)$/);
@@ -160,6 +164,7 @@ function renderHarness(overrides: HarnessOverrides = {}) {
   const current = {
     taskId: TASK_ID,
     managedSystemId: SYSTEM_ID,
+    ifMatch: UPDATED_AT,
     milestoneId: overrides.milestoneId ?? null,
     valueLabel: overrides.valueLabel ?? null,
     canEdit: overrides.canEdit ?? true,
@@ -235,7 +240,7 @@ function TaskDetailProbe() {
 }
 
 async function openEditorAndPick(optionName: string | RegExp) {
-  fireEvent.click(await screen.findByRole('button', { name: '수정' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Milestone 수정' }));
   fireEvent.click(await screen.findByRole('combobox', { name: 'Milestone 선택' }));
   fireEvent.click(await screen.findByRole('option', { name: optionName }));
 }
@@ -306,7 +311,9 @@ describe('TaskMilestoneEditor', () => {
     // Success closes the editor and returns focus to the trigger; the rerender
     // feeds the row value the panel shows after its Task refetch.
     rerenderProps(body.milestone_id, rowLabel);
-    await waitFor(() => expect(screen.getByRole('button', { name: '수정' })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Milestone 수정' })).toHaveFocus(),
+    );
     if (rowLabel === null) {
       expect(screen.getByText('—')).toBeInTheDocument();
     } else {
@@ -329,13 +336,18 @@ describe('TaskMilestoneEditor', () => {
     expect(post.body).toEqual({ milestone_id: MS2_ID });
   });
 
-  it('reuses the idempotency key on a retry of the same choice and mints a new one after the choice changes', async () => {
-    router.config.postResponse = conflictResponse();
+  it('resends the captured identity on an ambiguous-failure retry and mints a new one after the choice changes', async () => {
+    // 502 after the server may have committed: ambiguous, so the captured
+    // key, If-Match, and body go back out unchanged.
+    router.config.postResponse = jsonResponse(
+      { code: 'upstream.unavailable', message: 'response lost' },
+      502,
+    );
     renderHarness({ milestoneId: MS1_ID, valueLabel: MS1_LABEL });
     await openEditorAndPick(MS2_OPTION);
     const first = await submitAndAwaitPost();
     expect(first.headers['idempotency-key']).toBeTruthy();
-    // Retry the same choice: same draft, same key.
+    // Retry the same choice: same draft, same captured identity.
     router.config.postResponse = null;
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => {
@@ -343,8 +355,10 @@ describe('TaskMilestoneEditor', () => {
     });
     const posts = router.requests.filter((request) => request.method === 'POST');
     expect(posts[1]?.headers['idempotency-key']).toBe(first.headers['idempotency-key']);
-    // A changed choice resets the key.
-    await waitFor(() => expect(screen.getByRole('button', { name: '수정' })).toBeInTheDocument());
+    expect(posts[1]?.headers['if-match']).toBe(UPDATED_AT);
+    expect(posts[1]?.body).toEqual(first.body);
+    // A changed choice starts a new attempt with a new key.
+    await waitFor(() => expect(screen.getByRole('button', { name: /수정/ })).toBeInTheDocument());
     await openEditorAndPick(NO_MILESTONE_PICK);
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => {
@@ -364,6 +378,7 @@ describe('TaskMilestoneEditor', () => {
         <TaskMilestoneEditor
           taskId={TASK_ID}
           managedSystemId={SYSTEM_ID}
+          ifMatch={UPDATED_AT}
           milestoneId={MS1_ID}
           valueLabel="MS-1 출시 준비"
           canEdit
@@ -398,17 +413,76 @@ describe('TaskMilestoneEditor', () => {
 
   it('shows no trigger and keeps the read-only value without canEdit', () => {
     renderHarness({ canEdit: false, valueLabel: MS1_LABEL });
-    expect(screen.queryByRole('button', { name: '수정' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Milestone 수정' })).not.toBeInTheDocument();
     expect(screen.getByText(MS1_LABEL)).toBeInTheDocument();
   });
 
   it('cancels on Escape and returns focus to the trigger', async () => {
     renderHarness({ milestoneId: MS1_ID, valueLabel: MS1_LABEL });
-    fireEvent.click(await screen.findByRole('button', { name: '수정' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Milestone 수정' }));
     expect(await screen.findByRole('combobox', { name: 'Milestone 선택' })).toHaveFocus();
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Milestone 선택' }), { key: 'Escape' });
-    await waitFor(() => expect(screen.getByRole('button', { name: '수정' })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Milestone 수정' })).toHaveFocus(),
+    );
     expect(screen.queryByRole('combobox', { name: 'Milestone 선택' })).not.toBeInTheDocument();
+  });
+
+  it('gives the trigger an accessible Milestone name while the visible text stays 수정', () => {
+    renderHarness({ valueLabel: MS1_LABEL });
+    const trigger = screen.getByRole('button', { name: 'Milestone 수정' });
+    expect(trigger).toHaveTextContent('수정');
+  });
+
+  it('shows a distinct read error and only Milestone 없음 when the initial choices GET fails', async () => {
+    router.config.listResponse = jsonResponse(
+      { code: 'internal_error.server', message: 'boom' },
+      500,
+    );
+    renderHarness();
+    fireEvent.click(await screen.findByRole('button', { name: /수정/ }));
+    // The read error is distinguishable from an empty list…
+    expect(await screen.findByText('Milestone 목록을 불러올 수 없습니다.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('combobox', { name: 'Milestone 선택' }));
+    const none = await screen.findByRole('option', { name: NO_MILESTONE_PICK });
+    expect(screen.queryByRole('option', { name: MS1_OPTION })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: MS2_OPTION })).not.toBeInTheDocument();
+    // …and the explicit clear stays available and submittable.
+    fireEvent.click(none);
+    const post = await submitAndAwaitPost();
+    expect(post.body).toEqual({ milestone_id: null });
+  });
+
+  it('hides retained choices and blocks a held non-null pick after a settled refetch error', async () => {
+    const harness = renderHarness({ milestoneId: MS1_ID, valueLabel: MS1_LABEL });
+    await openEditorAndPick(MS2_OPTION);
+    // Cached success, then a failed background refetch.
+    router.config.listResponse = jsonResponse(
+      { code: 'internal_error.server', message: 'boom' },
+      500,
+    );
+    await act(async () => {
+      await harness.client.refetchQueries({ queryKey: ['milestones', 'task-options', SYSTEM_ID] });
+    });
+    expect(await screen.findByText('Milestone 목록을 불러올 수 없습니다.')).toBeInTheDocument();
+    // The unavailable non-null choice cannot be saved; only an explicit none
+    // is allowed through. (Asserted with the listbox closed — while it is
+    // open, Radix hides the outside tree from the accessibility tree.)
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(
+      router.requests.filter(
+        (request) => request.method === 'POST' && /\/milestone$/.test(request.path),
+      ),
+    ).toHaveLength(0);
+    // Retained titles no longer render as options; the held pick is
+    // identity-free and disabled.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Milestone 선택' }));
+    expect(await screen.findByRole('option', { name: '확인할 수 없음' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: MS1_OPTION })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: MS2_OPTION })).not.toBeInTheDocument();
   });
 
   describe('progress refresh', () => {
@@ -443,6 +517,7 @@ describe('TaskMilestoneEditor', () => {
           <TaskMilestoneEditor
             taskId={TASK_ID}
             managedSystemId={SYSTEM_ID}
+            ifMatch={UPDATED_AT}
             milestoneId={from}
             valueLabel={from === null ? null : MS1_LABEL}
             canEdit

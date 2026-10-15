@@ -26,10 +26,17 @@ export const RESPONSIBILITY_COPY = {
 // #1181 Task detail Milestone row: inline assign/move/clear editor.
 export const TASK_MILESTONE_COPY = {
   edit: '수정',
+  editAriaLabel: 'Milestone 수정',
   select: 'Milestone 선택',
   none: 'Milestone 없음',
   save: '저장',
   saved: 'Milestone을 저장했습니다.',
+  // Choices read barrier (mirrors the Task Request conversion picker): a
+  // settled read error hides retained options; a held pick stays identity-free.
+  choicesUnavailable: 'Milestone 목록을 불러올 수 없습니다.',
+  choiceUnavailable: '확인할 수 없음',
+  current: (label: string | null) =>
+    label === null ? `현재: ${TASK_MILESTONE_COPY.none}` : `현재: ${label}`,
 } as const;
 
 export const TASK_REPORT_FILTER_COPY = {

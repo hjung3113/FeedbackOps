@@ -30,7 +30,7 @@ import {
   Skeleton,
   SkeletonBlocks,
 } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
@@ -151,6 +151,13 @@ export function TaskDetailPanel({
 }: TaskDetailPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [savedLabel, setSavedLabel] = React.useState<{
+    taskId: string;
+    id: string | null;
+    label: string | null;
+    at: number;
+  } | null>(null);
   const taskQuery = useQuery({
     queryKey: ['task', taskId] as const,
     queryFn: ({ signal }) => getTask(taskId, signal),
@@ -237,6 +244,24 @@ export function TaskDetailPanel({
   const managedSystem = managedSystems.find(
     (system) => system.id === task.primary_managed_system_id,
   );
+  // #1181 fix round 1: after a successful Milestone save the row keeps the
+  // submitted choice's label until the refetched Task and the new Milestone
+  // detail have settled, so it never flashes the old value or `—` in between.
+  // A failed save must not pin the row, so the label is recorded on success
+  // only; entries from another Task are inert.
+  const savedMilestone = savedLabel !== null && savedLabel.taskId === task.id ? savedLabel : null;
+  const taskSaveSettled = savedMilestone === null || taskQuery.dataUpdatedAt >= savedMilestone.at;
+  const destinationPending =
+    savedMilestone !== null &&
+    savedMilestone.id !== null &&
+    task.milestone_id === savedMilestone.id &&
+    milestoneQuery.data === undefined;
+  const milestoneLabel =
+    savedMilestone !== null && (!taskSaveSettled || destinationPending)
+      ? savedMilestone.label
+      : milestoneQuery.data && milestoneQuery.error === null
+        ? `${milestoneQuery.data.display_id} ${milestoneQuery.data.title}`
+        : null;
   return (
     <TaskDetailPanelFrame
       ariaLive="off"
@@ -322,21 +347,35 @@ export function TaskDetailPanel({
               key={task.id}
               taskId={task.id}
               managedSystemId={task.primary_managed_system_id}
+              ifMatch={task.updated_at}
               milestoneId={milestoneId}
-              valueLabel={
-                milestoneQuery.data && milestoneQuery.error === null
-                  ? `${milestoneQuery.data.display_id} ${milestoneQuery.data.title}`
-                  : null
-              }
+              valueLabel={milestoneLabel}
               canEdit={canManageAssignment}
-              onSave={(nextMilestoneId, key) =>
-                assignTaskMilestone(
+              onSave={(nextMilestoneId, key, ifMatch) => {
+                const options = queryClient.getQueryData<{
+                  items: Array<{ id: string; display_id: string; title: string }>;
+                }>(['milestones', 'task-options', task.primary_managed_system_id]);
+                const chosen =
+                  nextMilestoneId === null
+                    ? null
+                    : (options?.items.find((milestone) => milestone.id === nextMilestoneId) ??
+                      null);
+                const chosenLabel = chosen === null ? null : `${chosen.display_id} ${chosen.title}`;
+                return assignTaskMilestone(
                   task.id,
                   { milestone_id: nextMilestoneId },
                   key,
-                  task.updated_at,
-                )
-              }
+                  ifMatch,
+                ).then((saved) => {
+                  setSavedLabel({
+                    taskId: task.id,
+                    id: nextMilestoneId,
+                    label: chosenLabel,
+                    at: Date.now(),
+                  });
+                  return saved;
+                });
+              }}
             />
           </FieldRow>
         </div>
