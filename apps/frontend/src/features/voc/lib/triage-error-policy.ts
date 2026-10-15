@@ -5,8 +5,9 @@
 // through lib/api/errorMapper (its conflict.stale_write copy differs).
 
 import { ApiError } from '@/lib/api';
+import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
 import { formatRetryAfter, rateLimitedMessage } from '@/lib/copy/rate-limit';
-import { VOC_POSTPONE_INVALID_STATE_LABEL } from '@/lib/copy/voc-views';
+import { VOC_OWNER_FAILURE_PREFIX, VOC_POSTPONE_INVALID_STATE_LABEL } from '@/lib/copy/voc-views';
 
 export type TriageToast = { level: 'warning' | 'error'; message: string };
 
@@ -48,6 +49,31 @@ export function classifyTriageMutationError(err: unknown): TriageMutationDecisio
         lockPanel: false,
         toast: { level: 'error', message: VOC_POSTPONE_INVALID_STATE_LABEL },
       };
+    }
+    if (err.status === 422 && err.code === 'validation.failed' && Array.isArray(fields)) {
+      for (const field of fields) {
+        if (
+          field !== null &&
+          typeof field === 'object' &&
+          'path' in field &&
+          Array.isArray(field.path) &&
+          field.path.length === 1 &&
+          (field.path[0] === 'owner_user_id' || field.path[0] === 'owner_team_id') &&
+          'code' in field &&
+          (field.code === 'ineligible_actor' || field.code === 'foreign_workspace')
+        ) {
+          const category =
+            field.code === 'ineligible_actor' ? 'ineligible_actor' : 'foreign_workspace';
+          return {
+            restore: true,
+            lockPanel: false,
+            toast: {
+              level: 'error',
+              message: `${VOC_OWNER_FAILURE_PREFIX} ${MANAGED_SYSTEM_COPY.categories[category]}`,
+            },
+          };
+        }
+      }
     }
     switch (err.code) {
       case 'conflict.stale_write':

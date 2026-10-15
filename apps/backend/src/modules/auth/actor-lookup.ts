@@ -112,3 +112,23 @@ export function workspaceActorDisplayNameSql(workspaceId: SQL, actorId: SQL): SQ
   return sql`(SELECT requester.display_name FROM core.actors requester
     WHERE requester.workspace_id = ${workspaceId} AND requester.id = ${actorId} LIMIT 1)`;
 }
+
+/** Workspace internal members plus a retained current owner, with no private identity fields. */
+export async function listWorkspaceResponsibilityActors(
+  tx: Tx,
+  workspaceId: string,
+  currentActorId: string | null,
+): Promise<{ id: string; display_name: string }[]> {
+  return tx
+    .select({ id: actors.id, display_name: actors.displayName })
+    .from(actors)
+    .where(
+      and(
+        eq(actors.workspaceId, workspaceId),
+        currentActorId
+          ? sql`(${actors.actorType} = 'internal_member' OR ${actors.id} = ${currentActorId})`
+          : eq(actors.actorType, 'internal_member'),
+      ),
+    )
+    .orderBy(actors.displayName, actors.id);
+}

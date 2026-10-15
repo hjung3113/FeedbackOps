@@ -54,6 +54,12 @@ display_id
 
 Optional nullable `owner_user_id` / `owner_team_id` require server `voc.triage` on
 this Managed System; ordinary Reporter input still returns `validation.unexpected_field`.
+A concrete owner Actor must be a workspace `internal_member` with effective
+`voc.triage` and `voc.read` in the VOC's Managed System (deny-first, including
+expiry/revocation, in the creation transaction). Invalid explicit actors return
+422 `validation.failed`, with `fields[{ path: ['owner_user_id'], code:
+'ineligible_actor' }]`; missing/foreign-workspace actors use `foreign_workspace`.
+Invalid automatic defaults fall through and record the existing diagnostic.
 Explicit Actor/team/null skips defaults. Omission resolves eligible Managed System owner,
 then active same-system Analytics Area owner team, then null fallback. Creation stays
 `untriaged`, with null severity and `received` reporter status. The response and
@@ -189,6 +195,39 @@ VOC Cluster endpoint catalog: [voc-clusters.md](voc-clusters.md) §VOC Cluster.
 - The response is `{ items, page: { cursor?, has_more }, out_of_scope_summary? }`. `out_of_scope_summary: { count, severity_distribution }` is computed for `view=inbox` with a scoped read and is omitted when there is nothing outside the caller's scope (`voc/read/list.ts`).
 
 `PATCH /vocs/:id` (body schema `packages/shared/src/vocs/patch-request.ts`, `.strict()`) accepts `severity`, `owner_user_id`, `owner_team_id` (not both non-null), `analytics_area_id`, `triage_state`, `postpone_review`, and compensation-only `restore_review_postponed_at`. `postpone_review: true` sets `triage_state_review_postponed_at` on an untriaged VOC and emits `voc_triage_postponed`; on a VOC that is not untriaged it returns `422 validation.failed` (`invalid_state`). `postpone_review: false` clears `triage_state_review_postponed_at` to null on an untriaged VOC whose timestamp is set and emits one `voc_triage_postpone_cleared` row (same detail shape as `voc_triage_postponed`: `voc_id`, `actor_id`); when the VOC is not postponed the timestamp is unchanged and no postpone audit row is written. `postpone_review` together with `triage_state` is `422 validation.failed`. Other fields in the same request keep their normal audit rows and are applied in the same transaction. `restore_review_postponed_at` accepts an ISO-8601 datetime with offset only together with `triage_state: 'untriaged'`, mutually exclusive with `postpone_review`, and only when the current VOC is not untriaged. Invalid shape or field combinations return `422 validation.failed` at `restore_review_postponed_at` (the existing `postpone_review`/`triage_state` mutex still reports `postpone_review` first). A currently untriaged VOC returns `422 validation.failed` (`invalid_state`); a timestamp later than database `NOW()` returns `422 validation.failed` (`invalid`), both at `restore_review_postponed_at`. Restoration writes the exact supplied instant with no postpone audit row (`voc_triage_postponed` or `voc_triage_postpone_cleared`); ordinary triage-state/severity/owner/Analytics Area audits remain unchanged. New postpones store `date_trunc('milliseconds', NOW())` so the authorized read timestamp round-trips exactly; older postpones restore to the client-visible millisecond.
+
+## VOC Owner Candidates And Changed Ownership (#1172)
+
+`PATCH /vocs/:id` validates a changed resolved owner pair inside its transaction
+against the locked VOC Managed System using the creation validator. A concrete
+Actor requires same-workspace `internal_member`, effective `voc.triage` and
+`voc.read` (deny-first, including expiry/revocation). Failures are 422
+`validation.failed` with `fields[{ path: ['owner_user_id' | 'owner_team_id'],
+code: <category> }]`, naming the field carrying the new value. Categories remain
+`invalid_pair`, `foreign_workspace`, `archived_team`, `ineligible_actor`.
+Existing pair-mutex error precedence is preserved. Any failure rolls back the
+entire PATCH, including severity/Analytics Area/state and audit writes. Teams
+keep active same-workspace validation; explicit null/null unassigns. Unchanged
+ownership is not revalidated; historical records are not reassigned.
+
+`GET /vocs/:id/owner-candidates` (requirement #1172 / U1-7):
+
+- Session and workspace required; UUID `id` invalid → 422 `validation.failed`.
+- Uses the detail visibility decision: hidden/missing/archived/foreign VOC →
+  404 `not_found.record`. A visible VOC requires caller `voc.triage` on its
+  Managed System, with the same denial and request-access detail as triage PATCH.
+- Strict shared response: `{ actors: [{ id: uuid, display_name: string,
+  eligible: boolean }] }`. No emails or teams. Eligible actors pass the exact
+  mutation validator. Retain the current same-workspace owner Actor with
+  `eligible: false` when ineligible; never disclose foreign-workspace actors.
+- Evaluate workspace internal members in one bounded pass on one transaction /
+  connection; order by display name then id. This is an advisory read; mutation
+  revalidates current authority. No data writes, audit, entity links, queue
+  changes or idempotency key. Response cache is private/no-cache.
+- Triage uses these actor candidates; retained ineligible owners are labelled
+  and disabled. A late owner 422 follows existing optimistic failure recovery:
+  reselect/restore the originating VOC and show an owner-specific toast, without
+  placing errors or staged values on another VOC.
 
 ## VOC Similarity Projection
 

@@ -12,8 +12,9 @@ import { listWorkspaceAdminActorIds } from '../../auth/index.js';
 import type { RoleLevel } from '../../auth/session-service.js';
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
-import { isRequestableDenial } from '../../permissions/index.js';
+import { assertVocTriage } from '../authorization.js';
 import { selectVocForUpdate } from '../repo.js';
+import { validateOwner } from '../responsibility.js';
 import type { VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import { composeEnvelope } from './compose-envelope.js';
@@ -45,35 +46,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     // only needs `row.primaryManagedSystemId`, which is available after the
     // FOR UPDATE above. Moving it here ensures unauthorised actors receive
     // 403 regardless of the If-Match value they supply.
-    const decision = await deps.checkService.checkCapability(
-      { actor_id: actor.actor_id, workspace_id: workspaceId, role_level: actor.role_level },
-      'voc.triage',
-      { workspace_id: workspaceId, managed_system_id: row.primaryManagedSystemId },
-      { tx },
-    );
-    if (decision.allow !== true) {
-      // F1: `no_grant`, `grant_revoked`, and `grant_expired` map to
-      // `permission.scope_required` for developers (ADR-0061 §6).
-      // Explicit deny and workspace mismatch remain denied.
-      if (isRequestableDenial(decision.reason) && actor.role_level === 'developer') {
-        throw new HttpError(
-          'permission.scope_required',
-          'voc.triage capability required; developer needs MS-scoped grant',
-          {
-            requiredScope: [row.primaryManagedSystemId],
-            requestable_permission: {
-              permission: 'voc.triage',
-              managed_system_id: row.primaryManagedSystemId,
-              reason_required: false,
-            },
-          },
-        );
-      }
-      // Explicit deny, workspace mismatch, and non-developer denials stay generic.
-      throw new HttpError('permission.denied', `voc.triage denied: ${decision.reason}`, {
-        reason: decision.reason,
-      });
-    }
+    await assertVocTriage(tx, deps.checkService, actor, row.primaryManagedSystemId);
 
     // 3. Optimistic concurrency check (after permission — C3: no current_updated_at
     // leak to unauthorised actors; only authorised actors see 409 stale_write detail).
@@ -207,6 +180,12 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       );
     }
     if (newOwnerUser !== row.ownerUserId || newOwnerTeam !== row.ownerTeamId) {
+      const failure = await validateOwner(tx, deps, workspaceId, ms, newOwnerUser, newOwnerTeam);
+      if (failure) {
+        throw new HttpError('validation.failed', 'invalid owner', {
+          fields: [{ path: [newOwnerTeam ? 'owner_team_id' : 'owner_user_id'], code: failure }],
+        });
+      }
       patch.ownerUserId = newOwnerUser;
       patch.ownerTeamId = newOwnerTeam;
       ownerChanged = true;

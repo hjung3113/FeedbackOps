@@ -37,16 +37,16 @@ export async function validateOwner(
     workspace_id: workspaceId,
     role_level: candidate.role_level,
   };
-  return (
-    await deps.checkService.checkCapability(
+  for (const capability of ['voc.triage', 'voc.read'] as const) {
+    const decision = await deps.checkService.checkCapability(
       candidateActor,
-      'voc.triage',
+      capability,
       { workspace_id: workspaceId, managed_system_id: ms.id },
       { tx },
-    )
-  ).allow
-    ? null
-    : 'ineligible_actor';
+    );
+    if (!decision.allow) return 'ineligible_actor';
+  }
+  return null;
 }
 
 export async function resolveOwner(

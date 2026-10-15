@@ -95,6 +95,14 @@ Concrete Actor eligibility uses the destination's current authority: `voc.triage
 `finding.manage`, or the Admin-or-scoped-Developer `finding.manage` seam for Task Request
 review/Task management. Preserve each module's Admin bypass and explicit-deny semantics;
 a role label alone is insufficient. Validate expiry/revocation inside the transaction.
+**Amendment 2026-10-15 (#1172):** A concrete VOC owner must be an active internal
+Actor (an `internal_member` row in the workspace) with effective `voc.triage`
+**and** `voc.read` in the VOC's Managed System. Apply the same deny-first,
+transactional expiry/revocation checks to explicit creation, automatic defaults,
+changed triage ownership and owner candidates. Teams remain unchanged. Do not
+reassign historical records or reject unrelated edits because a stored owner
+became ineligible.
+
 Team responsibility requires active same-workspace validity and grants no member access.
 Assignment never confers `task_request.self_approve`; other authorized reviewers retain
 access to the shared queue. Send existing Task assignment notifications only to a concrete
