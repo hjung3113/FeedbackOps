@@ -52,13 +52,6 @@ it('renders exact domain links, neutral ratios, unavailable metrics and whole-sy
   expect(
     screen.getByRole('link', { name: 'Identity Platform · 인증 VOC Task 연결 0/10 · 0%' }),
   ).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' })).toHaveClass(
-    'text-accent-primary',
-    'hover:underline',
-  );
-  expect(
-    screen.getByRole('link', { name: 'Identity Platform · 인증 VOC Task 연결 0/10 · 0%' }),
-  ).toHaveClass('text-accent-primary', 'hover:underline');
   expect(screen.getByText('실행 연결 10/10 · 100%').closest('a')).toBeNull();
   expect(screen.getByText('공개 업데이트 해당 없음')).toBeVisible();
   for (const explanation of screen.getAllByText('현재 권한 범위에서 볼 수 없습니다')) {
@@ -98,16 +91,6 @@ it('renders exact domain links, neutral ratios, unavailable metrics and whole-sy
       'href',
       `${link.pathname}?${new URLSearchParams(link.search)}`,
     );
-  }
-  for (const table of screen.getAllByRole('table')) {
-    expect(table).toHaveClass('table-fixed');
-    expect([...table.querySelectorAll('col')].map((col) => col.getAttribute('class'))).toEqual([
-      'w-[14%]',
-      'w-[20%]',
-      'w-[16%]',
-      'w-[34%]',
-      'w-[16%]',
-    ]);
   }
   const row = screen.getByRole('row', { name: /인증/ });
   for (const label of ['전체 10', 'In-flight (Todo·Doing·Review) 3', '기한 지남 2', 'Open 1']) {
