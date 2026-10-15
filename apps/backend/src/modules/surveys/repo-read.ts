@@ -205,6 +205,26 @@ export async function listMySurveyResponseHistory(
   };
 }
 
+// #1183: one exists() against the definer. Do not go through listMyAnswerableSurveys:
+// that wrapper also selects survey.surveys, and this check must not.
+export async function actorCanAnswerSurvey(
+  db: Db | Tx,
+  args: { workspaceId: string; actorId: string; surveyId: string },
+): Promise<boolean> {
+  const result = await db.execute<{ answerable: boolean | string | null }>(sql`
+    select exists (
+      select 1
+        from survey.read_my_answerable_surveys(
+          ${args.workspaceId}::uuid,
+          ${args.actorId}::uuid
+        )
+       where survey_id = ${args.surveyId}::uuid
+    ) as answerable
+  `);
+  const value = result.rows[0]?.answerable;
+  return value === true || value === 't' || value === 'true';
+}
+
 export async function listMyAnswerableSurveys(
   db: Db | Tx,
   args: {

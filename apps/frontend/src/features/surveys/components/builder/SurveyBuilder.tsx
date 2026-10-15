@@ -2,7 +2,7 @@ import { SURVEY_QUESTION_KIND_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum
 import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { formatTime } from '@/lib/format/datetime';
 import { surveyQuestionKindSchema } from '@fops/shared';
-import { Button, DirtyConfirmation, Input, WorkbenchShell } from '@fops/ui';
+import { Button, DirtyConfirmation, Input, Textarea, WorkbenchShell } from '@fops/ui';
 import { Check, Megaphone } from 'lucide-react';
 import { useState } from 'react';
 import type { QuestionKind, Survey } from '../../types';
@@ -68,6 +68,8 @@ export function SurveyBuilder({
   const {
     title,
     onTitleChange,
+    description,
+    onDescriptionChange,
     questions,
     selected,
     selectedId,
@@ -181,7 +183,11 @@ export function SurveyBuilder({
             </Button>
           </>
         )}
-        <PreviewPane survey={{ ...survey, questions }} open={preview} onOpenChange={setPreview} />
+        <PreviewPane
+          survey={{ ...survey, title, description: description || null, questions }}
+          open={preview}
+          onOpenChange={setPreview}
+        />
         {editable && (
           <>
             {questions.length === 0 && (
@@ -202,6 +208,26 @@ export function SurveyBuilder({
           </>
         )}
       </header>
+      {editable ? (
+        <div className="border-b border-border-subtle px-4 py-3">
+          <label className="block text-sm" htmlFor="survey-builder-description">
+            설명 (선택)
+            <Textarea
+              id="survey-builder-description"
+              aria-label="설명 (선택)"
+              className="mt-1 min-h-20"
+              value={description}
+              onChange={(event) => onDescriptionChange(event.target.value)}
+            />
+          </label>
+        </div>
+      ) : (
+        description.trim() !== '' && (
+          <p className="border-b border-border-subtle px-4 py-3 text-sm text-text-secondary">
+            {description}
+          </p>
+        )
+      )}
       {!editable && (
         <div className="border-b border-border-subtle bg-surface-detail px-4 py-3 text-sm text-text-muted">
           {survey.status !== 'draft'

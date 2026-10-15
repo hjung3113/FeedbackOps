@@ -29,8 +29,9 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 
 ## Key files
 
-- `apps/frontend/src/routes/_authed/surveys/index.tsx` — Survey list and selected-detail composition.
-- `apps/frontend/src/routes/_authed/surveys/$surveyId.tsx` — Survey builder and detail route.
+- `apps/frontend/src/routes/_authed/surveys/index.tsx` — Survey list route adapter (search, selection, document title) over `SurveyListScreen`.
+- `apps/frontend/src/routes/_authed/surveys/$surveyId.tsx` — Survey builder and detail route; the non-builder branch uses `SurveyListScreen`.
+- `apps/frontend/src/features/surveys/components/list/SurveyListScreen.tsx` — shared Survey list composition (toolbar, filters, create, detail slot) for the index and detail routes.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.results.tsx` — Survey results presentation and outer metadata states.
 - `apps/frontend/src/features/surveys/hooks/useSurveyResultsController.ts` — metadata/results/Follow-up reads, capability readiness, denial persistence, safe content selection, and document title.
 - `apps/frontend/src/features/surveys/policy/resultsReadDenial.ts` — sticky denial key/default registration, denial merge, and results-read projection.

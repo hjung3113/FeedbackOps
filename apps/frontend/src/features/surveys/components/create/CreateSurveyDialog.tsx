@@ -6,6 +6,7 @@ import {
 } from '@/lib/api';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_START_COPY as COPY } from '@/lib/copy/survey-builder';
+import { searchDebounceMs } from '@/lib/forms/search-debounce';
 import {
   type SurveyCopySourceQuestion,
   type SurveyStartingPoint,
@@ -63,12 +64,21 @@ export function CreateSurveyDialog({
   const pinnedStart = React.useRef<SurveyStartingPoint | null>(null);
   const [mode, setMode] = React.useState<'blank' | 'builtin' | 'existing'>('blank');
   const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
   const [templateId, setTemplateId] = React.useState('');
   const [sourceId, setSourceId] = React.useState('');
   const [blocked, setBlocked] = React.useState(false);
   const [titleEdited, setTitleEdited] = React.useState(false);
   const templates = useSurveyTemplates(system, open && canManage && mode === 'builtin');
-  const sources = useSurveyCopySources(system, search, open && canManage && mode === 'existing');
+  const sources = useSurveyCopySources(
+    system,
+    debouncedSearch,
+    open && canManage && mode === 'existing',
+  );
+  React.useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedSearch(search), searchDebounceMs(search));
+    return () => window.clearTimeout(timeoutId);
+  }, [search]);
   const source = useSurveyCopySource(
     sourceId,
     open && canManage && mode === 'existing' && !blocked,
@@ -137,8 +147,11 @@ export function CreateSurveyDialog({
     if (!canManage) {
       clearSelection();
       setSearch('');
+      setDebouncedSearch('');
     }
   }, [canManage, clearSelection]);
+  const startingPointChosen =
+    (mode === 'builtin' && templateId !== '') || (mode === 'existing' && sourceId !== '');
   const sourceReadDenied =
     (sources.error instanceof ApiError &&
       (sources.error.status === 403 || sources.error.status === 404)) ||
@@ -170,6 +183,7 @@ export function CreateSurveyDialog({
     setIdentityProtected('');
     setMode('blank');
     setSearch('');
+    setDebouncedSearch('');
     clearSelection();
     setTitleEdited(false);
     resetCreate();
@@ -286,6 +300,7 @@ export function CreateSurveyDialog({
                     setMode(value as typeof mode);
                     clearSelection();
                     setSearch('');
+                    setDebouncedSearch('');
                   }}
                 >
                   <SelectTrigger aria-label={COPY.mode}>
@@ -316,9 +331,9 @@ export function CreateSurveyDialog({
                 Survey 유형
                 <Select
                   value={type}
+                  disabled={startingPointChosen}
                   onValueChange={(value) => {
                     setType(value as SurveyType);
-                    clearSelection();
                   }}
                 >
                   <SelectTrigger aria-label="Survey 유형">
@@ -332,6 +347,9 @@ export function CreateSurveyDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                {startingPointChosen ? (
+                  <p className="text-sm text-text-muted">{COPY.sourceSetsType}</p>
+                ) : null}
               </div>
               <div className="block text-sm">
                 Managed System
@@ -342,6 +360,7 @@ export function CreateSurveyDialog({
                     setAnalyticsArea('');
                     clearSelection();
                     setSearch('');
+                    setDebouncedSearch('');
                   }}
                 >
                   <SelectTrigger aria-label="Managed System">
@@ -378,7 +397,9 @@ export function CreateSurveyDialog({
                               clearSelection();
                             }}
                           />
-                          <p className="text-sm text-text-muted">{COPY.sourceSetsType}</p>
+                          {startingPointChosen ? null : (
+                            <p className="text-sm text-text-muted">{COPY.sourceSetsType}</p>
+                          )}
                         </>
                       )}
                       {(mode === 'builtin'

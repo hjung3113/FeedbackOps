@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
 
 const {
@@ -12,6 +12,7 @@ const {
   useOpenSurvey,
   useSurvey,
   useSurveys,
+  useSurveyManageAnySystemGate,
   useSurveyManageGate,
   useWorkspaceActors,
   useRouteSearch,
@@ -24,6 +25,7 @@ const {
   useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useSurvey: vi.fn(),
   useSurveys: vi.fn(),
+  useSurveyManageAnySystemGate: vi.fn(() => ({ canManage: false })),
   useSurveyManageGate: vi.fn(),
   useWorkspaceActors: vi.fn(() => ({
     actors: [] as Array<{
@@ -45,7 +47,11 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => ({
   useSurveys,
 }));
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
+  useSurveyManageAnySystemGate,
   useSurveyManageGate,
+}));
+vi.mock('@/lib/useAnalyticsAreaFilterLabel', () => ({
+  useAnalyticsAreaFilterLabel: () => undefined,
 }));
 vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({ useManagedSystemNamesResult }));
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors }));
@@ -97,6 +103,32 @@ const survey: Survey = {
 };
 
 describe('/surveys/:surveyId route', () => {
+  beforeEach(() => {
+    useSurveyManageAnySystemGate.mockReturnValue({ canManage: false });
+  });
+
+  it('renders the Surveys toolbar and create action for a manager', () => {
+    useSurvey.mockReturnValue({
+      data: survey,
+      isLoading: false,
+      isError: false,
+    });
+    useSurveyManageGate.mockReturnValue({ canManage: true, gateState: undefined });
+    useSurveyManageAnySystemGate.mockReturnValue({ canManage: true });
+    useSurveys.mockReturnValue({
+      data: [survey],
+      isPending: false,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<SurveyDetailRoute />);
+
+    expect(screen.getByRole('heading', { name: 'Surveys' })).toBeInTheDocument();
+    expect(screen.getByTestId('survey-create-button')).toBeInTheDocument();
+  });
+
   it('renders the detail screen when the survey exists', () => {
     useSurvey.mockReturnValue({
       data: survey,

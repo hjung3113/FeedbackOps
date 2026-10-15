@@ -295,9 +295,18 @@ questions. A successful open/close updates the status and records respectively
 `GET /surveys/:id/form` is the respondent form read surface. Any authenticated
 Actor in the same Workspace may read an open Survey without `survey.read`; a
 missing or cross-Workspace Survey returns `404 not_found.record`, and a
-non-open Survey returns `409 conflict.survey_not_open`. Its DTO is respondent
-safe: form fields, questions, choices, and rating bounds only—never operator or
-personal-response data.
+non-open Survey returns `409 conflict.survey_not_open` with message
+`survey is not open`. After those checks, if the Survey is not in
+`survey.read_my_answerable_surveys(workspace, actor)` — queried with
+`select exists (select 1 from survey.read_my_answerable_surveys(…) where survey_id = $id)`
+and no table `SELECT` — the Actor has already answered and receives
+`409 conflict.survey_response_already_submitted` with message
+`survey response already submitted`, the same code and message as
+`POST /surveys/:id/responses`. A closed Survey is rejected as not-open before
+that check, even when a response already exists. The strict survey object is
+exactly `{ id, title, type, identity_protected, description }` where
+`description` is `string | null`, plus questions, choices, and rating bounds.
+The body never carries operator or respondent identity.
 
 `POST /surveys/:id/responses` is implemented for an authenticated Actor in the
 same Workspace and requires `Idempotency-Key`. It returns `201` with only

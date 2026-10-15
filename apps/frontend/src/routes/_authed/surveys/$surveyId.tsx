@@ -1,7 +1,11 @@
 import { SurveyBuilder } from '@/features/surveys/components/builder/SurveyBuilder';
 import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail';
-import { SurveyList } from '@/features/surveys/components/list/SurveyList';
-import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
+import {
+  SurveyListScreen,
+  surveyListContextFromSearch,
+  surveyListContextSearch,
+} from '@/features/surveys/components/list/SurveyListScreen';
+import { useSurvey } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import type { Survey } from '@/features/surveys/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
@@ -10,7 +14,7 @@ import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
-import { DirtyConfirmation, EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
+import { DirtyConfirmation, EmptyState, PermissionBlockedPanel } from '@fops/ui';
 import {
   Outlet,
   createFileRoute,
@@ -22,7 +26,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
 const searchSchema = z
-  .object({ builder: z.boolean().optional(), returnTo: recoverySearchFields.returnTo })
+  .object({
+    builder: z.boolean().optional(),
+    returnTo: recoverySearchFields.returnTo,
+    managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    status: z.literal('open').optional(),
+    follow_up: z.literal('needed').optional(),
+  })
   .strict();
 
 export function validateSurveyDetailSearch(raw: unknown) {
@@ -123,7 +134,7 @@ export function SurveyDetailRoute() {
         })
       : null;
   useDocumentTitle(documentTitleRecord);
-  const list = useSurveys();
+  const listContext = surveyListContextFromSearch(search);
   const managedSystemNames = useManagedSystemNamesResult({ enabled: !isOutcomeReviewRoute });
   const managedSystemNamesById = managedSystemNames.isSuccess
     ? managedSystemNames.namesById
@@ -165,36 +176,51 @@ export function SurveyDetailRoute() {
     );
   }
   return (
-    <ListShell
-      list={
-        <SurveyList
-          surveys={list.data ?? []}
-          // #706 — isPending keeps the skeleton up through the whole
-          // no-data window (incl. the retry delay), so tabs never render
-          // unknown counts as 0.
-          isLoading={list.isPending}
-          error={list.error}
-          onRetry={() => void list.refetch()}
-          selectedId={surveyId}
-          managedSystemNamesById={managedSystemNamesById}
-          actorNamesById={actorNamesById}
-          onSelect={(id) =>
-            void navigate({
-              to: '/surveys/$surveyId',
-              params: { surveyId: id },
-            })
-          }
-        />
+    <SurveyListScreen
+      context={listContext}
+      selectedId={surveyId}
+      onSelect={(id) =>
+        void navigate({
+          to: '/surveys/$surveyId',
+          params: { surveyId: id },
+          search: (previous) => previous,
+        })
       }
-      detailPanel={
+      onClose={() =>
+        void navigate({
+          to: '/surveys',
+          search: surveyListContextSearch(listContext),
+        })
+      }
+      onRemoveFilters={(keys) =>
+        void navigate({
+          to: '/surveys/$surveyId',
+          params: { surveyId },
+          search: (previous) => {
+            const next = { ...previous };
+            for (const key of keys) delete next[key];
+            return next;
+          },
+        })
+      }
+      onCreated={(createdId) =>
+        void navigate({
+          to: '/surveys/$surveyId',
+          params: { surveyId: createdId },
+          search: { builder: true },
+        })
+      }
+      managedSystemNamesById={managedSystemNamesById}
+      actorNamesById={actorNamesById}
+      renderDetail={(close) => (
         <SurveyDetail
           survey={query.data}
           canManage={gate.canManage}
-          onClose={() => void navigate({ to: '/surveys' })}
+          onClose={close}
           managedSystemNamesById={managedSystemNamesById}
           actorNamesById={actorNamesById}
         />
-      }
+      )}
     />
   );
 }

@@ -11,11 +11,13 @@ export async function saveSurveyDraft(deps: {
   questionsRef: { current: SurveyQuestion[] };
   titleRef: { current: string };
   savedTitleRef: { current: string };
+  descriptionRef: { current: string };
+  savedDescriptionRef: { current: string };
   savedQuestionsRef: { current: SurveyQuestion[] };
   replaceLocalId: (localId: string, serverId: string) => void;
   updateQuestions: (update: (current: SurveyQuestion[]) => SurveyQuestion[]) => void;
   mutations: {
-    updateSurvey: (body: { title: string }) => Promise<unknown>;
+    updateSurvey: (body: { title?: string; description?: string }) => Promise<unknown>;
     remove: (id: string) => Promise<unknown>;
     create: (body: QuestionInput) => Promise<{ id: string }>;
     update: (args: { id: string; body: QuestionInput }) => Promise<unknown>;
@@ -26,6 +28,8 @@ export async function saveSurveyDraft(deps: {
     questionsRef,
     titleRef,
     savedTitleRef,
+    descriptionRef,
+    savedDescriptionRef,
     savedQuestionsRef,
     replaceLocalId,
     updateQuestions,
@@ -33,9 +37,14 @@ export async function saveSurveyDraft(deps: {
   } = deps;
 
   const sentTitle = titleRef.current;
-  if (sentTitle !== savedTitleRef.current) {
-    await mutations.updateSurvey({ title: sentTitle });
-    savedTitleRef.current = sentTitle;
+  const sentDescription = descriptionRef.current;
+  const surveyPatch: { title?: string; description?: string } = {};
+  if (sentTitle !== savedTitleRef.current) surveyPatch.title = sentTitle;
+  if (sentDescription !== savedDescriptionRef.current) surveyPatch.description = sentDescription;
+  if (surveyPatch.title !== undefined || surveyPatch.description !== undefined) {
+    await mutations.updateSurvey(surveyPatch);
+    if (surveyPatch.title !== undefined) savedTitleRef.current = sentTitle;
+    if (surveyPatch.description !== undefined) savedDescriptionRef.current = sentDescription;
   }
 
   const persisted = savedQuestionsRef.current;

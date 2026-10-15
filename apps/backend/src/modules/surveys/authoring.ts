@@ -21,6 +21,7 @@ import {
   type QuestionKind,
   type QuestionRow,
   type SurveyRow,
+  actorCanAnswerSurvey,
   findSurvey,
   listQuestions,
   listSurveys,
@@ -985,6 +986,17 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
     if (!survey) throw new HttpError('not_found.record', 'survey not found');
     if (survey.status !== 'open')
       throw new HttpError('conflict.survey_not_open', 'survey is not open');
+    if (
+      !(await actorCanAnswerSurvey(deps.db, {
+        workspaceId: actor.workspace_id,
+        actorId: actor.actor_id,
+        surveyId: survey.id,
+      }))
+    )
+      throw new HttpError(
+        'conflict.survey_response_already_submitted',
+        'survey response already submitted',
+      );
     const questions = await listQuestions(deps.db, actor.workspace_id, id);
     return {
       survey: {
@@ -992,6 +1004,7 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
         title: survey.title,
         type: survey.type,
         identity_protected: survey.responses_identity_protected,
+        description: survey.description,
       },
       questions: questions.map((question) => ({
         id: question.id,

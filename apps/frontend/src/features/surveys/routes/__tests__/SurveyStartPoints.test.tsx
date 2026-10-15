@@ -1,7 +1,7 @@
 import { fetchCapabilityScope } from '@/lib/api';
 import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import * as React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -31,6 +31,7 @@ vi.mock('@/lib/api', async (original) => ({
   fetchAnalyticsAreas: async () => ({ items: [] }),
 }));
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.mocked(fetchCapabilityScope).mockImplementation(async () => ({ scope: { kind: 'all' } }));
 });
@@ -156,6 +157,9 @@ it('searches and loads another page, previews saved branches/rating, and loads p
   );
   await existing(user);
   await user.type(screen.getByLabelText('기존 Survey 검색'), '지난');
+  await waitFor(() =>
+    expect(requests.some((path) => path.includes('q=%EC%A7%80%EB%82%9C'))).toBe(true),
+  );
   await user.click(await screen.findByRole('button', { name: '더 보기' }));
   await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
   expect(await screen.findByText(/분기: 리포트를 얼마나 자주 사용하시나요/)).toBeVisible();
@@ -537,7 +541,7 @@ it.each(['empty', 'toolbar'])(
   },
 );
 
-it('clears incompatible preview on type/system/source changes while preserving authored text; cancel resets', async () => {
+it('keeps a selected starting point when the type cannot change, and clears it with the Managed System', async () => {
   const user = userEvent.setup();
   vi.stubGlobal(
     'fetch',
@@ -565,8 +569,13 @@ it('clears incompatible preview on type/system/source changes while preserving a
   await choose(user, 'Managed System', 'Revenue Analytics');
   await user.click(await screen.findByRole('radio', { name: /Discovery 기본 템플릿/ }));
   expect(await screen.findByText(/이 Managed System을 얼마나 자주/)).toBeVisible();
-  await choose(user, 'Survey 유형', '검증');
+  const typeSelect = screen.getByRole('combobox', { name: 'Survey 유형' });
+  expect(typeSelect).toBeDisabled();
+  expect(typeSelect).toHaveTextContent('탐색');
+  expect(screen.getByText('Survey 유형은 선택한 Survey를 따릅니다.')).toBeVisible();
+  await choose(user, 'Managed System', 'Another System');
   expect(screen.queryByText(/이 Managed System을 얼마나 자주/)).not.toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Survey 유형' })).toBeEnabled();
   expect(screen.getByLabelText('제목')).toHaveValue('작성한 제목');
   expect(screen.getByLabelText('설명 (선택)')).toHaveValue('작성한 설명');
   expect(screen.getByTestId('survey-create-submit')).toBeDisabled();
@@ -577,6 +586,73 @@ it('clears incompatible preview on type/system/source changes while preserving a
   expect(screen.getByRole('combobox', { name: '응답 익명 보호' })).toHaveTextContent(
     '보호 여부 선택',
   );
+});
+
+it('disables the type select for a copy source and re-enables it when the mode is cleared', async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).includes('/copy-sources?')
+              ? surveyCopySourcesVisualFixture
+              : surveyCopySourceVisualFixture,
+          ),
+        ),
+    ),
+  );
+  mountDialog();
+  await existing(user);
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
+  const typeSelect = screen.getByRole('combobox', { name: 'Survey 유형' });
+  await waitFor(() => expect(typeSelect).toHaveTextContent('탐색'));
+  expect(typeSelect).toBeDisabled();
+  expect(screen.getByText('Survey 유형은 선택한 Survey를 따릅니다.')).toBeVisible();
+  await choose(user, '시작 방법', '빈 Survey');
+  expect(screen.getByRole('combobox', { name: 'Survey 유형' })).toBeEnabled();
+});
+
+it('sends one copy-source request after the search settles', async () => {
+  const requests: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url) => {
+      const path = String(url);
+      requests.push(path);
+      return new Response(
+        JSON.stringify(
+          path.includes('/copy-sources?')
+            ? { items: [], page: { has_more: false } }
+            : surveyCopySourceVisualFixture,
+        ),
+      );
+    }),
+  );
+  const user = userEvent.setup();
+  mountDialog();
+  await existing(user);
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const input = screen.getByLabelText('기존 Survey 검색');
+  fireEvent.change(input, { target: { value: 'a' } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  fireEvent.change(input, { target: { value: 'ab' } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  fireEvent.change(input, { target: { value: 'abc' } });
+  expect(input).toHaveValue('abc');
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(299);
+  });
+  expect(requests.some((path) => /[?&]q=(a|ab|abc)(?:&|$)/.test(path))).toBe(false);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(requests.filter((path) => path.includes('q=abc'))).toHaveLength(1);
 });
 
 it('preserves an uncertain attempt body/key through a rendered retry and uses a new key after editing', async () => {
