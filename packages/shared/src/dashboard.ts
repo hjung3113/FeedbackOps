@@ -2,9 +2,11 @@ import { z } from 'zod';
 
 export const DASHBOARD_UNASSIGNED_VOC_ROUTE = '/vocs?view=inbox&tab=unassigned';
 export const DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE = '/vocs?view=inbox&tab=high-no-link';
-export const DASHBOARD_ACTIONABLE_FINDINGS_ROUTE = '/findings';
-export const DASHBOARD_RELEASED_TASKS_ROUTE = '/tasks?view=board';
-export const DASHBOARD_OUTCOME_SURVEYS_ROUTE = '/surveys';
+// #1179: each queue's count must land on the filtered list the count promised
+// (Home/Integration render these verbatim as next_action/secondary_action).
+export const DASHBOARD_ACTIONABLE_FINDINGS_ROUTE = '/findings?execution=none';
+export const DASHBOARD_RELEASED_TASKS_ROUTE = '/tasks?view=backlog&reporter_update=needed';
+export const DASHBOARD_OUTCOME_SURVEYS_ROUTE = '/surveys?follow_up=needed';
 export const DASHBOARD_PERMISSION_REQUESTS_ROUTE = '/admin/permissions/requests';
 
 export const COVERAGE_METRIC_IDS = [
@@ -157,7 +159,8 @@ export type DashboardHopId = Exclude<DashboardCoverageId, 'milestone-outcome'> |
 // and Home so the two screens cannot drift (plan-513 one-hop routes table).
 // Every target must stay listed in its route's strict search schema:
 // /vocs (tab, filter.analytics_area), /findings (execution),
-// /tasks (public_update), /surveys, /admin/permissions/requests.
+// /tasks (public_update, reporter_update), /surveys (follow_up),
+// /admin/permissions/requests.
 // voc-task must not reuse the no-link tab: it is the "no voc -> task link"
 // complement, not the follow-up predicate (plan-513, N9).
 export const DASHBOARD_HOP_ROUTES = {

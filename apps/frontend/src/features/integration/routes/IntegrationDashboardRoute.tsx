@@ -191,7 +191,11 @@ export function IntegrationDashboardRoute({
               data-testid="integration-dashboard-queues"
             >
               {queues.map((queue) => (
-                <IntegrationDashboardQueueCard key={queue.id} queue={queue} />
+                <IntegrationDashboardQueueCard
+                  key={queue.id}
+                  queue={queue}
+                  {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                />
               ))}
             </div>
           )}

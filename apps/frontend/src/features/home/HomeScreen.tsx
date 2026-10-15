@@ -44,6 +44,7 @@ import {
 } from '@/lib/cross-system/useUnreadNotificationCount';
 import { formatRelativeTime } from '@/lib/format/datetime';
 import { InternalLink } from '@/lib/router/InternalLink';
+import { hrefWithManagedSystem } from '@/lib/router/managed-system-href';
 import { AnswerableSurveysPanel } from './AnswerableSurveysPanel';
 import { InboxPanel } from './InboxPanel';
 
@@ -171,7 +172,10 @@ export function HomeScreen({
             {summary.isError ? (
               <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
             ) : (
-              <HomeSummary summary={summary.data} />
+              <HomeSummary
+                summary={summary.data}
+                {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+              />
             )}
             <div
               className={`mt-9 grid gap-7 ${
@@ -324,7 +328,13 @@ function OpenRequestsPanel({
   );
 }
 
-function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): React.ReactElement {
+function HomeSummary({
+  summary,
+  managedSystemId,
+}: {
+  summary: DashboardSummary | undefined;
+  managedSystemId?: string;
+}): React.ReactElement {
   const kpis = summary?.kpis;
   const queues = summary?.action_queues ?? [];
   const activeQueues = queues.filter((queue) => queue.count > 0);
@@ -384,7 +394,11 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
           </div>
           <div className="flex flex-col gap-2" data-testid="home-action-queues">
             {activeQueues.map((queue) => (
-              <ActionQueueRow key={queue.id} queue={queue} />
+              <ActionQueueRow
+                key={queue.id}
+                queue={queue}
+                {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+              />
             ))}
           </div>
         </>
@@ -396,7 +410,7 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
             <InternalLink
               className="inline-flex items-center rounded-full border border-border-subtle bg-surface-card px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
               data-testid={`home-zero-queue-${queue.id}`}
-              href={queue.next_action.route}
+              href={hrefWithManagedSystem(queue.next_action.route, managedSystemId)}
               key={queue.id}
             >
               {HOME_QUEUE_COPY[queue.id].title} 0
@@ -410,7 +424,11 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
 
 function ActionQueueRow({
   queue,
-}: { queue: DashboardSummary['action_queues'][number] }): React.ReactElement {
+  managedSystemId,
+}: {
+  queue: DashboardSummary['action_queues'][number];
+  managedSystemId?: string;
+}): React.ReactElement {
   const copy = HOME_QUEUE_COPY[queue.id];
   const countClass =
     queue.severity === 'urgent'
@@ -457,7 +475,7 @@ function ActionQueueRow({
         {queue.secondary_action && copy.secondaryAction ? (
           <InternalLink
             className="text-xs text-text-secondary hover:text-text-primary"
-            href={queue.secondary_action.route}
+            href={hrefWithManagedSystem(queue.secondary_action.route, managedSystemId)}
           >
             {copy.secondaryAction}
           </InternalLink>
@@ -465,7 +483,7 @@ function ActionQueueRow({
           <span />
         )}
         <Button asChild variant="primary" size="sm" wrapText className="max-w-full">
-          <InternalLink href={queue.next_action.route}>
+          <InternalLink href={hrefWithManagedSystem(queue.next_action.route, managedSystemId)}>
             <span className="min-w-0 wrap-break-word">{copy.primaryAction}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           </InternalLink>
@@ -529,11 +547,7 @@ function coverageHopHref(
   managedSystemId: string | undefined,
 ): string | undefined {
   if (id === 'milestone-outcome') return undefined;
-  const route = DASHBOARD_HOP_ROUTES[id];
-  if (managedSystemId === undefined) return route;
-  const url = new URL(route, 'http://localhost');
-  url.searchParams.set('managedSystem', managedSystemId);
-  return `${url.pathname}?${url.searchParams.toString()}`;
+  return hrefWithManagedSystem(DASHBOARD_HOP_ROUTES[id], managedSystemId);
 }
 
 // #1087 UX: value text follows the band colour like Coverage does, so a real

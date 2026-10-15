@@ -392,9 +392,21 @@ function AuthedShell() {
   const entries = React.useMemo(
     () =>
       activeDomain === 'home'
-        ? homeSidebarEntries(homeSummary.data, location.pathname === '/home', openCommandPalette)
+        ? homeSidebarEntries(
+            homeSummary.data,
+            location.pathname === '/home',
+            openCommandPalette,
+            managedSystemId,
+          )
         : getSidebarEntryStates(NAV_TREE[activeDomain], location.pathname, location.searchStr),
-    [activeDomain, homeSummary.data, location.pathname, location.searchStr, openCommandPalette],
+    [
+      activeDomain,
+      homeSummary.data,
+      location.pathname,
+      location.searchStr,
+      openCommandPalette,
+      managedSystemId,
+    ],
   );
   const changeManagedSystem = React.useCallback(
     (managedSystemId: string | undefined) => {

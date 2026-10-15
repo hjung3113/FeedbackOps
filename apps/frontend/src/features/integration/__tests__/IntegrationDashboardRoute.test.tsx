@@ -591,6 +591,26 @@ test('Evidence entry preserves Managed System without inventing a count (#1107)'
   expect(screen.queryByTestId('integration-surface-evidence-stat')).toBeNull();
 });
 
+test.each(queueFixtures.map((queue) => [queue.id, queue.next_action.route] as const))(
+  'queue card primary link keeps the selected Managed System on %s (#1179)',
+  async (id, route) => {
+    await renderDashboard(`/integration?managedSystem=${MS_A}`);
+    expect(await screen.findByTestId(`integration-queue-primary-${id}`)).toHaveAttribute(
+      'href',
+      `${route}&managedSystem=${MS_A}`,
+    );
+  },
+);
+
+test('queue card secondary link keeps the selected Managed System (#1179)', async () => {
+  await renderDashboard(`/integration?managedSystem=${MS_A}`);
+  const queue = queueFixtures.find((entry) => entry.id === 'unassigned-voc');
+  expect(await screen.findByTestId('integration-queue-secondary-unassigned-voc')).toHaveAttribute(
+    'href',
+    `${queue?.secondary_action.route}&managedSystem=${MS_A}`,
+  );
+});
+
 test.each(['', `?managedSystem=${MS_A}`])(
   'Coverage secondary entry keeps scope %s',
   async (scope) => {

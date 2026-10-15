@@ -489,7 +489,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       });
   }
 
-  async function seedSurveyGaps(msId: string, total: number) {
+  async function seedSurveyGaps(msId: string, total: number): Promise<string> {
     // 0052 predicate (ADR-0055): only CLOSED outcome surveys whose cohort
     // meets the workspace anonymity threshold count, with low-band ratings.
     // One survey per call; `total` poor responses plus high-band filler up to
@@ -546,6 +546,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         ],
       );
     }
+    return surveyId;
   }
 
   it('returns distinct, non-zero admin counts with all rendered queue and coverage metadata', async () => {
@@ -2596,6 +2597,98 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(outside.statusCode).toBe(200);
     expect(outside.json<Summary>().action_queues).toEqual([]);
     expect(outside.json<Summary>().coverage).toEqual([]);
+  });
+
+  // Enumerates a cursor-paginated source list into its row ids (there is no
+  // total field on /findings or /tasks).
+  async function listAllSourceIds(cookie: string, url: string): Promise<string[]> {
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `${url}${cursor === undefined ? '' : `&cursor=${encodeURIComponent(cursor)}`}`,
+        headers: headers(cookie),
+      });
+      expect(response.statusCode, url).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page?: { has_more: boolean; cursor?: string };
+      }>();
+      ids.push(...body.items.map((item) => item.id));
+      if (body.page?.has_more !== true || body.page.cursor === undefined) return ids;
+      cursor = body.page.cursor;
+    }
+    throw new Error(`cursor pagination did not settle for ${url}`);
+  }
+
+  it('#1179: every queue count equals the rows its filtered destination list returns', async () => {
+    const seed = await createDashboardScope();
+    const { msA, msB } = seed;
+    const findingSourceA = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterActorId,
+      '1179 finding source a',
+    );
+    const findingSourceB = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msB,
+      reporterActorId,
+      '1179 finding source b',
+    );
+    // Two matching rows on MS-A; MS-B holds two extra matching rows so the
+    // scope selector is observable on the summary and on both lists.
+    await seedFindings(msA, findingSourceA.id, 3, 1);
+    await seedFindings(msB, findingSourceB.id, 3, 1);
+    const vocsA = await seedVocs(msA, 2, 2, 0, 0);
+    const vocsB = await seedVocs(msB, 2, 2, 0, 0);
+    await seedTasks(msA, vocsA.all, 1, 3, 2);
+    await seedTasks(msB, vocsB.all, 0, 2, 2);
+    // One Survey with two unresolved poor responses per System.
+    const surveyA = await seedSurveyGaps(msA, 2);
+    const surveyB = await seedSurveyGaps(msB, 2);
+
+    const summaryAll = (await get(adminCookie)).json<Summary>();
+    const findingsUrl = '/findings?execution=none';
+    const tasksUrl = '/tasks?reporter_update=needed';
+    const findingsAll = await listAllSourceIds(adminCookie, findingsUrl);
+    expect(queue(summaryAll, 'actionable-finding-no-execution')?.count).toBe(findingsAll.length);
+    const tasksAll = await listAllSourceIds(adminCookie, tasksUrl);
+    expect(queue(summaryAll, 'released-task-unresolved-voc')?.count).toBe(tasksAll.length);
+
+    // Scoped to MS-A: exact parity, with MS-B's extra rows correctly excluded.
+    const summaryA = (await get(adminCookie, msA)).json<Summary>();
+    expect(queue(summaryA, 'actionable-finding-no-execution')?.count).toBe(2);
+    expect(await listAllSourceIds(adminCookie, `${findingsUrl}&managed_system_id=${msA}`)).toHaveLength(2);
+    expect(queue(summaryA, 'released-task-unresolved-voc')?.count).toBe(2);
+    expect(await listAllSourceIds(adminCookie, `${tasksUrl}&managed_system_id=${msA}`)).toHaveLength(2);
+
+    // Surveys stay response-grain on the summary while the destination list is
+    // Survey-grain (ADR-0067, the same intended difference as the owner-grain
+    // case above): MS-A summary counts 2 poor responses but the list returns
+    // exactly the one qualifying Survey, and MS-B's matching Survey joins the
+    // workspace-wide list.
+    expect(queue(summaryA, 'bad-outcome-no-followup')?.count).toBe(2);
+    const surveysA = await app.inject({
+      method: 'GET',
+      url: `/surveys?follow_up=needed&managed_system_id=${msA}`,
+      headers: headers(adminCookie),
+    });
+    expect(surveysA.statusCode).toBe(200);
+    expect(surveysA.json<Array<{ id: string }>>().map((survey) => survey.id)).toEqual([surveyA]);
+    expect(queue(summaryAll, 'bad-outcome-no-followup')?.count).toBe(4);
+    const surveysAll = await app.inject({
+      method: 'GET',
+      url: '/surveys?follow_up=needed',
+      headers: headers(adminCookie),
+    });
+    expect(surveysAll.statusCode).toBe(200);
+    expect(surveysAll.json<Array<{ id: string }>>().map((survey) => survey.id).sort()).toEqual(
+      [surveyA, surveyB].sort(),
+    );
   });
 
   it('keeps the zero-grant actor empty and writes no audit row', async () => {
