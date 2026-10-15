@@ -121,7 +121,14 @@ no-op: already in target status returns 200 with current DTO and no new audit
   event
 self-approval: if reviewer is requester, approve requires non-empty reason and
   `task_request.self_approve` on the same Managed System unless reviewer is
-  Admin. Denied attempts record `task_request_self_approval_denied`.
+  Admin. Denied permission/reason attempts record `task_request_self_approval_denied`.
+rate tiers: every approve consumes the 10/min mutation bucket. Self-approval
+  additionally consumes the shared 5/min sensitive bucket on an idempotency miss, keyed by
+  workspace_id:actor_id with a 60,000 ms window, from the locked stored requester.
+  Peer approvals consume only mutation capacity. Sensitive 429 returns
+  rate_limited.actor with detail.retry_after_seconds and Retry-After, before
+  decision/audit/notification writes; no idempotency response is recorded, so
+  an identical key/body retry can succeed after the sensitive window expires.
 audit events:
   approve: task_request_approved
   reject: task_request_rejected

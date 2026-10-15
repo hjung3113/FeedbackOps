@@ -1,5 +1,6 @@
 import { assignTaskRequestReviewer } from '@/lib/api/task-requests';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { shortId } from '@/lib/identity';
 import type { TaskRequestDto } from '@fops/shared';
@@ -96,7 +97,11 @@ export function TaskRequestPropertiesSection({
       </FieldRow>
       <FieldRow label="본인 승인">
         <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
-          범위 내 권한 필요
+          {item.status === 'approved' || item.status === 'converted'
+            ? item.reviewer_actor_id === item.requester_actor_id
+              ? TASK_REQUEST_COPY.selfApproved
+              : TASK_REQUEST_COPY.peerApproved
+            : TASK_REQUEST_COPY.notApproved}
         </span>
       </FieldRow>
     </section>

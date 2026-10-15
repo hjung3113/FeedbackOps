@@ -15,6 +15,9 @@ const workspaceActors = vi.hoisted(() => ({
 const findingSourceType = vi.hoisted(() => ({
   value: 'manual' as 'voc' | 'voc_cluster' | 'survey' | 'survey_response' | 'manual',
 }));
+const navigate = vi.hoisted(() => vi.fn());
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 const ORIGINAL_FETCH = globalThis.fetch;
 
 vi.mock('@tanstack/react-router', () => ({
@@ -37,7 +40,7 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   useRouter: () => undefined,
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
 }));
 
 vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
@@ -487,6 +490,14 @@ describe('FindingDetailPanel', () => {
       ),
     );
     await waitFor(() => expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument());
+    const options = toast.success.mock.calls.at(-1)?.[1];
+    expect(options.duration).toBe(Number.POSITIVE_INFINITY);
+    expect(options.action.label).toEqual('Task Request 열기');
+    options.action.onClick();
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/tasks',
+      search: { view: 'requests', param: 'task-request-1' },
+    });
   });
 
   it('drops an open draft when the selection moves to another Finding', async () => {

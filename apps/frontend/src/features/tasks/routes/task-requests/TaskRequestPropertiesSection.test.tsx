@@ -76,3 +76,18 @@ describe('Task Request responsibility detail', () => {
     expect(await screen.findByText('팀 · 검토팀')).toBeInTheDocument();
   });
 });
+
+it.each([
+  ['approved', true, '본인이 승인함'],
+  ['converted', true, '본인이 승인함'],
+  ['approved', false, '다른 검토자가 승인함'],
+  ['pending_review', true, '아직 승인되지 않음'],
+] as const)('shows truthful self approval for %s (self=%s)', (status, self, expected) => {
+  renderProperties({
+    ...item,
+    status,
+    reviewer_actor_id: self ? item.requester_actor_id : item.id,
+  });
+  expect(screen.getByText(expected)).toBeInTheDocument();
+  expect(screen.queryByText('범위 내 권한 필요')).not.toBeInTheDocument();
+});

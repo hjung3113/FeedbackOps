@@ -13,6 +13,7 @@
 // the table without colliding with the global per-Actor / per-IP tier.
 
 import type pg from 'pg';
+import { HttpError } from './errors.js';
 
 export interface PgStoreOptions {
   pool: pg.Pool;
@@ -90,4 +91,23 @@ export class PgRateLimitStore {
     (child as unknown as { options: PgStoreOptions }).options = merged;
     return child;
   }
+}
+
+/** An independent increment: Fastify's per-request guard skips a second plugin handler. */
+export function createSensitiveActorRateLimit(pool: pg.Pool) {
+  const store = new PgRateLimitStore({ pool, routeGroup: 'sensitive', timeWindow: 60_000 });
+  return async (actor: { workspace_id: string; actor_id: string }): Promise<void> => {
+    const result = await new Promise<IncrResult>((resolve, reject) => {
+      store.incr(`${actor.workspace_id}:${actor.actor_id}`, (error, value) => {
+        if (error) reject(error);
+        else if (value) resolve(value);
+        else reject(new Error('rate_limits increment returned no result'));
+      });
+    });
+    if (result.current > 5) {
+      throw new HttpError('rate_limited.actor', 'rate limit exceeded', {
+        retry_after_seconds: Math.ceil(result.ttl / 1000),
+      });
+    }
+  };
 }

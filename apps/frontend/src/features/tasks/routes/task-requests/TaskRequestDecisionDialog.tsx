@@ -25,6 +25,8 @@ export interface DecisionDialogState {
 export function TaskRequestDecisionDialog({
   completedResult = null,
   getCompletedFocusTarget,
+  onCompletedClose,
+  recovery,
   dialog,
   request,
   isSelfApproval,
@@ -34,6 +36,8 @@ export function TaskRequestDecisionDialog({
   onSubmit,
 }: {
   completedResult?: TaskRequestDto | null;
+  onCompletedClose?: () => void;
+  recovery?: React.ReactNode;
   getCompletedFocusTarget?: (result: TaskRequestDto) => HTMLElement | null;
   dialog: DecisionDialogState | null;
   request: TaskRequestDto;
@@ -109,7 +113,7 @@ export function TaskRequestDecisionDialog({
   }, [successfulClose, handedOff, opening, completedResult, getCompletedFocusTarget]);
 
   function dismiss() {
-    if (isSubmitting) return;
+    if (isSubmitting || successfulClose) return;
     opening.dismissed = true;
     onClose();
   }
@@ -174,6 +178,8 @@ export function TaskRequestDecisionDialog({
             ) {
               opening.successTarget.focus();
             }
+            if (mounted.current && activeOpening.current === opening && opening.successTarget)
+              onCompletedClose?.();
             opening.opener = null;
             opening.dismissed = false;
           }}
@@ -182,9 +188,10 @@ export function TaskRequestDecisionDialog({
             <DialogTitle>{details.title}</DialogTitle>
             <DialogDescription>{details.description}</DialogDescription>
           </DialogHeader>
+          {successfulClose && recovery}
           <form
             onSubmit={(event) => {
-              if (isSubmitting) event.preventDefault();
+              if (isSubmitting || successfulClose) event.preventDefault();
               else onSubmit(event);
             }}
             className="flex flex-col gap-4"
@@ -196,7 +203,7 @@ export function TaskRequestDecisionDialog({
                 rows={3}
                 value={content.value}
                 onChange={(event) => onChange(event.target.value)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || successfulClose}
                 aria-invalid={content.error !== null}
               />
               {details.required && (
@@ -212,13 +219,17 @@ export function TaskRequestDecisionDialog({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={isSubmitting}
+                disabled={isSubmitting || successfulClose}
                 onClick={dismiss}
                 data-testid="task-request-decision-cancel"
               >
                 취소
               </Button>
-              <Button type="submit" aria-busy={isSubmitting} aria-disabled={isSubmitting}>
+              <Button
+                type="submit"
+                aria-busy={isSubmitting}
+                aria-disabled={isSubmitting || successfulClose}
+              >
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {details.submitLabel}
               </Button>

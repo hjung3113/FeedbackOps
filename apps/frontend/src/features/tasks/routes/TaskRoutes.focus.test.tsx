@@ -371,14 +371,14 @@ it('cancels the pending focus return when another row is selected before a frame
 });
 
 it.each(['approved', 'rejected'] as const)(
-  'preserves %s focus through a cold result fetch in the real AppFrame',
+  'preserves %s focus through a delayed current-tab refetch in the real AppFrame',
   async (status) => {
     const user = userEvent.setup();
     const result: TaskRequestDto = { ...request, status, decision_reason: '검토 완료' };
     let resolvePage!: (value: Awaited<ReturnType<typeof api.fetchTaskRequests>>) => void;
     const originalFetch = api.fetchTaskRequests;
     const fetch = vi.spyOn(api, 'fetchTaskRequests').mockImplementation((query) =>
-      query?.status === status
+      query?.status === 'pending_review' && mutation.mock.calls.length > 0
         ? new Promise((resolve) => {
             resolvePage = resolve;
           })
@@ -411,18 +411,15 @@ it.each(['approved', 'rejected'] as const)(
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByRole('textbox'), '검토 완료');
       await user.click(within(dialog).getByRole('button', { name: action }));
-      const heading = await screen.findByRole('heading', {
-        name: status === 'approved' ? '검토 결정' : '결정 요약',
-      });
-      await waitFor(() => expect(heading).toHaveFocus());
-      expect(screen.getByText('Task Request을 불러오는 중…')).toBeInTheDocument();
+      const nextRow = await screen.findByRole('button', { name: new RegExp(request2.display_id) });
+      await waitFor(() => expect(nextRow).toHaveFocus());
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      expect(document.activeElement).toBe(heading);
-      await act(async () => resolvePage(taskRequestPage([result])));
-      expect(document.activeElement).toBe(heading);
-      expect(router.state.location.search.param).toBe(request.id);
+      expect(document.activeElement).toBe(nextRow);
+      await act(async () => resolvePage(taskRequestPage([request2])));
+      expect(document.activeElement).toBe(nextRow);
+      expect(router.state.location.search.param).toBe(request2.id);
     } finally {
       cleanup();
       client.clear();

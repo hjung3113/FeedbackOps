@@ -1,10 +1,13 @@
-import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
+import { convertTaskRequest, fetchPermissionCheck, resolveActors } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { GENERIC_ERROR_MESSAGE, mapUnknownError } from '@/lib/api/errorMapper';
 import { listMilestones } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { InternalLink } from '@/lib/router/InternalLink';
 import {
   type MilestoneDto,
   type TaskDto,
@@ -278,14 +281,39 @@ export function useTaskRequestConversion({
         crypto.randomUUID(),
       );
     },
-    onSuccess: (task) => {
+    onSuccess: async (task) => {
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
-      toast.success(`Task ${task.display_id}로 전환했습니다.`);
+      let assignee = TASK_REQUEST_COPY.unassigned;
+      if (task.assignee_actor_id || task.assignee_team_id) {
+        // Resolve the server's actual recipient through the same read seam as the editor.
+        const actorIds = task.assignee_actor_id ? [task.assignee_actor_id] : [];
+        const teamIds = task.assignee_team_id ? [task.assignee_team_id] : [];
+        const identities = await queryClient
+          .fetchQuery({
+            queryKey: ['actors-resolve', actorIds, teamIds],
+            queryFn: ({ signal }) => resolveActors({ actorIds, teamIds }, signal),
+            staleTime: 60_000,
+          })
+          .catch(() => null);
+        assignee = task.assignee_actor_id
+          ? (identities?.actors.find((actor) => actor.id === task.assignee_actor_id)
+              ?.display_name ?? GLOSSARY.unknownUser)
+          : `팀 · ${identities?.teams.find((team) => team.id === task.assignee_team_id)?.name ?? TASK_REQUEST_COPY.unknownTeam}`;
+      }
+      toast.success(TASK_REQUEST_COPY.converted(task.display_id, assignee), {
+        description: React.createElement(
+          InternalLink,
+          {
+            href: `/tasks?view=backlog&param=${task.id}`,
+          },
+          TASK_REQUEST_COPY.openTask,
+        ),
+      });
       setConvertOpen(false);
     },
     onError: (err) => {

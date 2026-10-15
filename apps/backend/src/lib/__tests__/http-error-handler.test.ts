@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
+import { HttpError } from '../errors.js';
 import { registerHttpErrorHandler } from '../http-error-handler.js';
 
 const malformedRequestEnvelope = {
@@ -67,6 +68,28 @@ describe('registerHttpErrorHandler', () => {
       }
     },
   );
+
+  it('returns the sensitive rejection envelope and Retry-After on the wire', async () => {
+    const { app } = buildApp({
+      route: async () => {
+        throw new HttpError('rate_limited.actor', 'rate limit exceeded', {
+          retry_after_seconds: 42,
+        });
+      },
+    });
+    try {
+      const response = await app.inject({ method: 'POST', url: '/requests' });
+      expect(response.statusCode).toBe(429);
+      expect(response.headers['retry-after']).toBe('42');
+      expect(response.json()).toEqual({
+        code: 'rate_limited.actor',
+        message: 'rate limit exceeded',
+        detail: { retry_after_seconds: 42 },
+      });
+    } finally {
+      await app.close();
+    }
+  });
 
   it('never echoes the request body into the log or the response', async () => {
     // V8 copies this payload into the SyntaxError message ("secret-marker" is

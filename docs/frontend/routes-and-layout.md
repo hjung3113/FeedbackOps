@@ -225,13 +225,17 @@ as the other surfaces.
   page membership does not prove deletion. Detail 404 or the screen's active
   scope/filter rule reconciles selection. Task Request explicit selections never
   fall back to another row while unresolved. Review decisions refresh page and
-  summary caches and retain the returned request across the result-tab switch,
-  including when the destination's first page does not contain it.
+  summary caches while keeping the current tab. If the decided request leaves
+  the tab, select the next loaded row in visible order, otherwise the preceding
+  row. If no loaded rows remain, fetch remaining cursor pages before claiming
+  emptiness; preserve loading/error/retry until that read settles. The all tab
+  (or any matching-status tab) keeps a request that still belongs.
 - Without an explicit `param`, changing the Task list view or either Task screen's
   Managed System scope, or switching a Task Request status tab, resets the panel
   selection to the new context's first row (or none when empty). An explicit
-  `param` remains authoritative; a completed review retains the decided request
-  on its result tab as described above.
+  `param` remains authoritative; review completion replaces it with the next
+  current-tab selection (or clears it while remaining pages reconcile). Explicit
+  deep links still align to a request's status tab once; manual tab changes persist.
 - Task Request row selection pushes `param` while preserving the current search
   context. Task list row selection also pushes `param` while preserving the current
   search context, including `view` and `managedSystem`.
@@ -245,20 +249,26 @@ as the other surfaces.
   The notice clears on row selection, a tab/view or scope change, or a new defined
   `param`; removing `param` during cleanup does not clear it. First-row auto-selection
   stays local and runs only without an explicit `param`, a closed panel, or the notice.
-  Review decisions replace `param` with the returned
-  request so refreshing restores that request.
+  Review decisions replace `param` with the current-tab selection, reconciling
+  it after refetch so refresh restores that selection.
 - Task Request status tabs stay mounted during initial load, uncached-tab loading,
   cached refresh, and queue errors/permission denial; loading/error content replaces
   only the list body. Empty/rows motion boundaries keep their existing context keys.
   A manual tab or scope change still reconciles selection by the rules above.
-- Approval/rejection/additional-evidence requests retain the same request panel through result-tab loading.
-  Approval focuses the retained `검토 결정` heading and keeps conversion/link actions;
-  rejection focuses `결정 요약`. These headings accept programmatic focus only
-  (`tabIndex=-1`). A successful dialog close retains its content until the connected
-  same-request heading receives focus, before content removal, and reconciles that
-  handoff in close autofocus. Cancel/Escape keep opener restoration. Request changes
-  reset panel-local state; newer openings/selections own focus over old close callbacks.
-  Additional-evidence success also focuses `검토 결정`, keeping approval/rejection available.
+- Approval/rejection/additional-evidence completion retains the old panel and
+  successful dialog content until the newly selected current-tab row (or a
+  confirmed empty-state heading with `tabIndex=-1`) receives focus while the
+  content is still connected. The dialog releases its trap before handoff,
+  respects its exit animation, and reconciles deferred close autofocus. A failed
+  remaining-page read offers retry in the retained dialog. Cancel/Escape keep
+  opener restoration; newer openings, selections, and manual tabs own focus.
+  Action-specific success copy names the decision; approval explains that Task
+  conversion is a separate next step. Automatic conversion explains configured
+  defaults and reports the returned Task's actual actor/team/unassigned recipient
+  with a Task link. Finding request registration keeps a persistent, dismissible
+  toast with an action to `/tasks?view=requests&param=:requestId`.
+  The `본인 승인` property describes actual self/peer approval for approved or
+  converted requests; other statuses use a neutral not-yet-approved value.
   Pending dialog submit controls stay focusable with `aria-disabled` and keep their loading
   spinner; repeated submissions and dismissal are guarded, and cancel stays disabled.
 - Restoring a Task Request `param` follows its in-scope status tab once per URL-param

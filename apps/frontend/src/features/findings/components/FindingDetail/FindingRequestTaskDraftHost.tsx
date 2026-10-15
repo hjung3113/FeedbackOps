@@ -1,6 +1,8 @@
 import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import type { FindingDto } from '@fops/shared';
+import { useNavigate } from '@tanstack/react-router';
 import type * as React from 'react';
 import { toast } from 'sonner';
 import { useRequestTaskFromFinding } from '../../hooks/useRequestTaskFromFinding';
@@ -23,6 +25,7 @@ function FindingRequestTaskDraftSubmission({
   markConsumed: () => void;
   onClose: () => void;
 }): React.ReactElement {
+  const navigate = useNavigate();
   const mutation = useRequestTaskFromFinding({
     findingId: finding.id,
     idempotencyKey,
@@ -41,11 +44,19 @@ function FindingRequestTaskDraftSubmission({
       onClose={onClose}
       onSubmit={(values) => {
         mutation.mutate(values, {
-          onSuccess: () => {
+          onSuccess: (request) => {
             markConsumed();
             mutation.reset();
             onClose();
-            toast.success('Task Request가 생성되었습니다.');
+            toast.success(TASK_REQUEST_COPY.created, {
+              duration: Number.POSITIVE_INFINITY,
+              action: {
+                label: TASK_REQUEST_COPY.openRequest,
+                onClick: () => {
+                  void navigate({ to: '/tasks', search: { view: 'requests', param: request.id } });
+                },
+              },
+            });
           },
         });
       }}

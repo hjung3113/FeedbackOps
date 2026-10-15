@@ -37,6 +37,17 @@ Rate-limit decisions are **not** audited (volume; would drown the audit log). Th
 
 Named per-route tiers are the `rateLimitConfig` object decorated on the app in `apps/backend/src/server.ts`. Pass the tier a plugin needs into that plugin's options, then set it on the one route with `config: { rateLimit: rateLimitConfig.<tier> }` (`apps/backend/src/modules/permissions/routes.ts` uses `sensitive`; `apps/backend/src/modules/attachments/routes.ts` uses `attachmentMutation`). The per-actor and per-IP defaults in the list above are the global plugin `max` in that same file, not keys on `rateLimitConfig`.
 
+### Self-approval enforcement consequence (#1180)
+
+The approve route retains its mutation tier. After loading and locking the stored
+Task Request on an idempotency miss, self-approval increments the same Postgres
+`(workspace_id:actor_id, sensitive)` bucket independently (60,000 ms, max 5).
+A second `app.rateLimit()` handler cannot enforce both tiers: the plugin marks a
+request as already checked. The independent increment persists across command
+rollback; a 429 precedes even denied-approval audit, propagates the standard
+envelope and Retry-After, and leaves no decision/notification/idempotency record.
+Successful idempotent replays do not execute or charge the sensitive command again.
+
 ## Security headers
 
 `@fastify/helmet` is mounted with the defaults enabled (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `Referrer-Policy: strict-origin-when-cross-origin`) **plus** an explicit Content-Security-Policy:
