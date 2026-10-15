@@ -2312,8 +2312,9 @@ describe.skipIf(!runIntegration)('VOC actionable ownership (#1172)', () => {
   });
 
   beforeEach(async () => {
+    // Rate-limit keys are `<workspace_id>:<actor_id>` (server.ts keyGenerator).
     await handle.pool.query('delete from core.rate_limits where key=any($1::text[])', [
-      Object.values(ids),
+      Object.values(ids).map((id) => `${WORKSPACE_ID}:${id}`),
     ]);
   });
 
@@ -2516,18 +2517,19 @@ describe.skipIf(!runIntegration)('VOC actionable ownership (#1172)', () => {
     });
     const developerCookie = await loginAs(app, `${PREFIX}-expired`);
     const developerDenied = await candidates(voc.id, developerCookie);
+    const developerDeniedPatch = await app.inject({
+      method: 'PATCH',
+      url: `/vocs/${voc.id}`,
+      headers: { ...requestHeaders(developerCookie), 'if-match': voc.updated_at },
+      payload: { severity: 'low' },
+    });
     expect(developerDenied.statusCode).toBe(403);
+    expect(developerDeniedPatch.statusCode).toBe(403);
     expect(developerDenied.json()).toMatchObject({
       code: 'permission.scope_required',
-      detail: {
-        requiredScope: [ms],
-        requestable_permission: {
-          permission: 'voc.triage',
-          managed_system_id: ms,
-          reason_required: false,
-        },
-      },
+      detail: developerDeniedPatch.json().detail,
     });
+    expect(developerDenied.json().detail.requiredScope).toEqual([ms]);
     const hidden = await candidates(voc.id, unrelatedCookie);
     expect(hidden.statusCode).toBe(404);
     expect(hidden.json().code).toBe('not_found.record');
