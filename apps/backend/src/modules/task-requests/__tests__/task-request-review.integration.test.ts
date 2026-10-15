@@ -504,7 +504,9 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const response = await Promise.race([
-        decide(adminCookie, request.id, 'approve', { reason: 'Owner approval under pool pressure.' }),
+        decide(adminCookie, request.id, 'approve', {
+          reason: 'Owner approval under pool pressure.',
+        }),
         new Promise<never>((_resolve, reject) => {
           timer = setTimeout(
             () => reject(new Error('self-approval did not settle with one free pool connection')),
