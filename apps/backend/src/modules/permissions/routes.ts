@@ -9,12 +9,14 @@ import { z } from 'zod';
 import {
   type ApprovePermissionRequest,
   type Capability,
+  type CreatePermissionRequest,
   type DenyPermissionRequest,
   type NeedMoreInfoPermissionRequest,
   type RejectPermissionRequest,
   type RevokePermissionBody,
   approvePermissionRequestSchema,
   cancelPermissionRequestSchema,
+  createPermissionRequestSchema,
   denyPermissionRequestSchema,
   directPermissionGrantSchema,
   editPermissionRequestSchema,
@@ -54,21 +56,6 @@ export interface PermissionsRoutesOptions {
     sensitive: Record<string, unknown>;
   };
 }
-
-const createRequestBodySchema = z
-  .object({
-    requested_capability: z.string().min(1),
-    requested_managed_system_id: z.string().uuid().optional(),
-    requested_object_type: z.string().min(1).optional(),
-    requested_object_id: z.string().uuid().optional(),
-    reason: z.string().min(1).max(2000),
-    requested_expiration: z.string().datetime().optional(),
-    source_object_type: z.string().min(1).optional(),
-    source_object_id: z.string().uuid().optional(),
-    source_action_id: z.string().min(1).optional(),
-    return_route_intent: z.string().min(1).optional(),
-  })
-  .strict();
 
 export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = async (
   app,
@@ -185,7 +172,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
     ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
     schema: {
-      body: createRequestBodySchema,
+      body: createPermissionRequestSchema,
     },
     handler: async (req, reply) => {
       const sess = req.session;
@@ -206,7 +193,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         idempotencyKey = headerKey;
       }
 
-      const body = req.body as z.infer<typeof createRequestBodySchema>;
+      const body = req.body as CreatePermissionRequest;
 
       // Unknown capability check happens inside the service (returns 422), but
       // we can short-circuit here for a cleaner envelope.

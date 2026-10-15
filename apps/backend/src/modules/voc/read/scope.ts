@@ -99,10 +99,18 @@ export function resolveVocListScope(args: {
       ? msInScope(triage, selected)
       : triage.kind === 'all' || triage.managedSystemIds.length > 0;
     if (holdsTriage) {
+      // #1170: `voc.read` is requestable only per Managed System. With no
+      // selection, a triage scope held on exactly one System names it so the
+      // request validates; several Systems (or workspace-wide) leave the
+      // choice to the actor.
+      const fallbackSystemId =
+        triage.kind === 'scoped' && triage.managedSystemIds.length === 1
+          ? (triage.managedSystemIds[0] ?? null)
+          : null;
       throw new HttpError('permission.denied', 'voc.read required to use voc.triage scope', {
         requestable_permission: {
           permission: 'voc.read',
-          managed_system_id: selected ?? null,
+          managed_system_id: selected ?? fallbackSystemId,
         },
       });
     }

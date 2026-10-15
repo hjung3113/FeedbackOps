@@ -49,6 +49,24 @@ export const revokePermissionBodySchema = z
   .object({ reason: z.string().trim().min(1).max(2000) })
   .strict();
 
+// POST /permission-requests body. Shared so the FE request-dialog tests can
+// parse the posted payload against the exact transport contract the route
+// validates (#1170).
+export const createPermissionRequestSchema = z
+  .object({
+    requested_capability: z.string().min(1),
+    requested_managed_system_id: z.string().uuid().optional(),
+    requested_object_type: z.string().min(1).optional(),
+    requested_object_id: z.string().uuid().optional(),
+    reason: z.string().min(1).max(2000),
+    requested_expiration: z.string().datetime().optional(),
+    source_object_type: z.string().min(1).optional(),
+    source_object_id: z.string().uuid().optional(),
+    source_action_id: z.string().min(1).optional(),
+    return_route_intent: z.string().min(1).optional(),
+  })
+  .strict();
+
 export const revokePermissionResultSchema = z
   .object({ id: z.string().uuid(), revoked_at: z.string().datetime() })
   .strict();
@@ -60,3 +78,4 @@ export type NeedMoreInfoPermissionRequest = z.infer<typeof needMoreInfoPermissio
 export type PermissionDecisionResult = z.infer<typeof permissionDecisionResultSchema>;
 export type RevokePermissionBody = z.infer<typeof revokePermissionBodySchema>;
 export type RevokePermissionResult = z.infer<typeof revokePermissionResultSchema>;
+export type CreatePermissionRequest = z.infer<typeof createPermissionRequestSchema>;

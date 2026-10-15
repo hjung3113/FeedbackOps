@@ -100,6 +100,17 @@ describe.skipIf(!runIntegration)('GET /vocs?view=triage requests the missing rea
       path: '/vocs?view=triage',
       code: 'permission.denied',
       permission: 'voc.read',
+      system: 'A',
+    },
+    {
+      name: 'triage on A and B and no read, no System',
+      grants: [
+        ['voc.triage', 'A'],
+        ['voc.triage', 'B'],
+      ] as const,
+      path: '/vocs?view=triage',
+      code: 'permission.denied',
+      permission: 'voc.read',
       system: null,
     },
     {

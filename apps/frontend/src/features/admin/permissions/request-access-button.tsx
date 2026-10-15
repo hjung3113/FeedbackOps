@@ -30,6 +30,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { useManagedSystemNames } from '@/lib/cross-system/useManagedSystemNames';
 import {
   permissionCheckQueryKey,
   permissionRequestsMineKey,
@@ -72,6 +73,14 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
   // only after a successful submit (a new logical intent). Concurrent
   // clicks / TanStack Query retries within one intent share the same key.
   const [attempt, setAttempt] = useState(0);
+
+  // Scope summary shows the Managed System name; the raw UUID is only a
+  // fallback while the name is unresolved (#1170). Fetched when the dialog
+  // opens so a blocked panel mount costs no extra request.
+  const managedSystemNames = useManagedSystemNames({ enabled: open });
+  const managedSystemName = props.managedSystemId
+    ? managedSystemNames.get(props.managedSystemId)
+    : undefined;
 
   // The dep list here is an *intent key*, not a value dependency: one
   // Idempotency-Key per logical intent (ADR-0015:71-90). Narrowing it to what the
@@ -182,10 +191,14 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 <dt className="text-text-muted">Managed System</dt>
                 <dd
                   className={
-                    props.managedSystemId ? 'font-mono text-text-primary' : 'text-text-primary'
+                    props.managedSystemId && !managedSystemName
+                      ? 'font-mono text-text-primary'
+                      : 'text-text-primary'
                   }
                 >
-                  {props.managedSystemId ?? '워크스페이스 전체'}
+                  {props.managedSystemId === undefined
+                    ? '워크스페이스 전체'
+                    : (managedSystemName ?? props.managedSystemId)}
                 </dd>
                 <dt className="text-text-muted">사유</dt>
                 <dd className="text-text-primary">{submitted.reason}</dd>
@@ -250,10 +263,14 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                   <dt className="text-text-muted">Managed System</dt>
                   <dd
                     className={
-                      props.managedSystemId ? 'font-mono text-text-primary' : 'text-text-primary'
+                      props.managedSystemId && !managedSystemName
+                        ? 'font-mono text-text-primary'
+                        : 'text-text-primary'
                     }
                   >
-                    {props.managedSystemId ?? '워크스페이스 전체'}
+                    {props.managedSystemId === undefined
+                      ? '워크스페이스 전체'
+                      : (managedSystemName ?? props.managedSystemId)}
                   </dd>
                 </dl>
                 <div className="space-y-1">

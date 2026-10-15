@@ -244,7 +244,14 @@ On a queue denial, the request capability and Managed System come from the
 server's `requestable_permission`. When that permission is `voc.read`, the panel
 copy names the missing VOC 조회 access (`vocTriageMissingRead` /
 `vocTriageMissingReadManagedSystem` in `lib/copy/permission-reasons.ts`) and the
-dialog requests that capability and System. Otherwise the dialog requests
+dialog requests that capability and System. A `voc.read` requestable that
+carries no Managed System renders the panel as `blocked_not_requestable` with
+`vocTriageMissingReadSelectSystem` (`Managed System을 선택한 뒤 VOC 조회 권한을
+요청하세요.`) and no request button — a workspace-wide `voc.read` request would
+fail scope validation, and selecting a System in the existing selector re-gates
+into the scoped request flow. The dialog's scope summary shows the Managed
+System name, falling back to the raw UUID only while the name is unresolved.
+Otherwise the dialog requests
 `voc.triage`, with the selected Managed System when present, and a
 selected-System block uses `선택한 Managed System의 VOC Triage 권한이 없습니다.`.
 Return intent stays `/vocs?view=triage`. Non-requestable point-check states keep
