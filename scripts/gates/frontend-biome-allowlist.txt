@@ -474,3 +474,7 @@ apps/backend/src/modules/voc/embedding/voyage.ts format -- pre-existing on devel
 apps/backend/migrations/meta/0070_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1099, 2026-10-14)
 apps/backend/src/modules/voc/embedding/__tests__/voyage.test.ts format -- pre-existing on develop (measured 2026-10-14); #1099 adds identity and signal cases
 apps/backend/migrations/meta/0071_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1097, 2026-10-14)
+apps/backend/src/modules/core/jobs/purge-unlinked-attachments.ts format -- pre-existing on develop (measured 2026-10-15); #1171 changes the claim/delete loop only
+apps/backend/src/modules/core/jobs/purge-unlinked-attachments.ts organizeImports -- pre-existing on develop (measured 2026-10-15); #1171 adds no imports to the sorted block
+apps/backend/src/modules/core/jobs/__tests__/purge-unlinked-attachments.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-15); #1171 adds interleaving cases
+apps/backend/src/modules/attachments/__tests__/get-attachments-download.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-15); #1171 adds privacy cases

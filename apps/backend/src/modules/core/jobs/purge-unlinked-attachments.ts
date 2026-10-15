@@ -47,6 +47,8 @@ export interface PurgeUnlinkedAttachmentsDeps {
   pool: pg.Pool;
   storage: StorageBackend;
   log?: JobLog;
+  /** Test barrier after candidate selection, before entering the claim transaction. */
+  beforeClaim?: (attachmentId: string) => Promise<void>;
 }
 
 interface AttachmentRow {
@@ -59,11 +61,11 @@ interface AttachmentRow {
  * Pure handler — invoked by pg-boss workers and directly from unit tests.
  *
  * For each unlinked row older than 24h:
- *   1. Try storage.delete(storage_key). If it throws, log + skip DB delete
- *      so the next run retries.
- *   2. If storage delete succeeded (or was a no-op for a missing key),
- *      DELETE the DB row by id. The size_bytes contributes to
- *      bytes_reclaimed.
+ *   1. Lock and re-check the candidate in a short transaction, then archive
+ *      the still-unlinked row. Commit before touching storage. The link UPDATE
+ *      takes the same row lock and excludes archived rows, so only one wins.
+ *   2. Delete storage. Failure leaves the claim for the next hourly retry.
+ *   3. Delete only a still-unlinked, claimed row; count successful DB deletes.
  *
  * Idempotent: re-running once nothing older than 24h remains is a no-op.
  */
@@ -84,7 +86,38 @@ export async function purgeUnlinkedAttachments(
   let bytes_reclaimed = 0;
   let storage_delete_failures = 0;
 
-  for (const row of candidates.rows) {
+  for (const candidate of candidates.rows) {
+    await deps.beforeClaim?.(candidate.id);
+    const client = await pool.connect();
+    let row: AttachmentRow | undefined;
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query<AttachmentRow>(
+        `SELECT id, storage_key, size_bytes FROM voc.voc_attachments
+          WHERE id = $1 AND voc_id IS NULL AND comment_id IS NULL
+            AND created_at < now() - interval '24 hours'
+          FOR UPDATE`,
+        [candidate.id],
+      );
+      row = locked.rows[0];
+      if (row) {
+        // Preserve an existing claim: failed storage deletes are retried.
+        // Only unlinked rows are archived here, so active linked projections
+        // retain their existing archive semantics.
+        await client.query(
+          'UPDATE voc.voc_attachments SET archived_at = coalesce(archived_at, now()) WHERE id = $1',
+          [row.id],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    if (!row) continue;
+
     const size = typeof row.size_bytes === 'string' ? Number(row.size_bytes) : row.size_bytes;
 
     try {
@@ -100,7 +133,11 @@ export async function purgeUnlinkedAttachments(
       continue;
     }
 
-    const del = await pool.query('DELETE FROM voc.voc_attachments WHERE id = $1', [row.id]);
+    const del = await pool.query(
+      `DELETE FROM voc.voc_attachments WHERE id = $1
+        AND archived_at IS NOT NULL AND voc_id IS NULL AND comment_id IS NULL`,
+      [row.id],
+    );
     if ((del.rowCount ?? 0) > 0) {
       count += 1;
       bytes_reclaimed += Number.isFinite(size) ? size : 0;

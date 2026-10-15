@@ -13,13 +13,14 @@ It is the implementation of Core's attachment governance (`docs/implementation/0
 - The MIME allowlist (`mime-allowlist.ts`) is a closed set checked against the declared Content-Type; anything else is `attachment.unsupported_type`. The size cap is `MAX_ATTACHMENT_BYTES` (25 MB).
 - Every filename passes `sanitizeFilename` (strips `/`, `\`, and control characters; clamps to 255 UTF-8 bytes; an empty result is rejected) before it enters the storage key `{workspace_id}/{uuid}/{filename}`.
 - `voc_attachments` has no `workspace_id` column. The storage-key prefix is the workspace gate on download, and a cross-workspace id returns 404, not 403.
-- Download entitlement is the parent VOC's: `getVocDetail` must return `kind: 'full'` (comment attachments resolve to their parent VOC). An unlinked upload is readable only by its uploader.
+- VOC-level download entitlement requires `getVocDetail` to return `kind: 'full'`. Comment attachments use VOC's `canReadConversationEntry` seam, which resolves the parent and enforces the exact conversation entry's visibility, including deny-aware triage and Reporter Reply authorship. Attachments must not query conversation tables for authorization. An unlinked upload is readable only by its uploader.
 - `linkAttachments` runs in the parent's transaction and links only rows that are unlinked, not archived, and uploaded by the caller; any miss throws `LinkAttachmentsRejected` and rolls the parent back.
 - `Content-Disposition` carries an ASCII fallback plus RFC 5987 `filename*` (`rfc5987.ts`) so non-ASCII names survive.
 
 ## Cross-System Rules
 
 - Other modules use the barrel (`index.ts`), never `repo.ts` (`pnpm check:boundaries` rejects cross-module `repo*.js` imports).
+- The purge job claims old unlinked rows by locking, re-checking, and setting `archived_at` in a short transaction before deleting storage. The link guard rejects claimed rows; storage failures retain the claim for retry. Only still-claimed, unlinked rows are deleted.
 - Unlinked rows older than 24 hours are reclaimed by the hourly `core.attachments_purge` job (`modules/core/jobs/purge-unlinked-attachments.ts`), not by this module.
 
 ## Verification

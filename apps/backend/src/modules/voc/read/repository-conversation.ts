@@ -39,6 +39,7 @@ export interface SelectConversationPageArgs {
   cursor?: { createdAt: string; id: string }; // (createdAt, id) pagination
   limit: number;
   kind?: ConversationKind;
+  entryId?: string; // exact-entry projection for attachment entitlement
 }
 
 export async function selectConversationPage(
@@ -78,6 +79,7 @@ export async function selectConversationPage(
       JOIN ${vocs} v ON v.id = pu.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
       WHERE pu.voc_id = ${vocId}
         AND ${puCursor}
+        AND ${args.entryId ? sql`pu.id = ${args.entryId}` : sql`true`}
     `);
   }
 
@@ -104,6 +106,7 @@ export async function selectConversationPage(
         JOIN ${vocs} v ON v.id = rr.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
         WHERE rr.voc_id = ${vocId}
           AND ${rrCursor}
+          AND ${args.entryId ? sql`rr.id = ${args.entryId}` : sql`true`}
       `);
     } else if (isReporter) {
       branches.push(sql`
@@ -119,6 +122,7 @@ export async function selectConversationPage(
         JOIN ${vocs} v ON v.id = rr.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
         WHERE rr.voc_id = ${vocId}
           AND ${rrCursor}
+          AND ${args.entryId ? sql`rr.id = ${args.entryId}` : sql`true`}
           AND rr.actor_id = ${actorId}
       `);
     }
@@ -144,6 +148,7 @@ export async function selectConversationPage(
       JOIN ${vocs} v ON v.id = ic.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
       WHERE ic.voc_id = ${vocId}
         AND ${icCursor}
+        AND ${args.entryId ? sql`ic.id = ${args.entryId}` : sql`true`}
     `);
   }
 
@@ -202,4 +207,23 @@ export async function selectConversationPage(
   }
 
   return { entries, hasMore, nextCursor };
+}
+
+/** Parent resolution stays VOC-owned; a foreign module never reads conversation tables. */
+export async function selectConversationEntryParent(
+  db: Db,
+  args: { workspaceId: string; kind: ConversationKind; entryId: string },
+): Promise<string | null> {
+  const table = {
+    public_update: vocPublicUpdates,
+    reporter_reply: vocReporterReplies,
+    internal_comment: vocInternalComments,
+  }[args.kind];
+  const result = await db.execute<{ voc_id: string }>(sql`
+    SELECT e.voc_id FROM ${table} e
+    JOIN ${vocs} v ON v.id = e.voc_id AND v.workspace_id = ${args.workspaceId}
+      AND v.archived_at IS NULL
+    WHERE e.id = ${args.entryId} LIMIT 1
+  `);
+  return result.rows[0]?.voc_id ?? null;
 }
