@@ -26,6 +26,7 @@ export const GLOSSARY = {
   highNoLink: '높음 · 연결 없음',
   noTask: 'Task 없음',
   linkedVoc: '연결된 VOC',
+  linkedCluster: '연결된 Cluster',
   linkedTask: '연결된 Task',
   requestedBy: '요청자',
   fromFinding: 'Finding에서',

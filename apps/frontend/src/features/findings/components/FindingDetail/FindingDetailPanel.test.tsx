@@ -90,6 +90,12 @@ vi.mock('@/lib/cross-system/useVocDetail', () => ({
   useVocDetail: () => ({ data: null }),
 }));
 
+const useVocClusterDetailMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/features/voc-cluster/hooks/useVocClusterDetail', () => ({
+  useVocClusterDetail: useVocClusterDetailMock,
+}));
+
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: workspaceActors.actors }),
 }));
@@ -171,6 +177,8 @@ describe('FindingDetailPanel', () => {
   });
 
   beforeEach(() => {
+    useVocClusterDetailMock.mockReset();
+    useVocClusterDetailMock.mockReturnValue({ data: undefined });
     findingSourceType.value = 'manual';
     workspaceActors.actors = [
       { id: '40000000-0000-0000-0000-000000000004', display_name: '분석가' },
@@ -248,6 +256,42 @@ describe('FindingDetailPanel', () => {
       expect(taskLink).toContainElement(taskId);
       expect(within(taskLink).getByText('이동')).toHaveClass('whitespace-nowrap', 'shrink-0');
     });
+  });
+
+  // #1174b U2-2: a Cluster-sourced Finding names its source Cluster when the actor
+  // may read it, and falls back to the safe placeholder when the read is denied/missing.
+  it('links a cluster-sourced Finding to its readable source Cluster', () => {
+    const clusterId = '70000000-0000-7000-8000-000000000007';
+    useVocClusterDetailMock.mockReturnValue({
+      // #1174 FIX1: the controller projects identity only from a successful
+      // read, so the fixture models the query state it represents.
+      data: { id: clusterId, display_id: 'CLU-9001', title: '결제 실패 클러스터' },
+      isSuccess: true,
+    });
+    renderWithClient(
+      <FullFindingDetail
+        finding={{ ...mediumFinding, source_type: 'voc_cluster', source_id: clusterId }}
+      />,
+    );
+
+    expect(screen.getByText('연결된 Cluster')).toBeInTheDocument();
+    const clusterLink = screen.getByRole('link', { name: /결제 실패 클러스터/ });
+    expect(clusterLink.getAttribute('href')).toContain('/voc-clusters');
+    expect(clusterLink).toHaveTextContent('CLU-9001');
+  });
+
+  it('renders the safe placeholder when the source Cluster read is denied or missing', () => {
+    const clusterId = '70000000-0000-7000-8000-000000000007';
+    useVocClusterDetailMock.mockReturnValue({ data: undefined, isError: true });
+    renderWithClient(
+      <FullFindingDetail
+        finding={{ ...mediumFinding, source_type: 'voc_cluster', source_id: clusterId }}
+      />,
+    );
+
+    expect(screen.getByText('연결된 Cluster')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /결제 실패 클러스터/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('CLU-9001')).not.toBeInTheDocument();
   });
 
   it('AC-681-2 shows an active pending Task Request and makes it the primary footer action', async () => {

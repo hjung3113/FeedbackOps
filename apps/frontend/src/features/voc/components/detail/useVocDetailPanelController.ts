@@ -162,6 +162,10 @@ export function useVocDetailPanelController({
     void navigate({ to: '/tasks', search: { param: taskId } });
   }
 
+  function handleOpenFinding(findingId: string): void {
+    void navigate({ to: '/findings', search: { selected: findingId } });
+  }
+
   return {
     setComposerDirty,
     dirtyConfirmOpen,
@@ -190,5 +194,6 @@ export function useVocDetailPanelController({
     handleSimilarVocSelect,
     handleOpenTriage,
     handleOpenTask,
+    handleOpenFinding,
   };
 }

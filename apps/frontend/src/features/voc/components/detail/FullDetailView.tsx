@@ -12,7 +12,7 @@ import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
 import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
-import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
+import { LinkedEntityTrailSection, isVisibleFindingLink } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
 import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
@@ -80,6 +80,7 @@ export function FullDetailView({
     handleSimilarVocSelect,
     handleOpenTriage,
     handleOpenTask,
+    handleOpenFinding,
   } = useVocDetailPanelController({
     voc,
     vocId,
@@ -158,11 +159,15 @@ export function FullDetailView({
                     (link.source_type === 'task' || link.target_type === 'task'),
                 ) ?? false
               }
+              hasVisibleFindingLink={(voc.links ?? []).some((link) =>
+                isVisibleFindingLink(link, !canRenderAllowedTask),
+              )}
             />
             <LinkedEntityTrailSection
               links={voc.links ?? []}
               isReporterContext={!canRenderAllowedTask}
               onOpenTask={handleOpenTask}
+              onOpenFinding={handleOpenFinding}
             />
             {requestTaskOpen && (
               <TaskRequestDraftCard

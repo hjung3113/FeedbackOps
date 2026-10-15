@@ -4,6 +4,7 @@
 // and the status mutation handler. Request Task execution state lives in
 // useFindingExecutionSection; rendering lives in FullFindingDetail.
 
+import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
@@ -33,6 +34,9 @@ export interface FindingDetailController {
   analyticsAreasById: Map<string, string>;
   linkedVocTitle: string | null;
   linkedVocDisplayId: string | null;
+  /** Source Cluster display data for `voc_cluster`-sourced Findings (#1174b). */
+  linkedClusterTitle: string | null;
+  linkedClusterDisplayId: string | null;
   linkedTaskQuery: UseQueryResult<TaskDetailDto>;
   canManage: boolean;
   handleMarkNotActionable: () => void;
@@ -110,6 +114,20 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     linkedVocQuery.data && 'display_id' in linkedVocQuery.data
       ? linkedVocQuery.data.display_id
       : null;
+  // #1174b U2-2: mirror the linked-VOC read for a Cluster source; a denied or
+  // not-found read leaves both fields null so the UI renders the safe fallback.
+  const linkedClusterQuery = useVocClusterDetail(
+    finding.source_type === 'voc_cluster' && finding.source_id !== null ? finding.source_id : null,
+  );
+  // #1174 FIX1: TanStack Query keeps cached `data` when a refetch errors, so
+  // project the identity only from a successful read — a previously readable
+  // Cluster must not stay named or linked after its read turns denied/not-found.
+  const linkedClusterTitle = linkedClusterQuery.isSuccess
+    ? (linkedClusterQuery.data?.title ?? null)
+    : null;
+  const linkedClusterDisplayId = linkedClusterQuery.isSuccess
+    ? (linkedClusterQuery.data?.display_id ?? null)
+    : null;
   const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } = useIdempotencyKey();
   const { data: me } = useMe();
   const managePermissionQuery = usePermissionCheck({
@@ -162,6 +180,8 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     analyticsAreasById,
     linkedVocTitle,
     linkedVocDisplayId,
+    linkedClusterTitle,
+    linkedClusterDisplayId,
     linkedTaskQuery,
     canManage,
     handleMarkNotActionable,

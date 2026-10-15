@@ -5,6 +5,7 @@
 // assertions are paired with positive twins so a broken mock or query wiring
 // cannot pass vacuously.
 
+import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
 import type { PermissionCheckResponse } from '@/lib/api';
 import { apiClient, getTask } from '@/lib/api';
 import type { MeResponse } from '@/lib/auth/useMe';
@@ -14,7 +15,7 @@ import type { VocDetailResult } from '@/lib/cross-system/useVocDetail';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { UseWorkspaceActorsResult } from '@/lib/cross-system/useWorkspaceActors';
-import type { FindingDto, TaskDetailDto } from '@fops/shared';
+import type { FindingDto, TaskDetailDto, VocClusterDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -32,6 +33,7 @@ const IDS = vi.hoisted(() => ({
   task: '20000000-0000-0000-0000-000000000002',
   actor: '40000000-0000-0000-0000-000000000004',
   voc: '50000000-0000-0000-0000-000000000005',
+  cluster: '70000000-0000-7000-8000-000000000007',
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -56,6 +58,10 @@ vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 vi.mock('@/lib/cross-system/usePermissionCheck', () => ({ usePermissionCheck: vi.fn() }));
 
 vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
+
+vi.mock('@/features/voc-cluster/hooks/useVocClusterDetail', () => ({
+  useVocClusterDetail: vi.fn(),
+}));
 
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: vi.fn(() => ({
@@ -138,6 +144,10 @@ describe('useFindingDetailController', () => {
     vi.mocked(useVocDetail).mockReturnValue({
       data: null,
     } as unknown as UseQueryResult<VocDetailResult>);
+    vi.mocked(useVocClusterDetail).mockClear();
+    vi.mocked(useVocClusterDetail).mockReturnValue({
+      data: undefined,
+    } as unknown as UseQueryResult<VocClusterDto>);
     mockPermissionGate({ role: 'user', state: 'approved' });
   });
 
@@ -197,6 +207,30 @@ describe('useFindingDetailController', () => {
     await waitFor(() => expect(result.current.linkedVocTitle).toBe('연관 VOC'));
     expect(result.current.linkedVocDisplayId).toBe('VOC-77');
     expect(useVocDetail).toHaveBeenCalledWith(IDS.voc);
+  });
+
+  it('linked Cluster title/display fall through from the cluster query, id-gated (#1174b)', async () => {
+    vi.mocked(useVocClusterDetail).mockReturnValue({
+      // #1174 FIX1: the controller projects identity only from a successful
+      // read, so the fixture models the query state it represents.
+      data: { id: IDS.cluster, title: '결제 실패 클러스터', display_id: 'CLU-9001' },
+      isSuccess: true,
+    } as unknown as UseQueryResult<VocClusterDto>);
+    const { result } = renderController({
+      ...FINDING_LINKED,
+      source_type: 'voc_cluster',
+      source_id: IDS.cluster,
+    });
+    await waitFor(() => expect(result.current.linkedClusterTitle).toBe('결제 실패 클러스터'));
+    expect(result.current.linkedClusterDisplayId).toBe('CLU-9001');
+    expect(useVocClusterDetail).toHaveBeenCalledWith(IDS.cluster);
+  });
+
+  it('issues no cluster read for a VOC-sourced Finding and leaves cluster fields null', () => {
+    const { result } = renderController(FINDING_FROM_VOC);
+    expect(useVocClusterDetail).toHaveBeenCalledWith(null);
+    expect(result.current.linkedClusterTitle).toBeNull();
+    expect(result.current.linkedClusterDisplayId).toBeNull();
   });
 
   it.each([

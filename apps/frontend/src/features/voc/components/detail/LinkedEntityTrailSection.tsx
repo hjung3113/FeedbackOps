@@ -1,5 +1,6 @@
+import { TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { formatDateOnly, formatRelativeTime } from '@/lib/format/datetime';
-import type { EntityLinkDto, TaskReporterSummary } from '@fops/shared';
+import type { EntityLinkDto, TaskReporterSummary, TaskStatus } from '@fops/shared';
 import {
   LinkedEntityTrail,
   OutlineBadge,
@@ -20,10 +21,27 @@ export interface LinkedEntityTrailSectionProps {
    * fallback for any surface with nowhere to send the actor.
    */
   onOpenTask?: ((taskId: string) => void) | undefined;
+  /** Opens the linked Finding; same plain-text fallback rule as `onOpenTask` (#1174b). */
+  onOpenFinding?: ((findingId: string) => void) | undefined;
 }
 
 function isTaskLink(link: EntityLinkDto): boolean {
   return link.source_type === 'task' || link.target_type === 'task';
+}
+
+function isFindingLink(link: EntityLinkDto): boolean {
+  return link.source_type === 'finding' || link.target_type === 'finding';
+}
+
+/**
+ * True when this trail renders the Finding link for the current actor (#1174b).
+ * `allowed` counts outside Reporter context, `denied` counts everywhere it is
+ * emitted; `hidden` and the unreachable Finding `summary_visible` payload do not.
+ */
+export function isVisibleFindingLink(link: EntityLinkDto, isReporterContext: boolean): boolean {
+  if (!isFindingLink(link)) return false;
+  if (link.visibility_state === 'denied') return true;
+  return link.visibility_state === 'allowed' && !isReporterContext;
 }
 
 function ReporterTaskSummary({
@@ -104,7 +122,9 @@ function AllowedTaskLink({
             id: task.id,
             display_id: task.display_id,
             title: task.title,
-            meta: task.status,
+            // Shared English workflow label (ADR-0057 A2); a target_summary status
+            // is an unparsed string, so fall back to it only if it leaves the enum.
+            meta: TASK_STATUS_LABELS[task.status as TaskStatus] ?? task.status,
             // `allowed` already means the backend decided this actor may read
             // the Task, so naming it without a way there is a dead end. Only
             // this state gets a destination — summary_visible and denied must
@@ -153,31 +173,122 @@ function TaskLink({
   }
 }
 
+function SafeFindingLink(): React.ReactElement {
+  // ADR-0023 §A/§E: denied may acknowledge only a safe category.
+  return (
+    <div data-testid="linked-finding-denied">
+      <PermissionBlockedPanel state="denied" category="연결된 Finding" />
+    </div>
+  );
+}
+
+function AllowedFindingLink({
+  link,
+  isReporterContext,
+  onOpenFinding,
+}: {
+  link: Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
+  isReporterContext: boolean;
+  onOpenFinding?: ((findingId: string) => void) | undefined;
+}): React.ReactElement | null {
+  if (isReporterContext) return null;
+
+  const finding = link.target_summary?.type === 'finding' ? link.target_summary : null;
+  if (finding === null) return null;
+
+  const openFinding = onOpenFinding;
+  return (
+    <div data-testid="linked-finding-allowed">
+      <LinkedEntityTrail
+        nodes={[
+          {
+            type: 'finding',
+            id: finding.id,
+            display_id: finding.display_id,
+            title: finding.title,
+            meta: finding.display_id,
+            // `allowed` already means the backend decided this actor may read the
+            // Finding, so naming it without a way there is a dead end. Only this
+            // state gets a destination — summary_visible and denied must stay
+            // unnavigable (ADR-0023 §A/§E, ADR-0024 §D), and Reporter context
+            // returned above before reaching here.
+            ...(openFinding ? { onNavigate: () => openFinding(finding.id) } : {}),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+function FindingLink({
+  link,
+  isReporterContext,
+  onOpenFinding,
+}: {
+  link: EntityLinkDto;
+  isReporterContext: boolean;
+  onOpenFinding?: ((findingId: string) => void) | undefined;
+}): React.ReactElement | null {
+  switch (link.visibility_state) {
+    case 'summary_visible':
+      // ADR-0024 §E: a Finding has no reporter summary, so this payload is
+      // inconsistent — fail closed and conceal the row.
+      return null;
+    case 'allowed':
+      return (
+        <AllowedFindingLink
+          link={link}
+          isReporterContext={isReporterContext}
+          onOpenFinding={onOpenFinding}
+        />
+      );
+    case 'hidden':
+      // ADR-0023 §A: do not acknowledge that this link exists.
+      return null;
+    case 'denied':
+      return <SafeFindingLink />;
+  }
+}
+
 export function LinkedEntityTrailSection({
   links = [],
   isReporterContext,
   onOpenTask,
+  onOpenFinding,
 }: LinkedEntityTrailSectionProps): React.ReactElement {
-  const taskLinks = links.filter(
-    (link) =>
-      isTaskLink(link) &&
+  const trailLinks = links.filter((link) => {
+    // #1174b: a Finding `summary_visible` payload is inconsistent (ADR-0024 §E);
+    // treat it exactly like `hidden`.
+    if (isFindingLink(link) && link.visibility_state === 'summary_visible') return false;
+    return (
+      (isTaskLink(link) || isFindingLink(link)) &&
       link.visibility_state !== 'hidden' &&
-      !(isReporterContext && link.visibility_state === 'allowed'),
-  );
+      !(isReporterContext && link.visibility_state === 'allowed')
+    );
+  });
 
-  if (taskLinks.length === 0) return <></>;
+  if (trailLinks.length === 0) return <></>;
 
   return (
     <div>
       <PanelSectionTitle>관련 엔티티</PanelSectionTitle>
-      {taskLinks.map((link) => (
-        <TaskLink
-          key={link.id}
-          link={link}
-          isReporterContext={isReporterContext}
-          onOpenTask={onOpenTask}
-        />
-      ))}
+      {trailLinks.map((link) =>
+        isFindingLink(link) ? (
+          <FindingLink
+            key={link.id}
+            link={link}
+            isReporterContext={isReporterContext}
+            onOpenFinding={onOpenFinding}
+          />
+        ) : (
+          <TaskLink
+            key={link.id}
+            link={link}
+            isReporterContext={isReporterContext}
+            onOpenTask={onOpenTask}
+          />
+        ),
+      )}
     </div>
   );
 }
