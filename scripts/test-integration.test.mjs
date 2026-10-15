@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const SCRIPT = fileURLToPath(new URL('test-integration.sh', import.meta.url));
 const url = (role, port) => `postgres://${role}:${role}@localhost:${port}/feedbackops`;
-const connectionUrl = (role, target) => typeof target === 'number' ? url(role, target) : target;
+const connectionUrl = (role, target) => (typeof target === 'number' ? url(role, target) : target);
 
 const cases = [
   ['app URL on 5434', 5434, 5439, {}, 'refusing DATABASE_URL on port 5434'],
@@ -26,7 +26,11 @@ const cases = [
 const devTargets = [
   ['query overrides authority', 'postgres://u:p@localhost:5432/feedbackops?port=5434', {}],
   ['query without authority port', 'postgres://u:p@localhost/feedbackops?port=5434', {}],
-  ['at sign in query', 'postgres://u:p@localhost:5434/feedbackops?application_name=review@host', {}],
+  [
+    'at sign in query',
+    'postgres://u:p@localhost:5434/feedbackops?application_name=review@host',
+    {},
+  ],
   ['zero-padded port', 'postgres://u:p@localhost:05434/feedbackops', {}],
   ['PGPORT fallback', 'postgres://u:p@localhost/feedbackops', { PGPORT: '5434' }],
 ];
@@ -52,8 +56,20 @@ for (const variable of ['DATABASE_URL', 'DATABASE_URL_MIGRATE']) {
     ]);
   }
 }
-cases.push(['default port', 'postgres://u:p@localhost/feedbackops', 'postgres://u:p@localhost/feedbackops', {}, 'NODE_ENV=production']);
-cases.push(['explicit 5439 overrides PGPORT', 5439, 5439, { PGPORT: '5434' }, 'NODE_ENV=production']);
+cases.push([
+  'default port',
+  'postgres://u:p@localhost/feedbackops',
+  'postgres://u:p@localhost/feedbackops',
+  {},
+  'NODE_ENV=production',
+]);
+cases.push([
+  'explicit 5439 overrides PGPORT',
+  5439,
+  5439,
+  { PGPORT: '5434' },
+  'NODE_ENV=production',
+]);
 
 const dir = mkdtempSync(join(tmpdir(), 'test-integration-guard-'));
 let failures = 0;
