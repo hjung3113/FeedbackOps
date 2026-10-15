@@ -5,9 +5,10 @@
 # runs the same three commands after `pnpm install --frozen-lockfile` on Node 22.
 #
 #   scripts/ci/gate.sh static [--base <ref>]
-#       route tree, root typecheck, boundaries (+ its fixture test), migration
-#       drift, FE typecheck, design lint, and — with --base — the FE Biome gate
-#       on the files changed since merge-base(HEAD, <ref>). The Biome gate diffs
+#       route tree, root typecheck, boundaries (+ its fixture test), the
+#       integration runner's dev-database guard test, migration drift, FE
+#       typecheck, design lint, and — with --base — the FE Biome gate on the
+#       files changed since merge-base(HEAD, <ref>). The Biome gate diffs
 #       committed history, so the checkout needs full history and <ref>.
 #   scripts/ci/gate.sh unit
 #       vitest for apps/frontend, packages/ui and packages/shared. The backend
@@ -42,6 +43,7 @@ stage_static() {
   step pnpm -s typecheck
   step node scripts/check-boundaries.mjs
   step node scripts/check-boundaries.test.mjs
+  step node scripts/test-integration.test.mjs
   step pnpm -s gate:db-migration-drift
   step pnpm -s gate:fe-typecheck
   step pnpm -s lint:design

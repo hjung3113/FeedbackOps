@@ -61,9 +61,11 @@ Never mark a finding major without a measurement or a code path that clearly sca
 
 ## Report
 
-1. Verdict: `PASS` / `PASS-WITH-NITS` / `CHANGES-REQUIRED`.
-2. A table of measured deltas: target, develop vs branch `readyMs` / `apiCalls` / `reloaded`.
-3. Findings table, most severe first: `Sev | path:line | problem | fix`.
-4. What you checked and what you could not.
+It starts with `## Summary`, **at most 25 lines**: the verdict (`PASS` / `PASS-WITH-NITS` /
+`CHANGES-REQUIRED`), then the findings table, most severe first, with IDs (`P1`, `P2`, …):
+`ID | Sev | path:line | problem (one line)`. Then `## Details`:
+1. A table of measured deltas: target, develop vs branch `readyMs` / `apiCalls` / `reloaded`.
+2. Per finding ID, the evidence and the fix.
+3. What you checked and what you could not.
 
 The last line is the sentinel given at the end of your task, written only after the report is finished.
