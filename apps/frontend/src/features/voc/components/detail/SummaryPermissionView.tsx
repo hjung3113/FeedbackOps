@@ -1,3 +1,4 @@
+import { VOC_READ_PERMISSION_REASONS } from '@/lib/copy/permission-reasons';
 import { getSummarySelfDecision } from '@/lib/cross-system/getPermissionDecision';
 import type { VocSummaryEnvelope } from '@fops/shared';
 import { PermissionBlockedPanel } from '@fops/ui';
@@ -17,6 +18,11 @@ export function SummaryPermissionView({
   onClose,
 }: SummaryPermissionViewProps): React.ReactElement {
   const selfDecision = getSummarySelfDecision(data);
+  const reason =
+    selfDecision.reason !== undefined &&
+    Object.hasOwn(VOC_READ_PERMISSION_REASONS, selfDecision.reason)
+      ? VOC_READ_PERMISSION_REASONS[selfDecision.reason]
+      : undefined;
 
   return (
     <div className="flex flex-col h-full">
@@ -26,7 +32,7 @@ export function SummaryPermissionView({
           <PermissionBlockedPanel
             state={selfDecision.state}
             category="VOC 상세"
-            {...(selfDecision.reason !== undefined ? { reason: selfDecision.reason } : {})}
+            {...(reason !== undefined ? { reason } : {})}
             {...(selfDecision.required_scope !== undefined
               ? { requiredScope: selfDecision.required_scope }
               : {})}

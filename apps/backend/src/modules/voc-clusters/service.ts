@@ -188,7 +188,7 @@ async function authorizedMembersByCluster(
 ): Promise<Map<string, VocClusterMemberRow[]>> {
   const visibleByCluster = new Map<string, VocClusterMemberRow[]>();
   for (const cluster of clusters) visibleByCluster.set(cluster.id, []);
-  if (clusters.length === 0 || actor.role_level === 'admin') return visibleByCluster;
+  if (clusters.length === 0) return visibleByCluster;
 
   const members = await listVocClusterMembersForClusters(deps.db, {
     clusterIds: clusters.map((cluster) => cluster.id),
@@ -313,10 +313,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         clusterToDto(
           {
             ...row,
-            member_count:
-              args.actor.role_level === 'admin'
-                ? row.member_count
-                : (membersByCluster.get(row.id)?.length ?? 0),
+            member_count: membersByCluster.get(row.id)?.length ?? 0,
           },
           undefined,
           linkedFindingsByClusterId.get(row.id) ?? [],
