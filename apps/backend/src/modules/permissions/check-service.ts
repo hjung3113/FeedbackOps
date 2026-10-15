@@ -275,17 +275,34 @@ export async function resolveCapabilityScope(
   const bypass = actor.role_level === 'admin' ? adminModuleBypassFor(capability) : 'none';
   if (bypass === 'always') return { kind: 'all' };
 
-  const denyRows = await db
-    .select({ managedSystemId: permissionDenies.managedSystemId })
-    .from(permissionDenies)
-    .where(
-      and(
-        eq(permissionDenies.workspaceId, actor.workspace_id),
-        eq(permissionDenies.actorId, actor.actor_id),
-        eq(permissionDenies.capability, capability),
-        isNull(permissionDenies.revokedAt),
+  const [denyRows, grantRows] = await Promise.all([
+    db
+      .select({ managedSystemId: permissionDenies.managedSystemId })
+      .from(permissionDenies)
+      .where(
+        and(
+          eq(permissionDenies.workspaceId, actor.workspace_id),
+          eq(permissionDenies.actorId, actor.actor_id),
+          eq(permissionDenies.capability, capability),
+          isNull(permissionDenies.revokedAt),
+        ),
       ),
-    );
+    db
+      .select({
+        managedSystemId: permissionGrants.managedSystemId,
+        revokedAt: permissionGrants.revokedAt,
+        expiresAt: permissionGrants.expiresAt,
+      })
+      .from(permissionGrants)
+      .where(
+        and(
+          eq(permissionGrants.workspaceId, actor.workspace_id),
+          eq(permissionGrants.actorId, actor.actor_id),
+          eq(permissionGrants.capability, capability),
+          isNull(permissionGrants.supersededAt),
+        ),
+      ),
+  ]);
   if (denyRows.some((row) => row.managedSystemId === null)) {
     return { kind: 'scoped', managed_system_ids: [] };
   }
@@ -293,21 +310,6 @@ export async function resolveCapabilityScope(
     denyRows.map((row) => row.managedSystemId).filter((id): id is string => id !== null),
   );
 
-  const grantRows = await db
-    .select({
-      managedSystemId: permissionGrants.managedSystemId,
-      revokedAt: permissionGrants.revokedAt,
-      expiresAt: permissionGrants.expiresAt,
-    })
-    .from(permissionGrants)
-    .where(
-      and(
-        eq(permissionGrants.workspaceId, actor.workspace_id),
-        eq(permissionGrants.actorId, actor.actor_id),
-        eq(permissionGrants.capability, capability),
-        isNull(permissionGrants.supersededAt),
-      ),
-    );
   const rightNow = now();
   const isActive = (row: {
     revokedAt: Date | null;

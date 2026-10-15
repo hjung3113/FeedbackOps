@@ -12,6 +12,9 @@ export const VOC_TRIAGE_QUEUE_TOTAL_LABELS = {
 } as const;
 
 /** #922: shown when the active tab has no rows but the queue total is greater than zero. */
+export const VOC_TRIAGE_EMPTY_LABEL = '큐가 비었습니다';
+export const VOC_TRIAGE_EMPTY_DESCRIPTION =
+  '현재 범위에 Triage할 VOC가 없습니다. 새 VOC가 들어오면 자동으로 추가됩니다.';
 export const VOC_TRIAGE_TAB_EMPTY_LABEL = '이 탭에 해당하는 VOC가 없습니다';
 
 export const VOC_INBOX_NO_LINK_TAB_LABEL = GLOSSARY.noLink;

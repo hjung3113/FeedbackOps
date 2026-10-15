@@ -1,3 +1,4 @@
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 // TriageRoute — mounts <VocTriageScreen> inside the existing WorkbenchShell slot.
 //
 // Reads URL state (tab, managedSystem, selected) from the route search.
@@ -170,13 +171,33 @@ export function TriageRoute(): React.ReactElement {
 
   // An authoritative queue denial wins over cached/retained rows and selection.
   if (!isApproved || queueDenied) {
+    const state = queueDenied ? 'request_access' : mapToPanelState(capCheck.data?.state);
+    const requestable = queueDenied ? error.envelope.requestable_permission : undefined;
+    const capability = queueDenied ? requestable?.permission : 'voc.triage';
+    const managedSystemId = queueDenied ? requestable?.managed_system_id : search.managedSystem;
+    const reason =
+      search.managedSystem !== undefined
+        ? PERMISSION_BLOCKED_REASONS.vocTriageManagedSystem
+        : PERMISSION_BLOCKED_REASONS.vocTriage;
     return (
       <div className="flex items-center justify-center h-full p-6">
-        <PermissionBlockedPanel
-          state={queueDenied ? 'request_access' : mapToPanelState(capCheck.data?.state)}
-          category="Triage"
-          reason={PERMISSION_BLOCKED_REASONS.vocTriage}
-        />
+        {state === 'request_access' && capability !== undefined ? (
+          <RequestAccessButton
+            capability={capability}
+            returnRouteIntent="/vocs?view=triage"
+            {...(typeof managedSystemId === 'string' ? { managedSystemId } : {})}
+            renderTrigger={(onRequestAccess) => (
+              <PermissionBlockedPanel
+                state={state}
+                category="Triage"
+                reason={reason}
+                onRequestAccess={onRequestAccess}
+              />
+            )}
+          />
+        ) : (
+          <PermissionBlockedPanel state={state} category="Triage" reason={reason} />
+        )}
       </div>
     );
   }
