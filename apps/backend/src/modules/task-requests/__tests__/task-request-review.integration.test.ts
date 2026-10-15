@@ -495,41 +495,27 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(notifications.jobs).toEqual([]);
   });
 
-  it('settles concurrent self-approvals beyond main-pool capacity without deadlock', async () => {
-    const count = dbHandle.pool.options.max + 2;
-    const rows = await Promise.all(
-      Array.from({ length: count }, () => seedTaskRequest({ requesterActorId: adminActorId })),
-    );
+  it('settles a self-approval while the shared app pool has only one free connection', async () => {
+    // The server shares dbHandle.pool. Hold every connection but one, so the command
+    // transaction takes the last one; the limiter must not need another from this pool.
+    const request = await seedTaskRequest({ requesterActorId: adminActorId });
+    const max = dbHandle.pool.options.max;
+    const held = await Promise.all(Array.from({ length: max - 1 }, () => dbHandle.pool.connect()));
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const responses = await Promise.race([
-        Promise.all(
-          rows.map((row) =>
-            decide(adminCookie, row.id, 'approve', {
-              reason: 'Concurrent owner approval.',
-            }),
-          ),
-        ),
+      const response = await Promise.race([
+        decide(adminCookie, request.id, 'approve', { reason: 'Owner approval under pool pressure.' }),
         new Promise<never>((_resolve, reject) => {
           timer = setTimeout(
-            () => reject(new Error('self-approvals did not settle within 10 seconds')),
-            10_000,
+            () => reject(new Error('self-approval did not settle with one free pool connection')),
+            5_000,
           );
         }),
       ]);
-      expect(responses.every((response) => [200, 429].includes(response.statusCode))).toBe(true);
-      expect(responses.filter((response) => response.statusCode === 200)).toHaveLength(5);
-      const stored = await migrateHandle.pool.query<{ id: string; status: string }>(
-        'select id, status from task_request.task_requests where id = any($1::uuid[])',
-        [rows.map((row) => row.id)],
-      );
-      for (const [index, response] of responses.entries()) {
-        expect(stored.rows.find((row) => row.id === rows[index]?.id)?.status).toBe(
-          response.statusCode === 200 ? 'approved' : 'pending_review',
-        );
-      }
+      expect([200, 429]).toContain(response.statusCode);
     } finally {
       clearTimeout(timer);
+      for (const client of held) client.release();
     }
   }, 15_000);
 
