@@ -222,6 +222,33 @@ describe('useInboxRoute', () => {
     });
   });
 
+  it.each(['my', 'inbox'] as const)('%s only exposes permitted severity controls', (view) => {
+    render(<InboxTestHarness view={view} />);
+    const high = screen.queryAllByRole('tab', { name: /^높음/ });
+    expect(high).toHaveLength(view === 'my' ? 0 : 2);
+    fireEvent.click(screen.getByRole('button', { name: /정렬/ }));
+    if (view === 'my') {
+      expect(screen.queryByText('심각도 높은순')).not.toBeInTheDocument();
+      expect(screen.queryByText('심각도 낮은순')).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText('심각도 높은순')).toBeInTheDocument();
+      expect(screen.getByText('심각도 낮은순')).toBeInTheDocument();
+    }
+  });
+
+  it.each(['my', 'inbox'] as const)('%s severity filter follows the list perspective', (view) => {
+    searchState = { 'filter.severity': 'high' };
+    render(<InboxTestHarness view={view} />);
+    fireEvent.click(screen.getByRole('button', { name: /^필터/ }));
+    if (view === 'my') {
+      expect(screen.queryByText('심각도')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: '높음' })).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText('심각도')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: '높음' })).toBeChecked();
+    }
+  });
+
   it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
     const { useVocList } =
       await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');

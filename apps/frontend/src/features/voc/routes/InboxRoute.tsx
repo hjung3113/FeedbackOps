@@ -258,13 +258,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
     const out: Record<string, string[]> = {};
     const sev = parseCommaList(search['filter.severity']);
-    if (sev.length > 0) out['filter.severity'] = sev;
+    if (view !== 'my' && sev.length > 0) out['filter.severity'] = sev;
     const status = parseCommaList(search['filter.reporterStatus']);
     if (status.length > 0) out['filter.reporterStatus'] = status;
     const owner = parseCommaList(search['filter.owner']);
     if (owner.length > 0) out['filter.owner'] = owner;
     return out;
-  }, [search]);
+  }, [search, view]);
 
   const apiFilters = React.useMemo(() => {
     const analyticsArea = search['filter.analytics_area'];
@@ -389,12 +389,20 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               onCommit={commit}
             />
             <ListFilterButton
-              categories={FILTER_CATEGORIES}
+              categories={
+                view === 'my'
+                  ? FILTER_CATEGORIES.filter((category) => category.key !== 'filter.severity')
+                  : FILTER_CATEGORIES
+              }
               values={currentFilters}
               onChange={handleFiltersChange}
             />
             <ListSortButton
-              options={SORT_OPTIONS}
+              options={
+                view === 'my'
+                  ? SORT_OPTIONS.filter((option) => !option.value.startsWith('severity:'))
+                  : SORT_OPTIONS
+              }
               value={currentSort}
               defaultValue={DEFAULT_SORT}
               onChange={handleSortChange}

@@ -258,6 +258,7 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
         actor: {
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
         },
         vocId,
         ifMatch,

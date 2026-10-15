@@ -15,9 +15,12 @@ import {
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
 import { selectVocForUpdate, updateVocDescriptionFields } from '../repo.js';
-import type { VocEnvelope, VocServiceDeps } from '../service.js';
+import type { CreateVocActor, VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import { composeEnvelope } from './compose-envelope.js';
+
+import { actorEffectiveScope } from '../authorization.js';
+import { msInScope } from '../read/scope.js';
 
 export function createVocEditDescriptionCommands(deps: VocServiceDeps) {
   // ── editVocDescription ────────────────────────────────────────────────────
@@ -35,7 +38,7 @@ export function createVocEditDescriptionCommands(deps: VocServiceDeps) {
   //  10. Non-empty diff → updateVocDescriptionFields + audit + return envelope
   async function editVocDescription(args: {
     tx: Tx;
-    actor: { actor_id: string; workspace_id: string };
+    actor: CreateVocActor;
     vocId: string;
     ifMatch: string;
     input: EditDescriptionRequest;
@@ -167,6 +170,12 @@ export function createVocEditDescriptionCommands(deps: VocServiceDeps) {
       changes.attachments = { from: [], to: linkedAttachmentsForAudit };
     }
 
+    const scope = await actorEffectiveScope(tx, {
+      ...actor,
+      role_level: actor.role_level ?? 'user',
+    });
+    const isReporterArm = !msInScope(scope, row.primaryManagedSystemId);
+
     // 9. Empty diff — return current envelope without any writes.
     if (Object.keys(changes).length === 0) {
       // Breadcrumb: no-op edit, idempotency will cache the result.
@@ -174,7 +183,7 @@ export function createVocEditDescriptionCommands(deps: VocServiceDeps) {
         row.reporterFacingStatus as ReporterFacingStatus,
         tx,
       );
-      return composeEnvelope(row, nextStates);
+      return composeEnvelope(row, nextStates, isReporterArm);
     }
 
     // 10. Non-empty diff — UPDATE + audit + return refreshed envelope.
@@ -224,10 +233,10 @@ export function createVocEditDescriptionCommands(deps: VocServiceDeps) {
       updatedRow.reporterFacingStatus as ReporterFacingStatus,
       tx,
     );
-    return composeEnvelope(updatedRow, nextStates);
+    return composeEnvelope(updatedRow, nextStates, isReporterArm);
   }
   async function editVocDescriptionCommand(args: {
-    actor: { actor_id: string; workspace_id: string };
+    actor: CreateVocActor;
     vocId: string;
     ifMatch: string;
     input: EditDescriptionRequest;

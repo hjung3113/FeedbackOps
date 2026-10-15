@@ -1,4 +1,4 @@
-import type { VocListItem } from '@fops/shared';
+import { type VocListItem, vocListItemSchema } from '@fops/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TriageRow } from '../TriageRow';
@@ -106,4 +106,19 @@ describe('TriageRow', () => {
     render(<TriageRow voc={vocWithArea} selected={false} onSelect={vi.fn()} />);
     expect(screen.queryByText('Analytics Area 미지정')).not.toBeInTheDocument();
   });
+});
+
+it.each([
+  [null, '심각도 미지정'],
+  ['medium', '심각도 중간'],
+] as const)('announces %s without inventing low', (severity, label) => {
+  const voc = vocListItemSchema.parse({
+    ...BASE_VOC,
+    severity,
+    primary_managed_system_id: BASE_VOC.id,
+    reporter_id: BASE_VOC.id,
+  });
+  render(<TriageRow voc={voc} selected={false} onSelect={vi.fn()} />);
+  expect(screen.getAllByLabelText(label)).toHaveLength(1);
+  expect(screen.queryByLabelText('low')).not.toBeInTheDocument();
 });

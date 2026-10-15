@@ -20,6 +20,7 @@ export type StatusBadgeTone =
 
 export interface StatusBadgeFrameProps {
   appearance: StatusBadgeAppearance;
+  ariaLabel?: string;
   tone?: StatusBadgeTone;
   children: React.ReactNode;
   indicator?: React.ReactNode;
@@ -80,6 +81,7 @@ const TONE_CLASS: Record<StatusBadgeTone, { text: string; tint: string }> = {
 /** Shared status badge geometry with caller-owned state maps and tone colors. */
 export function StatusBadgeFrame({
   appearance,
+  ariaLabel,
   tone,
   children,
   indicator,
@@ -100,6 +102,8 @@ export function StatusBadgeFrame({
 
   return (
     <span
+      role={ariaLabel === undefined ? undefined : 'img'}
+      aria-label={ariaLabel}
       className={cn(
         APPEARANCE_CLASS[appearance],
         textClassName ?? toneClasses?.text,
