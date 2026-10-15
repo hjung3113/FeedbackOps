@@ -4,6 +4,8 @@ import { GLOSSARY } from './glossary';
 
 import { COVERAGE_METRIC_LABELS } from './coverage';
 
+import { DASHBOARD_QUEUE_ACTION_LABELS } from './dashboard-actions';
+
 export const HOME_COPY = {
   title: (name: string) => `안녕하세요, ${name}님`,
   subtitle: (
@@ -72,7 +74,9 @@ export const HOME_QUEUE_COPY: Record<
     title: '실행 계획 없는 Finding',
     sidebarLabel: '실행 계획 없는 Finding',
     detail: '진행 중 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
-    primaryAction: 'Task 요청',
+    // #1179: the link opens the Findings list, so it keeps the Integration
+    // wording for the same destination instead of promising a Task Request.
+    primaryAction: DASHBOARD_QUEUE_ACTION_LABELS['actionable-finding-no-execution'],
     secondaryAction: '큐 열기',
   },
   'released-task-unresolved-voc': {
@@ -86,7 +90,9 @@ export const HOME_QUEUE_COPY: Record<
     title: '후속 조치 없는 부정 성과 Survey',
     sidebarLabel: '후속 조치 없는 부정 성과 Survey',
     detail: '부정 성과 Survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
-    primaryAction: '후속 조치 생성',
+    // #1179: the link opens the outcome Surveys review, so it keeps the
+    // Integration wording instead of promising to create the follow-up.
+    primaryAction: DASHBOARD_QUEUE_ACTION_LABELS['bad-outcome-no-followup'],
     secondaryAction: 'Survey 보기',
   },
   'permission-requests-pending': {

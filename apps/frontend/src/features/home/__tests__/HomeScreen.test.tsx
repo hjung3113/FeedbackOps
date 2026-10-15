@@ -447,7 +447,7 @@ describe('HomeScreen route content', () => {
     renderHome(`/home?managedSystem=${systemId}`);
 
     await screen.findByTestId('home-queue-actionable-finding-no-execution');
-    expect(screen.getByRole('link', { name: /Task 요청/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Finding 검토/ })).toHaveAttribute(
       'href',
       `${DASHBOARD_ACTIONABLE_FINDINGS_ROUTE}&managedSystem=${systemId}`,
     );
@@ -485,7 +485,7 @@ describe('HomeScreen route content', () => {
     renderHome('/home');
 
     await screen.findByTestId('home-queue-actionable-finding-no-execution');
-    expect(screen.getByRole('link', { name: /Task 요청/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Finding 검토/ })).toHaveAttribute(
       'href',
       DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
     );

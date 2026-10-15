@@ -149,6 +149,24 @@ describe('AppSidebar', () => {
     expect(labelSpan).toBeDefined();
   });
 
+  // #1179: long queue labels truncate at 1440; the span itself keeps the full
+  // label discoverable on hover, the same guarantee as scope-name.
+  it('expanded nav label span carries the full label as its title', () => {
+    const label = '후속 조치 없는 부정 성과 Survey';
+    render(
+      <AppSidebar entries={[{ id: 'queue', label, href: '/integration', section: '연동' }]} />,
+    );
+    const navLink = screen.getByTestId('sidebar-nav-queue');
+    const labelSpan = Array.from(navLink.querySelectorAll('span')).find(
+      (el) => el.textContent === label,
+    );
+    expect(labelSpan).toBeDefined();
+    expect(labelSpan).toHaveClass('truncate');
+    expect(labelSpan).toHaveAttribute('title', label);
+    // The link itself stays title-free when expanded (label is visible).
+    expect(navLink.getAttribute('title')).toBeNull();
+  });
+
   it('expanded state does not set title/aria-label (label is visible)', () => {
     render(<AppSidebar entries={entries} />);
     const navLink = screen.getByTestId('sidebar-nav-inbox');

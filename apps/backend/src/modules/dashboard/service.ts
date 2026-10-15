@@ -3,13 +3,17 @@ import { recoveryHistoryWindowStart } from './history-window.js';
 import { createHash } from 'node:crypto';
 import { type SQL, sql } from 'drizzle-orm';
 import { HttpError } from '../../lib/errors.js';
-import { findingRecoveryProjection, findingRecoveryRepairScope } from '../findings/index.js';
+import {
+  actorFindingListScope,
+  findingRecoveryProjection,
+  findingRecoveryRepairScope,
+} from '../findings/index.js';
 import {
   countRecoveryPermissionRequests,
   permissionRecoveryProjection,
 } from '../permissions/index.js';
 import { surveyRecoveryProjection } from '../surveys/index.js';
-import { taskRecoveryProjection } from '../tasks/index.js';
+import { actorTaskListScope, taskRecoveryProjection } from '../tasks/index.js';
 import {
   type VocGroupedCountReader,
   type VocGroupedCountRow,
@@ -40,7 +44,7 @@ import { z } from 'zod';
 import type { Db } from '../../db/client.js';
 import { actorFindingReadScope } from '../findings/authorization.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
-import type { CheckService } from '../permissions/check-service.js';
+import { type CheckService, memoizeCapabilityChecks } from '../permissions/check-service.js';
 import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
@@ -185,9 +189,13 @@ export function createDashboardService(deps: DashboardDeps) {
     // `all` is the public selector for no backing filter; repositories receive
     // undefined so they apply the actor's resolved scope rather than cast it as a UUID.
     const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
+    // Queue scopes are the destination lists' own scope: the findings/tasks
+    // list-scope helpers keep readable archived Systems and per-System denies,
+    // so summary counts and the filtered lists share one scope decision (#1179).
+    const check = memoizeCapabilityChecks(deps.checkService);
     const [findingScopeRaw, taskScopeRaw, surveyReadScopeRaw, vocScopeRaw] = await Promise.all([
-      actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
-      actorScopeForCapability(deps.db, actor, 'finding.manage'),
+      authorizationAbsent(() => actorFindingListScope(deps.db, check, actor)),
+      authorizationAbsent(() => actorTaskListScope(deps.db, check, actor)),
       actorSurveyReadScope(deps.db, deps.checkService, actor),
       actorScopeForCapability(deps.db, actor, 'voc.read'),
     ]);
@@ -226,8 +234,14 @@ export function createDashboardService(deps: DashboardDeps) {
     const unassigned = sumGroupedVocCounts((row) => row.unassigned);
     const highUnlinked = sumGroupedVocCounts((row) => row.high_no_link);
     const totalHigh = sumGroupedVocCounts((row) => row.high_severity);
-    const findingScope = inRequestedScope(findingScopeRaw, selectedManagedSystemId);
-    const taskScope = inRequestedScope(taskScopeRaw, selectedManagedSystemId);
+    const findingScope =
+      findingScopeRaw === undefined
+        ? undefined
+        : inRequestedScope(findingScopeRaw, selectedManagedSystemId);
+    const taskScope =
+      taskScopeRaw === undefined
+        ? undefined
+        : inRequestedScope(taskScopeRaw, selectedManagedSystemId);
     const surveyScopeRaw = actor.role_level === 'admin'
       ? await actorSurveyRecoveryScope(deps.db, deps.checkService, actor) : surveyReadScopeRaw;
     const surveyScope = inRequestedScope(surveyScopeRaw, selectedManagedSystemId);

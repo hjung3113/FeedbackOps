@@ -284,7 +284,7 @@ export function AppSidebar({
                   aria-label={collapsed ? entry.label : undefined}
                 >
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
-                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate" title={entry.label}>{entry.label}</span>}
                   {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
                   {!collapsed && entry.trailing}
                 </InternalLink>

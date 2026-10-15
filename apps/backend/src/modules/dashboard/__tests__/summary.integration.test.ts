@@ -2691,6 +2691,81 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     );
   });
 
+  it('#1179: a workspace-wide Developer keeps readable archived Systems in Finding/Task summary-list parity', async () => {
+    // Workspace-wide grants plus a deny on one live System force the old
+    // capability scope through its non-archived subtract branch, dropping the
+    // archived System the destination lists still keep.
+    const msLive = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${SLUG_PREFIX}-${uid('live')}`,
+      'Dashboard wide live',
+    );
+    const msArchived = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${SLUG_PREFIX}-${uid('arch')}`,
+      'Dashboard wide archived',
+    );
+    await migrateHandle.pool.query(
+      'UPDATE core.managed_systems SET archived_at = now() WHERE id = $1::uuid',
+      [msArchived],
+    );
+    const msDenied = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${SLUG_PREFIX}-${uid('deny')}`,
+      'Dashboard wide denied',
+    );
+    const wide = await insertDevActor(migrateHandle, WORKSPACE_ID, `dashboard-217-${uid('wide')}`);
+    for (const capability of ['finding.read', 'finding.manage']) {
+      await grantCapability(migrateHandle, WORKSPACE_ID, wide.id, capability, null, adminActorId);
+      await denyCapability(migrateHandle, WORKSPACE_ID, wide.id, capability, msDenied, adminActorId);
+    }
+    // One qualifying Finding and one qualifying released Task on each readable
+    // System: the permitted live one and the permitted archived one.
+    const liveSource = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msLive,
+      reporterActorId,
+      '1179 wide live source',
+    );
+    const archivedSource = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msArchived,
+      reporterActorId,
+      '1179 wide archived source',
+    );
+    await seedFindings(msLive, liveSource.id, 1, 0);
+    await seedFindings(msArchived, archivedSource.id, 1, 0);
+    const liveVocs = await seedVocs(msLive, 1, 1, 0, 0);
+    const archivedVocs = await seedVocs(msArchived, 1, 1, 0, 0);
+    await seedTasks(msLive, liveVocs.all, 0, 1, 1);
+    await seedTasks(msArchived, archivedVocs.all, 0, 1, 1);
+    const cookie = await loginAs(app, wide.externalId);
+    const findingsUrl = '/findings?execution=none';
+    const tasksUrl = '/tasks?reporter_update=needed';
+
+    const summaryAll = (await get(cookie)).json<Summary>();
+    expect(queue(summaryAll, 'actionable-finding-no-execution')?.count).toBe(2);
+    expect(await listAllSourceIds(cookie, findingsUrl)).toHaveLength(2);
+    expect(queue(summaryAll, 'released-task-unresolved-voc')?.count).toBe(2);
+    expect(await listAllSourceIds(cookie, tasksUrl)).toHaveLength(2);
+
+    // The same parity with the archived System as the managed_system_id selector.
+    const summaryArchived = (await get(cookie, msArchived)).json<Summary>();
+    expect(queue(summaryArchived, 'actionable-finding-no-execution')?.count).toBe(1);
+    expect(
+      await listAllSourceIds(cookie, `${findingsUrl}&managed_system_id=${msArchived}`),
+    ).toHaveLength(1);
+    expect(queue(summaryArchived, 'released-task-unresolved-voc')?.count).toBe(1);
+    expect(
+      await listAllSourceIds(cookie, `${tasksUrl}&managed_system_id=${msArchived}`),
+    ).toHaveLength(1);
+  });
+
   it('keeps the zero-grant actor empty and writes no audit row', async () => {
     const actor = await insertDevActor(
       migrateHandle,
