@@ -128,6 +128,32 @@ const routeCases: Array<{
   },
 ];
 
+it('keeps Survey detail list context, builder, and returnTo', () => {
+  expect(
+    validateSurveyDetailSearch({
+      builder: true,
+      returnTo: '/home',
+      managedSystem: ID,
+      'filter.analytics_area': 'unset',
+      status: 'open',
+      follow_up: 'needed',
+      selected: ID,
+    }),
+  ).toEqual({
+    builder: true,
+    returnTo: '/home',
+    managedSystem: ID,
+    'filter.analytics_area': 'unset',
+    status: 'open',
+    follow_up: 'needed',
+    selected: undefined,
+  });
+  expect(validateSurveyDetailSearch({ builder: false, returnTo: '/home?tab=dashboard' })).toEqual({
+    builder: false,
+    returnTo: '/home?tab=dashboard',
+  });
+});
+
 describe('route search validation', () => {
   it.each(routeCases)('$name drops invalid values and keeps valid search state', (routeCase) => {
     expect(routeCase.validateSearch(routeCase.raw)).toEqual(routeCase.expected);

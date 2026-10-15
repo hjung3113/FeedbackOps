@@ -52,6 +52,7 @@ export const surveyRespondentFormFixture = surveyRespondentFormDtoSchema.parse({
     title: 'Q3 매출 리포트 사용성 진단',
     type: 'discovery',
     identity_protected: true,
+    description: null,
   },
   questions: [
     {

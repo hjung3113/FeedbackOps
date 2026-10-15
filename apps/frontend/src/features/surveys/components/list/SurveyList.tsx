@@ -1,9 +1,11 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
-import { CAPABILITY_LABELS } from '@/lib/copy/capabilities';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { SURVEY_PARTICIPATION_COPY } from '@/lib/copy/survey-participation';
+import { SURVEY_LIST_COPY } from '@/lib/copy/surveys';
+import { InternalLink } from '@/lib/router/InternalLink';
 import {
   ActiveFilterBar,
   type ActiveFilterBarProps,
@@ -184,11 +186,11 @@ export function SurveyList({
           ) : (
             <ListStateMessage
               variant="empty"
-              title="생성된 Survey가 없습니다."
+              title={canCreate ? '생성된 Survey가 없습니다.' : SURVEY_LIST_COPY.emptyUnmanagedTitle}
               body={
                 canCreate
                   ? 'Survey를 만들어 응답을 수집하세요.'
-                  : `Survey를 만들려면 ${CAPABILITY_LABELS['survey.manage']} 권한이 필요합니다.`
+                  : SURVEY_LIST_COPY.emptyUnmanagedBody
               }
               actionContent={
                 canCreate ? (
@@ -203,10 +205,23 @@ export function SurveyList({
                       Survey 생성
                     </Button>
                   )
-                ) : permissionState === 'request_access' ? (
-                  <RequestAccessButton capability="survey.manage" returnRouteIntent="/surveys" />
                 ) : (
-                  <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
+                  <div className="flex flex-col items-center gap-2">
+                    <InternalLink
+                      href="/surveys/participate"
+                      className="text-sm font-medium text-accent-primary underline"
+                    >
+                      {SURVEY_PARTICIPATION_COPY.participate}
+                    </InternalLink>
+                    {permissionState === 'request_access' ? (
+                      <RequestAccessButton
+                        capability="survey.manage"
+                        returnRouteIntent="/surveys"
+                      />
+                    ) : (
+                      <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
+                    )}
+                  </div>
                 )
               }
             />

@@ -116,8 +116,10 @@ Extend ADR-0039's shipped dialog, with blank creation as its initial mode and
 “기본 템플릿” / “기존 Survey 문항 사용” choices. System and privacy start
 unselected, including after choosing a source. Only after explicit system
 selection load sources for that system and show metadata and compact previews.
-Type/title suggestions are visible; changing type/system/source clears an
-incompatible source/preview while preserving independently typed title/description.
+Amended by #1183 (2026-10-16): Type follows the selected starting point and
+is locked until that starting point is cleared; title stays editable. Changing
+system/source clears an incompatible source/preview while preserving
+independently typed title/description.
 Cancellation resets the dialog. This creates a new Survey; it never overwrites
 an existing builder.
 

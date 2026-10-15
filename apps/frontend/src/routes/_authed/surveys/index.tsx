@@ -1,20 +1,17 @@
-import { CreateSurveyDialog } from '@/features/surveys/components/create/CreateSurveyDialog';
 import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail';
-import { SurveyList } from '@/features/surveys/components/list/SurveyList';
-import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import {
-  useSurveyManageAnySystemGate,
-  useSurveyManageGate,
-} from '@/features/surveys/routes/SurveyPermissionGate';
+  type SurveyListFilterKey,
+  SurveyListScreen,
+  surveyListContextFromSearch,
+  surveyListQueryArgs,
+} from '@/features/surveys/components/list/SurveyListScreen';
+import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
+import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
 export { CreateSurveyDialog } from '@/features/surveys/components/create/CreateSurveyDialog';
-import { surveyStatusLabel } from '@/features/surveys/components/SurveyStatusBadge';
-import { SURVEY_REPORT_FILTER_COPY as FILTER_COPY } from '@/lib/copy/surveys';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
-import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
-import { ListShell } from '@fops/ui';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 import { z } from 'zod';
@@ -55,17 +52,12 @@ export const Route = createFileRoute('/_authed/surveys/')({
 export function SurveysIndexRoute() {
   const search = useSearch({ strict: false }) as SurveysSearch;
   const navigate = useNavigate({ from: '/surveys/' });
-  const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
-  const query = useSurveys(managedSystemId, {
-    ...(search['filter.analytics_area'] === undefined
-      ? {}
-      : { analytics_area_id: search['filter.analytics_area'] }),
-    ...(search.status === undefined ? {} : { status: search.status }),
-    ...(search.follow_up === undefined ? {} : { follow_up: search.follow_up }),
-  });
-  const areaLabel = useAnalyticsAreaFilterLabel(search['filter.analytics_area'], managedSystemId);
-  const filterKeys = ['filter.analytics_area', 'status', 'follow_up'] as const;
-  const removeFilters = (keys: readonly (typeof filterKeys)[number][]) => {
+  const context = surveyListContextFromSearch(search);
+  const { managedSystemId, filters } = surveyListQueryArgs(context);
+  // Same arguments as SurveyListScreen, so the stale-selection effect and the
+  // list share one query. Creation and filter chips live in the screen.
+  const query = useSurveys(managedSystemId, filters);
+  const removeFilters = (keys: readonly SurveyListFilterKey[]) => {
     void navigate({
       to: '/surveys',
       search: (previous) => {
@@ -75,21 +67,6 @@ export function SurveysIndexRoute() {
       },
     });
   };
-  const labels = {
-    'filter.analytics_area': areaLabel,
-    status: FILTER_COPY.status(surveyStatusLabel('open')),
-    follow_up: FILTER_COPY.followUp,
-  };
-  const activeFilters = filterKeys.flatMap((key) =>
-    search[key] === undefined
-      ? []
-      : [{ key, label: labels[key], onRemove: () => removeFilters([key]) }],
-  );
-  // Creation entry follows the survey.manage capability scope (ADR-0033): the
-  // workspace-wide check stays only for the empty-state request-access
-  // recovery; a scoped Developer with one granted system may create (#1075).
-  const scopeGate = useSurveyManageAnySystemGate();
-  const gate = useSurveyManageGate();
   const managedSystemNames = useManagedSystemNamesResult();
   const managedSystemNamesById = managedSystemNames.isSuccess
     ? managedSystemNames.namesById
@@ -102,7 +79,6 @@ export function SurveysIndexRoute() {
         : undefined,
     [actors, actorsResolved],
   );
-  const [createOpen, setCreateOpen] = React.useState(false);
   const selectedId = search.selected ?? null;
   const selected = useSurvey(selectedId ?? '');
   const selectedGate = useSurveyManageGate(selected.data?.primary_managed_system_id);
@@ -145,57 +121,32 @@ export function SurveysIndexRoute() {
   }, [navigate, query.isSuccess, selectedId, surveys]);
 
   return (
-    <>
-      <ListShell
-        toolbar={{ title: 'Surveys' }}
-        list={
-          <SurveyList
-            surveys={query.data ?? []}
-            urlFilters={activeFilters}
-            onClearUrlFilters={() => removeFilters(filterKeys)}
-            // #706 — isPending keeps the skeleton up through the whole
-            // no-data window (incl. the retry delay), so tabs never render
-            // unknown counts as 0.
-            isLoading={query.isPending}
-            error={query.error}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            canCreate={scopeGate.canManage}
-            {...(gate.permissionState !== undefined
-              ? { permissionState: gate.permissionState }
-              : {})}
+    <SurveyListScreen
+      context={context}
+      selectedId={selectedId}
+      onSelect={handleSelect}
+      onClose={handleClose}
+      onRemoveFilters={removeFilters}
+      onCreated={(surveyId) =>
+        void navigate({
+          to: '/surveys/$surveyId',
+          params: { surveyId },
+          search: { builder: true },
+        })
+      }
+      managedSystemNamesById={managedSystemNamesById}
+      actorNamesById={actorNamesById}
+      renderDetail={(close) =>
+        selected.data ? (
+          <SurveyDetail
+            survey={selected.data}
+            canManage={selectedGate.canManage}
+            onClose={close}
             managedSystemNamesById={managedSystemNamesById}
             actorNamesById={actorNamesById}
-            onCreate={() => setCreateOpen(true)}
-            onRetry={() => void query.refetch()}
           />
-        }
-        detailPanel={
-          selected.data ? (
-            <SurveyDetail
-              survey={selected.data}
-              canManage={selectedGate.canManage}
-              onClose={handleClose}
-              managedSystemNamesById={managedSystemNamesById}
-              actorNamesById={actorNamesById}
-            />
-          ) : undefined
-        }
-      />
-      {createOpen && (
-        <CreateSurveyDialog
-          canManage={scopeGate.canManage}
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={(surveyId) =>
-            void navigate({
-              to: '/surveys/$surveyId',
-              params: { surveyId },
-              search: { builder: true },
-            })
-          }
-        />
-      )}
-    </>
+        ) : null
+      }
+    />
   );
 }

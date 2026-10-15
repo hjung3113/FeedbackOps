@@ -61,8 +61,10 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/surveys/hooks/useSurveys')>();
   return {
     ...actual,
-    useSurveys: (managedSystemId?: string) =>
-      routeQueryStubs.surveys ? routeQueryStubs.surveys() : actual.useSurveys(managedSystemId),
+    useSurveys: (managedSystemId?: string, filters?: Parameters<typeof actual.useSurveys>[1]) =>
+      routeQueryStubs.surveys
+        ? routeQueryStubs.surveys()
+        : actual.useSurveys(managedSystemId, filters),
     useSurvey: (surveyId: string) =>
       routeQueryStubs.survey ? routeQueryStubs.survey() : actual.useSurvey(surveyId),
   };
@@ -430,7 +432,7 @@ describe('Survey screens', () => {
     expect(row).not.toHaveTextContent('Responses');
     expect(row).not.toHaveTextContent('— / —');
     rerender(<SurveyList surveys={[]} isLoading={false} error={null} onSelect={select} />);
-    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('관리할 수 있는 Survey가 없습니다.')).toBeInTheDocument();
     rerender(<SurveyList surveys={[]} isLoading error={null} onSelect={select} />);
     expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
     rerender(
@@ -656,7 +658,7 @@ describe('Survey screens', () => {
     expect(apiRequest).toHaveBeenCalledTimes(2);
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
-    expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('관리할 수 있는 Survey가 없습니다.')).toBeInTheDocument();
     expect(apiRequest).toHaveBeenCalledTimes(3);
   });
 
@@ -3213,7 +3215,7 @@ describe('Survey screens', () => {
 
       renderWithQuery(<SurveysIndexRoute />);
 
-      expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+      expect(await screen.findByText('관리할 수 있는 Survey가 없습니다.')).toBeInTheDocument();
       expect(screen.queryByTestId('survey-create-button')).not.toBeInTheDocument();
       expect(screen.queryByTestId('survey-empty-create-button')).not.toBeInTheDocument();
     });

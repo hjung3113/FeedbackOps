@@ -314,7 +314,8 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
     if (
       form.error instanceof ApiError &&
       form.error.status === 409 &&
-      form.error.code === 'conflict.survey_not_open'
+      (form.error.code === 'conflict.survey_not_open' ||
+        form.error.code === 'conflict.survey_response_already_submitted')
     ) {
       return <RespondentPageMessage message={errorMapper(form.error.envelope).message} />;
     }
@@ -393,6 +394,9 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
             <h1 className="text-xl font-semibold tracking-tight text-text-primary">
               {form.data.survey.title}
             </h1>
+            {form.data.survey.description ? (
+              <p className="mt-2 text-sm text-text-muted">{form.data.survey.description}</p>
+            ) : null}
             <p className="mt-4 rounded bg-surface-detail p-3 text-sm text-text-secondary">
               {SURVEY_PARTICIPATION_COPY.anonymityNotice} ·{' '}
               {respondentIdentityNotice(form.data.survey.identity_protected)}

@@ -29,6 +29,8 @@ export function useSurveyBuilderController(args: {
 }): {
   title: string;
   onTitleChange: (value: string) => void;
+  description: string;
+  onDescriptionChange: (value: string) => void;
   questions: SurveyQuestion[];
   selected: SurveyQuestion | null;
   selectedId: string | null;
@@ -62,6 +64,9 @@ export function useSurveyBuilderController(args: {
   const [title, setTitle] = React.useState(survey.title);
   const titleRef = React.useRef(title);
   const savedTitleRef = React.useRef(survey.title);
+  const [description, setDescription] = React.useState(survey.description ?? '');
+  const descriptionRef = React.useRef(description);
+  const savedDescriptionRef = React.useRef(survey.description ?? '');
   const savedQuestionsRef = React.useRef<SurveyQuestion[]>(survey.questions ?? []);
   const [selectedId, setSelectedId] = React.useState<string | null>(questions[0]?.id ?? null);
   const [dirty, setDirty] = React.useState(false);
@@ -202,6 +207,13 @@ export function useSurveyBuilderController(args: {
     setSaveFailed(false);
   };
 
+  const onDescriptionChange = (value: string) => {
+    descriptionRef.current = value;
+    setDescription(value);
+    updateDirty(true);
+    setSaveFailed(false);
+  };
+
   const confirmLaunch = () => {
     setLaunchSaveFailed(false);
     setLaunchOptionValidationFailed(false);
@@ -249,6 +261,8 @@ export function useSurveyBuilderController(args: {
         questionsRef,
         titleRef,
         savedTitleRef,
+        descriptionRef,
+        savedDescriptionRef,
         savedQuestionsRef,
         replaceLocalId,
         updateQuestions,
@@ -271,7 +285,10 @@ export function useSurveyBuilderController(args: {
             questionSignature(savedQuestion) === questionSignature(question)
           );
         });
-      const isClean = titleRef.current === savedTitleRef.current && questionsAreSaved;
+      const isClean =
+        titleRef.current === savedTitleRef.current &&
+        descriptionRef.current === savedDescriptionRef.current &&
+        questionsAreSaved;
       updateDirty(!isClean);
       return isClean;
     } catch {
@@ -286,6 +303,8 @@ export function useSurveyBuilderController(args: {
   return {
     title,
     onTitleChange,
+    description,
+    onDescriptionChange,
     questions,
     selected,
     selectedId,

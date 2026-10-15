@@ -18,8 +18,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /voc-clusters?managedSystem=:managedSystemId|all&selected=:clusterId
 /voc-clusters/:clusterId
 /surveys?managedSystem=:managedSystemId|all&selected=:surveyId
-/surveys/:surveyId
-/surveys/:surveyId?builder=true
+/surveys/:surveyId?managedSystem=:managedSystemId|all&filter.analytics_area=:areaId|unset&status=open&follow_up=needed&builder=true&returnTo=:encodedQueueUrl
 /surveys/:surveyId/results
 /surveys/:surveyId/follow-up
 /surveys/participate
@@ -48,6 +47,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/findings` | `q`, `managedSystem`, `selected`, `execution`, `assignment`, `filter.analytics_area`, `status`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution`, `assignment`, `filter.analytics_area` and `status` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
 | `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected`, `filter.analytics_area`, `status`, `follow_up` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `filter.analytics_area`, `status` (`open`) and `follow_up` (`needed`) when unfiltered |
+| `/surveys/:surveyId` | `managedSystem`, `filter.analytics_area`, `status`, `follow_up`, `builder`, `returnTo` | Same list-filter omissions as `/surveys`. Selection is the path `surveyId`, not a search key. `builder` unless the builder is open; `returnTo` unless opened from a recovery queue. The detail toolbar matches the index list (title, create, chips). Row selection and chip removal stay on `/surveys/:surveyId` and keep unrelated search. Close returns to `/surveys` with the remaining list context and drops `builder` and `returnTo`. |
 | `/surveys/:surveyId/follow-up` | `returnTo` | `returnTo` unless opened from a recovery queue |
 | `/surveys/participate` | — | No search state |
 | `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |

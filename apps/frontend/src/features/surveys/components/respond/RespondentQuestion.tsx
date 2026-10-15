@@ -40,25 +40,27 @@ export function RespondentQuestion({
     const minimum = question.rating_min ?? 1;
     const maximum = question.rating_max ?? 5;
     return (
-      <div
-        className="mt-2 space-y-2"
-        role="radiogroup"
-        aria-labelledby={`respondent-question-label-${question.id}`}
-      >
+      <fieldset className="mt-2 space-y-2">
+        <legend className="sr-only">{question.prompt}</legend>
         <div className="flex gap-2">
           {Array.from({ length: Math.max(0, maximum - minimum + 1) }, (_, index) => {
             const score = minimum + index;
             const selected = value === score;
             return (
-              <button
+              <label
                 key={score}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onChange(score)}
-                className={`h-8 w-8 rounded-full border ${selected ? 'border-border-selected bg-surface-row-selected' : 'border-border-subtle'}`}
+                className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ring-offset-surface-canvas has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 ${selected ? 'border-border-selected bg-surface-row-selected' : 'border-border-subtle'}`}
               >
+                <input
+                  type="radio"
+                  className="sr-only"
+                  name={question.id}
+                  value={score}
+                  checked={selected}
+                  onChange={() => onChange(score)}
+                />
                 {score}
-              </button>
+              </label>
             );
           })}
         </div>
@@ -66,7 +68,7 @@ export function RespondentQuestion({
           <span>{question.rating_low_label}</span>
           <span>{question.rating_high_label}</span>
         </div>
-      </div>
+      </fieldset>
     );
   }
 

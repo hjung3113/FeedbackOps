@@ -95,7 +95,7 @@ Acceptance Criteria:
 - Survey requires exactly one Primary Managed System.
 - Survey can link Analytics Area under that Managed System.
 - Survey can be created atomically from one of three built-in starters through the backend contract (#1073, ADR-0070).
-- The creation dialog starts blank and offers built-in templates or saved questions from a same-Managed-System Survey (#1075). Sources are searched and paginated, with a read-only definition preview. Type/title suggestions are editable; privacy is chosen independently.
+- The creation dialog starts blank and offers built-in templates or saved questions from a same-Managed-System Survey (#1075). Sources are searched and paginated, with a read-only definition preview. Type follows the selected starting point and is locked until it is cleared; title remains editable and privacy is chosen independently (#1183, ADR-0070 amendment).
 - Managed System and respondent privacy remain explicit choices, and builder navigation uses only the persisted server ID (ADR-0039, amended by ADR-0070).
 - Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links (ADR-0035/0036) were rejected on 2026-10-13, ADR-0059 D4.)
 ```
