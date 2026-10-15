@@ -193,21 +193,21 @@ export const entityLinkDetachedDetailSchema = z.union([
     target: taskRefDetailSchema,
     relation_type: z.literal('converted_to'),
     reason: z.string().min(1),
-  }),
+    }).strict(),
   z.object({
     link_id: z.string().uuid(),
     source: findingRefDetailSchema,
     target: taskRefDetailSchema,
     relation_type: z.literal('requested_task'),
     reason: z.string().min(1),
-  }),
+    }).strict(),
   z.object({
     link_id: z.string().uuid(),
     source: vocRefDetailSchema,
     target: taskRefDetailSchema,
     relation_type: z.literal('evidence_of'),
     reason: z.string().min(1),
-  }),
+    }).strict(),
 ]);
 export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSchema>;
 

@@ -31,6 +31,36 @@ describe('entity_link.detached details', () => {
     expect(entityLinkDetachedDetailSchema.parse(detail)).toEqual(detail);
   });
 
+  // The owner-specific Cluster unlink command (voc-clusters/conversion.ts) also emits
+  // entity_link.detached; that command-only tuple stays accepted for the event.
+  it('accepts the Cluster unlink command tuple voc_cluster -> finding evidence_of', () => {
+    const detail = {
+      link_id: LINK,
+      source: { type: 'voc_cluster', id: SOURCE },
+      target: { type: 'finding', id: TARGET },
+      relation_type: 'evidence_of',
+      reason: 'Unlink the Cluster evidence',
+    };
+    expect(entityLinkDetachedDetailSchema.parse(detail)).toEqual(detail);
+  });
+
+  it.each([
+    ['task_request', 'task', 'converted_to'],
+    ['finding', 'task', 'requested_task'],
+    ['voc', 'task', 'evidence_of'],
+  ] as const)('rejects unexpected fields on %s -> %s %s', (source, target, relation_type) => {
+    expect(
+      entityLinkDetachedDetailSchema.safeParse({
+        link_id: LINK,
+        source: { type: source, id: SOURCE },
+        target: { type: target, id: TARGET },
+        relation_type,
+        reason: 'Remove the obsolete link',
+        unexpected_field: true,
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     ['survey_response', 'finding', 'generated_finding'],
     ['survey_response', 'finding', 'evidence_of'],
