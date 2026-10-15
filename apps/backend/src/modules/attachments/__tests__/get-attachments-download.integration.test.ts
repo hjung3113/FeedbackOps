@@ -575,6 +575,15 @@ describe.skipIf(!(runIntegration && process.env.DATABASE_URL_MIGRATE))(
         [keys],
       );
       await handle.pool.query('delete from voc.vocs where id = $1', [voc]);
+      // Grants and denies reference the Managed System; remove them first (FK).
+      await handle.pool.query(
+        'delete from permission.permission_grants where managed_system_id = $1',
+        [ms],
+      );
+      await handle.pool.query(
+        'delete from permission.permission_denies where managed_system_id = $1',
+        [ms],
+      );
 
       await deleteRecoveryFixtureParents(handle, 'delete from core.managed_systems where id = $1', [
         ms,
