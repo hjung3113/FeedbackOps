@@ -6,7 +6,12 @@ import { apiRequest } from '@/lib/api';
 import { ApiError, ApiParseError } from '@/lib/api/types';
 import { listFindingsResponseSchema } from '@fops/shared';
 import type { ListFindingsResponse } from '@fops/shared';
-import { type UseQueryResult, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  type UseQueryResult,
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query';
 
 export function useFindingsList(
   managedSystemId?: string,
@@ -53,6 +58,7 @@ export function useFindingsPages(
       'pages',
       { managedSystemId, execution, assignment, analyticsAreaId, status, q },
     ] as const,
+    placeholderData: keepPreviousData,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }) => {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });

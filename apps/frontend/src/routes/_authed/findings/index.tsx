@@ -395,7 +395,7 @@ function FindingsListShell({
           {(
             [
               ['execution', 'none', '실행 연결 없음'],
-              ['status', 'active', '활성 Finding'],
+              ['status', 'active', FINDING_STATUS_LABELS.active],
             ] as const
           ).map(([key, value, label]) => (
             <label

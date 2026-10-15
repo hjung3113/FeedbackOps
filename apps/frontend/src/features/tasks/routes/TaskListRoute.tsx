@@ -32,7 +32,7 @@ import {
   SelectValue,
   UnassignedBadge,
 } from '@fops/ui';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import {
@@ -49,6 +49,7 @@ import { useTaskPanelSelection } from '../hooks/useTaskPanelSelection';
 
 const PAGE_SIZE = 50;
 const FILTER_KEYS = [
+  'q',
   'filter.analytics_area',
   'status',
   'status_group',
@@ -140,6 +141,7 @@ export function TaskListRoute({
     });
   };
   const labels = {
+    q: `${LIST_SEARCH_PLACEHOLDER}: ${filters.q ?? ''}`,
     'filter.analytics_area': areaLabel,
     status:
       filters.status === undefined ? '' : FILTER_COPY.status(TASK_STATUS_LABELS[filters.status]),
@@ -167,6 +169,7 @@ export function TaskListRoute({
         ...(view === 'my' ? { assignee: 'me' } : {}),
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
+    placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
   const { actors } = useWorkspaceActors();
@@ -178,8 +181,9 @@ export function TaskListRoute({
   const teamNames = useTaskTeamNames(items);
   const { selectedId, linkMissing, selectRow, closePanel, markLinkMissing } = useTaskPanelSelection(
     {
+      // Previous rows stay clickable while loading, but cannot auto-select for the new context.
       selectedParam,
-      items,
+      items: tasksQuery.isPlaceholderData ? [] : items,
       context: [view, JSON.stringify([managedSystem, wireFilters])],
       onSelectionChange,
     },
@@ -271,11 +275,12 @@ export function TaskListRoute({
               }}
             >
               <SelectTrigger density="compact" className="w-fit" aria-label="Task 상태">
+                <span className="mr-1 text-text-muted">{FILTER_COPY.status('')}</span>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체 상태</SelectItem>
-                <SelectItem value="in-flight">{FILTER_COPY.inFlight}</SelectItem>
+                <SelectItem value="in-flight">{FILTER_COPY.inFlightOption}</SelectItem>
                 {taskStatusSchema.options.map((status) => (
                   <SelectItem key={status} value={status}>
                     {TASK_STATUS_LABELS[status]}

@@ -42,6 +42,7 @@ export const TASK_MILESTONE_COPY = {
 export const TASK_REPORT_FILTER_COPY = {
   status: (label: string) => `상태: ${label}`,
   inFlight: '상태: Todo·Doing·Review',
+  inFlightOption: 'Todo·Doing·Review',
   overdue: '기한 지남',
   publicUpdate: '공개 업데이트 없음',
   reporterUpdate: '보고자 업데이트 필요',

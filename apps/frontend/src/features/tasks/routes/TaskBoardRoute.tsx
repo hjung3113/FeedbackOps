@@ -30,7 +30,7 @@ import {
   WorkbenchShell,
   readMotionTiming,
 } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { resolveTaskAssignee, taskTeamLabel, useTaskManagedSystemNames, useTaskTeamNames } from '../adapters/taskDisplayAdapters';
@@ -157,6 +157,7 @@ export function TaskBoardRoute({
   const mutation = useTaskStatusTransition(tasksKey);
   const tasksQuery = useQuery({
     queryKey: tasksKey,
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       listTasks({
         signal,

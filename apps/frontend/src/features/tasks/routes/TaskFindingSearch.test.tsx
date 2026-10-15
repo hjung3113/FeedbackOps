@@ -143,11 +143,12 @@ it('My Tasks status control sends status and status_group and clears them', asyn
     }),
   );
   mount('my');
+  expect(screen.getByRole('combobox', { name: 'Task 상태' })).toHaveTextContent('상태:');
   fireEvent.click(screen.getByRole('combobox', { name: 'Task 상태' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Doing' }));
   await waitFor(() => expect(queries.at(-1)?.status).toBe('doing'));
   fireEvent.click(screen.getByRole('combobox', { name: 'Task 상태' }));
-  fireEvent.click(await screen.findByRole('option', { name: '상태: Todo·Doing·Review' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Todo·Doing·Review' }));
   await waitFor(() => expect(queries.at(-1)?.status_group).toBe('in-flight'));
   expect(queries.at(-1)?.status).toBeUndefined();
   expect(queries.at(-1)?.assignee).toBe('me');
@@ -169,7 +170,7 @@ it('Findings toggles execution and status with removable chips and reset', async
   );
   mount('findings');
   fireEvent.click(screen.getByRole('checkbox', { name: '실행 연결 없음' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: '활성 Finding' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: '진행 중' }));
   await waitFor(() =>
     expect(queries.some((q) => q.execution === 'none' && q.status === 'active')).toBe(true),
   );
@@ -213,3 +214,123 @@ it.each(['my', 'findings'] as const)(
     expect(queries.at(-1)?.cursor).toBeUndefined();
   },
 );
+
+it('clears a normalized padded Task search from both the box and request', async () => {
+  const queries: Query[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
+      return reply({ items: [], page: { has_more: false, total: 0 } });
+    }),
+  );
+  mount('my');
+  const box = screen.getByPlaceholderText('제목 또는 ID');
+  fireEvent.change(box, { target: { value: ' padded ' } });
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await screen.findByText('검색 결과가 없습니다.');
+  expect(router.search.q).toBe('padded');
+  fireEvent.click(screen.getByRole('button', { name: '검색 초기화' }));
+  await waitFor(() => expect(router.search.q).toBeUndefined());
+  expect(box).toHaveValue('');
+  await waitFor(() => expect(queries.at(-1)?.q).toBeUndefined());
+});
+
+it('keeps newer raw Task typing after a delayed normalized URL acknowledgement', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => reply({ items: [], page: { has_more: false, total: 0 } })),
+  );
+  mount('my');
+  const acknowledge = router.navigate.getMockImplementation();
+  if (!acknowledge) throw new Error('Missing route navigation');
+  let pendingNavigation: Parameters<typeof acknowledge> | undefined;
+  router.navigate.mockImplementation((...args) => {
+    pendingNavigation = args;
+    return Promise.resolve();
+  });
+  const box = screen.getByPlaceholderText('제목 또는 ID');
+  fireEvent.change(box, { target: { value: ' older ' } });
+  fireEvent.keyDown(box, { key: 'Enter' });
+  fireEvent.change(box, { target: { value: ' newer raw ' } });
+  expect(pendingNavigation).toBeDefined();
+  const navigation = pendingNavigation;
+  if (!navigation) throw new Error('Missing pending navigation');
+  await act(async () => {
+    await acknowledge(...navigation);
+  });
+  expect(router.search.q).toBe('older');
+  expect(box).toHaveValue(' newer raw ');
+  await waitFor(() => expect(router.search.q).toBe('newer raw'));
+});
+
+it('keeps previous Task rows and total visible until the next search arrives', async () => {
+  const task = {
+    id: '10000000-0000-0000-0000-000000000001',
+    workspace_id: '90000000-0000-0000-0000-000000000009',
+    display_id: 'TASK-1',
+    primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
+    title: 'Previous Task',
+    status: 'backlog',
+    priority: 'high',
+    assignee_actor_id: null,
+    assignee_team_id: null,
+    due_date: null,
+    milestone_id: null,
+    analytics_area_id: null,
+    source_task_request_id: null,
+    created_by: '20000000-0000-0000-0000-000000000002',
+    created_at: '2026-07-10T00:00:00.000Z',
+    updated_at: '2026-07-10T00:00:00.000Z',
+  };
+  let resolveSearch: ((value: Response) => void) | undefined;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.searchParams.has('q'))
+        return new Promise<Response>((resolve) => {
+          resolveSearch = resolve;
+        });
+      return reply({ items: [task], page: { has_more: false, total: 7 } });
+    }),
+  );
+  mount('my');
+  await screen.findByText('Previous Task');
+  const box = screen.getByPlaceholderText('제목 또는 ID');
+  fireEvent.change(box, { target: { value: 'next' } });
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await waitFor(() => expect(resolveSearch).toBeDefined());
+  expect(screen.getByText('Previous Task')).toBeInTheDocument();
+  expect(screen.getByText('7건')).toBeInTheDocument();
+  expect(screen.queryByText('Task를 불러오는 중…')).not.toBeInTheDocument();
+  await act(async () => {
+    resolveSearch?.(reply({ items: [], page: { has_more: false, total: 0 } }));
+  });
+  await screen.findByText('검색 결과가 없습니다.');
+  expect(screen.queryByText('Previous Task')).not.toBeInTheDocument();
+  expect(screen.getByText('0건')).toBeInTheDocument();
+});
+
+it.each(['chip', 'clear all'] as const)('clears Task q through %s', async (action) => {
+  const queries: Query[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
+      return reply({ items: [], page: { has_more: false, total: 0 } });
+    }),
+  );
+  mount('my', { q: 'TASK-21', status: 'doing', managedSystem: 'all' });
+  await waitFor(() => expect(queries.at(-1)?.q).toBe('TASK-21'));
+  const chip = screen.getByRole('button', { name: '제목 또는 ID: TASK-21 필터 제거' });
+  fireEvent.click(action === 'chip' ? chip : screen.getByRole('button', { name: '필터 초기화' }));
+  await waitFor(() => expect(router.search.q).toBeUndefined());
+  expect(screen.getByPlaceholderText('제목 또는 ID')).toHaveValue('');
+  expect(router.search.status).toBe(action === 'chip' ? 'doing' : undefined);
+  expect(router.search.managedSystem).toBe('all');
+  await waitFor(() => expect(queries.at(-1)?.q).toBeUndefined());
+  expect(queries.at(-1)?.assignee).toBe('me');
+});
