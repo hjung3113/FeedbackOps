@@ -106,10 +106,15 @@ export function TaskRequestDecisionDialog({
       !completedResult
     )
       return;
-    let frame: number;
+    let frame: number | undefined;
+    let attempts = 0;
     const transfer = () => {
       const target = getCompletedFocusTarget?.(completedResult);
-      if (target?.isConnected && !target.closest('[hidden], [inert]')) {
+      // Queue/recovery changes supply a new resolver and restart this effect.
+      // Missing targets wait for those inputs instead of polling every frame.
+      if (!target?.isConnected) return;
+      attempts += 1;
+      if (!target.closest('[hidden], [inert]')) {
         target.focus();
         if (document.activeElement === target) {
           opening.successTarget = target;
@@ -117,10 +122,14 @@ export function TaskRequestDecisionDialog({
           return;
         }
       }
-      frame = requestAnimationFrame(transfer);
+      // Allow fullscreen teardown to reveal the target, but retain the dialog
+      // if visibility or actual focus cannot be established within ten attempts.
+      if (attempts < 10) frame = requestAnimationFrame(transfer);
     };
     transfer();
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
   }, [successfulClose, handedOff, opening, completedResult, getCompletedFocusTarget]);
 
   function dismiss() {

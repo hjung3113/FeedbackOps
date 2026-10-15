@@ -2,6 +2,7 @@ type ApiModule = typeof import('@/lib/api');
 import * as api from '@/lib/api';
 import * as areasApi from '@/lib/api/analytics-areas';
 import * as milestonesApi from '@/lib/api/milestones';
+import { ApiError } from '@/lib/api/types';
 import { AppFrame } from '@/lib/layout/AppFrame';
 import { parseAppSearch, stringifyAppSearch } from '@/lib/router/search-serialization';
 import { TasksRouteView, validateTasksSearch } from '@/routes/_authed/tasks';
@@ -614,6 +615,94 @@ it('keeps the sole URL-selected row connected through delayed refetch and remain
     mutation.mockRestore();
   }
 });
+
+it.each(['refetch error', 'focus refusal'] as const)(
+  'bounds decision focus work after %s and retains connected content',
+  async (failure) => {
+    let decided = false;
+    let recovered = false;
+    let failPage!: (error: Error) => void;
+    const fetch = vi.spyOn(api, 'fetchTaskRequests').mockImplementation(async (query) => {
+      if (query?.limit === 1) return taskRequestPage(requests);
+      if (!decided)
+        return taskRequestPage(failure === 'refetch error' ? [request] : requests, query);
+      if (recovered || failure === 'focus refusal') return taskRequestPage([request2], query);
+      return new Promise((_resolve, reject) => {
+        failPage = reject;
+      });
+    });
+    const mutation = vi.spyOn(api, 'approveTaskRequest').mockImplementation(async () => {
+      decided = true;
+      return { ...request, status: 'approved' };
+    });
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    });
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id);
+    });
+    const { client } = mount('requests');
+    let focus: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      await screen.findByRole('heading', { name: '검토 결정' });
+      await settleQueries(client);
+      if (failure === 'focus refusal') {
+        const target = screen.getByRole('button', { name: /REQ-1072/ });
+        focus = vi.spyOn(target, 'focus').mockImplementation(() => {});
+      }
+      fireEvent.click(screen.getByRole('button', { name: '승인' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '검토 완료' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+      if (failure === 'refetch error') {
+        await waitFor(() => expect(failPage).toBeTypeOf('function'));
+        await act(async () =>
+          failPage(
+            new ApiError(500, { code: 'internal.unexpected', message: 'temporary failure' }),
+          ),
+        );
+        await within(dialog).findByRole('button', { name: '다시 시도' });
+      } else {
+        await waitFor(() => expect(focus).toHaveBeenCalled());
+      }
+      await settleQueries(client);
+      const attemptsBeforeFrames = focus?.mock.calls.length ?? 0;
+      for (let frame = 0; frame < 50; frame++) {
+        await act(async () => {
+          const pending = [...frames.values()];
+          frames.clear();
+          for (const callback of pending) callback(frame * 16);
+        });
+      }
+      expect(frames.size).toBe(0);
+      if (focus) {
+        expect(focus.mock.calls.length).toBeGreaterThan(0);
+        expect(focus.mock.calls.length - attemptsBeforeFrames).toBeLessThanOrEqual(10);
+      }
+      expect(dialog.isConnected).toBe(true);
+      expect(within(dialog).getByRole('textbox')).toHaveValue('검토 완료');
+      if (failure === 'refetch error') {
+        const retry = within(dialog).getByRole('button', { name: '다시 시도' });
+        expect(retry).toBeVisible();
+        recovered = true;
+        fireEvent.click(retry);
+        await waitFor(() => expect(screen.getByRole('button', { name: /REQ-1072/ })).toHaveFocus());
+        expect(dialog.isConnected).toBe(false);
+      }
+    } finally {
+      focus?.mockRestore();
+      cleanup();
+      client.clear();
+      raf.mockRestore();
+      cancel.mockRestore();
+      fetch.mockRestore();
+      mutation.mockRestore();
+    }
+  },
+);
 
 it('opens the converted Task from the persistent toast action through the real router', async () => {
   const row = { ...request, status: 'approved' as const, source_type: 'voc' as const };
