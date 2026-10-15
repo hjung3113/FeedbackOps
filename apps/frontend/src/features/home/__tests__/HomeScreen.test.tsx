@@ -1,6 +1,11 @@
 import { PermissionGate } from '@/features/admin/permissions/permission-gate';
 import { ownerDetailFixture } from '@/test/permission-details';
-import { DASHBOARD_HOP_ROUTES, dashboardSummarySchema } from '@fops/shared';
+import {
+  DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+  DASHBOARD_HOP_ROUTES,
+  DASHBOARD_UNASSIGNED_VOC_ROUTE,
+  dashboardSummarySchema,
+} from '@fops/shared';
 import type { DashboardCoverageId } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -20,6 +25,7 @@ const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
 import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 import { AppSidebar } from '@/lib/layout/AppSidebar';
 import { HomeRoute } from '@/routes/_authed/home';
 import { HomeScreen } from '../HomeScreen';
@@ -412,12 +418,116 @@ describe('HomeScreen route content', () => {
     }
   });
 
+  it('keeps the selected managed system on queue card and zero-chip links (#1179)', async () => {
+    const systemId = '33333333-3333-4333-8333-333333333333';
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: [
+        {
+          id: 'actionable-finding-no-execution',
+          severity: 'warn',
+          count: 2,
+          next_action: {
+            label: 'Request',
+            route: DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+            intent: 'review',
+          },
+          secondary_action: null,
+        },
+        {
+          id: 'unassigned-voc',
+          severity: 'urgent',
+          count: 0,
+          next_action: { label: 'Review', route: DASHBOARD_UNASSIGNED_VOC_ROUTE, intent: 'review' },
+          secondary_action: null,
+        },
+      ],
+    });
+    installFetch(summary);
+    renderHome(`/home?managedSystem=${systemId}`);
+
+    await screen.findByTestId('home-queue-actionable-finding-no-execution');
+    expect(screen.getByRole('link', { name: /Finding 검토/ })).toHaveAttribute(
+      'href',
+      `${DASHBOARD_ACTIONABLE_FINDINGS_ROUTE}&managedSystem=${systemId}`,
+    );
+    expect(screen.getByTestId('home-zero-queue-unassigned-voc')).toHaveAttribute(
+      'href',
+      `${DASHBOARD_UNASSIGNED_VOC_ROUTE}&managedSystem=${systemId}`,
+    );
+  });
+
+  it('keeps queue card and zero-chip links bare without a selected managed system (#1179)', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: [
+        {
+          id: 'actionable-finding-no-execution',
+          severity: 'warn',
+          count: 2,
+          next_action: {
+            label: 'Request',
+            route: DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+            intent: 'review',
+          },
+          secondary_action: null,
+        },
+        {
+          id: 'unassigned-voc',
+          severity: 'urgent',
+          count: 0,
+          next_action: { label: 'Review', route: DASHBOARD_UNASSIGNED_VOC_ROUTE, intent: 'review' },
+          secondary_action: null,
+        },
+      ],
+    });
+    installFetch(summary);
+    renderHome('/home');
+
+    await screen.findByTestId('home-queue-actionable-finding-no-execution');
+    expect(screen.getByRole('link', { name: /Finding 검토/ })).toHaveAttribute(
+      'href',
+      DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+    );
+    expect(screen.getByTestId('home-zero-queue-unassigned-voc')).toHaveAttribute(
+      'href',
+      DASHBOARD_UNASSIGNED_VOC_ROUTE,
+    );
+  });
+
+  it.each([
+    'unassigned-voc',
+    'high-severity-unlinked',
+    'actionable-finding-no-execution',
+    'released-task-unresolved-voc',
+    'bad-outcome-no-followup',
+    'permission-requests-pending',
+  ] as const)('sidebar label equals the card title for %s (#1179)', (id) => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: [
+        {
+          id,
+          severity: 'warn',
+          count: 1,
+          next_action: { label: 'Review', route: '/findings', intent: 'review' },
+          secondary_action: null,
+        },
+      ],
+    });
+    const entries = homeSidebarEntries(summary, true);
+    expect(entries.find((entry) => entry.id === `queue-${id}`)?.label).toBe(
+      HOME_QUEUE_COPY[id].title,
+    );
+  });
+
   it('renders a present zero queue in the sidebar', () => {
     render(
       <AppSidebar entries={homeSidebarEntries(dashboardSummarySchema.parse(response), true)} />,
     );
     expect(screen.getByTestId('sidebar-count-queue-unassigned-voc')).toHaveTextContent('0');
-    expect(screen.getByText('구성된 후속 조치')).toBeInTheDocument();
+    // #1179: the sidebar reuses the card title as the one queue name.
+    expect(screen.getByText('실행 계획 없는 Finding')).toBeInTheDocument();
   });
 
   it('omits permission-hidden queue ids from the sidebar', () => {

@@ -349,14 +349,19 @@ answer different user questions:
 The Dashboard queue links shown on Home and Integration are aggregate list routes, not per-record links. Each
 queue's `next_action` and `secondary_action` carry `label`, `route`, and an `intent` string
 (`packages/shared/src/dashboard.ts`). Navigation uses `route` only; `intent` maps to the Integration button label
-(`apps/frontend/src/lib/copy/dashboard-actions.ts`) and is not a URL search key, so no `action=` intent is carried on these links. Shipped queue routes:
+(`apps/frontend/src/lib/copy/dashboard-actions.ts`) and is not a URL search key, so no `action=` intent is carried on these links. Each route is the filtered
+source list the queue count promises (#1179). Home and Integration append
+`managedSystem=<id>` to a queue route when a specific Managed System is selected
+(`hrefWithManagedSystem` in `apps/frontend/src/lib/router/managed-system-href.ts`);
+with no selection or `all`, the bare route is used and the destination applies the
+caller's effective scope. Shipped queue routes:
 
 ```text
 /vocs?view=inbox&tab=unassigned
 /vocs?view=inbox&tab=high-no-link
-/findings
-/tasks?view=board
-/surveys
+/findings?execution=none
+/tasks?view=backlog&reporter_update=needed
+/surveys?follow_up=needed
 /admin/permissions/requests
 ```
 

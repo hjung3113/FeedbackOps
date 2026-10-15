@@ -4,6 +4,8 @@ import { GLOSSARY } from './glossary';
 
 import { COVERAGE_METRIC_LABELS } from './coverage';
 
+import { DASHBOARD_QUEUE_ACTION_LABELS } from './dashboard-actions';
+
 export const HOME_COPY = {
   title: (name: string) => `안녕하세요, ${name}님`,
   subtitle: (
@@ -70,28 +72,32 @@ export const HOME_QUEUE_COPY: Record<
   },
   'actionable-finding-no-execution': {
     title: '실행 계획 없는 Finding',
-    sidebarLabel: '구성된 후속 조치',
+    sidebarLabel: '실행 계획 없는 Finding',
     detail: '진행 중 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
-    primaryAction: 'Task 요청',
+    // #1179: the link opens the Findings list, so it keeps the Integration
+    // wording for the same destination instead of promising a Task Request.
+    primaryAction: DASHBOARD_QUEUE_ACTION_LABELS['actionable-finding-no-execution'],
     secondaryAction: '큐 열기',
   },
   'released-task-unresolved-voc': {
     title: 'Released Task · 미해결 VOC',
-    sidebarLabel: '공개 업데이트 검토',
+    sidebarLabel: 'Released Task · 미해결 VOC',
     detail: 'Task는 Released지만 연결된 공개 상태가 해결됨이 아닙니다.',
     primaryAction: '업데이트 검토',
     secondaryAction: '큐 열기',
   },
   'bad-outcome-no-followup': {
     title: '후속 조치 없는 부정 성과 Survey',
-    sidebarLabel: '성과 Survey 후속 조치',
+    sidebarLabel: '후속 조치 없는 부정 성과 Survey',
     detail: '부정 성과 Survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
-    primaryAction: '후속 조치 생성',
+    // #1179: the link opens the outcome Surveys review, so it keeps the
+    // Integration wording instead of promising to create the follow-up.
+    primaryAction: DASHBOARD_QUEUE_ACTION_LABELS['bad-outcome-no-followup'],
     secondaryAction: 'Survey 보기',
   },
   'permission-requests-pending': {
     title: '검토 대기 중인 권한 요청',
-    sidebarLabel: '권한 요청 검토',
+    sidebarLabel: '검토 대기 중인 권한 요청',
     detail: '워크스페이스 관리자 검토를 기다리는 상위 권한 요청입니다.',
     primaryAction: '요청 열기',
   },

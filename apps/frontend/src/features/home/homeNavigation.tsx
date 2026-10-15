@@ -5,6 +5,7 @@ import { COMMAND_PALETTE_COPY } from '@/lib/copy/command-palette';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 import type { SidebarNavItem } from '@/lib/layout/AppSidebar';
 import { shortcutLabel } from '@/lib/layout/command-palette/platform';
+import { hrefWithManagedSystem } from '@/lib/router/managed-system-href';
 import { KeyboardShortcut } from '@fops/ui';
 
 const QUEUE_COUNT_KEY = {
@@ -20,11 +21,12 @@ export function homeSidebarEntries(
   summary: DashboardSummary | undefined,
   active: boolean,
   onOpenCommandPalette?: () => void,
+  managedSystemId?: string,
 ): SidebarNavItem[] {
   const queues = summary?.action_queues.map((queue) => ({
     id: `queue-${queue.id}`,
     label: HOME_QUEUE_COPY[queue.id].sidebarLabel,
-    href: queue.next_action.route,
+    href: hrefWithManagedSystem(queue.next_action.route, managedSystemId),
     section: '액션 큐',
     countKey: QUEUE_COUNT_KEY[queue.id],
     count: queue.count,

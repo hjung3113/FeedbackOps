@@ -46,6 +46,14 @@ closed coverage ID set (`coverage[].id`) and per-Managed-System coverage shape
 (`by_managed_system[].coverage`); `DASHBOARD_HOP_ROUTES` in the same file defines
 dashboard hop IDs and destinations.
 
+Each action queue's `next_action.route` is the filtered source list its count
+promises (#1179): `actionable-finding-no-execution` → `/findings?execution=none`,
+`released-task-unresolved-voc` → `/tasks?view=backlog&reporter_update=needed`,
+`bad-outcome-no-followup` → `/surveys?follow_up=needed`. The Survey count stays
+response-grain while that list is Survey-grain (ADR-0067). Browsers keep the
+selected Managed System on these links by appending `managedSystem=<id>`; the
+backend route string itself stays System-free.
+
 ## Close-out Coverage and freshness (ADR-0067; 56-G implemented)
 
 Required summary `computed_at` is server computation time, not an atomic database

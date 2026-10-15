@@ -255,6 +255,13 @@ export function isSidebarEntryActive(
   if (entry.id === 'surveys') {
     return (pathname === '/surveys' || pathname.startsWith('/surveys/')) && !participationPath;
   }
+  // #1179: the backlog list highlights the same Tasks entry as the board view.
+  if (entry.id === 'tasks-board') {
+    return (
+      pathname === '/tasks' &&
+      ['board', 'backlog'].includes(new URLSearchParams(searchStr).get('view') ?? '')
+    );
+  }
 
   const [entryPath = '', entrySearch] = entry.href.split('?');
   if (entryPath !== pathname) {
@@ -392,9 +399,21 @@ function AuthedShell() {
   const entries = React.useMemo(
     () =>
       activeDomain === 'home'
-        ? homeSidebarEntries(homeSummary.data, location.pathname === '/home', openCommandPalette)
+        ? homeSidebarEntries(
+            homeSummary.data,
+            location.pathname === '/home',
+            openCommandPalette,
+            managedSystemId,
+          )
         : getSidebarEntryStates(NAV_TREE[activeDomain], location.pathname, location.searchStr),
-    [activeDomain, homeSummary.data, location.pathname, location.searchStr, openCommandPalette],
+    [
+      activeDomain,
+      homeSummary.data,
+      location.pathname,
+      location.searchStr,
+      openCommandPalette,
+      managedSystemId,
+    ],
   );
   const changeManagedSystem = React.useCallback(
     (managedSystemId: string | undefined) => {

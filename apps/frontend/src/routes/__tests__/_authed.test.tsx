@@ -241,6 +241,19 @@ describe('_authed sidebar current destination', () => {
       searchStr: '?view=my',
       expectedId: 'my-tasks',
     },
+    {
+      route: 'Task board',
+      pathname: '/tasks',
+      searchStr: '?view=board',
+      expectedId: 'tasks-board',
+    },
+    // #1179: the backlog list highlights the same Tasks entry as the board.
+    {
+      route: 'Task backlog',
+      pathname: '/tasks',
+      searchStr: '?view=backlog',
+      expectedId: 'tasks-board',
+    },
   ])(
     'renders the expected current destination for $route',
     ({ pathname, searchStr, expectedId }) => {

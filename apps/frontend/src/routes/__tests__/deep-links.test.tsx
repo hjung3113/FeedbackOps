@@ -120,6 +120,17 @@ describe('shipped deep-link contract', () => {
     expect(foundRoute?.id).toBe('/_authed/surveys/participate');
   });
 
+  test('#1179: recovery queue constants land on their filtered source lists', () => {
+    expect(DASHBOARD_ACTIONABLE_FINDINGS_ROUTE).toBe('/findings?execution=none');
+    expect(DASHBOARD_RELEASED_TASKS_ROUTE).toBe('/tasks?view=backlog&reporter_update=needed');
+    expect(DASHBOARD_OUTCOME_SURVEYS_ROUTE).toBe('/surveys?follow_up=needed');
+    [
+      DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+      DASHBOARD_RELEASED_TASKS_ROUTE,
+      DASHBOARD_OUTCOME_SURVEYS_ROUTE,
+    ].forEach(assertResolvable);
+  });
+
   test('renders respondent form without loading Survey management data', async () => {
     const requests: Array<{ method: string; pathname: string }> = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

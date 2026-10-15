@@ -3,13 +3,17 @@ import { recoveryHistoryWindowStart } from './history-window.js';
 import { createHash } from 'node:crypto';
 import { type SQL, sql } from 'drizzle-orm';
 import { HttpError } from '../../lib/errors.js';
-import { findingRecoveryProjection, findingRecoveryRepairScope } from '../findings/index.js';
+import {
+  actorFindingListScope,
+  findingRecoveryProjection,
+  findingRecoveryRepairScope,
+} from '../findings/index.js';
 import {
   countRecoveryPermissionRequests,
   permissionRecoveryProjection,
 } from '../permissions/index.js';
 import { surveyRecoveryProjection } from '../surveys/index.js';
-import { taskRecoveryProjection } from '../tasks/index.js';
+import { actorTaskListScope, taskRecoveryProjection } from '../tasks/index.js';
 import {
   type VocGroupedCountReader,
   type VocGroupedCountRow,
@@ -40,7 +44,7 @@ import { z } from 'zod';
 import type { Db } from '../../db/client.js';
 import { actorFindingReadScope } from '../findings/authorization.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
-import type { CheckService } from '../permissions/check-service.js';
+import { type CheckService, memoizeCapabilityChecks } from '../permissions/check-service.js';
 import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
@@ -88,6 +92,10 @@ function inRequestedScope(scope: Scope, managedSystemId?: string): Scope | undef
     return { kind: 'scoped', managedSystemIds: [managedSystemId] };
   }
   return undefined;
+}
+
+function hasScope(scope: Scope | undefined): scope is Scope {
+  return scope !== undefined && (scope.kind === 'all' || scope.managedSystemIds.length > 0);
 }
 
 function percent(value: number, total: number) {
@@ -185,11 +193,23 @@ export function createDashboardService(deps: DashboardDeps) {
     // `all` is the public selector for no backing filter; repositories receive
     // undefined so they apply the actor's resolved scope rather than cast it as a UUID.
     const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
-    const [findingScopeRaw, taskScopeRaw, surveyReadScopeRaw, vocScopeRaw] = await Promise.all([
+    // Preserve capability-based metric availability even when a destination list
+    // has no records. Only the two queue counts use destination-list scope (#1179).
+    const check = memoizeCapabilityChecks(deps.checkService);
+    const [
+      findingScopeRaw,
+      taskScopeRaw,
+      surveyReadScopeRaw,
+      vocScopeRaw,
+      findingQueueScopeRaw,
+      taskQueueScopeRaw,
+    ] = await Promise.all([
       actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
       actorScopeForCapability(deps.db, actor, 'finding.manage'),
       actorSurveyReadScope(deps.db, deps.checkService, actor),
       actorScopeForCapability(deps.db, actor, 'voc.read'),
+      authorizationAbsent(() => actorFindingListScope(deps.db, check, actor)),
+      authorizationAbsent(() => actorTaskListScope(deps.db, check, actor)),
     ]);
     // Reuse this scope in the grouped VOC read so metric counts do not resolve it again.
     const groupedVocCounts = await authorizationAbsent(() =>
@@ -228,6 +248,16 @@ export function createDashboardService(deps: DashboardDeps) {
     const totalHigh = sumGroupedVocCounts((row) => row.high_severity);
     const findingScope = inRequestedScope(findingScopeRaw, selectedManagedSystemId);
     const taskScope = inRequestedScope(taskScopeRaw, selectedManagedSystemId);
+    // A list denial/empty result must not erase a previously available zero.
+    const emptyScope: Scope = { kind: 'scoped', managedSystemIds: [] };
+    const findingQueueScope = inRequestedScope(
+      findingQueueScopeRaw ?? emptyScope,
+      selectedManagedSystemId,
+    );
+    const taskQueueScope = inRequestedScope(
+      taskQueueScopeRaw ?? emptyScope,
+      selectedManagedSystemId,
+    );
     const surveyScopeRaw = actor.role_level === 'admin'
       ? await actorSurveyRecoveryScope(deps.db, deps.checkService, actor) : surveyReadScopeRaw;
     const surveyScope = inRequestedScope(surveyScopeRaw, selectedManagedSystemId);
@@ -273,32 +303,13 @@ export function createDashboardService(deps: DashboardDeps) {
       findingScope !== undefined &&
       (findingScope.kind === 'all' || findingScope.managedSystemIds.length > 0)
     ) {
-      const [active, noExecution] = await Promise.all([
-        repo.countActiveFindings(
-          deps.db,
-          actor.workspace_id,
-          findingScope,
-          selectedManagedSystemId,
-        ),
-        repo.countActiveFindingsWithoutExecution(
-          deps.db,
-          actor.workspace_id,
-          findingScope,
-          selectedManagedSystemId,
-        ),
-      ]);
+      const active = await repo.countActiveFindings(
+        deps.db,
+        actor.workspace_id,
+        findingScope,
+        selectedManagedSystemId,
+      );
       kpis.active_finding = active;
-      queues.push({
-        id: 'actionable-finding-no-execution',
-        severity: 'warn',
-        count: noExecution,
-        next_action: {
-          label: 'Review Findings',
-          route: DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
-          intent: 'plan_execution',
-        },
-        secondary_action: null,
-      });
       const executed = await repo.countActiveFindingsWithExecution(
         deps.db,
         actor.workspace_id,
@@ -311,6 +322,28 @@ export function createDashboardService(deps: DashboardDeps) {
         total: active,
         percent: percent(executed, active),
         status: coverageStatus(percent(executed, active), active, bands['finding-execution']),
+      });
+    }
+
+    if (hasScope(findingScope) || hasScope(findingQueueScope)) {
+      const noExecution = hasScope(findingQueueScope)
+        ? await repo.countActiveFindingsWithoutExecution(
+            deps.db,
+            actor.workspace_id,
+            findingQueueScope,
+            selectedManagedSystemId,
+          )
+        : 0;
+      queues.push({
+        id: 'actionable-finding-no-execution',
+        severity: 'warn',
+        count: noExecution,
+        next_action: {
+          label: 'Review Findings',
+          route: DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+          intent: 'plan_execution',
+        },
+        secondary_action: null,
       });
     }
 
@@ -331,23 +364,6 @@ export function createDashboardService(deps: DashboardDeps) {
         selectedManagedSystemId,
       );
       kpis.pending_request = (kpis.pending_request ?? 0) + pendingTaskRequests;
-      const unresolved = await repo.countReleasedTasksWithUnresolvedVoc(
-        deps.db,
-        actor.workspace_id,
-        taskScope,
-        selectedManagedSystemId,
-      );
-      queues.push({
-        id: 'released-task-unresolved-voc',
-        severity: 'warn',
-        count: unresolved,
-        next_action: {
-          label: 'Review released Tasks',
-          route: DASHBOARD_RELEASED_TASKS_ROUTE,
-          intent: 'request_reporter_update',
-        },
-        secondary_action: null,
-      });
       const releasedUpdate = await repo.countReleasedTasksWithPublicUpdate(
         deps.db,
         actor.workspace_id,
@@ -364,6 +380,28 @@ export function createDashboardService(deps: DashboardDeps) {
           releasedUpdate.total,
           bands['released-update'],
         ),
+      });
+    }
+
+    if (hasScope(taskScope) || hasScope(taskQueueScope)) {
+      const unresolved = hasScope(taskQueueScope)
+        ? await repo.countReleasedTasksWithUnresolvedVoc(
+            deps.db,
+            actor.workspace_id,
+            taskQueueScope,
+            selectedManagedSystemId,
+          )
+        : 0;
+      queues.push({
+        id: 'released-task-unresolved-voc',
+        severity: 'warn',
+        count: unresolved,
+        next_action: {
+          label: 'Review released Tasks',
+          route: DASHBOARD_RELEASED_TASKS_ROUTE,
+          intent: 'request_reporter_update',
+        },
+        secondary_action: null,
       });
     }
 
@@ -500,14 +538,8 @@ export function createDashboardService(deps: DashboardDeps) {
       }
 
       if (includesManagedSystem(findingScope, systemId)) {
-        const [active, noExecution, executed] = await Promise.all([
+        const [active, executed] = await Promise.all([
           repo.countActiveFindings(deps.db, actor.workspace_id, findingScope, systemId),
-          repo.countActiveFindingsWithoutExecution(
-            deps.db,
-            actor.workspace_id,
-            findingScope,
-            systemId,
-          ),
           repo.countActiveFindingsWithExecution(
             deps.db,
             actor.workspace_id,
@@ -517,18 +549,11 @@ export function createDashboardService(deps: DashboardDeps) {
         ]);
         rowKpis.active_finding = active;
         rowCoverage['finding-execution'] = cell('finding-execution', executed, active);
-        rowQueues['actionable-finding-no-execution'] = noExecution;
       }
 
       if (includesManagedSystem(taskScope, systemId)) {
-        const [tasksInFlight, unresolved, releasedUpdate] = await Promise.all([
+        const [tasksInFlight, releasedUpdate] = await Promise.all([
           repo.countTasksInFlight(deps.db, actor.workspace_id, taskScope, systemId),
-          repo.countReleasedTasksWithUnresolvedVoc(
-            deps.db,
-            actor.workspace_id,
-            taskScope,
-            systemId,
-          ),
           repo.countReleasedTasksWithPublicUpdate(deps.db, actor.workspace_id, taskScope, systemId),
         ]);
         rowKpis.tasks_in_flight = tasksInFlight;
@@ -537,7 +562,36 @@ export function createDashboardService(deps: DashboardDeps) {
           releasedUpdate.value,
           releasedUpdate.total,
         );
-        rowQueues['released-task-unresolved-voc'] = unresolved;
+      }
+
+      if (
+        includesManagedSystem(findingScope, systemId) ||
+        includesManagedSystem(findingQueueScope, systemId)
+      ) {
+        rowQueues['actionable-finding-no-execution'] = includesManagedSystem(
+          findingQueueScope,
+          systemId,
+        )
+          ? await repo.countActiveFindingsWithoutExecution(
+              deps.db,
+              actor.workspace_id,
+              findingQueueScope,
+              systemId,
+            )
+          : 0;
+      }
+      if (
+        includesManagedSystem(taskScope, systemId) ||
+        includesManagedSystem(taskQueueScope, systemId)
+      ) {
+        rowQueues['released-task-unresolved-voc'] = includesManagedSystem(taskQueueScope, systemId)
+          ? await repo.countReleasedTasksWithUnresolvedVoc(
+              deps.db,
+              actor.workspace_id,
+              taskQueueScope,
+              systemId,
+            )
+          : 0;
       }
 
       // ADR-0033 §C: an explicit survey.read deny dominates the admin bypass,

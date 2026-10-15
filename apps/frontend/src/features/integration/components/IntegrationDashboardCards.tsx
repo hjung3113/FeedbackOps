@@ -1,6 +1,7 @@
 import { DASHBOARD_QUEUE_ACTION_LABELS, dashboardActionLabel } from '@/lib/copy/dashboard-actions';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { InternalLink } from '@/lib/router/InternalLink';
+import { hrefWithManagedSystem } from '@/lib/router/managed-system-href';
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
@@ -70,7 +71,11 @@ export const INTEGRATION_DASHBOARD_QUEUE_ORDER: readonly QueueId[] = [
 
 export function IntegrationDashboardQueueCard({
   queue,
-}: { queue: DashboardQueue }): React.ReactElement {
+  managedSystemId,
+}: {
+  queue: DashboardQueue;
+  managedSystemId?: string;
+}): React.ReactElement {
   const copy = QUEUE_COPY[queue.id];
   const tone = QUEUE_SEVERITY_TONE[queue.severity];
 
@@ -103,7 +108,7 @@ export function IntegrationDashboardQueueCard({
           <InternalLink
             className="min-w-0 truncate text-xs text-text-secondary hover:text-text-primary"
             data-testid={`integration-queue-secondary-${queue.id}`}
-            href={queue.secondary_action.route}
+            href={hrefWithManagedSystem(queue.secondary_action.route, managedSystemId)}
           >
             {dashboardActionLabel(queue.secondary_action.intent, queue.secondary_action.label)}
           </InternalLink>
@@ -114,7 +119,7 @@ export function IntegrationDashboardQueueCard({
           <InternalLink
             className="inline-flex shrink-0 items-center gap-1"
             data-testid={`integration-queue-primary-${queue.id}`}
-            href={queue.next_action.route}
+            href={hrefWithManagedSystem(queue.next_action.route, managedSystemId)}
           >
             {DASHBOARD_QUEUE_ACTION_LABELS[queue.id] ??
               dashboardActionLabel(queue.next_action.intent, queue.next_action.label)}
