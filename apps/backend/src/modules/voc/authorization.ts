@@ -28,8 +28,8 @@ export interface ActorContextLite {
 // ── Scope resolvers ───────────────────────────────────────────────────────────
 
 /**
- * Effective scope: union of voc.read and voc.triage grants for the actor.
- * Admin role → 'all'. MS-scoped grants → union of both capability MS lists.
+ * Effective scope: union of deny-aware voc.read and voc.triage scopes.
+ * Admin role-derived scope honours explicit denies on each capability.
  *
  * WHY: using undefined (any capability) let future non-VOC capabilities
  * widen VOC summary visibility, creating an unintended existence-probe
@@ -39,9 +39,6 @@ export interface ActorContextLite {
  * Used for out_of_scope_summary visibility and detail-existence-probe defense.
  */
 export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
-  if (actor.role_level === 'admin') {
-    return { kind: 'all' };
-  }
   const [readScope, triageScope] = await Promise.all([
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
@@ -55,14 +52,14 @@ export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite):
 }
 
 /**
- * voc.read scope. Admin → 'all'. Otherwise: workspace-wide voc.read grant →
- * 'all'; MS-scoped voc.read grants → scoped list. Empty list → scoped:[].
+ * Deny-aware voc.read scope, including Admin role-derived access.
+ * Broad allow without denies → 'all'; otherwise scoped ids after deny subtraction.
  */
 export async function actorReadScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read');
 }
 
-/** voc.triage scope. Same shape as actorReadScope; admin → 'all'. */
+/** Deny-aware voc.triage scope, independent of voc.read. */
 export async function actorTriageScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
 }

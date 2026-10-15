@@ -98,6 +98,23 @@ returns `kind: all` only when there are no active Managed-System-scoped denies.
 When such denies exist, the scope is the workspace Managed System list minus
 the denied ids so its membership remains identical to point checks.
 
+VOC list/count/detail/conversation scope resolution uses the same capability rule
+as `GET /me/permissions/scope` and point checks, including explicit denies for
+Admin. `voc.read` and `voc.triage` are independent: Triage lists/counts use their
+intersection; effective summary visibility uses their union. A `voc.read` deny
+can leave summary visibility through `voc.triage`, but grants no conversation
+read. A `voc.triage` deny removes Internal Comments from both inline detail and
+conversation pages. Denying both scopes hides non-own detail/conversation with
+404; reporter-own read arms remain unchanged. Survey read scope honours denies
+(`unless_denied`); Finding read/manage keeps its intentional `always` bypass.
+
+At All Systems (전체 Managed System), Triage eligibility may come from a non-empty
+`voc.triage` capability scope when the workspace point check is not approved.
+The queue remains authoritative for `voc.read` ∩ `voc.triage`; an authorization
+failure replaces even cached rows/detail with the request-access blocked panel.
+Selecting a Managed System keeps the point-check gate; navigation counts follow
+the same eligibility gate. The frontend does not compute the intersection.
+
 Managed System is the MVP authorization boundary below workspace Admin. Sibling
 Managed Systems and Analytics Area are not grant sources. See the 09 Capability
 Matrix notes.

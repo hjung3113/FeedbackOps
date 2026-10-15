@@ -259,70 +259,80 @@ export function createCheckService(deps: CheckServiceDeps) {
     if (actor.workspace_id !== scope.workspace_id)
       return { kind: 'scoped', managed_system_ids: [] };
 
-    const bypass = actor.role_level === 'admin' ? adminModuleBypassFor(capability) : 'none';
-    if (bypass === 'always') return { kind: 'all' };
-
-    const denyRows = await db
-      .select({ managedSystemId: permissionDenies.managedSystemId })
-      .from(permissionDenies)
-      .where(
-        and(
-          eq(permissionDenies.workspaceId, actor.workspace_id),
-          eq(permissionDenies.actorId, actor.actor_id),
-          eq(permissionDenies.capability, capability),
-          isNull(permissionDenies.revokedAt),
-        ),
-      );
-    if (denyRows.some((row) => row.managedSystemId === null)) {
-      return { kind: 'scoped', managed_system_ids: [] };
-    }
-    const deniedIds = new Set(
-      denyRows.map((row) => row.managedSystemId).filter((id): id is string => id !== null),
-    );
-
-    const grantRows = await db
-      .select({
-        managedSystemId: permissionGrants.managedSystemId,
-        revokedAt: permissionGrants.revokedAt,
-        expiresAt: permissionGrants.expiresAt,
-      })
-      .from(permissionGrants)
-      .where(
-        and(
-          eq(permissionGrants.workspaceId, actor.workspace_id),
-          eq(permissionGrants.actorId, actor.actor_id),
-          eq(permissionGrants.capability, capability),
-          isNull(permissionGrants.supersededAt),
-        ),
-      );
-    const rightNow = now();
-    const isActive = (row: {
-      revokedAt: Date | null;
-      expiresAt: Date | null;
-    }) =>
-      row.revokedAt === null &&
-      (row.expiresAt === null || row.expiresAt.getTime() > rightNow.getTime());
-    const broadAllow =
-      grantRows.some((row) => row.managedSystemId === null && isActive(row)) ||
-      roleSatisfies(actor.role_level, capability) ||
-      bypass === 'unless_denied';
-    if (broadAllow && deniedIds.size === 0) return { kind: 'all' };
-
-    const allowedIds = broadAllow
-      ? await allManagedSystemIds(db, actor.workspace_id)
-      : grantRows
-          .filter(
-            (row): row is typeof row & { managedSystemId: string } =>
-              row.managedSystemId !== null && isActive(row),
-          )
-          .map((row) => row.managedSystemId);
-    return {
-      kind: 'scoped',
-      managed_system_ids: allowedIds.filter((id) => !deniedIds.has(id)),
-    };
+    return resolveCapabilityScope(db, actor, capability, now);
   }
 
   return { checkCapability, capabilityScope };
+}
+
+/** Single capability scope rule, shared by HTTP hints and db/tx read-model filters. */
+export async function resolveCapabilityScope(
+  db: Tx,
+  actor: ActorContext,
+  capability: Capability,
+  now: () => Date = () => new Date(),
+): Promise<CapabilityScope> {
+  const bypass = actor.role_level === 'admin' ? adminModuleBypassFor(capability) : 'none';
+  if (bypass === 'always') return { kind: 'all' };
+
+  const denyRows = await db
+    .select({ managedSystemId: permissionDenies.managedSystemId })
+    .from(permissionDenies)
+    .where(
+      and(
+        eq(permissionDenies.workspaceId, actor.workspace_id),
+        eq(permissionDenies.actorId, actor.actor_id),
+        eq(permissionDenies.capability, capability),
+        isNull(permissionDenies.revokedAt),
+      ),
+    );
+  if (denyRows.some((row) => row.managedSystemId === null)) {
+    return { kind: 'scoped', managed_system_ids: [] };
+  }
+  const deniedIds = new Set(
+    denyRows.map((row) => row.managedSystemId).filter((id): id is string => id !== null),
+  );
+
+  const grantRows = await db
+    .select({
+      managedSystemId: permissionGrants.managedSystemId,
+      revokedAt: permissionGrants.revokedAt,
+      expiresAt: permissionGrants.expiresAt,
+    })
+    .from(permissionGrants)
+    .where(
+      and(
+        eq(permissionGrants.workspaceId, actor.workspace_id),
+        eq(permissionGrants.actorId, actor.actor_id),
+        eq(permissionGrants.capability, capability),
+        isNull(permissionGrants.supersededAt),
+      ),
+    );
+  const rightNow = now();
+  const isActive = (row: {
+    revokedAt: Date | null;
+    expiresAt: Date | null;
+  }) =>
+    row.revokedAt === null &&
+    (row.expiresAt === null || row.expiresAt.getTime() > rightNow.getTime());
+  const broadAllow =
+    grantRows.some((row) => row.managedSystemId === null && isActive(row)) ||
+    roleSatisfies(actor.role_level, capability) ||
+    bypass === 'unless_denied';
+  if (broadAllow && deniedIds.size === 0) return { kind: 'all' };
+
+  const allowedIds = broadAllow
+    ? await allManagedSystemIds(db, actor.workspace_id)
+    : grantRows
+        .filter(
+          (row): row is typeof row & { managedSystemId: string } =>
+            row.managedSystemId !== null && isActive(row),
+        )
+        .map((row) => row.managedSystemId);
+  return {
+    kind: 'scoped',
+    managed_system_ids: allowedIds.filter((id) => !deniedIds.has(id)),
+  };
 }
 
 /**
