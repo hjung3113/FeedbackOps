@@ -431,7 +431,10 @@ describe.skipIf(!runIntegration)('attachment purge/link serialization (#1171)', 
         expect(response.statusCode).toBe(422);
         expect(response.json()).toMatchObject({
           code: 'validation.failed',
-          detail: { fields: [{ path: ['attachment_ids', 0], code: 'invalid' }], reason: 'archived' },
+          detail: {
+            fields: [{ path: ['attachment_ids', 0], code: 'invalid' }],
+            reason: 'archived',
+          },
         });
         expect((await parentRows(kind, title)).rows).toEqual(before.rows);
       } finally {
