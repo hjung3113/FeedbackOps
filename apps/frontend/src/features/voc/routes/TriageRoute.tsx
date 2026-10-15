@@ -175,8 +175,12 @@ export function TriageRoute(): React.ReactElement {
     const requestable = queueDenied ? error.envelope.requestable_permission : undefined;
     const capability = queueDenied ? requestable?.permission : 'voc.triage';
     const managedSystemId = queueDenied ? requestable?.managed_system_id : search.managedSystem;
-    const reason =
-      search.managedSystem !== undefined
+    const missingRead = queueDenied && requestable?.permission === 'voc.read';
+    const reason = missingRead
+      ? typeof requestable?.managed_system_id === 'string'
+        ? PERMISSION_BLOCKED_REASONS.vocTriageMissingReadManagedSystem
+        : PERMISSION_BLOCKED_REASONS.vocTriageMissingRead
+      : search.managedSystem !== undefined
         ? PERMISSION_BLOCKED_REASONS.vocTriageManagedSystem
         : PERMISSION_BLOCKED_REASONS.vocTriage;
     return (

@@ -1,3 +1,4 @@
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -96,7 +97,11 @@ describe('Triage request access', () => {
         reason: 'Triage 업무에 필요합니다.',
         return_route_intent: '/vocs?view=triage',
       });
-      if (managedSystem) {
+      if (capability === 'voc.read') {
+        expect(
+          screen.getByText(PERMISSION_BLOCKED_REASONS.vocTriageMissingReadManagedSystem),
+        ).toBeInTheDocument();
+      } else if (managedSystem) {
         expect(
           screen.getByText('선택한 Managed System의 VOC Triage 권한이 없습니다.'),
         ).toBeInTheDocument();

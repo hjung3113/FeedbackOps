@@ -10,7 +10,11 @@ import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
-import { PermissionDirectGrantForm } from './permission-direct-grant-form.js';
+import {
+  type DirectGrantDraft,
+  type DirectGrantReadFollowUp,
+  PermissionDirectGrantForm,
+} from './permission-direct-grant-form.js';
 import { PermissionGrantDetail } from './permission-grant-detail.js';
 import { permissionGrantTabs } from './permission-grants-search.js';
 import {
@@ -42,6 +46,10 @@ export function PermissionGrantsScreen() {
     handleClose,
   } = usePermissionGrantsConsole();
   const [directGrantOpen, setDirectGrantOpen] = React.useState(false);
+  const [directGrantDraft, setDirectGrantDraft] = React.useState<DirectGrantDraft | null>(null);
+  const [readFollowUp, setReadFollowUp] = React.useState<
+    (DirectGrantReadFollowUp & { sourceGrantId: string }) | null
+  >(null);
   const [focusGrantIdAfterClose, setFocusGrantIdAfterClose] = React.useState<{
     id: string;
     navigationAttempted: boolean;
@@ -64,6 +72,7 @@ export function PermissionGrantsScreen() {
   function handleDirectGrantCreated(
     item: PermissionGrantAdminItem,
     submittedContext: string,
+    followUp: DirectGrantReadFollowUp | null,
   ): void {
     const navigationAttempted =
       screenMounted.current && currentSelectionContext.current === submittedContext;
@@ -71,6 +80,8 @@ export function PermissionGrantsScreen() {
       handleCreatedGrant(item.id);
     }
     setFocusGrantIdAfterClose({ id: item.id, navigationAttempted });
+    setReadFollowUp(followUp === null ? null : { ...followUp, sourceGrantId: item.id });
+    setDirectGrantDraft(null);
     setDirectGrantOpen(false);
   }
 
@@ -94,6 +105,13 @@ export function PermissionGrantsScreen() {
     directGrantTriggerRef.current?.focus();
   }, [directGrantOpen, focusGrantIdAfterClose, selectedId]);
 
+  const readFollowUpForSelection =
+    selected?.kind === 'grants' &&
+    readFollowUp !== null &&
+    readFollowUp.sourceGrantId === selected.item.id
+      ? readFollowUp
+      : null;
+
   const tabs: ListToolbarTab[] = permissionGrantTabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
@@ -114,7 +132,10 @@ export function PermissionGrantsScreen() {
               ref={directGrantTriggerRef}
               type="button"
               size="sm"
-              onClick={() => setDirectGrantOpen(true)}
+              onClick={() => {
+                setDirectGrantDraft(null);
+                setDirectGrantOpen(true);
+              }}
             >
               {ADMIN_PERMISSIONS_COPY.directGrant.action}
             </Button>
@@ -126,6 +147,7 @@ export function PermissionGrantsScreen() {
               cacheReturnedGrant={cacheReturnedGrant}
               onOpenChange={setDirectGrantOpen}
               onCreated={handleDirectGrantCreated}
+              {...(directGrantDraft ? { draft: directGrantDraft } : {})}
             />
           </>
         ),
@@ -179,6 +201,20 @@ export function PermissionGrantsScreen() {
             onClose={handleClose}
             onGrantRevoked={discardReturnedGrant}
             onSuccess={handleClose}
+            {...(readFollowUpForSelection
+              ? {
+                  onGrantReadFollowUp: () => {
+                    setDirectGrantDraft({
+                      actorId: readFollowUpForSelection.actorId,
+                      capability: 'voc.read',
+                      managedSystemId: readFollowUpForSelection.managedSystemId,
+                      reason: readFollowUpForSelection.reason,
+                      expirationDate: readFollowUpForSelection.expirationDate,
+                    });
+                    setDirectGrantOpen(true);
+                  },
+                }
+              : {})}
           />
         ) : undefined
       }

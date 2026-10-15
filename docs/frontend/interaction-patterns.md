@@ -287,7 +287,7 @@ UX rules:
 - Approved requests return the user to the blocked object or action when possible, without automatically executing it.
 - Send expected_revision on every requester mutation and Admin decision. Refetch on stale conflict, retain requester input for reconciliation, reset Admin draft on request ID/revision changes, and require fresh review.
 - Admin selected detail shows requested versus granted scope/expiry and server-supported narrowing choices. Four explained server signals use `검토 시 확인할 사항`; no score. Zero signals, failure/retry, loading, and terminal no-actions are distinct.
-- `활성 권한` offers `권한 부여` with governed workspace Admin/self-grant controls, required reason, optional expiry, and server scope choices. Matching asks and overlapping denies lead to review or explicit lift. Errors retain input; success selects the returned grant and never claims Role Level promotion (ADR-0066; proposed/new).
+- `활성 권한` offers `권한 부여` with governed workspace Admin/self-grant controls, required reason, optional expiry, and server scope choices. Matching asks and overlapping denies lead to review or explicit lift. A missing `voc.read` prerequisite warns before the single `voc.triage` grant; after success the selected grant offers `VOC 조회 권한도 부여`, reopening the same dialog prefilled for a separate `voc.read` grant. A denied prerequisite shows the deny-lift link and no follow-up; held shows no notice. Errors retain input; success selects the returned grant and never claims Role Level promotion (ADR-0066; proposed/new).
 - Explicit Deny overrides allow and should show a non-requestable blocked state unless policy allows appeal.
 ```
 

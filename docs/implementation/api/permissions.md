@@ -534,10 +534,25 @@ The strict response is `permissionGrantOptionsSchema` in
     preflight:
       | { state: 'available' }
       | { state: 'request_review', request_id: uuid, review_route: string }
-      | { state: 'deny_lift', deny_ids: uuid[], lift_route: string }
+      | { state: 'deny_lift', deny_ids: uuid[], lift_route: string },
+    prerequisites?: [{
+      capability: 'voc.read',
+      managed_system_id: uuid | null,
+      state: 'held' | 'missing' | 'denied'
+    }]
   }]
 }
 ```
+
+Only a `voc.triage` candidate includes `prerequisites`, and the key is omitted
+otherwise. An empty array is invalid. The prerequisite is `voc.read` on the same
+Managed System; a workspace-wide triage candidate would use workspace `voc.read`
+(`managed_system_id: null`). `held` means the recipient's effective `voc.read`
+covers that scope (deny-aware and expiry-aware, the same rule as
+`resolveCapabilityScope`). `denied` means an active explicit `voc.read` deny
+blocks it, and an explicit deny wins over a covering grant. `missing` is every
+other gap, including an expired grant. The field does not imply that
+`voc.triage` grants `voc.read`, and it does not add a role bundle.
 
 `available` means no matching open ask or overlapping active deny; it is advisory,
 and submission still checks active duplicates and all write-time rules. Review links

@@ -9,6 +9,7 @@ import {
   listPermissionGrantsResponseSchema,
   permissionDenyAdminItemSchema,
   permissionGrantAdminItemSchema,
+  permissionGrantOptionsSchema,
 } from '../admin.js';
 import { revokePermissionBodySchema, revokePermissionResultSchema } from '../decisions.js';
 
@@ -171,5 +172,50 @@ describe('governed direct grant contracts (ADR-0066)', () => {
       self_approval: { policy_citation: 'Policy', peer_reviewer_absence: 'None' },
     };
     expect(schema.parse(self)).toEqual(self);
+  });
+
+  it('carries optional voc.read prerequisites and rejects an unknown state', () => {
+    const recipient = {
+      id: ACTOR_ID,
+      display_name: 'Dev',
+      role_level: 'developer' as const,
+    };
+    const triage = {
+      capability: 'voc.triage' as const,
+      managed_system_id: MANAGED_SYSTEM_ID,
+      governance_required: false,
+      preflight: { state: 'available' as const },
+      prerequisites: [
+        {
+          capability: 'voc.read' as const,
+          managed_system_id: MANAGED_SYSTEM_ID,
+          state: 'missing' as const,
+        },
+      ],
+    };
+    const { prerequisites: _omitted, ...withoutPrerequisites } = triage;
+    const envelope = {
+      recipient,
+      self_policy: 'allowed' as const,
+      self_approval_required: false,
+    };
+    expect(
+      permissionGrantOptionsSchema.parse({ ...envelope, candidates: [triage] }).candidates[0],
+    ).toEqual(triage);
+    expect(
+      permissionGrantOptionsSchema.parse({ ...envelope, candidates: [withoutPrerequisites] })
+        .candidates[0],
+    ).toEqual(withoutPrerequisites);
+    expect(
+      permissionGrantOptionsSchema.safeParse({
+        ...envelope,
+        candidates: [
+          {
+            ...withoutPrerequisites,
+            prerequisites: [{ ...triage.prerequisites[0], state: 'blocked' }],
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });
