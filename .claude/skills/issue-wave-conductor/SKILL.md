@@ -382,6 +382,7 @@ blocker or an owner request.
     (`inconclusive`, e.g. every sample rate-limited) exits 1: reset the rate limits and rerun.
   - Noise floor, develop vs develop: ≤4 ms. A reload-heavy build can hit the `/me` rate limit and drop a sample.
 - `scripts/app-preview.py start <checkout> [--backend --env <throwaway env> [--seed]] [--name <label>]` / `stop <label>|--all` / `status`:
+  - After `--seed`, run `SEED_MODE=scale npx tsx src/seed/index.ts` from `apps/backend` with the throwaway env for a 5k preview; it preserves baseline/preview rows.
   - It serves the checkout's vite at `http://<label>.localhost:<port>`. Each label gets its own host so logins do not
     collide.
   - `--backend` requires a throwaway `--env` and refuses an env whose DB is on port 5434. `--seed` only on a
