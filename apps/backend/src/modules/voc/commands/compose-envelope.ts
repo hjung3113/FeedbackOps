@@ -12,7 +12,7 @@ export function composeEnvelope(
     reporterId: string;
     title: string;
     descriptionRichContent: unknown;
-    severity: VocEnvelope['severity'];
+    severity: Exclude<VocEnvelope['severity'], undefined>;
     reporterFacingStatus: string;
     triageState: VocEnvelope['triage_state'];
     ownerUserId: string | null;
@@ -25,6 +25,7 @@ export function composeEnvelope(
     allowed: ReporterFacingStatus[];
     forbidden: Partial<Record<ReporterFacingStatus, string>>;
   },
+  isReporterArm = false,
 ): VocEnvelope {
   return {
     id: row.id,
@@ -35,7 +36,7 @@ export function composeEnvelope(
     reporter_id: row.reporterId,
     title: row.title,
     description_rich_content: row.descriptionRichContent,
-    severity: row.severity,
+    ...(!isReporterArm ? { severity: row.severity } : {}),
     reporter_facing_status: row.reporterFacingStatus as ReporterFacingStatus,
     triage_state: row.triageState,
     owner_user_id: row.ownerUserId,

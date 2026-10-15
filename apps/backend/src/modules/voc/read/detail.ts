@@ -219,7 +219,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       title: row.title,
       primary_managed_system_id: primaryMs,
       reporter_id: row.reporterId,
-      severity: row.severity,
+      ...(!isReporterArm ? { severity: row.severity } : {}),
       reporter_facing_status:
         row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
@@ -373,7 +373,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       title: row.title,
       primary_managed_system_id: primaryMs,
       reporter_id: row.reporterId,
-      severity: row.severity,
+      ...(!isReporterArm ? { severity: row.severity } : {}),
       reporter_facing_status:
         row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],

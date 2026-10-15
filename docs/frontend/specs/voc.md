@@ -100,7 +100,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | `<ListFilterButton categories applied onChange onClear>` | `<ListFilterButton>` in `packages/ui/src/toolbar/` | shadcn `<Popover>` + `<Checkbox>` group | `categories: FilterCategory[]`, `applied: Record<string, Set<string>>`, `onChange: (cat, value, on) => void`, `onClear: () => void` | closed · open · applied (count badge) |
 | `<ListSortButton fields value onChange>` | `<ListSortButton>` in `packages/ui/src/toolbar/` | shadcn `<Popover>` + `<RadioGroup>` | `fields: SortField[]`, `value: string` (`'<field>:<asc\|desc>'`), `onChange` | closed · open · sorted (chip on button) |
 | `<SearchInput placeholder>` | `<SearchInput>` in `packages/ui/src/forms/` | shadcn `<Input>` + leading icon | `placeholder`, `value?`, `onValueChange?`, `onCommit?` (passing `onValueChange` enables the box; without it the box renders disabled with a tooltip; `onCommit` fires on Enter and on blur in controlled mode) | disabled · default · focus · with-value; Escape clears a non-empty value and never commits. Inbox/My VOCs (#821, #864): Enter or blur writes the URL `q` at once (an unchanged draft writes nothing, and so does a repeat of a draft the URL has not acknowledged yet; an Enter that confirms an IME composition does not commit). Otherwise a 300 ms debounce does (700 ms when the draft ends in a Hangul character, which may still be a half-typed syllable), and `GET /vocs` receives it as `q`. A search covers the whole inbox: starting it drops the active tab, which returns when the search is cleared, and a tab picked during the search narrows it to that tab. |
-| `<SeverityIndicator severity>` | `<SeverityIndicator>` in `packages/ui/src/indicators/` | none (3×16px Tailwind bar) | `severity: 'low' \| 'medium' \| 'high' \| 'critical'` | 4 colors via `--severity-*` |
+| `<SeverityIndicator severity>` | `<SeverityIndicator>` in `packages/ui/src/indicators/` | none (3×16px Tailwind bar) | `severity: 'low' \| 'medium' \| 'high' \| 'critical' \| null`, optional `label` / `decorative` | Null uses neutral bars and `심각도 미지정`; 4 colors via `--severity-*` |
 
 ### 3.3 Triage queue specifics
 
@@ -201,7 +201,7 @@ Prototype mock entity → production DTO. **snake_case at HTTP boundary, camelCa
 | `reporter` (`u-1`) | `reporter_id: uuid` | `reporterId: string` | Resolved via `useActor(reporterId)` hook; backend may inline `reporter: ActorRef` envelope on `GET /vocs/:id`. |
 | `managedSystem` | `primary_managed_system_id: uuid` | `primaryManagedSystemId: string` | Resolve via `useManagedSystem(id)`. |
 | `analyticsArea` | `analytics_area_id: uuid \| null` | `analyticsAreaId: string \| null` | Must belong to `primary_managed_system_id` (enforced server-side, validated client-side by picker). |
-| `severity` | `severity: enum(low\|medium\|high\|critical) \| null` | `severity: Severity \| null` | Null until triage. Never submitted on create (FR-VOC-001). |
+| `severity` | `severity?: enum(low\|medium\|high\|critical) \| null` | `severity?: Severity \| null` | Omitted for reporter-only access; null until triage for operators. Never submitted on create (FR-VOC-001). |
 | `reporterStatus` | `reporter_facing_status: enum` (8 states) | `reporterFacingStatus: ReporterFacingStatus` | Enum mirrors `data.js · ReporterStatusLabels` keys. |
 | `internalState` (`triaged`/`unassigned`) | `triage_state: enum(untriaged\|triaged\|needs_more_information\|dismissed_not_actionable)` | `triageState: TriageState` | Prototype values (`unassigned`, `in_progress`, `assigned`, `done`) do not match the contract enum. **Use the contract values.** |
 | `owner` (`u-1`) | `owner_user_id: uuid \| null` | `ownerUserId: string \| null` | Mutually nullable with `owner_team_id`. |
@@ -575,3 +575,13 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 | VOC read-state, snooze, archive | Not built; menu items render disabled |
 | Saved list views | Shipped as sidebar saved views (`apps/frontend/src/lib/api/saved-views.ts`, `docs/implementation/api/saved-views.md`); `/vocs?view=list` is not a route |
 | Draft VOC ("초안 저장") | Not built |
+
+### Reporter severity projection (#1173)
+
+`내 VOC` hides severity filters and sort options and the `high` / `high-no-link`
+tabs for every actor. Restored bookmarks and saved views drop severity filters,
+severity sorting, and these tabs from the URL before fetching with My VOC defaults.
+Absent wire severity renders no indicator or badge and a
+neutral row bar. Visible null severity announces `심각도 미지정`; standalone
+indicators use `심각도 낮음/중간/높음/심각`. Badge indicators are decorative,
+so a triaged row announces severity once through its badge.

@@ -210,7 +210,26 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const apiTab = searchingAllTabs
     ? undefined
     : (search.tab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged'));
-  const currentSort = search.sort ?? DEFAULT_SORT;
+  const mySeveritySort = view === 'my' && search.sort?.startsWith('severity:') === true;
+  const mySeverityTab = view === 'my' && (search.tab === 'high' || search.tab === 'high-no-link');
+  const mySeverityFilter = view === 'my' && search['filter.severity'] !== undefined;
+  const currentSort = mySeveritySort ? DEFAULT_SORT : (search.sort ?? DEFAULT_SORT);
+  React.useEffect(() => {
+    if (!mySeveritySort && !mySeverityTab && !mySeverityFilter) return;
+    void navigate({
+      to: '/vocs',
+      search: (prev) => {
+        const { sort, tab, 'filter.severity': severity, ...rest } = prev;
+        return {
+          ...rest,
+          ...(!mySeveritySort && sort !== undefined ? { sort } : {}),
+          ...(!mySeverityTab && tab !== undefined ? { tab } : {}),
+          ...(!mySeverityFilter && severity !== undefined ? { 'filter.severity': severity } : {}),
+        };
+      },
+      replace: true,
+    });
+  }, [mySeveritySort, mySeverityTab, mySeverityFilter, navigate]);
   // The tab the current search started from, restored when the search is cleared.
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
   // #864: the hook calls this to write the URL q, from its debounced effect and
@@ -258,13 +277,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
     const out: Record<string, string[]> = {};
     const sev = parseCommaList(search['filter.severity']);
-    if (sev.length > 0) out['filter.severity'] = sev;
+    if (view !== 'my' && sev.length > 0) out['filter.severity'] = sev;
     const status = parseCommaList(search['filter.reporterStatus']);
     if (status.length > 0) out['filter.reporterStatus'] = status;
     const owner = parseCommaList(search['filter.owner']);
     if (owner.length > 0) out['filter.owner'] = owner;
     return out;
-  }, [search]);
+  }, [search, view]);
 
   const apiFilters = React.useMemo(() => {
     const analyticsArea = search['filter.analytics_area'];
@@ -389,12 +408,20 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               onCommit={commit}
             />
             <ListFilterButton
-              categories={FILTER_CATEGORIES}
+              categories={
+                view === 'my'
+                  ? FILTER_CATEGORIES.filter((category) => category.key !== 'filter.severity')
+                  : FILTER_CATEGORIES
+              }
               values={currentFilters}
               onChange={handleFiltersChange}
             />
             <ListSortButton
-              options={SORT_OPTIONS}
+              options={
+                view === 'my'
+                  ? SORT_OPTIONS.filter((option) => !option.value.startsWith('severity:'))
+                  : SORT_OPTIONS
+              }
               value={currentSort}
               defaultValue={DEFAULT_SORT}
               onChange={handleSortChange}

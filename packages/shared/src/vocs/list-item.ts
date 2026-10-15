@@ -44,7 +44,8 @@ export const vocListItemSchema = z.object({
   reporter_id: z.string().uuid(),
   owner_user_id: z.string().uuid().nullable(),
   owner_team_id: z.string().uuid().nullable(),
-  severity: severityEnumSchema.nullable(),
+  // Absent = reporter-hidden; null = operator-visible, untriaged.
+  severity: severityEnumSchema.nullable().optional(),
   reporter_facing_status: reporterFacingStatusEnumSchema,
   triage_state: triageStateEnumSchema,
   review_postponed_at: z.string().datetime().nullable(),

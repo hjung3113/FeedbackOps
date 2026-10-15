@@ -19,6 +19,7 @@ export function mapRowToListItem(
   attachmentCount = 0,
   similarCount = 0,
   view = 'inbox',
+  isReporterArm = false,
 ): VocListItem {
   return {
     id: row.id,
@@ -29,7 +30,7 @@ export function mapRowToListItem(
     reporter_id: row.reporterId,
     owner_user_id: row.ownerUserId,
     owner_team_id: row.ownerTeamId,
-    severity: row.severity,
+    ...(!isReporterArm ? { severity: row.severity } : {}),
     reporter_facing_status: row.reporterFacingStatus as VocListItem['reporter_facing_status'],
     triage_state: row.triageState as VocListItem['triage_state'],
     review_postponed_at:

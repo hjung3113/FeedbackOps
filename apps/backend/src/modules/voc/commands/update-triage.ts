@@ -258,7 +258,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     const updated = updatedRows[0];
     if (!updated) throw new HttpError('internal.unexpected', 'voc UPDATE returned no row');
 
-    const newSev = updated.severity as VocEnvelope['severity'];
+    const newSev = updated.severity as Exclude<VocEnvelope['severity'], undefined>;
     const newOwnerUser2 = updated.ownerUserId;
     const newOwnerTeam2 = updated.ownerTeamId;
     const newAa = updated.analyticsAreaId;

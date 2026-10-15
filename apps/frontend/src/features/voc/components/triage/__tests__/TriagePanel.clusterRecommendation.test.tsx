@@ -24,7 +24,7 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import type { VocListItem } from '@fops/shared';
+import { type VocListItem, vocRecommendationsResponseSchema } from '@fops/shared';
 import { TriagePanel } from '../TriagePanel';
 
 const VOC: VocListItem = {
@@ -107,6 +107,41 @@ describe('TriagePanel — 유사 VOC 추천 section', () => {
       await screen.findByTestId('cluster-recommendation-row-00000000-0000-0000-0000-0000000000b1'),
     ).toHaveTextContent('VOC-201');
     expect(urls).toContain(`/vocs/${VOC.id}/recommendations`);
+  });
+
+  it('renders a recommendation with hidden severity without severity UI', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.endsWith('/recommendations'))
+        return jsonResponse(
+          vocRecommendationsResponseSchema.parse({
+            available: true,
+            embedding_version: 1,
+            total: 1,
+            items: [
+              {
+                voc_id: '00000000-0000-0000-0000-0000000000b1',
+                display_id: 'VOC-201',
+                title: 'Reporter-visible recommendation',
+                reporter_facing_status: 'received',
+                score: 0.83,
+              },
+            ],
+          }),
+        );
+      return jsonResponse({ actors: [] });
+    }) as unknown as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    render(
+      <Wrapper>
+        <TriagePanel voc={VOC} />
+      </Wrapper>,
+    );
+    const row = await screen.findByTestId(
+      'cluster-recommendation-row-00000000-0000-0000-0000-0000000000b1',
+    );
+    expect(row).toHaveTextContent('Reporter-visible recommendation');
+    expect(row.querySelector('[aria-label^="심각도"]')).toBeNull();
   });
 
   it('keeps the recommendation nav visible when there are no same-Managed-System peers', async () => {

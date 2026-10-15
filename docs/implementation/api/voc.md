@@ -2,6 +2,23 @@
 
 Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file is the normative contract for the sections below.
 
+## Reporter-safe VOC wire projection (#1173)
+
+A VOC is in the reporter arm when its Reporter is the caller and its Managed
+System is in neither the caller's deny-aware `voc.read` scope nor `voc.triage`
+scope (`isReporterArm`). List rows, detail, and every post-write VOC envelope
+(create, description edit including no-op, and Reporter Reply's `voc`) omit the
+top-level `severity` key for this arm. Operators, including a Reporter with
+operational access, retain severity unchanged. Absent means hidden; `null`
+means visible but untriaged. Explicit Admin denies are honoured. Denied
+non-owners keep the existing not-found response.
+
+`view=my` is the reporter-perspective list for every actor. It rejects
+`filter.severity`, `sort=severity:asc|desc`, `tab=high`, and `tab=high-no-link`
+with HTTP 422 `validation.failed` at that field (`invalid_for_view`). My VOC
+counts never split by severity. Inbox and Triage keep their existing filters,
+sorts, tabs, and operator projections.
+
 ## VOC
 
 ```text
@@ -353,8 +370,11 @@ response body: 200, header Cache-Control: private, no-cache
   { available: false, reason: "provider_disabled" | "source_not_embedded",
     embedding_version: int, items: [], total: 0 }
   Item { voc_id: uuid, display_id: string, title: string,
-    severity: low|medium|high|critical|null, reporter_facing_status,
+    severity?: low|medium|high|critical|null, reporter_facing_status,
     score: number 0..1 }
+  severity is omitted for each candidate visible only through Reporter ownership
+    (outside both deny-aware voc.read and voc.triage scopes for its Managed System).
+    Operators retain severity, including null for an unclassified candidate.
   provider_disabled: the environment has no embedding provider.
   source_not_embedded: the source VOC has no vector at the active
     embedding_version yet. available false is never a silently empty list.

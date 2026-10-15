@@ -39,7 +39,7 @@ export interface VocEnvelope {
   reporter_id: string;
   title: string;
   description_rich_content: unknown;
-  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  severity?: 'low' | 'medium' | 'high' | 'critical' | null;
   reporter_facing_status: ReporterFacingStatus;
   triage_state: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
   owner_user_id: string | null;

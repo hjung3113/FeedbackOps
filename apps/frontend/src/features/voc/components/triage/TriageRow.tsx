@@ -93,7 +93,7 @@ export function TriageRow({
     >
       {/* LEFT: severity indicator — 3px × 16px pill (§3.2) */}
       <div className="flex items-center shrink-0">
-        <SeverityIndicator severity={voc.severity ?? 'low'} />
+        {voc.severity !== undefined && <SeverityIndicator severity={voc.severity} />}
       </div>
 
       {/* BODY: title + meta — .row-body (§3.8) */}

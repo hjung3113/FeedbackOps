@@ -10,9 +10,8 @@
  * SELECTED STATE: prototype uses a 2px left accent bar (`.object-row.selected::before`,
  * `--color-neon-lime`) plus a tinted row background — NOT a full ring. Mirrored here.
  *
- * SEVERITY NULL CHOICE: when severity is null we render a dimmed SeverityIndicator
- * ('low' fallback at reduced opacity) and omit the SeverityBadge chip — there is
- * no badge variant for "unset". aria reads "low" for the indicator.
+ * Absent severity is reporter-hidden; null is operator-visible but unassigned.
+ * Only the badge names a triaged row's severity; its indicators are decorative.
  *
  * HOOK-IN-MAP NOTE: VocRow calls no data hooks. VocList lifts the managed-system,
  * actor (owner/reporter), and analytics-area lookups to single map queries and
@@ -117,7 +116,7 @@ export function VocRow({
   // Determine left-bar color: accent when selected, severity color otherwise.
   const severityBarClass = selected
     ? 'bg-accent-primary'
-    : voc.severity !== null
+    : voc.severity != null
       ? SEVERITY_BAR_CLASS[voc.severity]
       : 'bg-border-strong';
 
@@ -170,7 +169,9 @@ export function VocRow({
             aria-label={`${voc.display_id} 선택`}
           />
         )}
-        <SeverityIndicator severity={voc.severity ?? 'low'} />
+        {voc.severity !== undefined && (
+          <SeverityIndicator severity={voc.severity} decorative={voc.severity !== null} />
+        )}
       </div>
 
       {/* TITLE + META column */}
@@ -200,7 +201,7 @@ export function VocRow({
             </div>
             <div className="flex items-center gap-2 text-xs text-text-muted overflow-hidden">
               <ReporterStatusBadge status={voc.reporter_facing_status} />
-              {voc.severity !== null && <SeverityBadge severity={voc.severity} />}
+              {voc.severity != null && <SeverityBadge severity={voc.severity} />}
               {managedSystem !== null && managedSystem !== undefined && (
                 <ManagedSystemPill
                   name={managedSystem.name}

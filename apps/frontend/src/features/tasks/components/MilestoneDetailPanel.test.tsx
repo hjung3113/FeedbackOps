@@ -477,7 +477,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     const row = section.closest('[data-anchor="tasks"]');
     if (!row) throw new Error('tasks section not found');
     // SeverityIndicator driven by task.priority (urgent → critical).
-    expect(within(row as HTMLElement).getByLabelText('critical')).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByLabelText('우선순위 긴급')).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText('TASK-902')).toBeInTheDocument();
     expect(
       within(row as HTMLElement).getByText('Power BI 임베디드 SSO 재인증 핸들러 구현'),

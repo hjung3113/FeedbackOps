@@ -289,6 +289,7 @@ export function TaskDetailPanel({
                 <SeverityBadge
                   severity={PRIORITY_SEVERITY[task.priority]}
                   label={TASK_PRIORITY_LABELS[task.priority]}
+                  ariaLabel={`우선순위 ${TASK_PRIORITY_LABELS[task.priority]}`}
                 />
               </>
             }
@@ -304,6 +305,7 @@ export function TaskDetailPanel({
             <SeverityBadge
               severity={PRIORITY_SEVERITY[task.priority]}
               label={TASK_PRIORITY_LABELS[task.priority]}
+              ariaLabel={`우선순위 ${TASK_PRIORITY_LABELS[task.priority]}`}
             />
           </FieldRow>
           <FieldRow label="담당자">

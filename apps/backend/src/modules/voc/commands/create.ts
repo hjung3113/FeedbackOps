@@ -18,6 +18,9 @@ import { resolveOwner } from '../responsibility.js';
 import type { CreateVocActor, VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 
+import { actorEffectiveScope } from '../authorization.js';
+import { msInScope } from '../read/scope.js';
+
 export function createVocCreateCommands(deps: VocServiceDeps) {
   async function assertOwnerOverride(
     tx: Tx,
@@ -183,6 +186,12 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       tx,
     );
     await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [{ type: 'voc', id: row.id }]);
+    const scope = await actorEffectiveScope(tx, {
+      ...actor,
+      role_level: actor.role_level ?? 'user',
+    });
+    const isReporterArm = !msInScope(scope, row.primaryManagedSystemId);
+
     return {
       id: row.id,
       display_id: row.displayId,
@@ -192,7 +201,7 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       reporter_id: row.reporterId,
       title: row.title,
       description_rich_content: row.descriptionRichContent,
-      severity: null,
+      ...(!isReporterArm ? { severity: null } : {}),
       reporter_facing_status: row.reporterFacingStatus as ReporterFacingStatus,
       triage_state: 'untriaged',
       ...owner,

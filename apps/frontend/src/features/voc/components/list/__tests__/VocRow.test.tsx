@@ -1,4 +1,4 @@
-import type { VocListItem } from '@fops/shared';
+import { type VocListItem, vocListItemSchema } from '@fops/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VocRow } from '../VocRow';
@@ -299,7 +299,7 @@ describe('<VocRow>', () => {
     expect(screen.getByRole('row').className).toContain('opacity-60');
   });
 
-  it('renders dimmed SeverityIndicator when severity is null', () => {
+  it('announces unspecified severity when severity is null', () => {
     const vocNoSeverity: VocListItem = { ...BASE_VOC, severity: null };
     const { container } = render(
       <VocRow voc={vocNoSeverity} selected={false} onSelect={onSelect} managedSystem={null} />,
@@ -307,7 +307,8 @@ describe('<VocRow>', () => {
     // SeverityIndicator renders with data-severity attribute
     const indicator = container.querySelector('[data-severity]');
     expect(indicator).not.toBeNull();
-    expect(indicator?.getAttribute('data-severity')).toBe('low');
+    expect(screen.getByLabelText('심각도 미지정')).toBeInTheDocument();
+    expect(screen.queryByLabelText('low')).not.toBeInTheDocument();
   });
 
   it('renders relative time in trailing area', () => {
@@ -316,4 +317,33 @@ describe('<VocRow>', () => {
     const rowEl = screen.getByRole('row');
     expect(rowEl.textContent).toMatch(/분|시간|일/);
   });
+});
+
+it('hides absent severity after parsing the reporter wire row', () => {
+  const { severity: _hidden, ...wire } = BASE_VOC;
+  const voc = vocListItemSchema.parse({
+    ...wire,
+    primary_managed_system_id: BASE_VOC.id,
+    reporter_id: BASE_VOC.id,
+  });
+  const { container } = render(<VocRow voc={voc} selected={false} onSelect={vi.fn()} />);
+  expect(container.querySelector('[data-severity]')).toBeNull();
+  expect(screen.queryByText('높음')).not.toBeInTheDocument();
+  expect(screen.getByTestId('voc-row-left-bar')).toHaveClass('bg-border-strong');
+});
+
+it('announces a triaged medium row once in Korean', () => {
+  const voc = vocListItemSchema.parse({
+    ...BASE_VOC,
+    primary_managed_system_id: BASE_VOC.id,
+    reporter_id: BASE_VOC.id,
+    severity: 'medium',
+    triage_state: 'triaged',
+  });
+  const { container } = render(<VocRow voc={voc} selected={false} onSelect={vi.fn()} />);
+  expect(screen.getAllByRole('img', { name: '심각도 중간' })).toHaveLength(1);
+  const indicators = container.querySelectorAll('[data-severity]');
+  expect(
+    Array.from(indicators).filter((el) => el.getAttribute('aria-hidden') !== 'true'),
+  ).toHaveLength(0);
 });

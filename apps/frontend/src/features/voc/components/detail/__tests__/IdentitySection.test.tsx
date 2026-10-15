@@ -1,4 +1,5 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { vocDetailEnvelopeSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -100,4 +101,16 @@ describe('<IdentitySection>', () => {
     expect(screen.getByText('결제 경험')).toBeInTheDocument();
     expect(screen.queryByText(areaId.slice(0, 8))).not.toBeInTheDocument();
   });
+});
+
+it('omits severity metadata for a schema-parsed reporter detail', () => {
+  const { severity: _hidden, ...wire } = DETAIL_ENVELOPE;
+  const voc = vocDetailEnvelopeSchema.parse({
+    ...wire,
+    id: OTHER_ACTOR_ID,
+    primary_managed_system_id: OTHER_ACTOR_ID,
+  });
+  const { container } = render(<IdentityMetadataStrip voc={voc} />);
+  expect(container.querySelector('[data-severity]')).toBeNull();
+  expect(screen.queryByText('높음')).not.toBeInTheDocument();
 });

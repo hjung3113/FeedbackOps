@@ -222,6 +222,64 @@ describe('useInboxRoute', () => {
     });
   });
 
+  it.each(['my', 'inbox'] as const)('%s only exposes permitted severity controls', (view) => {
+    render(<InboxTestHarness view={view} />);
+    const high = screen.queryAllByRole('tab', { name: /^높음/ });
+    expect(high).toHaveLength(view === 'my' ? 0 : 2);
+    fireEvent.click(screen.getByRole('button', { name: /정렬/ }));
+    if (view === 'my') {
+      expect(screen.queryByText('심각도 높은순')).not.toBeInTheDocument();
+      expect(screen.queryByText('심각도 낮은순')).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText('심각도 높은순')).toBeInTheDocument();
+      expect(screen.getByText('심각도 낮은순')).toBeInTheDocument();
+    }
+  });
+
+  it.each(['my', 'inbox'] as const)('%s severity filter follows the list perspective', (view) => {
+    searchState = { 'filter.severity': 'high' };
+    render(<InboxTestHarness view={view} />);
+    fireEvent.click(screen.getByRole('button', { name: /^필터/ }));
+    if (view === 'my') {
+      expect(screen.queryByText('심각도')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: '높음' })).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText('심각도')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: '높음' })).toBeChecked();
+    }
+  });
+
+  it.each(['high', 'high-no-link'] as const)(
+    'restores My VOC with a stale severity sort and %s tab using safe defaults',
+    async (tab) => {
+      const { useVocList } =
+        await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
+      useVocListMock.mockImplementation(useVocList);
+      searchState = { view: 'my', sort: 'severity:desc', tab, 'filter.severity': 'high' };
+      render(<InboxTestHarness view="my" />);
+      await waitFor(() => expect(apiClientMock).toHaveBeenCalled());
+      for (const [method, url] of apiClientMock.mock.calls) {
+        if (method !== 'GET' || !String(url).startsWith('/vocs?')) continue;
+        const params = new URL(String(url), 'http://localhost').searchParams;
+        expect(params.get('sort')).toBe('created_at:desc');
+        expect(params.has('tab')).toBe(false);
+        expect(params.has('filter.severity')).toBe(false);
+        expect(listVocsQuerySchema.safeParse(Object.fromEntries(params)).success).toBe(true);
+      }
+      const navigation = navigateMock.mock.calls.find(([value]) => value.replace)?.[0];
+      expect(navigation).toBeDefined();
+      expect(navigation.search(searchState)).toEqual({ view: 'my' });
+    },
+  );
+
+  it('keeps Inbox severity sorting and tabs when restoring a URL', () => {
+    searchState = { view: 'inbox', sort: 'severity:desc', tab: 'high' };
+    render(<InboxTestHarness view="inbox" />);
+    expect(useVocListMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'severity:desc', tab: 'high' }),
+    );
+  });
+
   it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
     const { useVocList } =
       await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');

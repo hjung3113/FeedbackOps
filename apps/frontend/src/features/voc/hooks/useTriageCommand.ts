@@ -133,7 +133,7 @@ export function useTriageCommand({
       ...buildTriageSnapshot(input, {
         triageState: voc.triage_state,
         reviewPostponedAt: serverReviewPostponedAt,
-        severity: voc.severity,
+        severity: voc.severity ?? null,
         ownerUserId: voc.owner_user_id,
         ownerTeamId: voc.owner_team_id,
         analyticsAreaId: voc.analytics_area_id,

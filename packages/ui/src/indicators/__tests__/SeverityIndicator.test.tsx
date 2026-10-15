@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { type SeverityEnum, SeverityIndicator } from '../SeverityIndicator.js';
 
 const severities: Array<{ severity: SeverityEnum; expectedFilled: number }> = [
@@ -51,4 +51,16 @@ describe('SeverityIndicator', () => {
       });
     });
   });
+});
+
+it.each([
+  ['low', '심각도 낮음'],
+  ['medium', '심각도 중간'],
+  ['high', '심각도 높음'],
+  ['critical', '심각도 심각'],
+  [null, '심각도 미지정'],
+] as const)('announces %s in Korean', (severity, name) => {
+  render(<SeverityIndicator severity={severity} />);
+  expect(screen.getByRole('img', { name })).toBeInTheDocument();
+  expect(screen.queryByLabelText('low')).not.toBeInTheDocument();
 });

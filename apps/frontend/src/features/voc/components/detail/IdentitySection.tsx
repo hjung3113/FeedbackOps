@@ -84,7 +84,7 @@ export function IdentityMetadataStrip({
 
   const sourceContextLabel = SOURCE_CONTEXT_LABELS[voc.source_context] ?? voc.source_context;
 
-  const hasSeverity = voc.severity !== null;
+  const hasSeverity = voc.severity != null;
   // `undefined` means the reporter arm redacted the field (#337), not "no area".
   // `!== null` alone would let a redacted envelope render an empty chip.
   const hasAnalyticsArea = voc.analytics_area_id != null;
@@ -98,7 +98,7 @@ export function IdentityMetadataStrip({
 
   return (
     <div className="flex flex-wrap gap-2 mt-3 text-xs">
-      {hasSeverity && severity !== null && <SeverityBadge severity={severity} />}
+      {hasSeverity && severity != null && <SeverityBadge severity={severity} />}
       {hasManagedSystem && (
         <ManagedSystemPill name={managedSystem.name} mark={managedSystem.mark} />
       )}
