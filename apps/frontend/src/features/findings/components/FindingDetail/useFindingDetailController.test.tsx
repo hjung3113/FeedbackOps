@@ -211,7 +211,10 @@ describe('useFindingDetailController', () => {
 
   it('linked Cluster title/display fall through from the cluster query, id-gated (#1174b)', async () => {
     vi.mocked(useVocClusterDetail).mockReturnValue({
+      // #1174 FIX1: the controller projects identity only from a successful
+      // read, so the fixture models the query state it represents.
       data: { id: IDS.cluster, title: '결제 실패 클러스터', display_id: 'CLU-9001' },
+      isSuccess: true,
     } as unknown as UseQueryResult<VocClusterDto>);
     const { result } = renderController({
       ...FINDING_LINKED,

@@ -263,7 +263,10 @@ describe('FindingDetailPanel', () => {
   it('links a cluster-sourced Finding to its readable source Cluster', () => {
     const clusterId = '70000000-0000-7000-8000-000000000007';
     useVocClusterDetailMock.mockReturnValue({
+      // #1174 FIX1: the controller projects identity only from a successful
+      // read, so the fixture models the query state it represents.
       data: { id: clusterId, display_id: 'CLU-9001', title: '결제 실패 클러스터' },
+      isSuccess: true,
     });
     renderWithClient(
       <FullFindingDetail

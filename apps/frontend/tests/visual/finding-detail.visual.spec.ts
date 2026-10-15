@@ -77,10 +77,16 @@ test.describe('/findings/$findingId visual harness', () => {
     await expect(panel.getByText('Identity Core')).toBeVisible();
     await expect(panel.getByText('인증 세션')).toBeVisible();
 
-    // Linked VOC and linked Task cards resolve their display data.
-    await expect(panel.getByRole('link', { name: findingSourceVoc.display_id })).toContainText(
-      findingSourceVoc.title,
-    );
+    // Linked VOC and linked Task cards resolve their display data. #1174b: the
+    // Evidence highlight row now also links the same display id, so the bare
+    // display-id name is ambiguous — pin the source-VOC link by its full
+    // accessible name (title + display id; \\s* because the accname may join
+    // the two spans without whitespace).
+    await expect(
+      panel.getByRole('link', {
+        name: new RegExp(`${findingSourceVoc.title}\\s*${findingSourceVoc.display_id}`),
+      }),
+    ).toContainText(findingSourceVoc.title);
     await expect(panel.getByRole('link', { name: linkedTask.display_id })).toContainText(
       linkedTask.title,
     );

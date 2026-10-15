@@ -168,9 +168,20 @@ describe('EvidenceHighlightsSection labels', () => {
     expect(screen.queryByText(sourceId.slice(0, 8))).not.toBeInTheDocument();
   });
 
+  // #1174b U2-6 / #1174 FIX1: the backend keeps the VOC `source_id` but
+  // withholds `source_meta` when the source is unreadable, so exercise that
+  // real shape — no identifier, no UUID fragment and no link may render.
   it('shows the source type only for VOC evidence without a readable source meta', () => {
+    const sourceId = '55555555-5555-4555-8555-555555555555';
     useEvidenceHighlightsMock.mockReturnValue({
-      data: [makeHighlight('voc', null)],
+      data: [
+        {
+          ...makeHighlight('voc', null),
+          source_id: sourceId,
+          source_title: 'Export failures',
+          source_meta: null,
+        },
+      ],
       isLoading: false,
       isError: false,
     });
@@ -178,5 +189,7 @@ describe('EvidenceHighlightsSection labels', () => {
 
     expect(screen.getByTestId('evidence-source-type')).toHaveTextContent('VOC');
     expect(screen.queryByTestId('evidence-source-id')).not.toBeInTheDocument();
+    expect(screen.queryByText(sourceId.slice(0, 8))).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

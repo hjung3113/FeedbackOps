@@ -119,8 +119,15 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
   const linkedClusterQuery = useVocClusterDetail(
     finding.source_type === 'voc_cluster' && finding.source_id !== null ? finding.source_id : null,
   );
-  const linkedClusterTitle = linkedClusterQuery.data?.title ?? null;
-  const linkedClusterDisplayId = linkedClusterQuery.data?.display_id ?? null;
+  // #1174 FIX1: TanStack Query keeps cached `data` when a refetch errors, so
+  // project the identity only from a successful read — a previously readable
+  // Cluster must not stay named or linked after its read turns denied/not-found.
+  const linkedClusterTitle = linkedClusterQuery.isSuccess
+    ? (linkedClusterQuery.data?.title ?? null)
+    : null;
+  const linkedClusterDisplayId = linkedClusterQuery.isSuccess
+    ? (linkedClusterQuery.data?.display_id ?? null)
+    : null;
   const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } = useIdempotencyKey();
   const { data: me } = useMe();
   const managePermissionQuery = usePermissionCheck({
