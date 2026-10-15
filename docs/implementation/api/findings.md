@@ -44,9 +44,15 @@ All Finding list/detail/create DTOs include required nullable `owner_actor_id` /
 `Idempotency-Key`, and returns the updated `FindingDto`. Authz is Admin or
 Developer with `finding.manage` on the Finding Primary Managed System. The
 target Task must exist in the same workspace and Primary Managed System. The
-command rejects a different pre-existing `linked_task_id` with
-`422 validation.failed` field code `already_linked`; relinking to the same Task
-is a `200` no-op. Side effects are atomic: set `findings.linked_task_id`, create
+command decides from active canonical `(finding, task, requested_task)` links,
+not the convenience `linked_task_id`: an active link to a different Task returns
+`422 validation.failed` field code `already_linked`; an active link to the same
+Task is a `200` no-op. With no active Task link, a fresh Idempotency-Key creates
+the link and repairs even a stale non-null `linked_task_id`. Generic detach
+reconciles the convenience column through the Findings-owned seam in the same
+transaction, clearing it when no active requested_task link to a Task remains.
+An active Task Request link still counts as execution; draft Findings stay out
+of `execution=none`. Side effects are atomic: set `findings.linked_task_id`, create
 the existing `(finding, task, requested_task)` entity link, audit
 `entity_link.created` when inserted, and audit `finding_task_linked`.
 

@@ -11,6 +11,7 @@ import { HttpError } from '../../lib/errors.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
 import { lockTaskById } from '../tasks/index.js';
+import { activeFindingTaskLinks } from './execution-projection.js';
 import { actorFindingListScope } from './list-scope.js';
 import {
   countListRows,
@@ -390,8 +391,12 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             throw new HttpError('permission.denied', 'task is outside finding scope');
           }
 
-          if (finding.linked_task_id !== null) {
-            if (finding.linked_task_id === task.id) {
+          const activeTaskLinks = await activeFindingTaskLinks(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+          });
+          if (activeTaskLinks.length > 0) {
+            if (activeTaskLinks.every((link) => link.target_id === task.id)) {
               const source = await findCreatedFindingSourceLink(tx, {
                 workspaceId: actor.workspace_id,
                 findingId: finding.id,

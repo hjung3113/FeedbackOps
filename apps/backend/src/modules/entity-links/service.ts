@@ -13,6 +13,7 @@ import type {
 import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
 import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
+import type { FindingExecutionReconciler } from '../findings/execution-projection.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -40,6 +41,7 @@ import {
 export type { EntityLinksActor, ReporterSummaryResult } from './provider-types.js';
 
 export interface EntityLinksServiceDeps {
+  reconcileFindingExecution?: FindingExecutionReconciler;
   recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
@@ -877,6 +879,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     if (!sourceAllowed || !targetAllowed) {
       throw new HttpError('not_found.record', 'entity link not found');
     }
+    if (
+      targetProvider.canCreateTarget !== undefined &&
+      !(await targetProvider.canCreateTarget(deps, actor, targetRow))
+    ) {
+      throw new HttpError('not_found.record', 'entity link not found');
+    }
     if (link.status !== 'active') {
       throw new HttpError('conflict.stale_write', 'entity link is no longer active');
     }
@@ -895,6 +903,17 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       });
       if (!updated) {
         throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+      }
+
+      if (
+        updated.source_type === 'finding' &&
+        updated.target_type === 'task' &&
+        updated.relation_type === 'requested_task'
+      ) {
+        await deps.reconcileFindingExecution?.(tx, {
+          workspaceId: actor.workspace_id,
+          findingId: updated.source_id,
+        });
       }
 
       await deps.auditService.record(tx, {

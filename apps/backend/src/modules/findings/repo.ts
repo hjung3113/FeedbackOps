@@ -280,7 +280,7 @@ export async function listFindingComments(
 
 export async function updateFindingLinkedTask(
   tx: Tx,
-  input: { workspaceId: string; findingId: string; taskId: string },
+  input: { workspaceId: string; findingId: string; taskId: string | null },
 ): Promise<FindingReadRow> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     UPDATE finding.findings
