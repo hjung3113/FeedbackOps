@@ -115,7 +115,7 @@ describe('TaskBoardRoute keyboard recovery scope', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['groupBy', 'managedSystem', 'publicUpdate'] as const)(
+  it.each(['groupBy', 'managedSystem', 'publicUpdate', 'q'] as const)(
     'abandons a pending destination and its later rejection after %s changes',
     async (scope) => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -164,7 +164,9 @@ describe('TaskBoardRoute keyboard recovery scope', () => {
           board(
             scope === 'managedSystem'
               ? { managedSystem: task.primary_managed_system_id }
-              : { publicUpdate: 'missing' },
+              : scope === 'q'
+                ? { q: 'new results' }
+                : { publicUpdate: 'missing' },
           ),
         );
         await screen.findByRole('button', { name: /TASK-1000:/ });

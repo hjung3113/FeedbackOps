@@ -1,9 +1,9 @@
 // useCommittedSearchDraft — debounce, immediate commit, and acknowledgement.
 // The inbox route used to own this; these tests are the seam that moved with it.
 
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
 const DEBOUNCE_MS = 300;
 // #875: searchDebounceMs waits this long when the draft ends in Hangul.

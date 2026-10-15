@@ -234,6 +234,12 @@ export type LinkEvidenceRequest = z.infer<typeof linkEvidenceRequestSchema>;
 
 export const listFindingsQuerySchema = z
   .object({
+    q: z
+      .string()
+      .trim()
+      .max(100)
+      .optional()
+      .transform((value) => (value === undefined || value === '' ? undefined : value)),
     analytics_area_id: z.union([z.string().uuid(), z.literal('unset')]).optional(),
     status: z.literal('active').optional(),
     managed_system_id: z.string().uuid().optional(),

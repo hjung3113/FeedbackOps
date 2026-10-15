@@ -576,6 +576,8 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 | Saved list views | Shipped as sidebar saved views (`apps/frontend/src/lib/api/saved-views.ts`, `docs/implementation/api/saved-views.md`); `/vocs?view=list` is not a route |
 | Draft VOC ("초안 저장") | Not built |
 
+The committed search draft hook is shared at `apps/frontend/src/lib/useCommittedSearchDraft.ts` (also used by Task list/board and Findings); VOC search behavior is unchanged.
+
 ### Reporter severity projection (#1173)
 
 `내 VOC` hides severity filters and sort options and the `high` / `high-no-link`

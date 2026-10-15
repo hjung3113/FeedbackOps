@@ -95,6 +95,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
   }
 
   async function listFindings(args: {
+    q?: string;
     actor: FindingsActor;
     managedSystemId?: string;
     execution?: 'none';
@@ -120,6 +121,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     const allowedSystemIds = scope.kind === 'all' ? undefined : scope.managedSystemIds;
     const input = {
       workspaceId: args.actor.workspace_id,
+      ...(args.q === undefined ? {} : { q: args.q }),
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
       ...(args.execution !== undefined ? { execution: args.execution } : {}),
       ...(args.analyticsAreaId === undefined ? {} : { analyticsAreaId: args.analyticsAreaId }),

@@ -138,6 +138,12 @@ export type LinkExistingTaskRequest = z.infer<typeof linkExistingTaskRequestSche
 
 export const listTasksQuerySchema = z
   .object({
+    q: z
+      .string()
+      .trim()
+      .max(100)
+      .optional()
+      .transform((value) => (value === undefined || value === '' ? undefined : value)),
     status: taskStatusSchema.optional(),
     assignee: z.union([z.string().uuid(), z.literal('me')]).optional(),
     assignee_team_id: z.string().uuid().optional(),

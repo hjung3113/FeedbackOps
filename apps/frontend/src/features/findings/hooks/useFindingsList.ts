@@ -45,12 +45,13 @@ export function useFindingsPages(
   assignment?: 'assigned' | 'unassigned',
   analyticsAreaId?: string,
   status?: 'active',
+  q?: string,
 ) {
   return useInfiniteQuery({
     queryKey: [
       'findings',
       'pages',
-      { managedSystemId, execution, assignment, analyticsAreaId, status },
+      { managedSystemId, execution, assignment, analyticsAreaId, status, q },
     ] as const,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }) => {
@@ -60,6 +61,7 @@ export function useFindingsPages(
       if (assignment !== undefined) params.set('assignment', assignment);
       if (analyticsAreaId !== undefined) params.set('analytics_area_id', analyticsAreaId);
       if (status !== undefined) params.set('status', status);
+      if (q !== undefined) params.set('q', q);
       if (pageParam !== undefined) params.set('cursor', pageParam);
       return (
         await apiRequest('GET', `/findings?${params}`, listFindingsResponseSchema, { signal })

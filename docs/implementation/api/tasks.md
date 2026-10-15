@@ -202,6 +202,7 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 
 ```text
 query:
+  q optional trimmed string, max 100 characters; blank means absent
   status optional backlog|todo|doing|review|done|released|reopened
   assignee optional uuid or me
   assignee_team_id optional team UUID
@@ -226,6 +227,17 @@ auth and permission: Admin or Developer. Admin sees all workspace Tasks.
 sort: updated_at DESC, id DESC; cursor continues both columns with raw
   PostgreSQL timestamp precision (including microseconds)
 ```
+
+Optional `q` is trimmed, at most 100 characters; blank/whitespace becomes absent.
+Matching is case-insensitive `display_id` prefix OR `title` contains; `\`, `%`
+and `_` in the input match literally. Bound SQL parameters apply this predicate
+after read scope and intersect it with all other filters, before pagination.
+Body/summary text is not searched. A 101-character normalized query returns
+`422 validation.failed` with `detail.fields: [{ path: ['q'], code: 'too_big' }]`.
+The first-page `page.total` counts the complete authorized matching population
+under the same filters, including zero; later pages omit it. Without `limit`,
+all authorized matching rows are returned. Navigation/report/badge counts omit
+`q` and remain unchanged.
 
 Task Board, Home and other full-set Task consumers omit `limit` and keep their
 complete population. Saved Task views reject `cursor` and `limit` at the

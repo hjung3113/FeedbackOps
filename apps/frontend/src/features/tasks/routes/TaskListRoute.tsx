@@ -5,6 +5,7 @@ import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { LIST_SEARCH_EMPTY_LABEL, LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import {
   TASK_REPORT_FILTER_COPY as FILTER_COPY,
@@ -14,7 +15,8 @@ import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
-import type { ListTasksResponse, TaskStatus } from '@fops/shared';
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
+import { type ListTasksResponse, type TaskStatus, taskStatusSchema } from '@fops/shared';
 import {
   ActiveFilterBar,
   InternalTaskBadge,
@@ -22,6 +24,12 @@ import {
   ObjectRow,
   OutlineBadge,
   PermissionBlockedPanel,
+  SearchInput,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   UnassignedBadge,
 } from '@fops/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -50,6 +58,7 @@ const FILTER_KEYS = [
 ] as const;
 
 export type TaskListFilters = {
+  q?: string | undefined;
   'filter.analytics_area'?: string | undefined;
   status?: TaskStatus | undefined;
   status_group?: 'in-flight' | undefined;
@@ -74,6 +83,23 @@ export function TaskListRoute({
   filters?: TaskListFilters;
 }) {
   const navigate = useNavigate();
+  const writeSearch = React.useCallback(
+    (draft: string) => {
+      void navigate({
+        to: '/tasks',
+        replace: true,
+        search: ({ q: _q, ...previous }) => ({
+          ...previous,
+          ...(draft.trim() === '' ? {} : { q: draft.trim() }),
+        }),
+      });
+    },
+    [navigate],
+  );
+  const { draft, setDraft, commit } = useCommittedSearchDraft({
+    committed: filters.q ?? '',
+    write: writeSearch,
+  });
   const { rowRef, returnFocus, cancel } = useCloseFocusReturn(
     JSON.stringify([view, managedSystem ?? null]),
   );
@@ -92,6 +118,7 @@ export function TaskListRoute({
     [navigate, view],
   );
   const wireFilters = {
+    ...(filters.q === undefined ? {} : { q: filters.q }),
     ...(filters['filter.analytics_area'] === undefined
       ? {}
       : { analytics_area_id: filters['filter.analytics_area'] }),
@@ -205,34 +232,18 @@ export function TaskListRoute({
     markLinkMissing,
   ]);
 
-  if (tasksQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Task를 불러오는 중…</div>;
-  }
-  if (isPermissionDenied(tasksQuery.error)) {
-    return (
-      <PermissionBlockedPanel
-        state="denied"
-        category="Task 목록"
-        reason={PERMISSION_BLOCKED_REASONS.taskList}
-        className="m-4"
-      />
-    );
-  }
-  if (tasksQuery.error && !tasksQuery.isFetchNextPageError) {
-    return (
-      <ListStateMessage
-        variant="error"
-        title="Task 목록을 불러오지 못했습니다"
-        body="잠시 후 다시 시도하세요."
-        action={{ label: '다시 시도', onClick: () => void tasksQuery.refetch() }}
-      />
-    );
-  }
-
   // #682 owner decision sets title/count and empty copy within the prototype Tasks list.
   return (
     <ListShell
       toolbar={{
+        actions: (
+          <SearchInput
+            placeholder={LIST_SEARCH_PLACEHOLDER}
+            value={draft}
+            onValueChange={setDraft}
+            onCommit={commit}
+          />
+        ),
         title: (
           <span className="flex items-center gap-2">
             {view === 'my' ? '내 Task' : 'Tasks'}
@@ -240,6 +251,41 @@ export function TaskListRoute({
           </span>
         ),
       }}
+      tabs={
+        view === 'my' ? (
+          <div className="mx-5 my-2">
+            <Select
+              value={filters.status ?? filters.status_group ?? 'all'}
+              onValueChange={(value) => {
+                void navigate({
+                  to: '/tasks',
+                  search: ({ status: _status, status_group: _group, ...previous }) => ({
+                    ...previous,
+                    ...(value === 'all'
+                      ? {}
+                      : value === 'in-flight'
+                        ? { status_group: 'in-flight' as const }
+                        : { status: taskStatusSchema.parse(value) }),
+                  }),
+                });
+              }}
+            >
+              <SelectTrigger density="compact" className="w-fit" aria-label="Task 상태">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 상태</SelectItem>
+                <SelectItem value="in-flight">{FILTER_COPY.inFlight}</SelectItem>
+                {taskStatusSchema.options.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {TASK_STATUS_LABELS[status]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : undefined
+      }
       list={
         <>
           <ActiveFilterBar
@@ -247,70 +293,96 @@ export function TaskListRoute({
             onClearAll={() => removeFilters(FILTER_KEYS)}
             className="mx-5 my-2"
           />
-          {items.map((task) => {
-            const assignee = resolveTaskAssignee(task.assignee_actor_id, actorNamesById);
-            return (
-              <ObjectRow
-                key={task.id}
-                ref={rowRef(task.id)}
-                id={task.display_id}
-                title={task.title}
-                selected={selected?.id === task.id}
-                density="default"
-                severity={taskPriorityToSeverity(task.priority)}
-                onClick={() => selectRow(task.id)}
-                badges={<InternalTaskBadge status={task.status} />}
-                meta={
-                  <>
-                    <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
-                    {dot()}
-                    <span>
-                      {task.assignee_actor_id ? (
-                        assignee.kind === 'resolved' ? (
-                          assignee.displayName
-                        ) : (
-                          GLOSSARY.unknownUser
-                        )
-                      ) : task.assignee_team_id ? (
-                        taskTeamMark(task.assignee_team_id, teamNames)
-                      ) : (
-                        <UnassignedBadge />
-                      )}
-                    </span>
-                    {dot()}
-                    <span>
-                      {managedSystemNamesById.get(task.primary_managed_system_id) ??
-                        'Managed System'}
-                    </span>
-                    {dot()}
-                    <span>{formatShortDateTime(task.updated_at)}</span>
-                  </>
-                }
+          {tasksQuery.isLoading ? (
+            <div className="p-4 text-sm text-text-muted">Task를 불러오는 중…</div>
+          ) : isPermissionDenied(tasksQuery.error) ? (
+            <PermissionBlockedPanel
+              state="denied"
+              category="Task 목록"
+              reason={PERMISSION_BLOCKED_REASONS.taskList}
+              className="m-4"
+            />
+          ) : tasksQuery.error && !tasksQuery.isFetchNextPageError ? (
+            <ListStateMessage
+              variant="error"
+              title="Task 목록을 불러오지 못했습니다"
+              body="잠시 후 다시 시도하세요."
+              action={{ label: '다시 시도', onClick: () => void tasksQuery.refetch() }}
+            />
+          ) : (
+            <>
+              {items.map((task) => {
+                const assignee = resolveTaskAssignee(task.assignee_actor_id, actorNamesById);
+                return (
+                  <ObjectRow
+                    key={task.id}
+                    ref={rowRef(task.id)}
+                    id={task.display_id}
+                    title={task.title}
+                    selected={selected?.id === task.id}
+                    density="default"
+                    severity={taskPriorityToSeverity(task.priority)}
+                    onClick={() => selectRow(task.id)}
+                    badges={<InternalTaskBadge status={task.status} />}
+                    meta={
+                      <>
+                        <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
+                        {dot()}
+                        <span>
+                          {task.assignee_actor_id ? (
+                            assignee.kind === 'resolved' ? (
+                              assignee.displayName
+                            ) : (
+                              GLOSSARY.unknownUser
+                            )
+                          ) : task.assignee_team_id ? (
+                            taskTeamMark(task.assignee_team_id, teamNames)
+                          ) : (
+                            <UnassignedBadge />
+                          )}
+                        </span>
+                        {dot()}
+                        <span>
+                          {managedSystemNamesById.get(task.primary_managed_system_id) ??
+                            'Managed System'}
+                        </span>
+                        {dot()}
+                        <span>{formatShortDateTime(task.updated_at)}</span>
+                      </>
+                    }
+                  />
+                );
+              })}
+              <ListLoadMore
+                hasMore={tasksQuery.hasNextPage}
+                loadingMore={tasksQuery.isFetchingNextPage}
+                failed={tasksQuery.isFetchNextPageError}
+                onLoadMore={() => void tasksQuery.fetchNextPage()}
               />
-            );
-          })}
-          <ListLoadMore
-            hasMore={tasksQuery.hasNextPage}
-            loadingMore={tasksQuery.isFetchingNextPage}
-            failed={tasksQuery.isFetchNextPageError}
-            onLoadMore={() => void tasksQuery.fetchNextPage()}
-          />
-          {items.length === 0 &&
-            (activeFilters.length > 0 ? (
-              <ListStateMessage
-                variant="filtered"
-                title={FILTER_COPY.empty}
-                body={activeFilters.map((filter) => filter.label).join(' · ')}
-              />
-            ) : view === 'my' ? (
-              <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />
-            ) : (
-              <ListStateMessage
-                variant="empty"
-                title="Task가 없습니다."
-                body="생성된 Task가 여기에 표시됩니다."
-              />
-            ))}
+              {items.length === 0 &&
+                (filters.q ? (
+                  <ListStateMessage
+                    variant="filtered"
+                    title={LIST_SEARCH_EMPTY_LABEL}
+                    action={{ label: '검색 초기화', onClick: () => writeSearch('') }}
+                  />
+                ) : activeFilters.length > 0 ? (
+                  <ListStateMessage
+                    variant="filtered"
+                    title={FILTER_COPY.empty}
+                    body={activeFilters.map((filter) => filter.label).join(' · ')}
+                  />
+                ) : view === 'my' ? (
+                  <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />
+                ) : (
+                  <ListStateMessage
+                    variant="empty"
+                    title="Task가 없습니다."
+                    body="생성된 Task가 여기에 표시됩니다."
+                  />
+                ))}
+            </>
+          )}
         </>
       }
       detailPanel={
