@@ -14,6 +14,7 @@ import {
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import { formatShortDateTime } from '@/lib/format/datetime';
+import { placeholderDataForSearchOnly } from '@/lib/query/placeholder-data-for-search';
 import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
 import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import { type ListTasksResponse, type TaskStatus, taskStatusSchema } from '@fops/shared';
@@ -32,7 +33,7 @@ import {
   SelectValue,
   UnassignedBadge,
 } from '@fops/ui';
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import {
@@ -86,16 +87,19 @@ export function TaskListRoute({
   const navigate = useNavigate();
   const writeSearch = React.useCallback(
     (draft: string) => {
+      const next = draft.trim();
+      if (next === (filters.q ?? '')) return false;
       void navigate({
         to: '/tasks',
         replace: true,
         search: ({ q: _q, ...previous }) => ({
           ...previous,
-          ...(draft.trim() === '' ? {} : { q: draft.trim() }),
+          ...(next === '' ? {} : { q: next }),
         }),
       });
+      return true;
     },
-    [navigate],
+    [filters.q, navigate],
   );
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: filters.q ?? '',
@@ -155,8 +159,9 @@ export function TaskListRoute({
       ? []
       : [{ key, label: labels[key], onRemove: () => removeFilters([key]) }],
   );
+  const tasksKey = ['tasks', view, managedSystem, 'pages', wireFilters] as const;
   const tasksQuery = useInfiniteQuery({
-    queryKey: ['tasks', view, managedSystem, 'pages', wireFilters] as const,
+    queryKey: tasksKey,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: ListTasksResponse) =>
       last.page?.has_more ? last.page.cursor : undefined,
@@ -169,7 +174,8 @@ export function TaskListRoute({
         ...(view === 'my' ? { assignee: 'me' } : {}),
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      placeholderDataForSearchOnly(tasksKey, previousData, previousQuery),
     staleTime: 30 * 1000,
   });
   const { actors } = useWorkspaceActors();

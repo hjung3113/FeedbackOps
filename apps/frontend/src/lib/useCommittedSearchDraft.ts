@@ -12,6 +12,13 @@
 //                                                    skipped once base is
 //                                                    already undefined
 //   acknowledged          undefined                  committed.trim() === draft.trim()
+//                                                    OR write() returned false
+//
+// A writer may return false when the normalized draft is already `committed`,
+// so `committed` will not change. That write is acknowledged immediately.
+// Undefined — VOC writes the raw draft and returns undefined, and the URL can
+// still change — still waits for `committed`. Newer raw typing stays in
+// draftAheadOfRef either way.
 //
 // draftAheadOfRef holds the pending draft while the box is ahead of it, so the
 // acknowledgement does not copy `committed` over newer text. setDraft sets it
@@ -25,7 +32,8 @@ import * as React from 'react';
 
 export interface UseCommittedSearchDraftOptions {
   committed: string;
-  write: (draft: string, base: string) => void;
+  /** Return false when this write does not change `committed`. */
+  write: (draft: string, base: string) => boolean | undefined;
 }
 
 export function useCommittedSearchDraft({ committed, write }: UseCommittedSearchDraftOptions): {
@@ -50,7 +58,10 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
       if (next === base) return;
       pendingWriteRef.current = { draft: next, base };
       draftAheadOfRef.current = undefined;
-      write(next, base);
+      if (write(next, base) === false) {
+        pendingWriteRef.current = undefined;
+        setDraftState(committed);
+      }
     },
     [committed, write],
   );

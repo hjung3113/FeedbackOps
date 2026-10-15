@@ -313,6 +313,41 @@ it('keeps previous Task rows and total visible until the next search arrives', a
   expect(screen.getByText('0건')).toBeInTheDocument();
 });
 
+it.each(['chip', 'clear all'] as const)(
+  'settles a padded search that already matches q, then %s leaves an empty box',
+  async (action) => {
+    const queries: Query[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
+        return reply({ items: [], page: { has_more: false, total: 0 } });
+      }),
+    );
+    mount('my', { q: 'padded' });
+    const box = screen.getByPlaceholderText('제목 또는 ID');
+    expect(box).toHaveValue('padded');
+    fireEvent.change(box, { target: { value: ' padded ' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(box).toHaveValue('padded'));
+    expect(router.search.q).toBe('padded');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: action === 'chip' ? '제목 또는 ID: padded 필터 제거' : '필터 초기화',
+      }),
+    );
+    await waitFor(() => expect(router.search.q).toBeUndefined());
+    expect(box).toHaveValue('');
+    await waitFor(() => expect(queries.at(-1)?.q).toBeUndefined());
+    fireEvent.change(box, { target: { value: 'again' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(router.search.q).toBe('again'));
+    expect(box).toHaveValue('again');
+    await waitFor(() => expect(queries.at(-1)?.q).toBe('again'));
+  },
+);
+
 it.each(['chip', 'clear all'] as const)('clears Task q through %s', async (action) => {
   const queries: Query[] = [];
   vi.stubGlobal(

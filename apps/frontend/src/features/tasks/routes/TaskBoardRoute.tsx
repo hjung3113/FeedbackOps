@@ -8,6 +8,7 @@ import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
+import { placeholderDataForSearchOnly } from '@/lib/query/placeholder-data-for-search';
 import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import {
   type Announcements,
@@ -21,7 +22,12 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { type TaskDto, type TaskStatus, taskPrioritySchema } from '@fops/shared';
+import {
+  type ListTasksResponse,
+  type TaskDto,
+  type TaskStatus,
+  taskPrioritySchema,
+} from '@fops/shared';
 import {
   ListFilterButton,
   OutlineBadge,
@@ -30,7 +36,7 @@ import {
   WorkbenchShell,
   readMotionTiming,
 } from '@fops/ui';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { resolveTaskAssignee, taskTeamLabel, useTaskManagedSystemNames, useTaskTeamNames } from '../adapters/taskDisplayAdapters';
@@ -115,16 +121,19 @@ export function TaskBoardRoute({
   const navigate = useNavigate();
   const writeSearch = React.useCallback(
     (draft: string) => {
+      const next = draft.trim();
+      if (next === (q ?? '')) return false;
       void navigate({
         to: '/tasks',
         replace: true,
         search: ({ q: _q, ...previous }) => ({
           ...previous,
-          ...(draft.trim() === '' ? {} : { q: draft.trim() }),
+          ...(next === '' ? {} : { q: next }),
         }),
       });
+      return true;
     },
-    [navigate],
+    [navigate, q],
   );
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: q ?? '',
@@ -155,9 +164,10 @@ export function TaskBoardRoute({
     [managedSystem, publicUpdate, q],
   );
   const mutation = useTaskStatusTransition(tasksKey);
-  const tasksQuery = useQuery({
+  const tasksQuery = useQuery<ListTasksResponse>({
     queryKey: tasksKey,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      placeholderDataForSearchOnly(tasksKey, previousData, previousQuery),
     queryFn: ({ signal }) =>
       listTasks({
         signal,

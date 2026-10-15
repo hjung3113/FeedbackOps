@@ -4,14 +4,10 @@
 
 import { apiRequest } from '@/lib/api';
 import { ApiError, ApiParseError } from '@/lib/api/types';
+import { placeholderDataForSearchOnly } from '@/lib/query/placeholder-data-for-search';
 import { listFindingsResponseSchema } from '@fops/shared';
 import type { ListFindingsResponse } from '@fops/shared';
-import {
-  type UseQueryResult,
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-} from '@tanstack/react-query';
+import { type UseQueryResult, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 export function useFindingsList(
   managedSystemId?: string,
@@ -52,13 +48,15 @@ export function useFindingsPages(
   status?: 'active',
   q?: string,
 ) {
+  const queryKey = [
+    'findings',
+    'pages',
+    { managedSystemId, execution, assignment, analyticsAreaId, status, q },
+  ] as const;
   return useInfiniteQuery({
-    queryKey: [
-      'findings',
-      'pages',
-      { managedSystemId, execution, assignment, analyticsAreaId, status, q },
-    ] as const,
-    placeholderData: keepPreviousData,
+    queryKey,
+    placeholderData: (previousData, previousQuery) =>
+      placeholderDataForSearchOnly(queryKey, previousData, previousQuery),
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }) => {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
@@ -73,7 +71,8 @@ export function useFindingsPages(
         await apiRequest('GET', `/findings?${params}`, listFindingsResponseSchema, { signal })
       ).data;
     },
-    getNextPageParam: (last) => (last.page?.has_more ? last.page.cursor : undefined),
+    getNextPageParam: (last: ListFindingsResponse) =>
+      last.page?.has_more ? last.page.cursor : undefined,
     staleTime: 30_000,
     retry: (count, error) =>
       !(error instanceof ApiParseError) &&

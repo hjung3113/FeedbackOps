@@ -652,6 +652,14 @@ Blank search omits `q`; the strict route schemas use the same trimmed, max-100
 query contract as the API. Each search changes the list query key and starts
 from page one without a cursor; no-limit board requests include `q` too.
 Pending/error/empty Task list bodies preserve the shell and focused search draft.
+While a search is pending, Task list/board and Findings retain previous rows and
+counts only when that query differs by `q` alone and the previous query
+succeeded. A Managed System, view, filter, or status change, or a previous
+error, shows the loading state with no previous rows. A normalized write that
+does not change the committed `q` settles the draft immediately, so a later
+reset can clear it. Normalized URL acknowledgements still preserve newer raw
+typing. Task and Findings lists show a `제목 또는 ID: …` chip;
+removing it clears `q`, and clear-all resets `q` with the other filters.
 No matches show `검색 결과가 없습니다.` with a reset action.
 
 `내 Task` exposes a status selector for individual `status` values or

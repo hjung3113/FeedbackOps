@@ -265,6 +265,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         },
         replace: true,
       });
+      // Undefined, not false: a raw write can still change the URL, so the
+      // draft waits for `committed` instead of settling as a no-op.
+      return undefined;
     },
     [navigate, search.tab, view],
   );

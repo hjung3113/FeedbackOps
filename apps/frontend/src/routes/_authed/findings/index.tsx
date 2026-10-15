@@ -170,16 +170,19 @@ function FindingsListShell({
   const navigate = useNavigate({ from: '/findings/' });
   const writeSearch = React.useCallback(
     (draft: string) => {
+      const next = draft.trim();
+      if (next === (q ?? '')) return false;
       void navigate({
         to: '/findings',
         replace: true,
         search: ({ q: _q, ...previous }) => ({
           ...previous,
-          ...(draft.trim() === '' ? {} : { q: draft.trim() }),
+          ...(next === '' ? {} : { q: next }),
         }),
       });
+      return true;
     },
-    [navigate],
+    [navigate, q],
   );
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: q ?? '',
