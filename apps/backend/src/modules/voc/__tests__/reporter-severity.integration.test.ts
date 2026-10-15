@@ -216,7 +216,7 @@ describe.skipIf(!APP_URL || !MIGRATE_URL || !WORKSPACE_ID)(
           expect(response.statusCode).toBe(422);
           expect(response.json()).toMatchObject({
             code: 'validation.failed',
-            fields: [{ path: [field], code: 'invalid_for_view' }],
+            detail: { fields: [{ path: [field], code: 'invalid_for_view' }] },
           });
           const inbox = await get('operator', `/vocs?view=inbox&${field}=${value}`);
           expect(inbox.statusCode).toBe(200);
