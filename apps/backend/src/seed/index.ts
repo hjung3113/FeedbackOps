@@ -18,12 +18,13 @@
 //       - teams: zero rows (ADR-0018 placeholder).
 //   * Idempotent. Re-running the seed inserts zero new rows.
 
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { loadConfig } from '../config.js';
 import { type DbHandle, createDb } from '../db/client.js';
 import { actors, analyticsAreas, managedSystems, workspaces } from '../db/schema/core.js';
 import { permissionGrants } from '../db/schema/permission.js';
+import { seedPreviewScale } from './scale-fixtures.js';
 import { ensureSeedTeam, seedSlice3Vocs } from './voc-fixtures.js';
 
 const SEED_ACTORS = [
@@ -256,11 +257,18 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
     );
   }
   await ensureSeedTeam(workspaceId, config.DATABASE_URL_MIGRATE);
-  const slice3 = await seedSlice3Vocs(handle, workspaceId);
+  const existingBaseline =
+    config.SEED_MODE === 'scale'
+      ? await db.execute(sql`select 1 from voc.vocs where workspace_id=${workspaceId}
+        and display_id like 'VOC-SEED-%' limit 1`)
+      : null;
+  const slice3 = existingBaseline?.rows.length
+    ? { vocsInserted: 0, conversationRowsInserted: 0, permissionFixturesInserted: 0 }
+    : await seedSlice3Vocs(handle, workspaceId);
 
   let personaActorsInserted = 0;
   let personaGrantsInserted = 0;
-  if (config.SEED_MODE === 'personas') {
+  if (config.SEED_MODE === 'personas' || config.SEED_MODE === 'scale') {
     const personaActorIdByExternalId = new Map<string, string>([['mock-admin-1', adminActorId]]);
     for (const actor of PERSONA_ACTORS) {
       const inserted = await db
@@ -323,6 +331,8 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
       personaGrantsInserted += 1;
     }
   }
+
+  if (config.SEED_MODE === 'scale') await seedPreviewScale(handle, workspaceId);
 
   return {
     workspaceId,

@@ -38,7 +38,7 @@ const envSchema = z.object({
   WORKSPACE_ID: z.string().uuid().optional(),
   WORKSPACE_NAME: z.string().default('FeedbackOps'),
   // `personas` layers black-box test actors and grants over the core seed.
-  SEED_MODE: z.enum(['core', 'personas']).default('core'),
+  SEED_MODE: z.enum(['core', 'personas', 'scale']).default('core'),
   // CSP `img-src`/`connect-src` origin for public attachment URLs (#402).
   // Accepted: the quoted literal `'self'` (default, everything same-origin) or
   // a bare origin `https://host[:port]`; outside production also

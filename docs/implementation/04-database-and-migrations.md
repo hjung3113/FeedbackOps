@@ -399,10 +399,12 @@ The seed is a separate, idempotent command (`pnpm --filter @fops/backend db:seed
 - 5 analytics areas: Permission Management, Usage Analytics, and Dashboard Catalog under Tableau; Permission Management and Usage Analytics under Power BI
 - one fixture team, "[seed] VOC owner team", inserted through the fops_migrate URL because fops_app cannot insert core.teams (ADR-0019)
 - 12 deterministic VOC fixtures (display_id VOC-SEED-*) with three conversation rows each, and two permission-decision fixtures (apps/backend/src/seed/voc-fixtures.ts)
-- SEED_MODE=personas only: mock-admin-2, mock-user-2, mock-developer-1, mock-developer-2, and permission grants for the two developers
+- SEED_MODE=personas or scale: mock-admin-2, mock-user-2, mock-developer-1, mock-developer-2, and permission grants for the two developers
 ```
 
-It does not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.
+Core/personas modes do not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.
+
+- `SEED_MODE=scale pnpm --filter @fops/backend db:seed` is for throwaway preview DBs only. It includes personas and adds 40 reporters, 5,000 VOCs, 5,000 Tasks, 300 Findings, 250 Task Requests, 60 Clusters and 25 Milestones across Tableau/Power BI, with five years of history, evidence links and memberships. Existing baseline/preview rows survive. The cohort and reserved `fops-preview-scale-complete` actor marker commit atomically; stable IDs and per-group deduplication permit partial-cohort retries when the marker is absent. Scale creates no Survey data or Evidence Highlights.
 
 ## Permission close-out migration contract (ADR-0066; proposed/new)
 
