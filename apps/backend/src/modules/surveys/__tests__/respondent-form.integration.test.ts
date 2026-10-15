@@ -22,6 +22,8 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
   let userCookie: string;
+  let otherActorId: string;
+  let otherCookie: string;
   const foreignWorkspaceIds = new Set<string>();
 
   beforeAll(async () => {
@@ -31,11 +33,29 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
     app = await buildServer({ config: loadConfig(), dbHandle: appHandle });
     await app.ready();
     userCookie = await loginAs(app, 'mock-user-1');
+    const externalId = `${SLUG_PREFIX}-other-${randomUUID()}`;
+    const actor = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.actors (workspace_id,external_id,email,display_name,role_level,actor_type)
+       values ($1,$2,$3,'Respondent form other user','user','internal_member') returning id`,
+      [WORKSPACE_ID, externalId, `${externalId}@example.test`],
+    );
+    otherActorId = actor.rows[0]?.id ?? '';
+    if (!otherActorId) throw new Error('other respondent seed failed');
+    otherCookie = await loginAs(app, externalId);
   });
 
   beforeEach(async () => cleanupFixtures());
   afterAll(async () => {
     await cleanupFixtures();
+    if (otherActorId) {
+      await migrateHandle.pool.query('delete from core.sessions where actor_id = $1', [
+        otherActorId,
+      ]);
+      await migrateHandle.pool.query('delete from core.audit_log where actor_id = $1', [
+        otherActorId,
+      ]);
+      await migrateHandle.pool.query('delete from core.actors where id = $1', [otherActorId]);
+    }
     await app?.close();
     await appHandle?.close();
     await migrateHandle?.close();
@@ -138,6 +158,26 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
     return surveyId;
   }
 
+  async function expectNoIdentity(body: unknown) {
+    function walkKeys(value: unknown) {
+      if (value === null || typeof value !== 'object') return;
+      for (const [key, child] of Object.entries(value)) {
+        expect(key).not.toMatch(/^(respondent|operator|actor)/i);
+        walkKeys(child);
+      }
+    }
+    walkKeys(body);
+    const actors = await migrateHandle.pool.query<{ id: string; display_name: string }>(
+      'select id, display_name from core.actors where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    const serialized = JSON.stringify(body);
+    for (const actor of actors.rows) {
+      expect(serialized).not.toContain(actor.id);
+      expect(serialized).not.toContain(actor.display_name);
+    }
+  }
+
   async function insertResponse(surveyId: string, externalId: string, identityProtected: boolean) {
     const actor = await migrateHandle.pool.query<{ id: string }>(
       'select id from core.actors where workspace_id = $1 and external_id = $2',
@@ -209,7 +249,7 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
       identity_protected: true,
       description: null,
     });
-    expect(JSON.stringify(body)).not.toContain('respondent');
+    await expectNoIdentity(body);
     const questionKeys = [
       'branch_parent_question_id',
       'branch_trigger_option_key',
@@ -283,7 +323,6 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
         message: 'survey response already submitted',
       });
 
-      const otherCookie = await loginAs(app, 'mock-user-2');
       const other = await app.inject({
         method: 'GET',
         url: `/surveys/${surveyId}/form`,
@@ -299,7 +338,7 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
         'title',
         'type',
       ]);
-      expect(JSON.stringify(body)).not.toContain('respondent');
+      await expectNoIdentity(body);
     },
   );
 

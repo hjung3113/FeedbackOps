@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
 import { SurveyBuilder } from './SurveyBuilder';
 
-const apiClient = vi.hoisted(() => vi.fn(async () => ({ data: { id: 'survey-1' } })));
+const apiClient = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -66,6 +66,13 @@ describe('Survey builder description', () => {
   });
 
   it('clears a saved description with an empty string that survives reload', async () => {
+    let storedSurvey = structuredClone(survey);
+    apiClient.mockImplementation(async (method, _path, options) => {
+      if (method === 'PATCH') {
+        storedSurvey = { ...storedSurvey, ...options.body };
+      }
+      return { data: structuredClone(storedSurvey) };
+    });
     const view = renderBuilder();
     fireEvent.change(screen.getByRole('textbox', { name: '설명 (선택)' }), {
       target: { value: '' },
@@ -78,8 +85,12 @@ describe('Survey builder description', () => {
       }),
     );
 
+    await waitFor(() =>
+      expect(screen.queryByText('저장되지 않은 변경 사항')).not.toBeInTheDocument(),
+    );
     view.unmount();
-    renderBuilder({ ...survey, description: null });
+    const readback = await apiClient('GET', '/surveys/survey-1');
+    renderBuilder(readback.data);
     expect(screen.getByRole('textbox', { name: '설명 (선택)' })).toHaveValue('');
   });
 

@@ -49,7 +49,7 @@ export function RespondentQuestion({
             return (
               <label
                 key={score}
-                className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ${selected ? 'border-border-selected bg-surface-row-selected' : 'border-border-subtle'}`}
+                className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ring-offset-surface-canvas has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 ${selected ? 'border-border-selected bg-surface-row-selected' : 'border-border-subtle'}`}
               >
                 <input
                   type="radio"

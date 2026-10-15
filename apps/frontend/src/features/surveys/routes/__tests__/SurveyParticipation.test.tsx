@@ -513,6 +513,20 @@ describe('respondent form', () => {
     });
   });
 
+  it('exposes the focus-visible ring contract on every rating chip', async () => {
+    installFetch({ form: ratingForm() });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+
+    const group = await screen.findByRole('group', { name: /사용 빈도는 어떠했나요/ });
+    for (const radio of within(group).getAllByRole('radio')) {
+      expect(radio.closest('label')).toHaveClass(
+        'has-[:focus-visible]:ring-2',
+        'has-[:focus-visible]:ring-focus-ring',
+        'has-[:focus-visible]:ring-offset-2',
+      );
+    }
+  });
+
   it('moves the rating with an arrow key and submits that score', async () => {
     const user = userEvent.setup();
     const { requests } = installFetch({ form: ratingForm() });
