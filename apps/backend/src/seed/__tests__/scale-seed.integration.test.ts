@@ -167,9 +167,7 @@ describe.skipIf(!enabled)('preview scale seed through runSeed', () => {
   it('completes a partial cohort after the marker and late group are removed (d)', async () => {
     const before = await snapshot();
     // Remove the late Task group and its links; migrate is used only for test cleanup.
-    await migrate.pool.query('delete from core.entity_links where workspace_id=$1', [
-      workspace,
-    ]);
+    await migrate.pool.query('delete from core.entity_links where workspace_id=$1', [workspace]);
     await migrate.pool.query('delete from task.tasks where workspace_id=$1', [workspace]);
     await migrate.pool.query(
       `delete from core.actors where workspace_id=$1
@@ -215,5 +213,113 @@ describe.skipIf(!enabled)('preview scale seed through runSeed', () => {
       [workspace],
     );
     expect(rows.rows).toEqual([]);
+  });
+
+  it('keeps provenance, membership, links and conversion updates in temporal order (F1)', async () => {
+    const invalid = await handle.pool.query(
+      `with entities as (
+        ${tables.map(([table, entity]) => `select id, created_at, updated_at, '${entity === 'cluster' ? 'voc_cluster' : entity}' type from ${table} where workspace_id=$1`).join(' union all ')}
+      ), edges as (
+        select 'finding origin' kind, f.id, f.created_at derived, v.created_at source
+        from finding.findings f join voc.vocs v on v.id=f.source_id
+        where f.workspace_id=$1 and f.source_type='voc'
+        union all
+        select 'request source', r.id, r.created_at, s.created_at
+        from task_request.task_requests r join entities s on s.id=r.source_id and s.type=r.source_type
+        where r.workspace_id=$1
+        union all
+        select 'converted task', t.id, t.created_at, r.created_at
+        from task.tasks t join task_request.task_requests r on r.id=t.source_task_request_id
+        where t.workspace_id=$1
+        union all
+        select 'cluster member', m.voc_id, m.added_at, greatest(c.created_at,v.created_at)
+        from voc_cluster.voc_cluster_members m join voc_cluster.voc_clusters c on c.id=m.cluster_id
+        join voc.vocs v on v.id=m.voc_id where c.workspace_id=$1 and c.id<>$2
+        union all
+        select 'link', l.id, l.created_at, greatest(s.created_at,t.created_at)
+        from core.entity_links_app l join entities s on s.id=l.source_id and s.type=l.source_type
+        join entities t on t.id=l.target_id and t.type=l.target_type where l.workspace_id=$1
+        union all
+        select 'request conversion update', r.id, r.updated_at, t.created_at
+        from task_request.task_requests r join task.tasks t on t.source_task_request_id=r.id
+        where r.workspace_id=$1 and r.status='converted'
+        union all
+        select 'finding conversion update', f.id, f.updated_at, t.created_at
+        from finding.findings f join task.tasks t on t.id=f.linked_task_id
+        where f.workspace_id=$1 and f.status='converted'
+        union all
+        select 'request decision', r.id, r.decided_at, r.created_at
+        from task_request.task_requests r where r.workspace_id=$1 and r.decided_at is not null
+      ) select kind,id from edges where derived<source`,
+      [workspace, cluster],
+    );
+    expect(invalid.rows).toEqual([]);
+  });
+
+  it.each(['voc.vocs', 'task.tasks'])(
+    'keeps plausible five-year recency in %s (C1)',
+    async (table) => {
+      const result = await handle.pool.query(
+        `select count(*) filter(where created_at>=now()-interval '30 days')::int last_30_days,
+          count(*) filter(where created_at>=now()-interval '24 hours')::int last_day,
+          count(*) filter(where created_at>now())::int future,
+          extract(epoch from (now()-min(created_at)))/86400 oldest_days
+        from ${table} where workspace_id=$1 ${table === 'voc.vocs' ? "and display_id not like 'VOC-SEED-%'" : ''}`,
+        [workspace],
+      );
+      expect(result.rows[0].last_30_days).toBeGreaterThanOrEqual(120);
+      expect(result.rows[0].last_30_days).toBeLessThanOrEqual(250);
+      expect(result.rows[0].last_day).toBeLessThanOrEqual(15);
+      expect(result.rows[0].future).toBe(0);
+      expect(Number(result.rows[0].oldest_days)).toBeGreaterThanOrEqual(1824);
+      expect(Number(result.rows[0].oldest_days)).toBeLessThan(1827);
+    },
+  );
+
+  it.each(['voc.vocs', 'task.tasks'])(
+    'varies neighbouring recent titles in %s (C2)',
+    async (table) => {
+      const result = await handle.pool.query(
+        `with newest as (select id,title,created_at from ${table} where workspace_id=$1
+          ${table === 'voc.vocs' ? "and display_id not like 'VOC-SEED-%'" : ''}
+          order by created_at desc,id limit 50), neighbours as (
+          select title,lag(title) over(order by created_at desc,id) previous from newest
+        ) select count(distinct title)::int titles,
+          count(*) filter(where title=previous)::int repeated_neighbours from neighbours`,
+        [workspace],
+      );
+      expect(result.rows[0].titles).toBeGreaterThanOrEqual(45);
+      expect(result.rows[0].repeated_neighbours).toBe(0);
+    },
+  );
+
+  it('keeps needs-information VOCs in nonterminal reporter states (F2)', async () => {
+    const result = await handle.pool.query(
+      `select count(*)::int total, count(*) filter(where reporter_facing_status in ('resolved','closed'))::int terminal
+      from voc.vocs where workspace_id=$1 and triage_state='needs_more_information'`,
+      [workspace],
+    );
+    expect(result.rows[0].total).toBeGreaterThan(0);
+    expect(result.rows[0].terminal).toBe(0);
+  });
+
+  it('supplies released VOC-linked work and pending reporter updates (F3)', async () => {
+    const result = await handle.pool.query(
+      `select count(distinct t.id)::int released,
+        count(distinct t.id) filter(where v.reporter_facing_status not in ('resolved','closed'))::int pending_update
+      from task.tasks t join core.entity_links_app l on l.target_id=t.id and l.target_type='task'
+        and l.source_type='voc' and l.relation_type='evidence_of' and l.status='active'
+      join voc.vocs v on v.id=l.source_id
+      where t.workspace_id=$1 and t.status='released' and t.source_task_request_id is not null
+        and v.display_id not like 'VOC-SEED-%'`,
+      [workspace],
+    );
+    expect(result.rows[0].released).toBeGreaterThan(0);
+    expect(result.rows[0].pending_update).toBeGreaterThan(0);
+    const open = await handle.pool.query(
+      `select count(*)::int n from task.tasks where workspace_id=$1 and status not in ('done','released')`,
+      [workspace],
+    );
+    expect(open.rows[0].n).toBe(300);
   });
 });

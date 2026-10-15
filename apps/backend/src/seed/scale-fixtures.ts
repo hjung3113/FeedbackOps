@@ -100,8 +100,10 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
     };
     const now = Date.now();
     const base = (kind: string, n: number, total: number): Row => {
-      // Cubic age distribution: dense recent rows, oldest approximately five years.
-      const created = new Date(now - (n / total) ** 3 * 5 * 365 * 86400_000).toISOString();
+      // Mild recent density: ~187/month and ~12/day at 5k, spanning five years.
+      const created = new Date(
+        now - 3600_000 - (n / total) ** 1.25 * 5 * 365 * 86400_000,
+      ).toISOString();
       return {
         id: stableUuid(workspaceId, `${kind}-${n}`),
         workspace_id: workspaceId,
@@ -157,7 +159,7 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
         ...base('voc', n, 4999),
         analytics_area_id: c.analytics_area_id,
         reporter_id: reporterIds[n % reporterIds.length],
-        title: `${c.noun}: ${TITLES[Math.floor(n / 5) % TITLES.length]}`,
+        title: `${c.noun}: ${TITLES[n % TITLES.length]} · 사례 ${n + 1}`,
         description_rich_content: {
           type: 'doc',
           content: [
@@ -176,7 +178,15 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
           n % 500 === 0 ? 'critical' : n % 10 === 0 ? 'high' : n % 3 === 0 ? 'low' : 'medium',
         triage_state: n < 150 ? 'untriaged' : n % 17 === 0 ? 'needs_more_information' : 'triaged',
         reporter_facing_status:
-          n < 150 ? 'received' : n < 300 ? 'progress' : n % 2 ? 'closed' : 'resolved',
+          n < 150
+            ? 'received'
+            : n % 17 === 0
+              ? 'reviewing'
+              : n < 300
+                ? 'progress'
+                : n % 2
+                  ? 'closed'
+                  : 'resolved',
         source_context: [
           'direct_use',
           'proxy_report',
@@ -192,15 +202,39 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
       if (!row) throw new Error('Missing same-system scale prerequisite');
       return row;
     };
+    const latest = (...dates: string[]) => dates.reduce((a, b) => (a > b ? a : b));
+    // Pick the closest older source in the same system to retain historical spread.
+    // At the oldest edge a system may have no older row; the dependent follows it.
+    const origin = <T extends Row>(rows: T[], dependent: Row): T => {
+      const candidates = rows
+        .filter((r) => r.primary_managed_system_id === dependent.primary_managed_system_id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      const row = candidates.find((r) => r.created_at <= dependent.created_at) ?? candidates.at(-1);
+      if (!row) throw new Error('Missing chronological scale prerequisite');
+      return row;
+    };
+    const findingEvidence = new Map<string, typeof vocs>();
     const findings = Array.from({ length: 300 }, (_, n) => {
       const b = base('finding', n, 299);
+      const source = origin(vocs, b);
+      const candidates = vocs.filter(
+        (v) => v.primary_managed_system_id === b.primary_managed_system_id,
+      );
+      const count = 2 + (n % 14);
+      const start = Math.min(
+        candidates.findIndex((v) => v.id === source.id),
+        candidates.length - count,
+      );
+      const evidence = candidates.slice(start, start + count);
+      findingEvidence.set(b.id, evidence);
+      b.created_at = b.updated_at = latest(b.created_at, ...evidence.map((v) => v.created_at));
       return {
         ...b,
         analytics_area_id: context(n).analytics_area_id,
         title: `${context(n).noun}: 반복 불편 분석 ${n + 1}`,
         summary: '반복 제보를 분석하여 개선 범위와 기대 효과를 정리했습니다.',
         source_type: 'voc',
-        source_id: sameSystem(vocs, b.primary_managed_system_id, n * 13).id,
+        source_id: source.id,
         evidence_count: 2 + (n % 14),
         severity: ['low', 'medium', 'high', 'critical'][n % 4],
         status: ['draft', 'active', 'not_actionable', 'archived'][n % 4],
@@ -238,14 +272,15 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
       const b = base('request', n, 249);
       const sourceType = ['voc', 'voc_cluster', 'finding'][n % 3] ?? 'voc';
       const sources = sourceType === 'voc' ? vocs : sourceType === 'finding' ? findings : clusters;
+      // One historical conversion deliberately retains a pending reporter update.
+      const candidates =
+        n === 111 ? vocs.filter((v) => v.triage_state === 'needs_more_information') : sources;
+      const source = origin<Row>(candidates, b);
+      b.created_at = b.updated_at = latest(b.created_at, source.created_at);
       return {
         ...b,
         source_type: sourceType,
-        source_id: sameSystem<Row>(
-          sources,
-          b.primary_managed_system_id,
-          Math.floor(n / 5) * (n % 5 < 3 ? 3 : 2) + (n % 5 < 3 ? n % 5 : (n % 5) - 3),
-        ).id,
+        source_id: source.id,
         evidence_summary: '여러 제보에서 동일한 업무 불편이 확인되었습니다.',
         requested_outcome: '원인을 개선하고 처리 결과를 공유해 주세요.',
         requester_actor_id: admin,
@@ -258,10 +293,15 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
     });
     await insert('task_request.task_requests', requests, 'task_request');
     const converted = requests.filter((r) => r.status === 'converted');
+    // Spread conversions across the full Task history, including Done/Released.
+    const taskRequests = new Map(
+      converted.map((r) => [Math.round((requests.indexOf(r) / 249) * 4999), r]),
+    );
     const tasks = Array.from({ length: 5000 }, (_, n) => {
       const b = base('task', n, 4999);
       // Converted requests each receive exactly one Task, in their own system.
-      const request = converted[n];
+      const request = taskRequests.get(n);
+      if (request) b.created_at = b.updated_at = latest(b.created_at, request.created_at);
       const ms = request?.primary_managed_system_id ?? b.primary_managed_system_id;
       const assignees = [
         requireActor(ms === system(0).id ? 'mock-developer-1' : 'mock-developer-2'),
@@ -289,16 +329,22 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
     });
     await insert('task.tasks', tasks, 'task');
     const members = clusters.flatMap((c, n) =>
-      Array.from({ length: 3 + (n % 18) }, (_, k) => ({
-        cluster_id: c.id,
-        voc_id: sameSystem(vocs, c.primary_managed_system_id, n * 20 + k).id,
-        added_by: admin,
-        added_at: c.created_at,
-      })),
+      Array.from({ length: 3 + (n % 18) }, (_, k) => {
+        const voc = sameSystem(vocs, c.primary_managed_system_id, n * 20 + k);
+        return {
+          cluster_id: c.id,
+          voc_id: voc.id,
+          added_by: admin,
+          added_at: latest(c.created_at, voc.created_at),
+        };
+      }),
     );
     await tx.execute(sql`insert into voc_cluster.voc_cluster_members(cluster_id,voc_id,added_by,added_at)
       select r.cluster_id,r.voc_id,r.added_by,r.added_at from jsonb_to_recordset(${JSON.stringify(members)}::jsonb)
       r(cluster_id uuid,voc_id uuid,added_by uuid,added_at timestamptz) on conflict (cluster_id,voc_id) do nothing`);
+    const entities = new Map(
+      [...vocs, ...findings, ...clusters, ...requests, ...tasks].map((r) => [r.id, r]),
+    );
     const links: Record<string, unknown>[] = [];
     const link = (
       sourceType: string,
@@ -307,6 +353,9 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
       target: Row,
       relation: string,
     ) => {
+      const source = entities.get(sourceId);
+      if (!source) throw new Error('Missing scale link source');
+      const created = latest(source.created_at, target.created_at);
       links.push({
         id: stableUuid(workspaceId, `link:${sourceId}:${target.id}:${relation}`),
         workspace_id: workspaceId,
@@ -319,33 +368,37 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
         created_by: admin,
         visibility:
           targetType === 'task' && sourceType === 'voc' ? 'summary_visible' : 'internal_only',
-        created_at: target.created_at,
-        updated_at: target.updated_at,
+        created_at: created,
+        updated_at: created,
       });
     };
-    const evidence = (f: (typeof findings)[number], n: number) =>
-      Array.from({ length: f.evidence_count }, (_, k) =>
-        sameSystem(vocs, f.primary_managed_system_id, n * 13 + k),
-      );
-    findings.forEach((f, n) => {
+    const evidence = (f: (typeof findings)[number]) => {
+      const rows = findingEvidence.get(f.id);
+      if (!rows) throw new Error('Missing scale Finding evidence');
+      return rows;
+    };
+    for (const f of findings) {
       link('voc', f.source_id, 'finding', f, 'created_finding');
-      for (const v of evidence(f, n)) link('voc', v.id, 'finding', f, 'evidence_of');
-    });
+      for (const v of evidence(f)) link('voc', v.id, 'finding', f, 'evidence_of');
+    }
     for (const r of requests) {
       link(r.source_type, r.source_id, 'task_request', r, 'requested_task');
     }
-    for (const t of tasks.slice(0, converted.length)) {
+    for (const t of tasks.filter((t) => t.source_task_request_id)) {
       const r = converted.find((r) => r.id === t.source_task_request_id);
       if (!r) throw new Error('Missing converted request');
+      await tx.execute(sql`update task_request.task_requests
+        set updated_at=greatest(updated_at, ${t.created_at}::timestamptz)
+        where id=${r.id} and workspace_id=${workspaceId}`);
       link('task_request', r.id, 'task', t, 'converted_to');
       if (r.source_type === 'voc') link('voc', r.source_id, 'task', t, 'evidence_of');
       if (r.source_type === 'finding') {
         link('finding', r.source_id, 'task', t, 'requested_task');
-        const index = findings.findIndex((f) => f.id === r.source_id);
-        const f = findings[index];
+        const f = findings.find((f) => f.id === r.source_id);
         if (!f) throw new Error('Missing converted Finding');
-        for (const v of evidence(f, index)) link('voc', v.id, 'task', t, 'evidence_of');
-        await tx.execute(sql`update finding.findings set status='converted', linked_task_id=${t.id}
+        for (const v of evidence(f)) link('voc', v.id, 'task', t, 'evidence_of');
+        await tx.execute(sql`update finding.findings set status='converted', linked_task_id=${t.id},
+          updated_at=greatest(updated_at, ${t.created_at}::timestamptz)
           where id=${f.id} and workspace_id=${workspaceId}`);
       }
     }
