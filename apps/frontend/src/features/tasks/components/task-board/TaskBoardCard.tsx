@@ -97,6 +97,7 @@ function TaskBoardCardContent({
         <SeverityBadge
           severity={taskPriorityToSeverity(task.priority)}
           label={TASK_PRIORITY_LABELS[task.priority]}
+          ariaLabel={`우선순위 ${TASK_PRIORITY_LABELS[task.priority]}`}
         />
       </div>
       {/* TaskDto does not project finding linkage or linked VOC counts; only TaskDetailDto.source does. */}

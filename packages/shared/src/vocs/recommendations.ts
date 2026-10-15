@@ -6,7 +6,7 @@ export const vocRecommendationItemSchema = z.object({
   voc_id: z.string().uuid(),
   display_id: z.string(),
   title: z.string(),
-  severity: z.enum(['low', 'medium', 'high', 'critical']).nullable(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional(),
   reporter_facing_status: reporterFacingStatusEnumSchema,
   score: z.number().min(0).max(1),
 }).strict();

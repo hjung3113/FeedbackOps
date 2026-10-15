@@ -249,6 +249,37 @@ describe('useInboxRoute', () => {
     }
   });
 
+  it.each(['high', 'high-no-link'] as const)(
+    'restores My VOC with a stale severity sort and %s tab using safe defaults',
+    async (tab) => {
+      const { useVocList } =
+        await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
+      useVocListMock.mockImplementation(useVocList);
+      searchState = { view: 'my', sort: 'severity:desc', tab, 'filter.severity': 'high' };
+      render(<InboxTestHarness view="my" />);
+      await waitFor(() => expect(apiClientMock).toHaveBeenCalled());
+      for (const [method, url] of apiClientMock.mock.calls) {
+        if (method !== 'GET' || !String(url).startsWith('/vocs?')) continue;
+        const params = new URL(String(url), 'http://localhost').searchParams;
+        expect(params.get('sort')).toBe('created_at:desc');
+        expect(params.has('tab')).toBe(false);
+        expect(params.has('filter.severity')).toBe(false);
+        expect(listVocsQuerySchema.safeParse(Object.fromEntries(params)).success).toBe(true);
+      }
+      const navigation = navigateMock.mock.calls.find(([value]) => value.replace)?.[0];
+      expect(navigation).toBeDefined();
+      expect(navigation.search(searchState)).toEqual({ view: 'my' });
+    },
+  );
+
+  it('keeps Inbox severity sorting and tabs when restoring a URL', () => {
+    searchState = { view: 'inbox', sort: 'severity:desc', tab: 'high' };
+    render(<InboxTestHarness view="inbox" />);
+    expect(useVocListMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'severity:desc', tab: 'high' }),
+    );
+  });
+
   it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
     const { useVocList } =
       await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');

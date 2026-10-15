@@ -74,6 +74,12 @@ function renderPanel(current: TaskDetailDto) {
 }
 
 describe('Task detail responsibility', () => {
+  it('names Task priority as priority for assistive technology', async () => {
+    renderPanel({ ...task, priority: 'urgent' });
+    expect(await screen.findAllByLabelText('우선순위 긴급')).toHaveLength(2);
+    expect(screen.queryByLabelText('심각도 긴급')).not.toBeInTheDocument();
+  });
+
   it.each([null, teamId])(
     'opens team selection with null defaults and current team %s',
     async (currentTeam) => {

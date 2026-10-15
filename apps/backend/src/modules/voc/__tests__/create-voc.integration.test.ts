@@ -284,7 +284,6 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(body).toMatchObject({
       workspace_id: WORKSPACE_ID,
       primary_managed_system_id: msId,
-      severity: null,
       reporter_facing_status: 'received',
       triage_state: 'untriaged',
       owner_user_id: null,
@@ -296,6 +295,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(body.id).toMatch(
       /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
     );
+    expect(body).not.toHaveProperty('severity');
     expect(body.display_id).toMatch(/^VOC-\d+$/);
     expect(body.next_reporter_states?.allowed).toContain('reviewing');
   });
@@ -325,12 +325,12 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       owner_user_id: ownerId,
       owner_team_id: null,
       triage_state: 'untriaged',
-      severity: null,
       reporter_facing_status: 'received',
       default_resolved: true,
       source_rule: 'managed_system_owner',
       managed_system_id: msId,
     });
+    expect(created.json()).not.toHaveProperty('severity');
     const replay = await postVoc(app, reporter, input, key);
     expect(replay.json()).toEqual(created.json());
     if (MIGRATE_URL) {
@@ -459,7 +459,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
             owner_user_id: variant === 'actor' ? ownerId : null,
             owner_team_id: variant === 'aa_team' ? teamId : null,
             triage_state: 'untriaged',
-            severity: null,
+            ...(variant === 'actor' || variant === 'null' ? { severity: null } : {}),
             default_resolved: variant === 'aa_team',
             source_rule:
               variant === 'actor' || variant === 'null'
@@ -468,6 +468,9 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
                   ? 'analytics_area_owner'
                   : 'workspace_fallback_queue',
           });
+          if (variant !== 'actor' && variant !== 'null') {
+            expect(created.json()).not.toHaveProperty('severity');
+          }
           const failures = await ops.pool.query<{ rule: string; category: string }>(
             'select rule,category from core.responsibility_default_failures where managed_system_id=$1',
             [msId],

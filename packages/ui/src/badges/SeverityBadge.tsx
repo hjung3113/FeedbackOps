@@ -9,6 +9,7 @@ import { StatusBadgeFrame } from './StatusBadgeFrame.js';
 export interface SeverityBadgeProps {
   severity: SeverityEnum;
   label?: string;
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -30,14 +31,14 @@ const SEVERITY_CLASS: Record<SeverityEnum, string> = {
  * fails WCAG AA 4.5:1 as text at 12% tint even once the syntax is fixed, so
  * the fix is the `-label` token, not just wrapping `token` in `rgb()`).
  */
-export function SeverityBadge({ severity, label, className }: SeverityBadgeProps) {
+export function SeverityBadge({ severity, label, ariaLabel, className }: SeverityBadgeProps) {
   const token = `--severity-${severity}`;
   const severityClass = SEVERITY_CLASS[severity];
 
   return (
     <StatusBadgeFrame
       appearance="severity"
-      ariaLabel={`심각도 ${label ?? SEVERITY_LABELS[severity]}`}
+      ariaLabel={ariaLabel ?? `심각도 ${label ?? SEVERITY_LABELS[severity]}`}
       textClassName={severityClass}
       tintClassName="bg-(--status-badge-tint)"
       {...(className !== undefined ? { className } : {})}

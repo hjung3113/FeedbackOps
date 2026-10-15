@@ -370,8 +370,11 @@ response body: 200, header Cache-Control: private, no-cache
   { available: false, reason: "provider_disabled" | "source_not_embedded",
     embedding_version: int, items: [], total: 0 }
   Item { voc_id: uuid, display_id: string, title: string,
-    severity: low|medium|high|critical|null, reporter_facing_status,
+    severity?: low|medium|high|critical|null, reporter_facing_status,
     score: number 0..1 }
+  severity is omitted for each candidate visible only through Reporter ownership
+    (outside both deny-aware voc.read and voc.triage scopes for its Managed System).
+    Operators retain severity, including null for an unclassified candidate.
   provider_disabled: the environment has no embedding provider.
   source_not_embedded: the source VOC has no vector at the active
     embedding_version yet. available false is never a silently empty list.

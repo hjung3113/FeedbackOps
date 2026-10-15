@@ -9,7 +9,9 @@ import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { AuditService } from '../../core/audit/audit-service.js';
 import type { VocClustersService } from '../../voc-clusters/service.js';
-import { type Scope, actorReadScope } from '../authorization.js';
+import { type Scope, actorReadScope, actorTriageScope } from '../authorization.js';
+
+import { msInScope } from '../read/scope.js';
 
 import { VOC_RECOMMENDATION_LIMIT, VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from './constants.js';
 import {
@@ -33,7 +35,7 @@ export interface VocRecommendationItem {
   voc_id: string;
   display_id: string;
   title: string;
-  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  severity?: 'low' | 'medium' | 'high' | 'critical' | null;
   reporter_facing_status: string;
   score: number;
 }
@@ -113,7 +115,10 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
     actor: VocRecommendationsActor;
     sourceVocId: string;
   }): Promise<VocRecommendationsResult> {
-    const { source, readScope } = await loadSource(deps.db, args.actor, args.sourceVocId);
+    const [{ source, readScope }, triageScope] = await Promise.all([
+      loadSource(deps.db, args.actor, args.sourceVocId),
+      actorTriageScope(deps.db, args.actor),
+    ]);
 
     if (!deps.embeddingEnabled) {
       return {
@@ -158,7 +163,11 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
         voc_id: row.voc_id,
         display_id: row.display_id,
         title: row.title,
-        severity: row.severity,
+        // Candidates outside read scope were admitted through reporter ownership.
+        ...(msInScope(readScope, row.primary_managed_system_id) ||
+        msInScope(triageScope, row.primary_managed_system_id)
+          ? { severity: row.severity }
+          : {}),
         reporter_facing_status: row.reporter_facing_status,
         score: row.score,
       })),

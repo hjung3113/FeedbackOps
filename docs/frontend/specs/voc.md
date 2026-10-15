@@ -579,7 +579,9 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 ### Reporter severity projection (#1173)
 
 `내 VOC` hides severity filters and sort options and the `high` / `high-no-link`
-tabs for every actor. Absent wire severity renders no indicator or badge and a
+tabs for every actor. Restored bookmarks and saved views drop severity filters,
+severity sorting, and these tabs from the URL before fetching with My VOC defaults.
+Absent wire severity renders no indicator or badge and a
 neutral row bar. Visible null severity announces `심각도 미지정`; standalone
 indicators use `심각도 낮음/중간/높음/심각`. Badge indicators are decorative,
 so a triaged row announces severity once through its badge.

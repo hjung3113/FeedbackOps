@@ -210,7 +210,26 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const apiTab = searchingAllTabs
     ? undefined
     : (search.tab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged'));
-  const currentSort = search.sort ?? DEFAULT_SORT;
+  const mySeveritySort = view === 'my' && search.sort?.startsWith('severity:') === true;
+  const mySeverityTab = view === 'my' && (search.tab === 'high' || search.tab === 'high-no-link');
+  const mySeverityFilter = view === 'my' && search['filter.severity'] !== undefined;
+  const currentSort = mySeveritySort ? DEFAULT_SORT : (search.sort ?? DEFAULT_SORT);
+  React.useEffect(() => {
+    if (!mySeveritySort && !mySeverityTab && !mySeverityFilter) return;
+    void navigate({
+      to: '/vocs',
+      search: (prev) => {
+        const { sort, tab, 'filter.severity': severity, ...rest } = prev;
+        return {
+          ...rest,
+          ...(!mySeveritySort && sort !== undefined ? { sort } : {}),
+          ...(!mySeverityTab && tab !== undefined ? { tab } : {}),
+          ...(!mySeverityFilter && severity !== undefined ? { 'filter.severity': severity } : {}),
+        };
+      },
+      replace: true,
+    });
+  }, [mySeveritySort, mySeverityTab, mySeverityFilter, navigate]);
   // The tab the current search started from, restored when the search is cleared.
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
   // #864: the hook calls this to write the URL q, from its debounced effect and
