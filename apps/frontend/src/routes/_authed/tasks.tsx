@@ -4,13 +4,14 @@ import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
-import { taskStatusSchema } from '@fops/shared';
+import { listTasksQuerySchema, taskStatusSchema } from '@fops/shared';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 
 export const tasksSearchSchema = z
   .object({
     returnTo: recoverySearchFields.returnTo,
+    q: listTasksQuerySchema.shape.q,
     view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox', 'milestones']).optional(),
     param: z.string().optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
@@ -56,6 +57,7 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
       <TaskBoardRoute
         {...managedSystemProps}
         {...selectedParamProps}
+        {...(search.q === undefined ? {} : { q: search.q })}
         {...(search.public_update === 'missing' ? { publicUpdate: search.public_update } : {})}
       />
     );

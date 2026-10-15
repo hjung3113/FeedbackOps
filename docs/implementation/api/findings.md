@@ -58,13 +58,24 @@ the existing `(finding, task, requested_task)` entity link, audit
 
 ## GET /findings — opt-in list pages
 
-Query: `managed_system_id` (UUID), `execution=none`, `owner_actor_id` / `owner_team_id`
+Query: optional `q` (trimmed string, max 100 characters), `managed_system_id` (UUID), `execution=none`, `owner_actor_id` / `owner_team_id`
 (UUID), `assignment=assigned|unassigned`, optional opaque `cursor`,
 and optional integer `limit` (1..100). The list screen sends `limit=50`;
 there is no server default for this list's limit. Without `limit`, the response
 stays exactly `{ items: FindingDto[] }` for full-set consumers, including
 navigation counts and Finding pickers. With `limit`, the response is
 `{ items, page: { has_more, cursor?, total? } }`.
+
+Optional `q` is trimmed, at most 100 characters; blank/whitespace becomes absent.
+Matching is case-insensitive `display_id` prefix OR `title` contains; `\`, `%`
+and `_` in the input match literally. Bound SQL parameters apply this predicate
+after read scope and intersect it with all other filters, before pagination.
+Body/summary text is not searched. A 101-character normalized query returns
+`422 validation.failed` with `detail.fields: [{ path: ['q'], code: 'too_big' }]`.
+The first-page `page.total` counts the complete authorized matching population
+under the same filters, including zero; later pages omit it. Without `limit`,
+all authorized matching rows are returned. Navigation/report/badge counts omit
+`q` and remain unchanged.
 
 Order is `created_at DESC, id DESC`. The cursor continues both order columns
 using the raw PostgreSQL timestamp (including microseconds) and UUID. It is

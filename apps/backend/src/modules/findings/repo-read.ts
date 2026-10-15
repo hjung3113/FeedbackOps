@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
+import { escapeLikePattern } from '../../lib/sql-like.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { findingExecutionPredicate } from './execution-predicate.js';
 import { findingRecoveryPredicate } from './recovery-read.js';
@@ -102,6 +103,7 @@ export async function findFindingIdByDisplayId(
 }
 
 interface ListInput {
+  q?: string;
   workspaceId: string;
   managedSystemId?: string;
   execution?: 'none';
@@ -141,6 +143,12 @@ function listPredicates(input: ListInput) {
     predicates.push(
       sql`f.primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,
     );
+  if (input.q !== undefined && input.q !== '') {
+    const pattern = escapeLikePattern(input.q);
+    predicates.push(
+      sql`(f.display_id ILIKE ${`${pattern}%`} ESCAPE '\\' OR f.title ILIKE ${`%${pattern}%`} ESCAPE '\\')`,
+    );
+  }
   return predicates;
 }
 

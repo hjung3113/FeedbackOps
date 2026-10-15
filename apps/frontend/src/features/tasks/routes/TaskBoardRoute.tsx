@@ -3,10 +3,13 @@ import { mapUnknownError } from '@/lib/api/errorMapper';
 import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { LIST_SEARCH_EMPTY_LABEL, LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
+import { placeholderDataForSearchOnly } from '@/lib/query/placeholder-data-for-search';
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import {
   type Announcements,
   DndContext,
@@ -19,11 +22,17 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { type TaskDto, type TaskStatus, taskPrioritySchema } from '@fops/shared';
+import {
+  type ListTasksResponse,
+  type TaskDto,
+  type TaskStatus,
+  taskPrioritySchema,
+} from '@fops/shared';
 import {
   ListFilterButton,
   OutlineBadge,
   PermissionBlockedPanel,
+  SearchInput,
   WorkbenchShell,
   readMotionTiming,
 } from '@fops/ui';
@@ -98,8 +107,38 @@ function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   return task.status;
 }
 
-export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: { selectedParam?: string; managedSystem?: string; publicUpdate?: 'missing' }) {
+export function TaskBoardRoute({
+  selectedParam,
+  managedSystem,
+  publicUpdate,
+  q,
+}: {
+  q?: string;
+  selectedParam?: string;
+  managedSystem?: string;
+  publicUpdate?: 'missing';
+}) {
   const navigate = useNavigate();
+  const writeSearch = React.useCallback(
+    (draft: string) => {
+      const next = draft.trim();
+      if (next === (q ?? '')) return false;
+      void navigate({
+        to: '/tasks',
+        replace: true,
+        search: ({ q: _q, ...previous }) => ({
+          ...previous,
+          ...(next === '' ? {} : { q: next }),
+        }),
+      });
+      return true;
+    },
+    [navigate, q],
+  );
+  const { draft, setDraft, commit } = useCommittedSearchDraft({
+    committed: q ?? '',
+    write: writeSearch,
+  });
   const [activeTask, setActiveTask] = React.useState<TaskDto | null>(null);
   const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
   const geometry = useTaskBoardDragGeometry();
@@ -116,13 +155,28 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
   const tasksKey = React.useMemo(
     () =>
-      publicUpdate === 'missing'
-        ? (['tasks', managedSystem, 'public_update:missing'] as const)
-        : (['tasks', managedSystem] as const),
-    [managedSystem, publicUpdate],
+      [
+        ...(publicUpdate === 'missing'
+          ? ['tasks', managedSystem, 'public_update:missing']
+          : ['tasks', managedSystem]),
+        ...(q === undefined ? [] : [{ q }]),
+      ] as const,
+    [managedSystem, publicUpdate, q],
   );
   const mutation = useTaskStatusTransition(tasksKey);
-  const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) }), staleTime: 30_000 });
+  const tasksQuery = useQuery<ListTasksResponse>({
+    queryKey: tasksKey,
+    placeholderData: (previousData, previousQuery) =>
+      placeholderDataForSearchOnly(tasksKey, previousData, previousQuery),
+    queryFn: ({ signal }) =>
+      listTasks({
+        signal,
+        ...(q === undefined ? {} : { q }),
+        ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
+        ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}),
+      }),
+    staleTime: 30_000,
+  });
   const { actors } = useWorkspaceActors();
   const systemNames = useTaskManagedSystemNames();
   const sensors = useSensors(
@@ -141,8 +195,8 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || assignee.includes(task.assignee_actor_id ?? (task.assignee_team_id ? `team:${task.assignee_team_id}` : '__unassigned')));
   }), [items, filters]);
   const focusScope = React.useMemo(
-    () => ({ groupBy, managedSystem, publicUpdate }),
-    [groupBy, managedSystem, publicUpdate],
+    () => ({ groupBy, managedSystem, publicUpdate, q }),
+    [groupBy, managedSystem, publicUpdate, q],
   );
   const keyboardFocus = useTaskBoardKeyboardFocus({
     scope: focusScope,
@@ -193,8 +247,18 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       },
     ];
   }, [actorNames, teamNames, items]);
-  function boardSearch(param?: string): { view: 'board'; param?: string; public_update?: 'missing' } {
-    return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
+  function boardSearch(param?: string): {
+    view: 'board';
+    param?: string;
+    public_update?: 'missing';
+    q?: string;
+  } {
+    return {
+      view: 'board',
+      ...(q === undefined ? {} : { q }),
+      ...(param !== undefined ? { param } : {}),
+      ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}),
+    };
   }
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: boardSearch(id) }); }
   const pickupColumn = React.useRef<TaskStatus | null>(null);
@@ -306,6 +370,12 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 Task Request 검토
               </Link>
             </span>
+            <SearchInput
+              placeholder={LIST_SEARCH_PLACEHOLDER}
+              value={draft}
+              onValueChange={setDraft}
+              onCommit={commit}
+            />
             <ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} />
             <TaskBoardGroupByButton value={groupBy} onChange={setGroupBy} />
           </>
@@ -365,7 +435,13 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 valueClassName="text-accent-success"
               />
             </div>
-            {items.length === 0 ? (
+            {items.length === 0 && q ? (
+              <ListStateMessage
+                variant="filtered"
+                title={LIST_SEARCH_EMPTY_LABEL}
+                action={{ label: '검색 초기화', onClick: () => writeSearch('') }}
+              />
+            ) : items.length === 0 ? (
               <output className="flex flex-1 items-center justify-center p-6">
                 <p className="text-sm text-text-muted">
                   Task는 Task Request에서 전환됩니다.{' '}

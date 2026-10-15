@@ -1,4 +1,6 @@
 import { fetchEntityLinksBySource } from '@/lib/api/entity-links';
+import { LIST_SEARCH_EMPTY_LABEL, LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import { useQuery } from '@tanstack/react-query';
 // /findings — ADR-0020 ListShell finding list + right detail panel.
 
@@ -23,14 +25,16 @@ import { formatShortDate } from '@/lib/format/datetime';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { parseRouteSearch } from '@/lib/router/search';
 import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
-import type { FindingDto } from '@fops/shared';
+import { type FindingDto, listFindingsQuerySchema } from '@fops/shared';
 import {
   ActiveFilterBar,
   type AvatarUser,
+  Checkbox,
   ListShell,
   ObjectRow,
   OutlineBadge,
   PermissionBlockedPanel,
+  SearchInput,
   Select,
   SelectContent,
   SelectItem,
@@ -54,6 +58,7 @@ import { vocSearchSchema } from '../vocs';
 // Absent execution stays unfiltered.
 export const findingsSearchSchema = z
   .object({
+    q: listFindingsQuerySchema.shape.q,
     'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
     status: z.literal('active').optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
@@ -110,6 +115,7 @@ export function FindingsListPage(): React.ReactElement {
     void navigate({
       to: '/findings',
       search: ({
+        q: _q,
         execution: _execution,
         assignment: _assignment,
         'filter.analytics_area': _area,
@@ -121,6 +127,7 @@ export function FindingsListPage(): React.ReactElement {
 
   return (
     <FindingsListShell
+      q={search.q}
       managedSystemId={managedSystemId}
       analyticsAreaId={search['filter.analytics_area']}
       status={search.status}
@@ -136,6 +143,7 @@ export function FindingsListPage(): React.ReactElement {
 }
 
 function FindingsListShell({
+  q,
   analyticsAreaId,
   status,
   managedSystemId,
@@ -147,6 +155,7 @@ function FindingsListShell({
   onSelectionReconciled,
   onResetFilters,
 }: {
+  q: string | undefined;
   analyticsAreaId: string | undefined;
   status: 'active' | undefined;
   managedSystemId: string | undefined;
@@ -159,9 +168,30 @@ function FindingsListShell({
   onResetFilters: () => void;
 }): React.ReactElement {
   const navigate = useNavigate({ from: '/findings/' });
+  const writeSearch = React.useCallback(
+    (draft: string) => {
+      const next = draft.trim();
+      if (next === (q ?? '')) return false;
+      void navigate({
+        to: '/findings',
+        replace: true,
+        search: ({ q: _q, ...previous }) => ({
+          ...previous,
+          ...(next === '' ? {} : { q: next }),
+        }),
+      });
+      return true;
+    },
+    [navigate, q],
+  );
+  const { draft, setDraft, commit } = useCommittedSearchDraft({
+    committed: q ?? '',
+    write: writeSearch,
+  });
+  const filterId = React.useId();
   const safeReturnTo = getSafeVocReturnTo(returnTo);
   const areaLabel = useAnalyticsAreaFilterLabel(analyticsAreaId, managedSystemId);
-  const removeFilter = (key: 'filter.analytics_area' | 'status' | 'execution') => {
+  const removeFilter = (key: 'filter.analytics_area' | 'status' | 'execution' | 'q') => {
     void navigate({
       to: '/findings',
       search: (prev) => {
@@ -172,6 +202,15 @@ function FindingsListShell({
     });
   };
   const activeFilters = [
+    ...(q === undefined
+      ? []
+      : [
+          {
+            key: 'q',
+            label: `${LIST_SEARCH_PLACEHOLDER}: ${q}`,
+            onRemove: () => removeFilter('q'),
+          },
+        ]),
     ...(analyticsAreaId === undefined
       ? []
       : [{ key: 'area', label: areaLabel, onRemove: () => removeFilter('filter.analytics_area') }]),
@@ -194,6 +233,7 @@ function FindingsListShell({
     assignment,
     analyticsAreaId,
     status,
+    q,
   );
   const findings = React.useMemo(
     () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -320,11 +360,19 @@ function FindingsListShell({
   return (
     <ListShell
       toolbar={{
+        actions: (
+          <SearchInput
+            placeholder={LIST_SEARCH_PLACEHOLDER}
+            value={draft}
+            onValueChange={setDraft}
+            onCommit={commit}
+          />
+        ),
         title: 'Findings',
         subtitle: 'VOC Evidence에서 실행 후보로 승격된 Finding을 검토합니다.',
       }}
       tabs={
-        <div className="mx-5 my-2">
+        <div className="mx-5 my-2 flex items-center gap-3">
           <Select
             value={assignment ?? 'all'}
             onValueChange={(value) => {
@@ -347,6 +395,35 @@ function FindingsListShell({
               <SelectItem value="unassigned">{OWNER_COPY.unassigned}</SelectItem>
             </SelectContent>
           </Select>
+          {(
+            [
+              ['execution', 'none', '실행 연결 없음'],
+              ['status', 'active', FINDING_STATUS_LABELS.active],
+            ] as const
+          ).map(([key, value, label]) => (
+            <label
+              key={key}
+              htmlFor={`${filterId}-${key}`}
+              className="flex items-center gap-2 text-sm"
+            >
+              <Checkbox
+                id={`${filterId}-${key}`}
+                checked={(key === 'execution' ? execution : status) === value}
+                onCheckedChange={(checked) => {
+                  void navigate({
+                    to: '/findings',
+                    search: (previous) => {
+                      const next = { ...previous };
+                      if (checked === true) return { ...next, [key]: value };
+                      delete next[key];
+                      return next;
+                    },
+                  });
+                }}
+              />
+              {label}
+            </label>
+          ))}
         </div>
       }
       list={
@@ -354,6 +431,7 @@ function FindingsListShell({
           <FindingsListBody
             findings={findings}
             total={total}
+            searchFiltered={q !== undefined}
             isPending={stateIsPending}
             isError={stateIsError}
             isSuccess={listQuery.isSuccess || listQuery.isFetchNextPageError}
@@ -459,6 +537,7 @@ function FindingsListBody({
   isSuccess,
   error,
   isFilteredEmpty,
+  searchFiltered,
   assignmentFiltered,
   filterBar,
   hasFilterBar,
@@ -477,6 +556,7 @@ function FindingsListBody({
   isSuccess: boolean;
   error: unknown;
   isFilteredEmpty: boolean;
+  searchFiltered: boolean;
   assignmentFiltered: boolean;
   filterBar: React.ReactNode;
   hasFilterBar: boolean;
@@ -526,6 +606,12 @@ function FindingsListBody({
             action={{ label: '다시 시도', onClick: onRetry }}
           />
         </div>
+      ) : searchFiltered && findings.length === 0 ? (
+        <ListStateMessage
+          variant="filtered"
+          title={LIST_SEARCH_EMPTY_LABEL}
+          action={{ label: '필터 초기화', onClick: onResetFilters }}
+        />
       ) : isFilteredEmpty ? (
         <div className="p-4" data-testid="finding-filtered-empty-state">
           <ListStateMessage

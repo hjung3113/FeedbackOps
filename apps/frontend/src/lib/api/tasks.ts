@@ -17,6 +17,7 @@ import { apiClient } from './client';
 
 export async function listTasks(
   options: {
+    q?: string;
     status?: TaskStatus;
     assignee?: string;
     assignee_team_id?: string;
@@ -33,6 +34,7 @@ export async function listTasks(
   } = {},
 ): Promise<ListTasksResponse> {
   const qs = new URLSearchParams();
+  if (options.q !== undefined) qs.set('q', options.q);
   if (options.limit !== undefined) qs.set('limit', String(options.limit));
   if (options.cursor !== undefined) qs.set('cursor', options.cursor);
   if (options.status !== undefined) qs.set('status', options.status);

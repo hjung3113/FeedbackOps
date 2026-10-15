@@ -1089,6 +1089,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     const allowedSystemIds = scope.kind === 'all' ? undefined : scope.managedSystemIds;
     const input = {
       workspaceId: args.actor.workspace_id,
+      ...(args.query.q === undefined ? {} : { q: args.query.q }),
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
       ...(args.query.assignee_team_id === undefined

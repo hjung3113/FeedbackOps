@@ -4,6 +4,7 @@ import * as React from 'react';
 import type { TaskBoardGroupBy } from '../components/task-board/TaskBoardGroupByButton';
 
 type FocusScope = {
+  q?: string | undefined;
   groupBy: TaskBoardGroupBy;
   managedSystem: string | undefined;
   publicUpdate: 'missing' | undefined;
@@ -44,7 +45,8 @@ export function useTaskBoardKeyboardFocus({
     if (
       previousScope.groupBy !== scope.groupBy ||
       previousScope.managedSystem !== scope.managedSystem ||
-      previousScope.publicUpdate !== scope.publicUpdate
+      previousScope.publicUpdate !== scope.publicUpdate ||
+      previousScope.q !== scope.q
     ) {
       dragGeneration.current += 1;
       keyboardFocusTask.current = null;

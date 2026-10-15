@@ -1,5 +1,6 @@
 // VOC list predicate, list/count queries, and out-of-scope summary.
 import { sql } from 'drizzle-orm';
+import { escapeLikePattern } from '../../../lib/sql-like.js';
 
 import type { Db } from '../../../db/client.js';
 import { entityLinksApp } from '../../../db/schema/core.js';
@@ -55,14 +56,6 @@ export interface ListVocsRepoArgs {
 }
 
 type VocListPredicateArgs = Omit<ListVocsRepoArgs, 'sort' | 'cursor' | 'limit'>;
-
-/**
- * #821: escape the LIKE wildcards so `%` and `_` in the user text match
- * literally. The escape character itself (`\`) is escaped first.
- */
-function escapeLikePattern(text: string): string {
-  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
 
 /**
  * The canonical list/count predicate.  Keep navigation counts on this path so

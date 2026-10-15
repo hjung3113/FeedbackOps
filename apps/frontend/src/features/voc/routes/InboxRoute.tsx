@@ -9,6 +9,7 @@ import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import {
   ActiveFilterBar,
   Button,
@@ -27,7 +28,6 @@ import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'l
 import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
-import { useCommittedSearchDraft } from '../hooks/useCommittedSearchDraft';
 import { useVocList } from '../hooks/useVocList';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -265,6 +265,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         },
         replace: true,
       });
+      // Undefined, not false: a raw write can still change the URL, so the
+      // draft waits for `committed` instead of settling as a no-op.
+      return undefined;
     },
     [navigate, search.tab, view],
   );

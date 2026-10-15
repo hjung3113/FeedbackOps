@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
+import { escapeLikePattern } from '../../lib/sql-like.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 
 import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
@@ -283,6 +284,7 @@ export async function findTaskIdByDisplayId(
 }
 
 interface ListInput {
+  q?: string;
   workspaceId: string;
   status?: TaskStatus;
   assigneeActorId?: string;
@@ -374,6 +376,12 @@ function listPredicates(input: ListInput) {
     predicates.push(
       sql`primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,
     );
+  if (input.q !== undefined && input.q !== '') {
+    const pattern = escapeLikePattern(input.q);
+    predicates.push(
+      sql`(display_id ILIKE ${`${pattern}%`} ESCAPE '\\' OR title ILIKE ${`%${pattern}%`} ESCAPE '\\')`,
+    );
+  }
   return predicates;
 }
 

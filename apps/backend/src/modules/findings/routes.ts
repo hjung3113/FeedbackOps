@@ -100,6 +100,7 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
         });
       }
       const result = await findingsService.listFindings({
+        ...(parsed.data.q === undefined ? {} : { q: parsed.data.q }),
         actor: {
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,

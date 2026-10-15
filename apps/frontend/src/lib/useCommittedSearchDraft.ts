@@ -11,7 +11,14 @@
 //   pending (superseded)  { draft, base: undefined } committed was neither;
 //                                                    skipped once base is
 //                                                    already undefined
-//   acknowledged          undefined                  committed === draft
+//   acknowledged          undefined                  committed.trim() === draft.trim()
+//                                                    OR write() returned false
+//
+// A writer may return false when the normalized draft is already `committed`,
+// so `committed` will not change. That write is acknowledged immediately.
+// Undefined — VOC writes the raw draft and returns undefined, and the URL can
+// still change — still waits for `committed`. Newer raw typing stays in
+// draftAheadOfRef either way.
 //
 // draftAheadOfRef holds the pending draft while the box is ahead of it, so the
 // acknowledgement does not copy `committed` over newer text. setDraft sets it
@@ -25,7 +32,8 @@ import * as React from 'react';
 
 export interface UseCommittedSearchDraftOptions {
   committed: string;
-  write: (draft: string, base: string) => void;
+  /** Return false when this write does not change `committed`. */
+  write: (draft: string, base: string) => boolean | undefined;
 }
 
 export function useCommittedSearchDraft({ committed, write }: UseCommittedSearchDraftOptions): {
@@ -50,7 +58,10 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
       if (next === base) return;
       pendingWriteRef.current = { draft: next, base };
       draftAheadOfRef.current = undefined;
-      write(next, base);
+      if (write(next, base) === false) {
+        pendingWriteRef.current = undefined;
+        setDraftState(committed);
+      }
     },
     [committed, write],
   );
@@ -74,9 +85,13 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
 
   React.useEffect(() => {
     const pending = pendingWriteRef.current;
-    if (pending !== undefined && committed === pending.draft) {
+    if (pending !== undefined && committed.trim() === pending.draft.trim()) {
       pendingWriteRef.current = undefined;
-    } else if (pending !== undefined && pending.base !== undefined && committed !== pending.base) {
+    } else if (
+      pending !== undefined &&
+      pending.base !== undefined &&
+      committed.trim() !== pending.base.trim()
+    ) {
       // #891: this outside URL is neither the pending write nor its base, so
       // that write has been superseded. Drop the base; a later return to it
       // must not be treated as ahead of the old write.
@@ -84,11 +99,14 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
     }
     // Strict mode runs this effect twice. The ref stays set so the second run
     // still refuses to replace a draft typed ahead of this acknowledgement.
-    if (draftAheadOfRef.current !== undefined && committed === draftAheadOfRef.current) {
+    if (
+      draftAheadOfRef.current !== undefined &&
+      committed.trim() === draftAheadOfRef.current.trim()
+    ) {
       return;
     }
     draftAheadOfRef.current = undefined;
-    if (pending !== undefined && pending.draft !== committed) {
+    if (pending !== undefined && pending.draft.trim() !== committed.trim()) {
       setDraftState((current) => (current === pending.draft ? current : committed));
       return;
     }

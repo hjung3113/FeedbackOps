@@ -24,14 +24,14 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId/follow-up
 /surveys/participate
 /surveys/:surveyId/respond
-/tasks?view=my&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=my&q=:query&managedSystem=:managedSystemId|all&param=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
 /tasks?view=requests&managedSystem=:managedSystemId|all&param=:requestId
-/tasks?view=backlog&managedSystem=:managedSystemId|all&param=:taskId
-/tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId&public_update=missing
+/tasks?view=backlog&q=:query&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=board&q=:query&managedSystem=:managedSystemId|all&param=:taskId&public_update=missing
 /tasks?view=milestones&managedSystem=:managedSystemId|all&param=:milestoneId
 /integration?managedSystem=:managedSystemId|all
-/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&assignment=assigned|unassigned&filter.analytics_area=:areaId|unset&status=active&returnTo=:encodedVocUrl
+/findings?q=:query&managedSystem=:managedSystemId|all&selected=:findingId&execution=none&assignment=assigned|unassigned&filter.analytics_area=:areaId|unset&status=active&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)
 /integration/evidence?managedSystem=:managedSystemId|all&source=voc|survey_response|note&q=:query&selected=:highlightId&cursor=:opaqueCursor
 /integration/coverage?managedSystem=:managedSystemId|all
@@ -45,7 +45,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 | Deep-link route | Search keys | Omitted defaults |
 |---|---|---|
-| `/findings` | `managedSystem`, `selected`, `execution`, `assignment`, `filter.analytics_area`, `status`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution`, `assignment`, `filter.analytics_area` and `status` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
+| `/findings` | `q`, `managedSystem`, `selected`, `execution`, `assignment`, `filter.analytics_area`, `status`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution`, `assignment`, `filter.analytics_area` and `status` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
 | `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected`, `filter.analytics_area`, `status`, `follow_up` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `filter.analytics_area`, `status` (`open`) and `follow_up` (`needed`) when unfiltered |
 | `/surveys/:surveyId/follow-up` | `returnTo` | `returnTo` unless opened from a recovery queue |
@@ -53,7 +53,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/voc-clusters/:clusterId` | — | No search state; the cluster id is the path param and the cluster list stays as the list context |
-| `/tasks` | `view`, `param`, `managedSystem`, `public_update`, `filter.analytics_area`, `status`, `status_group`, `overdue`, `reporter_update`, `returnTo` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` (`missing`) unless filtering the board, backlog or My list to Released Tasks missing a public update; `filter.analytics_area`, `status`, `status_group` (`in-flight`), `overdue` (`true`) and `reporter_update` (`needed`) when unfiltered — these apply to backlog and My only, not the board |
+| `/tasks` | `q`, `view`, `param`, `managedSystem`, `public_update`, `filter.analytics_area`, `status`, `status_group`, `overdue`, `reporter_update`, `returnTo` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` (`missing`) unless filtering the board, backlog or My list to Released Tasks missing a public update; `filter.analytics_area`, `status`, `status_group` (`in-flight`), `overdue` (`true`) and `reporter_update` (`needed`) when unfiltered — these apply to backlog and My only, not the board |
 | `/home` | `managedSystem`, `tab`, `category`, `selected`, `presentation`, `history`, `returnTo`, `cursor` | Dashboard tab, visible presentation, history=false and absent filters/selection/return/cursor; Home scope is a UUID when explicit |
 | `/integration` | `managedSystem`, `category`, `selected`, `presentation`, `history`, `returnTo`, `cursor` | `managedSystem` for the caller's effective scope union (`all` is also accepted); visible presentation, history=false and absent filters/selection/return/cursor |
 | `/integration/evidence` | `managedSystem`, `source`, `q`, `selected`, `cursor` | omit unfiltered defaults; selection uses a local highlight UUID; cursor is opaque |
@@ -641,3 +641,31 @@ non-null destination. Responsibility draft state resets with the existing conver
 item/scope/form lifecycle. Team labels remain teams, including board grouping/filtering and
 unassigned counts; no personal member is selected. Reviewer URL changes preserve Managed
 System and other search context, clear the old selection and restore through browser history.
+
+### Task and Finding list search (#1177)
+
+Task backlog, `내 Task`, Task board, and Findings expose `SearchInput` with
+placeholder `제목 또는 ID`. The route-lifetime shared
+`apps/frontend/src/lib/useCommittedSearchDraft.ts` restores URL `q`, keeps a local
+draft, and commits on Enter/blur or debounce (300 ms; Hangul-final text 700 ms).
+Blank search omits `q`; the strict route schemas use the same trimmed, max-100
+query contract as the API. Each search changes the list query key and starts
+from page one without a cursor; no-limit board requests include `q` too.
+Pending/error/empty Task list bodies preserve the shell and focused search draft.
+While a search is pending, Task list/board and Findings retain previous rows and
+counts only when that query differs by `q` alone and the previous query
+succeeded. A Managed System, view, filter, or status change, or a previous
+error, shows the loading state with no previous rows. A normalized write that
+does not change the committed `q` settles the draft immediately, so a later
+reset can clear it. Normalized URL acknowledgements still preserve newer raw
+typing. Task and Findings lists show a `제목 또는 ID: …` chip;
+removing it clears `q`, and clear-all resets `q` with the other filters.
+No matches show `검색 결과가 없습니다.` with a reset action.
+
+`내 Task` exposes a status selector for individual `status` values or
+`status_group=in-flight` (Todo/Doing/Review), preserving the `assignee=me` request.
+Findings exposes `execution=none` and `status=active` checkboxes alongside owner
+assignment. Their URL filters have removable ActiveFilterBar chips and reset.
+The board's query key, request parameters and keyboard-recovery scope include
+`q`; changing search abandons pending keyboard focus recovery while preserving
+grouping, local filters and the existing selection policy.
