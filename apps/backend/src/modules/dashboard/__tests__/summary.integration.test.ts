@@ -593,15 +593,15 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     });
     expect(queue(body, 'actionable-finding-no-execution')).toMatchObject({
       severity: 'warn',
-      next_action: { route: '/findings' },
+      next_action: { route: '/findings?execution=none' },
     });
     expect(queue(body, 'released-task-unresolved-voc')).toMatchObject({
       severity: 'warn',
-      next_action: { route: '/tasks?view=board' },
+      next_action: { route: '/tasks?view=backlog&reporter_update=needed' },
     });
     expect(queue(body, 'bad-outcome-no-followup')).toMatchObject({
       severity: 'urgent',
-      next_action: { route: '/surveys' },
+      next_action: { route: '/surveys?follow_up=needed' },
     });
     expect(queue(body, 'permission-requests-pending')).toMatchObject({
       severity: 'info',
