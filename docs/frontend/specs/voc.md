@@ -239,12 +239,23 @@ VOC summary detail maps `_self.reason` codes `explicit_deny`, `grant_expired`,
 `grant_revoked`, and `no_grant` to Korean copy in `lib/copy/permission-reasons.ts`.
 Unknown codes omit the reason and use the panel's default text; raw codes are never displayed.
 
-Triage's request-access panel opens the existing `RequestAccessButton` dialog for
-`voc.triage`, with the selected Managed System when present and return intent
-`/vocs?view=triage`. On a queue denial, the request capability and Managed System
-come from the server's `requestable_permission` instead. Non-requestable point-check
-states keep the panel without a request button. Selected-System blocks use
-`선택한 Managed System의 VOC Triage 권한이 없습니다.`.
+Triage's request-access panel opens the existing `RequestAccessButton` dialog.
+On a queue denial, the request capability and Managed System come from the
+server's `requestable_permission`. When that permission is `voc.read`, the panel
+copy names the missing VOC 조회 access (`vocTriageMissingRead` /
+`vocTriageMissingReadManagedSystem` in `lib/copy/permission-reasons.ts`) and the
+dialog requests that capability and System. A `voc.read` requestable that
+carries no Managed System renders the panel as `blocked_not_requestable` with
+`vocTriageMissingReadSelectSystem` (`Managed System을 선택한 뒤 VOC 조회 권한을
+요청하세요.`) and no request button — a workspace-wide `voc.read` request would
+fail scope validation, and selecting a System in the existing selector re-gates
+into the scoped request flow. The dialog's scope summary shows the Managed
+System name, falling back to the raw UUID only while the name is unresolved.
+Otherwise the dialog requests
+`voc.triage`, with the selected Managed System when present, and a
+selected-System block uses `선택한 Managed System의 VOC Triage 권한이 없습니다.`.
+Return intent stays `/vocs?view=triage`. Non-requestable point-check states keep
+the panel without a request button.
 
 ### 4.3 Conversation entries (public_updates, reporter_replies, internal_comments)
 

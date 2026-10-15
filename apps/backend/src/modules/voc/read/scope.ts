@@ -86,24 +86,56 @@ export function resolveVocListScope(args: {
     return { scopeFilter: readScope };
   }
 
-  const intersected = intersectScopes(readScope, triageScope!);
-  if (intersected.kind === 'scoped' && intersected.managedSystemIds.length === 0) {
+  if (!triageScope) {
     throw new HttpError('permission.denied', 'no voc.triage scope for actor', {
       requestable_permission: { permission: 'voc.triage', managed_system_id: null },
     });
   }
-  if (managed_system_id && managed_system_id !== 'all') {
-    if (!msInScope(intersected, managed_system_id)) {
+  const triage = triageScope;
+  const intersected = intersectScopes(readScope, triage);
+  const selected = managed_system_id && managed_system_id !== 'all' ? managed_system_id : undefined;
+  if (intersected.kind === 'scoped' && intersected.managedSystemIds.length === 0) {
+    const holdsTriage = selected
+      ? msInScope(triage, selected)
+      : triage.kind === 'all' || triage.managedSystemIds.length > 0;
+    if (holdsTriage) {
+      // #1170: `voc.read` is requestable only per Managed System. With no
+      // selection, a triage scope held on exactly one System names it so the
+      // request validates; several Systems (or workspace-wide) leave the
+      // choice to the actor.
+      const fallbackSystemId =
+        triage.kind === 'scoped' && triage.managedSystemIds.length === 1
+          ? (triage.managedSystemIds[0] ?? null)
+          : null;
+      throw new HttpError('permission.denied', 'voc.read required to use voc.triage scope', {
+        requestable_permission: {
+          permission: 'voc.read',
+          managed_system_id: selected ?? fallbackSystemId,
+        },
+      });
+    }
+    throw new HttpError('permission.denied', 'no voc.triage scope for actor', {
+      requestable_permission: { permission: 'voc.triage', managed_system_id: null },
+    });
+  }
+  if (selected) {
+    if (!msInScope(intersected, selected)) {
+      const asksForRead = msInScope(triage, selected) && !msInScope(readScope, selected);
       throw new HttpError(
         'permission.scope_required',
-        'managed_system_id not in voc.triage scope',
+        asksForRead
+          ? 'voc.read required for the selected managed system'
+          : 'managed_system_id not in voc.triage scope',
         {
-          requiredScope: [managed_system_id],
-          requestable_permission: { permission: 'voc.triage', managed_system_id },
+          requiredScope: [selected],
+          requestable_permission: {
+            permission: asksForRead ? 'voc.read' : 'voc.triage',
+            managed_system_id: selected,
+          },
         },
       );
     }
-    return { scopeFilter: { kind: 'scoped', managedSystemIds: [managed_system_id] } };
+    return { scopeFilter: { kind: 'scoped', managedSystemIds: [selected] } };
   }
   return { scopeFilter: intersected };
 }

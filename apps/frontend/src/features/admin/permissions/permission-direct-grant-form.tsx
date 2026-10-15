@@ -36,6 +36,21 @@ import { useDirectPermissionGrant } from './useDirectPermissionGrant.js';
 
 type DirectGrantCandidate = PermissionGrantOptions['candidates'][number];
 
+export type DirectGrantDraft = {
+  actorId: string;
+  capability: 'voc.read';
+  managedSystemId: string | null;
+  reason: string;
+  expirationDate: string;
+};
+
+export type DirectGrantReadFollowUp = {
+  actorId: string;
+  managedSystemId: string | null;
+  reason: string;
+  expirationDate: string;
+};
+
 const DIRECT_GRANT_COPY = ADMIN_PERMISSIONS_COPY.directGrant;
 
 function candidateKey(candidate: DirectGrantCandidate): string {
@@ -104,6 +119,7 @@ function conflictDestination(
 
 export function PermissionDirectGrantForm({
   open,
+  draft,
   selectionContext,
   managedSystemNames,
   activeGrants,
@@ -112,16 +128,29 @@ export function PermissionDirectGrantForm({
   onCreated,
 }: {
   open: boolean;
+  draft?: DirectGrantDraft;
   selectionContext: string;
   managedSystemNames: Record<string, string>;
   activeGrants: PermissionGrantAdminItem[];
   cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
   onOpenChange: (open: boolean) => void;
-  onCreated: (item: PermissionGrantAdminItem, submittedContext: string) => void;
+  onCreated: (
+    item: PermissionGrantAdminItem,
+    submittedContext: string,
+    followUp: DirectGrantReadFollowUp | null,
+  ) => void;
 }) {
   const actors = useWorkspaceActors({ retry: false });
   const [actorId, setActorId] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [seenOpen, setSeenOpen] = React.useState(open);
+  const [seenDraft, setSeenDraft] = React.useState(draft);
+  if (open !== seenOpen || draft !== seenDraft) {
+    setSeenOpen(open);
+    setSeenDraft(draft);
+    if (!open) setActorId('');
+    else if (draft) setActorId(draft.actorId);
+  }
   const actorSelectId = React.useId();
   const grantOptionsQuery = useQuery({
     queryKey: permissionGrantOptionsKey(actorId),
@@ -139,10 +168,11 @@ export function PermissionDirectGrantForm({
       : undefined;
   const optionsUnconfirmed = grantOptionsQuery.isFetching || grantOptionsQuery.isError;
   const recipientActors = (actors.actors ?? []).filter((actor) => actor.actor_type !== 'system');
+  const selectedActor = recipientActors.find((actor) => actor.id === actorId);
+  const prefilledDraft = draft?.actorId === actorId ? draft : undefined;
 
   React.useEffect(() => {
     if (open) return;
-    setActorId('');
     setBusy(false);
   }, [open]);
 
@@ -179,7 +209,11 @@ export function PermissionDirectGrantForm({
               {DIRECT_GRANT_COPY.actorLabel}
               <Select value={actorId} onValueChange={handleActorChange} disabled={busy}>
                 <SelectTrigger id={actorSelectId} aria-label={DIRECT_GRANT_COPY.actorLabel}>
-                  <SelectValue placeholder={DIRECT_GRANT_COPY.actorPlaceholder} />
+                  <SelectValue placeholder={DIRECT_GRANT_COPY.actorPlaceholder}>
+                    {selectedActor
+                      ? `${selectedActor.display_name} · ${selectedActor.email}`
+                      : undefined}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -233,6 +267,13 @@ export function PermissionDirectGrantForm({
               onClose={() => onOpenChange(false)}
               onCreated={onCreated}
               onPendingChange={setBusy}
+              {...(prefilledDraft
+                ? {
+                    initialCandidateKey: `voc.read|${prefilledDraft.managedSystemId ?? 'workspace'}`,
+                    initialReason: prefilledDraft.reason,
+                    initialExpirationDate: prefilledDraft.expirationDate,
+                  }
+                : {})}
             />
           ) : (
             <DialogFooter>
@@ -257,6 +298,9 @@ function DirectGrantFields({
   onClose,
   onCreated,
   onPendingChange,
+  initialCandidateKey = '',
+  initialReason = '',
+  initialExpirationDate = '',
 }: {
   options: PermissionGrantOptions;
   managedSystemNames: Record<string, string>;
@@ -265,14 +309,21 @@ function DirectGrantFields({
   optionsUnconfirmed: boolean;
   cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
   onClose: () => void;
-  onCreated: (item: PermissionGrantAdminItem, submittedContext: string) => void;
+  onCreated: (
+    item: PermissionGrantAdminItem,
+    submittedContext: string,
+    followUp: DirectGrantReadFollowUp | null,
+  ) => void;
   onPendingChange: (pending: boolean) => void;
+  initialCandidateKey?: string;
+  initialReason?: string;
+  initialExpirationDate?: string;
 }) {
   const me = useMe();
   const actorId = me.data?.actor.id ?? null;
-  const [selectedCandidateKey, setSelectedCandidateKey] = React.useState('');
-  const [reason, setReason] = React.useState('');
-  const [expirationDate, setExpirationDate] = React.useState('');
+  const [selectedCandidateKey, setSelectedCandidateKey] = React.useState(initialCandidateKey);
+  const [reason, setReason] = React.useState(initialReason);
+  const [expirationDate, setExpirationDate] = React.useState(initialExpirationDate);
   const [expirationDraftValid, setExpirationDraftValid] = React.useState(true);
   const [governanceConfirmed, setGovernanceConfirmed] = React.useState(false);
   const [policyCitation, setPolicyCitation] = React.useState('');
@@ -322,6 +373,20 @@ function DirectGrantFields({
   const expirationReady = expirationDate === '' || expiration !== undefined;
   const preflight = selectedCandidate?.preflight;
   const preflightBlocked = preflight !== undefined && preflight.state !== 'available';
+  const readPrerequisite = selectedCandidate?.prerequisites?.find(
+    (item) => item.capability === 'voc.read',
+  );
+  const readDenyLift = options.candidates.find(
+    (candidate) =>
+      readPrerequisite?.state === 'denied' &&
+      candidate.capability === 'voc.read' &&
+      candidate.managed_system_id === readPrerequisite.managed_system_id &&
+      candidate.preflight.state === 'deny_lift',
+  );
+  const readDenyLiftRoute =
+    readDenyLift?.preflight.state === 'deny_lift'
+      ? readDenyLift.preflight.lift_route
+      : '/admin/permissions/grants?tab=denies';
   const sessionReady = actorId !== null;
   const reasonReady = reason.trim().length > 0 && reason.trim().length <= 2000;
   const canSubmit =
@@ -370,13 +435,25 @@ function DirectGrantFields({
     }
     const idempotencyKey = intent.current.key;
     const submittedContext = selectionContext;
+    const readPrerequisite = selectedCandidate.prerequisites?.find(
+      (item) => item.capability === 'voc.read',
+    );
+    const followUp: DirectGrantReadFollowUp | null =
+      readPrerequisite?.state === 'missing'
+        ? {
+            actorId: options.recipient.id,
+            managedSystemId: readPrerequisite.managed_system_id,
+            reason: reason.trim(),
+            expirationDate,
+          }
+        : null;
     submitting.current = true;
     onPendingChange(true);
     void mutation
       .mutateAsync({ body, idempotencyKey })
       .then((item) => {
         intent.current = null;
-        if (mounted.current) onCreated(item, submittedContext);
+        if (mounted.current) onCreated(item, submittedContext, followUp);
       })
       .catch(() => {
         // The draft and its idempotency key remain available for an explicit retry.
@@ -419,7 +496,11 @@ function DirectGrantFields({
               id="permission-direct-grant-candidate"
               aria-label={DIRECT_GRANT_COPY.optionLabel}
             >
-              <SelectValue placeholder={DIRECT_GRANT_COPY.optionPlaceholder} />
+              <SelectValue placeholder={DIRECT_GRANT_COPY.optionPlaceholder}>
+                {selectedCandidate
+                  ? candidateLabel(selectedCandidate, managedSystemNames)
+                  : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
@@ -476,6 +557,21 @@ function DirectGrantFields({
             <InternalLink
               className="w-fit text-accent-primary underline underline-offset-2"
               href={selectedCandidate.preflight.lift_route}
+              onClick={onClose}
+            >
+              {DIRECT_GRANT_COPY.denyLink}
+            </InternalLink>
+          </div>
+        ) : null}
+        {readPrerequisite?.state === 'missing' ? (
+          <p className="text-sm text-text-secondary">{DIRECT_GRANT_COPY.missingReadPrerequisite}</p>
+        ) : null}
+        {readPrerequisite?.state === 'denied' ? (
+          <div className="flex flex-col gap-1 text-sm text-text-secondary">
+            <p>{DIRECT_GRANT_COPY.deniedReadPrerequisite}</p>
+            <InternalLink
+              className="w-fit text-accent-primary underline underline-offset-2"
+              href={readDenyLiftRoute}
               onClick={onClose}
             >
               {DIRECT_GRANT_COPY.denyLink}

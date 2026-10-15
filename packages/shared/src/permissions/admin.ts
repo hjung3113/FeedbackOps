@@ -75,6 +75,15 @@ export const permissionGrantPreflightSchema = z.discriminatedUnion('state', [
 ]);
 export type PermissionGrantPreflight = z.infer<typeof permissionGrantPreflightSchema>;
 
+export const permissionGrantPrerequisiteSchema = z
+  .object({
+    capability: z.literal('voc.read'),
+    managed_system_id: z.string().uuid().nullable(),
+    state: z.enum(['held', 'missing', 'denied']),
+  })
+  .strict();
+export type PermissionGrantPrerequisite = z.infer<typeof permissionGrantPrerequisiteSchema>;
+
 export const permissionGrantOptionsSchema = z
   .object({
     recipient: z
@@ -93,6 +102,7 @@ export const permissionGrantOptionsSchema = z
           managed_system_id: z.string().uuid().nullable(),
           governance_required: z.boolean(),
           preflight: permissionGrantPreflightSchema,
+          prerequisites: z.array(permissionGrantPrerequisiteSchema).min(1).optional(),
         })
         .strict(),
     ),

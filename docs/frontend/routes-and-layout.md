@@ -460,8 +460,15 @@ scope is omitted. Terminal requests retain the section with
 Its `권한 부여` primary action opens a feature-local form; direct-grant success
 selects the actual returned grant in the grants tab while preserving URL/history
 semantics. Server options, explicit workspace administrative governance,
-`permission_self_approval`, reason and optional expiry govern submission. Use
-workspace Actor display names, never email; retain input/focus on errors.
+`permission_self_approval`, reason and optional expiry govern submission. When
+the chosen `voc.triage` candidate's `voc.read` prerequisite is `missing`, the
+form warns `이 권한만으로는 VOC를 볼 수 없습니다. VOC 조회 권한도 필요합니다.`
+and still submits that one grant. After success, the selected grant offers
+`VOC 조회 권한도 부여`, which reopens the same dialog prefilled for a separate
+`voc.read` grant (same recipient, Managed System, expiry, and reason). A
+`denied` prerequisite shows the deny-lift link and no follow-up; `held` shows
+no notice. Use workspace Actor display names, never email; retain input/focus
+on errors.
 
 Canonical copy owners are `apps/frontend/src/lib/copy/home.ts` and
 `apps/frontend/src/lib/copy/admin-permissions.ts`; update them in implementation.

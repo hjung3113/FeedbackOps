@@ -18,6 +18,7 @@ export function PermissionGrantDetail({
   onClose,
   onGrantRevoked,
   onSuccess,
+  onGrantReadFollowUp,
 }: {
   permission: ActivePermission;
   actorNames: Record<string, string>;
@@ -25,6 +26,7 @@ export function PermissionGrantDetail({
   onClose: () => void;
   onGrantRevoked: (id: string) => void;
   onSuccess: () => void;
+  onGrantReadFollowUp?: () => void;
 }) {
   const { kind, item } = permission;
   const actorName = actorNames[item.actor_id] ?? GLOSSARY.unknownUser;
@@ -95,6 +97,11 @@ export function PermissionGrantDetail({
               <span className="font-mono text-xs text-text-muted">{shortId(item.id)}</span>
             </FieldRow>
           </section>
+          {kind === 'grants' && onGrantReadFollowUp ? (
+            <Button type="button" variant="secondary" onClick={onGrantReadFollowUp}>
+              {ADMIN_PERMISSIONS_COPY.directGrant.grantReadFollowUp}
+            </Button>
+          ) : null}
           <PermissionGrantActionForm
             key={`${kind}:${item.id}`}
             kind={kind}

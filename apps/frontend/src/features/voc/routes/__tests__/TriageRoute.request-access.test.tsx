@@ -1,4 +1,6 @@
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { createPermissionRequestSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +21,7 @@ vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
 const A = '00000000-0000-4000-8000-000000000001';
 const B = '00000000-0000-4000-8000-000000000002';
 const clients: QueryClient[] = [];
-function mount(state: string, queueDenied = false) {
+function mount(state: string, queueDenied = false, requestableSystem: string | null = B) {
   vi.mocked(usePermissionCheck).mockReturnValue({
     isPending: false,
     data: { state, decision: { allow: state === 'approved' } },
@@ -40,7 +42,7 @@ function mount(state: string, queueDenied = false) {
           message: 'denied',
           requestable_permission: {
             permission: 'voc.read',
-            managed_system_id: B,
+            managed_system_id: requestableSystem,
             reason_required: true,
           },
         };
@@ -90,19 +92,40 @@ describe('Triage request access', () => {
       });
       fireEvent.click(within(dialog).getByRole('button', { name: '요청 제출' }));
       await waitFor(() => expect(requests).toHaveLength(1));
+      // The posted payload must satisfy the transport contract the route validates.
+      const parsed = createPermissionRequestSchema.parse(requests[0]);
+      expect(parsed.requested_capability).toBe(capability);
+      expect(parsed.requested_managed_system_id).toBe(requestedSystem);
       expect(requests[0]).toEqual({
         requested_capability: capability,
         ...(requestedSystem ? { requested_managed_system_id: requestedSystem } : {}),
         reason: 'Triage 업무에 필요합니다.',
         return_route_intent: '/vocs?view=triage',
       });
-      if (managedSystem) {
+      if (capability === 'voc.read') {
+        expect(
+          screen.getByText(PERMISSION_BLOCKED_REASONS.vocTriageMissingReadManagedSystem),
+        ).toBeInTheDocument();
+      } else if (managedSystem) {
         expect(
           screen.getByText('선택한 Managed System의 VOC Triage 권한이 없습니다.'),
         ).toBeInTheDocument();
       }
     },
   );
+
+  it('keeps a voc.read denial without a requestable System non-requestable', async () => {
+    search = {};
+    const requests = mount('approved', true, null);
+    const reason = await screen.findByText(
+      PERMISSION_BLOCKED_REASONS.vocTriageMissingReadSelectSystem,
+      {},
+      { timeout: 5000 },
+    );
+    expect(reason.closest('[data-state]')).toHaveAttribute('data-state', 'blocked_not_requestable');
+    expect(screen.queryByRole('button', { name: '권한 요청하기' })).not.toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+  });
 
   it.each(['pending', 'denied', 'blocked_not_requestable'])(
     'keeps %s without a request trigger',

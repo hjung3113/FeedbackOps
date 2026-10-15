@@ -12,6 +12,10 @@ export const PERMISSION_BLOCKED_REASONS = {
   findingsList: 'Finding 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
   vocTriage: 'VOC Triage 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
   vocTriageManagedSystem: '선택한 Managed System의 VOC Triage 권한이 없습니다.',
+  vocTriageMissingRead: 'VOC Triage 권한이 있어도 VOC 조회 권한이 없으면 VOC를 볼 수 없습니다.',
+  vocTriageMissingReadManagedSystem:
+    '선택한 Managed System의 VOC 조회 권한이 없습니다. VOC Triage만으로는 VOC를 볼 수 없습니다.',
+  vocTriageMissingReadSelectSystem: 'Managed System을 선택한 뒤 VOC 조회 권한을 요청하세요.',
   vocInbox: 'VOC 수신함을 볼 권한이 없습니다. 내가 접수한 VOC는 내 VOC에서 확인할 수 있습니다.',
   vocInboxManagedSystem: '선택한 Managed System의 VOC를 볼 권한이 없습니다.',
   findingDetail:

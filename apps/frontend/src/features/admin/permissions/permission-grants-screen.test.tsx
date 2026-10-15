@@ -415,6 +415,42 @@ function installApi(
   };
 }
 
+function grantPosts(api: { requests: CapturedApiRequest[] }) {
+  return api.requests.filter(
+    (request) => request.method === 'POST' && request.path === '/permissions/grants',
+  );
+}
+
+function triagePrerequisiteCandidate(state: 'missing' | 'held' | 'denied') {
+  return {
+    capability: 'voc.triage' as const,
+    managed_system_id: MANAGED_SYSTEM_ID,
+    governance_required: false,
+    preflight: { state: 'available' as const },
+    prerequisites: [
+      {
+        capability: 'voc.read' as const,
+        managed_system_id: MANAGED_SYSTEM_ID,
+        state,
+      },
+    ],
+  };
+}
+
+function readGrantCandidate(
+  preflight:
+    | { state: 'available' }
+    | { state: 'request_review'; request_id: string; review_route: string }
+    | { state: 'deny_lift'; deny_ids: string[]; lift_route: string },
+) {
+  return {
+    capability: 'voc.read' as const,
+    managed_system_id: MANAGED_SYSTEM_ID,
+    governance_required: false,
+    preflight,
+  };
+}
+
 function renderScreen(initialPath = '/admin/permissions/grants') {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const route = createRoute({
@@ -1697,5 +1733,184 @@ describe('/admin/permissions/grants screen', () => {
     await act(async () => api.releaseDirectGrant());
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '권한 부여' }));
+  });
+
+  test('warns that triage without read cannot see VOC and follows up with one separate read grant', async () => {
+    const api = installApi({
+      initialGrants: [],
+      grantOptionsByActor: {
+        [RECIPIENT_ID]: grantOptionsFor(RECIPIENT_ID, {
+          candidates: [
+            triagePrerequisiteCandidate('missing'),
+            readGrantCandidate({ state: 'available' }),
+          ],
+        }),
+      },
+    });
+    renderScreen();
+    const dialog = await openDirectGrantDialog();
+    await selectDirectGrantTargetAndScope('Actor One', /VOC Triage.*Payments/);
+    expect(
+      within(dialog).getByText('이 권한만으로는 VOC를 볼 수 없습니다. VOC 조회 권한도 필요합니다.'),
+    ).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: 'VOC Triage 운영을 맡깁니다.' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('만료일 · 선택'), {
+      target: { value: '2027-06-15' },
+    });
+    fireEvent.click(within(dialog).getByTestId('direct-grant-submit'));
+
+    await waitFor(() => expect(grantPosts(api)).toHaveLength(1));
+    expect(directPermissionGrantSchema.parse(grantPosts(api)[0]?.body)).toEqual({
+      actor_id: RECIPIENT_ID,
+      capability: 'voc.triage',
+      managed_system_id: MANAGED_SYSTEM_ID,
+      expires_at: '2027-06-15T23:59:59.000Z',
+      reason: 'VOC Triage 운영을 맡깁니다.',
+    });
+    const firstKey = grantPosts(api)[0]?.idempotencyKey;
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    expect(grantPosts(api)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'VOC 조회 권한도 부여' }));
+    const followUp = await screen.findByRole('dialog', { name: '권한 부여' });
+    expect(within(followUp).getByRole('combobox', { name: '대상자' })).toHaveTextContent(
+      'Actor One',
+    );
+    expect(within(followUp).getByRole('combobox', { name: '부여 권한 및 범위' })).toHaveTextContent(
+      'VOC 조회',
+    );
+    const reason = within(followUp).getByLabelText('사유 · 필수');
+    expect(reason).toHaveValue('VOC Triage 운영을 맡깁니다.');
+    expect(reason).toBeEnabled();
+    expect(within(followUp).getByLabelText('만료일 · 선택')).toHaveValue('2027-06-15');
+    expect(
+      within(followUp).queryByText(
+        '이 권한만으로는 VOC를 볼 수 없습니다. VOC 조회 권한도 필요합니다.',
+      ),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => expect(within(followUp).getByTestId('direct-grant-submit')).toBeEnabled());
+    fireEvent.click(within(followUp).getByTestId('direct-grant-submit'));
+    await waitFor(() => expect(grantPosts(api)).toHaveLength(2));
+    const second = grantPosts(api)[1];
+    expect(directPermissionGrantSchema.parse(second?.body)).toEqual({
+      actor_id: RECIPIENT_ID,
+      capability: 'voc.read',
+      managed_system_id: MANAGED_SYSTEM_ID,
+      expires_at: '2027-06-15T23:59:59.000Z',
+      reason: 'VOC Triage 운영을 맡깁니다.',
+    });
+    expect(second?.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(second?.idempotencyKey).not.toBe(firstKey);
+  });
+
+  test('shows no prerequisite notice when voc.read is already held', async () => {
+    installApi({
+      initialGrants: [],
+      grantOptionsByActor: {
+        [RECIPIENT_ID]: grantOptionsFor(RECIPIENT_ID, {
+          candidates: [
+            triagePrerequisiteCandidate('held'),
+            readGrantCandidate({ state: 'available' }),
+          ],
+        }),
+      },
+    });
+    renderScreen();
+    const dialog = await openDirectGrantDialog();
+    await selectDirectGrantTargetAndScope('Actor One', /VOC Triage.*Payments/);
+    expect(
+      within(dialog).queryByText(
+        '이 권한만으로는 VOC를 볼 수 없습니다. VOC 조회 권한도 필요합니다.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('link', { name: '차단 해제 화면 보기' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('shows the deny-lift link for a denied voc.read prerequisite and offers no follow-up', async () => {
+    const liftRoute = `/admin/permissions/grants?tab=denies&selected=${DENY_ID}`;
+    const api = installApi({
+      initialGrants: [],
+      grantOptionsByActor: {
+        [RECIPIENT_ID]: grantOptionsFor(RECIPIENT_ID, {
+          candidates: [
+            triagePrerequisiteCandidate('denied'),
+            readGrantCandidate({
+              state: 'deny_lift',
+              deny_ids: [DENY_ID],
+              lift_route: liftRoute,
+            }),
+          ],
+        }),
+      },
+    });
+    renderScreen();
+    const dialog = await openDirectGrantDialog();
+    await selectDirectGrantTargetAndScope('Actor One', /VOC Triage.*Payments/);
+    expect(within(dialog).getByRole('link', { name: '차단 해제 화면 보기' })).toHaveAttribute(
+      'href',
+      liftRoute,
+    );
+    expect(
+      within(dialog).queryByText(
+        '이 권한만으로는 VOC를 볼 수 없습니다. VOC 조회 권한도 필요합니다.',
+      ),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: 'VOC Triage 운영을 맡깁니다.' },
+    });
+    fireEvent.click(within(dialog).getByTestId('direct-grant-submit'));
+    await waitFor(() => expect(grantPosts(api)).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    expect(screen.queryByRole('button', { name: 'VOC 조회 권한도 부여' })).not.toBeInTheDocument();
+    expect(directPermissionGrantSchema.parse(grantPosts(api)[0]?.body).capability).toBe(
+      'voc.triage',
+    );
+  });
+
+  test('links the deny list for a denied voc.read prerequisite whose read request is open', async () => {
+    const api = installApi({
+      initialGrants: [],
+      grantOptionsByActor: {
+        [RECIPIENT_ID]: grantOptionsFor(RECIPIENT_ID, {
+          candidates: [
+            triagePrerequisiteCandidate('denied'),
+            readGrantCandidate({
+              state: 'request_review',
+              request_id: REVIEW_REQUEST_ID,
+              review_route: `/admin/permissions/requests?selected=${REVIEW_REQUEST_ID}`,
+            }),
+          ],
+        }),
+      },
+    });
+    renderScreen();
+    const dialog = await openDirectGrantDialog();
+    await selectDirectGrantTargetAndScope('Actor One', /VOC Triage.*Payments/);
+    expect(
+      within(dialog).getByText('VOC 조회 권한은 차단되어 있어 이어서 부여할 수 없습니다.'),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: '차단 해제 화면 보기' })).toHaveAttribute(
+      'href',
+      '/admin/permissions/grants?tab=denies',
+    );
+
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: 'VOC Triage 운영을 맡깁니다.' },
+    });
+    fireEvent.click(within(dialog).getByTestId('direct-grant-submit'));
+    await waitFor(() => expect(grantPosts(api)).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    expect(grantPosts(api)).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'VOC 조회 권한도 부여' })).not.toBeInTheDocument();
+    expect(directPermissionGrantSchema.parse(grantPosts(api)[0]?.body).capability).toBe(
+      'voc.triage',
+    );
   });
 });

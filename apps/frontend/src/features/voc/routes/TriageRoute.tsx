@@ -175,20 +175,32 @@ export function TriageRoute(): React.ReactElement {
     const requestable = queueDenied ? error.envelope.requestable_permission : undefined;
     const capability = queueDenied ? requestable?.permission : 'voc.triage';
     const managedSystemId = queueDenied ? requestable?.managed_system_id : search.managedSystem;
-    const reason =
-      search.managedSystem !== undefined
-        ? PERMISSION_BLOCKED_REASONS.vocTriageManagedSystem
-        : PERMISSION_BLOCKED_REASONS.vocTriage;
+    const missingRead = queueDenied && requestable?.permission === 'voc.read';
+    // #1170: `voc.read` is requestable only per Managed System. A queue denial
+    // without one means the actor holds triage across several Systems — the
+    // request dialog would submit a workspace-wide request the API rejects, so
+    // the panel stays non-requestable until a System is selected.
+    const readNeedsSystemSelection = missingRead && typeof managedSystemId !== 'string';
+    const panelState = readNeedsSystemSelection ? 'blocked_not_requestable' : state;
+    const reason = readNeedsSystemSelection
+      ? PERMISSION_BLOCKED_REASONS.vocTriageMissingReadSelectSystem
+      : missingRead
+        ? typeof requestable?.managed_system_id === 'string'
+          ? PERMISSION_BLOCKED_REASONS.vocTriageMissingReadManagedSystem
+          : PERMISSION_BLOCKED_REASONS.vocTriageMissingRead
+        : search.managedSystem !== undefined
+          ? PERMISSION_BLOCKED_REASONS.vocTriageManagedSystem
+          : PERMISSION_BLOCKED_REASONS.vocTriage;
     return (
       <div className="flex items-center justify-center h-full p-6">
-        {state === 'request_access' && capability !== undefined ? (
+        {panelState === 'request_access' && capability !== undefined ? (
           <RequestAccessButton
             capability={capability}
             returnRouteIntent="/vocs?view=triage"
             {...(typeof managedSystemId === 'string' ? { managedSystemId } : {})}
             renderTrigger={(onRequestAccess) => (
               <PermissionBlockedPanel
-                state={state}
+                state={panelState}
                 category="Triage"
                 reason={reason}
                 onRequestAccess={onRequestAccess}
@@ -196,7 +208,7 @@ export function TriageRoute(): React.ReactElement {
             )}
           />
         ) : (
-          <PermissionBlockedPanel state={state} category="Triage" reason={reason} />
+          <PermissionBlockedPanel state={panelState} category="Triage" reason={reason} />
         )}
       </div>
     );

@@ -113,7 +113,11 @@ At All Systems (전체 Managed System), Triage eligibility may come from a non-e
 The queue remains authoritative for `voc.read` ∩ `voc.triage`; an authorization
 failure replaces even cached rows/detail with the request-access blocked panel.
 Selecting a Managed System keeps the point-check gate; navigation counts follow
-the same eligibility gate. The frontend does not compute the intersection.
+the same eligibility gate. The frontend does not compute the intersection. When
+that intersection is empty, or a selected System is inside triage but outside
+read, the queue's requestable permission is `voc.read` (that System, or null
+with no selection) rather than another `voc.triage` grant. A selection that
+lacks triage still requests `voc.triage`.
 
 Managed System is the MVP authorization boundary below workspace Admin. Sibling
 Managed Systems and Analytics Area are not grant sources. See the 09 Capability

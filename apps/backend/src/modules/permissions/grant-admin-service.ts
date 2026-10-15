@@ -34,7 +34,8 @@ import {
   getResolvedWorkspaceSettings,
   getResolvedWorkspaceSettingsForUpdate,
 } from '../workspace-settings/index.js';
-import type { ActorContext, CheckService } from './check-service.js';
+import { resolveCapabilityScope } from './check-service.js';
+import type { ActorContext, CapabilityScope, CheckService } from './check-service.js';
 import { writePermissionGrant } from './grant-command.js';
 import {
   supportedScopeCandidates,
@@ -55,6 +56,24 @@ export interface GrantAdminServiceOptions {
 }
 
 export type GrantAdminService = ReturnType<typeof createGrantAdminService>;
+
+/** Deny wins before coverage. Scope alone cannot tell a deny from a missing grant. */
+export function vocReadPrerequisiteState(
+  managedSystemId: string | null,
+  scope: CapabilityScope,
+  denies: readonly { managedSystemId: string | null }[],
+): 'held' | 'missing' | 'denied' {
+  const denied =
+    managedSystemId === null
+      ? denies.length > 0
+      : denies.some(
+          (deny) => deny.managedSystemId === null || deny.managedSystemId === managedSystemId,
+        );
+  if (denied) return 'denied';
+  if (managedSystemId === null) return scope.kind === 'all' ? 'held' : 'missing';
+  if (scope.kind === 'all' || scope.managed_system_ids.includes(managedSystemId)) return 'held';
+  return 'missing';
+}
 
 export function createGrantAdminService(deps: GrantAdminServiceDeps) {
   async function assertAdmin(actor: ActorContext, tx?: Tx): Promise<void> {
@@ -141,11 +160,42 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
         });
         if (!recipient) throw new HttpError('not_found.record', 'recipient not found');
         const settings = await getResolvedWorkspaceSettings(tx, actor.workspace_id);
+        // resolveCapabilityScope subtracts denies, so a deny-only gap looks like
+        // `missing` unless the active voc.read deny rows are read as well.
+        let vocRead: Promise<{
+          scope: CapabilityScope;
+          denies: { managedSystemId: string | null }[];
+        }> | null = null;
+        const loadVocRead = () => {
+          vocRead ??= Promise.all([
+            resolveCapabilityScope(
+              tx,
+              {
+                actor_id: actorId,
+                workspace_id: actor.workspace_id,
+                role_level: recipient.role_level,
+              },
+              'voc.read',
+            ),
+            tx
+              .select({ managedSystemId: permissionDenies.managedSystemId })
+              .from(permissionDenies)
+              .where(
+                and(
+                  eq(permissionDenies.workspaceId, actor.workspace_id),
+                  eq(permissionDenies.actorId, actorId),
+                  eq(permissionDenies.capability, 'voc.read'),
+                  isNull(permissionDenies.revokedAt),
+                ),
+              ),
+          ]).then(([scope, denies]) => ({ scope, denies }));
+          return vocRead;
+        };
         const candidates: PermissionGrantOptions['candidates'] = [];
         for (const capability of CAPABILITIES) {
           const scopes = await supportedScopeCandidates(tx, actor.workspace_id, capability);
-          for (const scope of scopes)
-            candidates.push({
+          for (const scope of scopes) {
+            const candidate = {
               capability,
               ...scope,
               governance_required: capability === 'workspace.admin',
@@ -156,7 +206,23 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
                 capability,
                 scope.managed_system_id,
               ),
+            };
+            if (capability !== 'voc.triage') {
+              candidates.push(candidate);
+              continue;
+            }
+            const read = await loadVocRead();
+            candidates.push({
+              ...candidate,
+              prerequisites: [
+                {
+                  capability: 'voc.read',
+                  managed_system_id: scope.managed_system_id,
+                  state: vocReadPrerequisiteState(scope.managed_system_id, read.scope, read.denies),
+                },
+              ],
             });
+          }
         }
         return permissionGrantOptionsSchema.parse({
           recipient,

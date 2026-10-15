@@ -58,14 +58,23 @@ function fillReasonAndSubmit(reason = REASON) {
   fireEvent.submit(screen.getByTestId('permission-request-form'));
 }
 
+// #1170: opening the dialog additionally fetches Managed System names via the
+// shared ['managed-systems','all'] query. The pins below guard permission
+// requests, so every helper counts POST calls only.
+function postCalls(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter(
+    (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+  );
+}
+
 function requestBody(fetchMock: ReturnType<typeof vi.fn>, index = 0) {
-  const call = fetchMock.mock.calls[index];
+  const call = postCalls(fetchMock)[index];
   if (!call) throw new Error(`missing fetch call ${index}`);
   return JSON.parse((call[1] as RequestInit).body as string) as Record<string, unknown>;
 }
 
-function idempotencyKey(fetchMock: ReturnType<typeof vi.fn>, index: number) {
-  const call = fetchMock.mock.calls[index];
+function idempotencyKey(fetchMock: ReturnType<typeof vi.fn>, index = 0) {
+  const call = postCalls(fetchMock)[index];
   if (!call) throw new Error(`missing fetch call ${index}`);
   return ((call[1] as RequestInit).headers as Record<string, string>)['Idempotency-Key'];
 }
@@ -92,7 +101,7 @@ describe('<RequestAccessButton>', () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(postCalls(fetchMock)).toHaveLength(0);
   });
 
   test('renders a workspace-wide request scope in Korean', () => {
@@ -116,7 +125,32 @@ describe('<RequestAccessButton>', () => {
     expect(screen.getByTestId('permission-request-form')).toBeInTheDocument();
     expect(screen.getByText(CAPABILITY_LABEL)).toBeInTheDocument();
     expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(postCalls(fetchMock)).toHaveLength(0);
+  });
+
+  test('the dialog scope summaries show the Managed System name, not the UUID', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/managed-systems') {
+        return new Response(
+          JSON.stringify({ items: [{ id: MANAGED_SYSTEM_ID, name: 'Tableau' }], total: 1 }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return success();
+    });
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
+    fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
+
+    expect(await screen.findByText('Tableau')).toBeInTheDocument();
+    expect(screen.queryByText(MANAGED_SYSTEM_ID)).not.toBeInTheDocument();
+
+    fillReasonAndSubmit();
+
+    expect(await screen.findByText('권한 요청 완료')).toBeInTheDocument();
+    expect(screen.getByText('Tableau')).toBeInTheDocument();
+    expect(screen.queryByText(MANAGED_SYSTEM_ID)).not.toBeInTheDocument();
   });
 
   test('AC-D8b submitting sends exactly one matching non-hardcoded reason', async () => {
@@ -220,6 +254,8 @@ describe('<RequestAccessButton>', () => {
   test('AC-D8h failed retry reuses the key and a post-success new intent rotates it', async () => {
     const fetchMock = vi
       .fn()
+      // Leading 500: the dialog-open Managed System name lookup (retry:false).
+      .mockResolvedValueOnce(new Response('failed', { status: 500 }))
       .mockResolvedValueOnce(new Response('failed', { status: 500 }))
       .mockResolvedValueOnce(success('PR-D8-RETRY'))
       .mockResolvedValueOnce(success('PR-D8-NEXT'));
@@ -240,7 +276,7 @@ describe('<RequestAccessButton>', () => {
     fireEvent.click(screen.getByRole('button', { name: '다른 권한 요청' }));
     fillReasonAndSubmit('A distinct second intent after the successful request.');
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(postCalls(fetchMock)).toHaveLength(3));
     expect(idempotencyKey(fetchMock, 0)).toBe(idempotencyKey(fetchMock, 1));
     expect(idempotencyKey(fetchMock, 2)).not.toBe(idempotencyKey(fetchMock, 1));
   });
