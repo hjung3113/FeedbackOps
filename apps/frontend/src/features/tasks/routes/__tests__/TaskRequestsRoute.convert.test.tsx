@@ -680,12 +680,41 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     });
   });
 
-  it('shows a Korean success toast after converting a Task Request', async () => {
-    api.convertTaskRequest.mockReset().mockResolvedValue({ display_id: 'TASK-7' });
+  it.each([
+    ['actor', '담당 개발자'],
+    ['team', '팀 · 실행팀'],
+    ['none', '담당자 없음'],
+  ])('reports returned automatic assignee %s and links the Task', async (kind, expected) => {
+    api.convertTaskRequest.mockReset().mockResolvedValue({
+      id: taskRequest.id,
+      display_id: 'TASK-7',
+      assignee_actor_id: kind === 'actor' ? taskRequest.requester_actor_id : null,
+      assignee_team_id: kind === 'team' ? taskRequest.source_id : null,
+    });
+    vi.mocked(resolveActors).mockResolvedValue({
+      actors: [
+        {
+          id: taskRequest.requester_actor_id,
+          display_name: '담당 개발자',
+          email: 'dev@example.com',
+        },
+      ],
+      teams: [{ id: taskRequest.source_id, name: '실행팀' }],
+    });
     await openConvertForm();
+    expect(screen.getByText('자동 배정은 설정된 기본값을 사용합니다.')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('task-request-convert-submit'));
-
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Task TASK-7로 전환했습니다.'));
+    await waitFor(() =>
+      expect(toast.success.mock.calls[0]?.[0]).toEqual(
+        `Task TASK-7로 전환했습니다. 담당자: ${expected}`,
+      ),
+    );
+    const body = convertTaskRequestRequestSchema.parse(api.convertTaskRequest.mock.calls[0]?.[1]);
+    expect(body).not.toHaveProperty('assignee_actor_id');
+    expect(toast.success.mock.calls[0]?.[1]).toMatchObject({
+      duration: Number.POSITIVE_INFINITY,
+      action: { label: 'Task 열기', onClick: expect.any(Function) },
+    });
   });
 
   // R2 (Astra P2-3) — after a successful picker read, a denied refetch must

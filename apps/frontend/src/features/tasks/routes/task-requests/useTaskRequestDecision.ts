@@ -6,6 +6,7 @@ import {
 } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
+import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -84,7 +85,7 @@ export function useTaskRequestDecision({
   const decisionMutation = useMutation<
     TaskRequestDto,
     ApiError,
-    { action: string; reason?: string; note?: string }
+    { action: 'approve' | 'reject' | 'request-more-evidence'; reason?: string; note?: string }
   >({
     mutationFn: async (vars) => {
       const key = crypto.randomUUID();
@@ -96,7 +97,7 @@ export function useTaskRequestDecision({
       }
       return requestMoreEvidenceForTaskRequest(item.id, { note: vars.note ?? '' }, key);
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       decisionSubmittingRef.current = false;
       setIsDecisionSubmitting(false);
       setDecisionDialog(null);
@@ -105,7 +106,7 @@ export function useTaskRequestDecision({
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
-      toast.success('Task Request가 처리되었습니다.');
+      toast.success(TASK_REQUEST_COPY.decisions[variables.action]);
     },
     onError: (err) => {
       decisionSubmittingRef.current = false;
@@ -114,7 +115,7 @@ export function useTaskRequestDecision({
       // there (a non-ApiError has no envelope) would take down the whole screen.
       const message = mapUnknownError(err).message;
       setDecisionDialog((current) => {
-        if (current) return { ...current, error: message };
+        if (current) return { ...current, error: message, reasonInvalid: err.status !== 429 };
         toast.error(message);
         return current;
       });
@@ -155,7 +156,9 @@ export function useTaskRequestDecision({
             ? '반려 사유를 입력해 주세요.'
             : null;
     if (error) {
-      setDecisionDialog((current) => (current ? { ...current, error } : current));
+      setDecisionDialog((current) =>
+        current ? { ...current, error, reasonInvalid: true } : current,
+      );
       return;
     }
     decisionSubmittingRef.current = true;

@@ -163,7 +163,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
-      `delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      'delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
@@ -349,6 +349,124 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(body.detail.fields).toContainEqual({ path: ['status'], code: 'invalid_transition' });
   });
 
+  it.each([0, 3])(
+    'enforces the shared sensitive bucket (preused=%s), rolls back 429 and retries the identical key',
+    async (preused) => {
+      const { id: devId, externalId } = await insertDevActor(
+        dbHandle,
+        WORKSPACE_ID,
+        uid('rate-self'),
+      );
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Rate Self MS');
+      await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.manage', msId, adminActorId);
+      await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        devId,
+        'task_request.self_approve',
+        msId,
+        adminActorId,
+      );
+      const cookie = await loginAs(app, externalId);
+      const rateKey = `${WORKSPACE_ID}:${devId}`;
+      if (preused)
+        await migrateHandle.pool.query(
+          `insert into core.rate_limits (key, route_group, counter, expires_at) values ($1, 'sensitive', $2, now() + interval '1 minute')`,
+          [rateKey, preused],
+        );
+      for (let i = 0; i < 5 - preused; i++) {
+        const row = await seedTaskRequest({ msId, requesterActorId: devId });
+        expect((await decide(cookie, row.id, 'approve', { reason: '검토 완료' })).statusCode).toBe(
+          200,
+        );
+      }
+      const rejected = await seedTaskRequest({ msId, requesterActorId: devId });
+      const key = randomUUID();
+      const payload = { reason: '검토 완료' };
+      const response = await decide(cookie, rejected.id, 'approve', payload, key);
+      expect(response.statusCode).toBe(429);
+      expect(response.json()).toMatchObject({
+        code: 'rate_limited.actor',
+        message: 'rate limit exceeded',
+        detail: { retry_after_seconds: expect.any(Number) },
+      });
+      expect(Number(response.headers['retry-after'])).toBeGreaterThan(0);
+      expect(
+        (
+          await migrateHandle.pool.query(
+            'select status from task_request.task_requests where id = $1',
+            [rejected.id],
+          )
+        ).rows,
+      ).toEqual([{ status: 'pending_review' }]);
+      expect(
+        (
+          await migrateHandle.pool.query('select id from core.audit_log where subject_id = $1', [
+            rejected.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await migrateHandle.pool.query(
+            'select key from core.idempotency_keys where actor_id = $1 and key = $2',
+            [devId, key],
+          )
+        ).rowCount,
+      ).toBe(0);
+      expect(notifications.jobs.some((job) => job.subject_id === rejected.id)).toBe(false);
+      expect(
+        (
+          await migrateHandle.pool.query(
+            'select id from core.notifications where subject_id = $1',
+            [rejected.id],
+          )
+        ).rowCount,
+      ).toBe(0);
+      const counters = await migrateHandle.pool.query<{ counter: number }>(
+        `select counter from core.rate_limits where key = $1 and route_group = 'mutation'`,
+        [rateKey],
+      );
+      expect(counters.rows[0]?.counter).toBe(6 - preused);
+      await migrateHandle.pool.query(
+        `update core.rate_limits set expires_at = now() - interval '1 second' where key = $1 and route_group = 'sensitive'`,
+        [rateKey],
+      );
+      expect((await decide(cookie, rejected.id, 'approve', payload, key)).statusCode).toBe(200);
+      expect(
+        (
+          await migrateHandle.pool.query(
+            'select key from core.idempotency_keys where actor_id = $1 and key = $2',
+            [devId, key],
+          )
+        ).rowCount,
+      ).toBe(1);
+    },
+  );
+
+  it('allows six peer approvals without consuming sensitive capacity', async () => {
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('rate-peer'),
+    );
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Rate Peer MS');
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.manage', msId, adminActorId);
+    const cookie = await loginAs(app, externalId);
+    for (let i = 0; i < 6; i++) {
+      const row = await seedTaskRequest({ msId, requesterActorId: userActorId });
+      expect((await decide(cookie, row.id, 'approve', {})).statusCode).toBe(200);
+    }
+    expect(
+      (
+        await migrateHandle.pool.query(
+          `select counter from core.rate_limits where key = $1 and route_group = 'sensitive'`,
+          [`${WORKSPACE_ID}:${devId}`],
+        )
+      ).rowCount,
+    ).toBe(0);
+  });
+
   it('self-approval by requester without capability is denied and audited', async () => {
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('self'));
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Self Review MS');
@@ -376,6 +494,32 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     });
     expect(notifications.jobs).toEqual([]);
   });
+
+  it('settles a self-approval while the shared app pool has only one free connection', async () => {
+    // The server shares dbHandle.pool. Hold every connection but one, so the command
+    // transaction takes the last one; the limiter must not need another from this pool.
+    const request = await seedTaskRequest({ requesterActorId: adminActorId });
+    const max = dbHandle.pool.options.max;
+    const held = await Promise.all(Array.from({ length: max - 1 }, () => dbHandle.pool.connect()));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const response = await Promise.race([
+        decide(adminCookie, request.id, 'approve', {
+          reason: 'Owner approval under pool pressure.',
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('self-approval did not settle with one free pool connection')),
+            5_000,
+          );
+        }),
+      ]);
+      expect([200, 429]).toContain(response.statusCode);
+    } finally {
+      clearTimeout(timer);
+      for (const client of held) client.release();
+    }
+  }, 15_000);
 
   it('self-approval by requester with admin role and reason is approved with sensitive audit detail', async () => {
     const request = await seedTaskRequest({ requesterActorId: adminActorId });

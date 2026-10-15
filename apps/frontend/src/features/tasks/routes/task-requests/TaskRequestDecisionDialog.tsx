@@ -20,11 +20,14 @@ export interface DecisionDialogState {
   action: DecisionAction;
   value: string;
   error: string | null;
+  reasonInvalid?: boolean;
 }
 
 export function TaskRequestDecisionDialog({
   completedResult = null,
   getCompletedFocusTarget,
+  onCompletedClose,
+  recovery,
   dialog,
   request,
   isSelfApproval,
@@ -34,6 +37,8 @@ export function TaskRequestDecisionDialog({
   onSubmit,
 }: {
   completedResult?: TaskRequestDto | null;
+  onCompletedClose?: () => void;
+  recovery?: React.ReactNode;
   getCompletedFocusTarget?: (result: TaskRequestDto) => HTMLElement | null;
   dialog: DecisionDialogState | null;
   request: TaskRequestDto;
@@ -101,15 +106,34 @@ export function TaskRequestDecisionDialog({
       !completedResult
     )
       return;
-    const target = getCompletedFocusTarget?.(completedResult);
-    if (!target?.isConnected) return;
-    target.focus();
-    opening.successTarget = target;
-    setHandedOff(opening);
+    let frame: number | undefined;
+    let attempts = 0;
+    const transfer = () => {
+      const target = getCompletedFocusTarget?.(completedResult);
+      // Queue/recovery changes supply a new resolver and restart this effect.
+      // Missing targets wait for those inputs instead of polling every frame.
+      if (!target?.isConnected) return;
+      attempts += 1;
+      if (!target.closest('[hidden], [inert]')) {
+        target.focus();
+        if (document.activeElement === target) {
+          opening.successTarget = target;
+          setHandedOff(opening);
+          return;
+        }
+      }
+      // Allow fullscreen teardown to reveal the target, but retain the dialog
+      // if visibility or actual focus cannot be established within ten attempts.
+      if (attempts < 10) frame = requestAnimationFrame(transfer);
+    };
+    transfer();
+    return () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
   }, [successfulClose, handedOff, opening, completedResult, getCompletedFocusTarget]);
 
   function dismiss() {
-    if (isSubmitting) return;
+    if (isSubmitting || successfulClose) return;
     opening.dismissed = true;
     onClose();
   }
@@ -174,6 +198,8 @@ export function TaskRequestDecisionDialog({
             ) {
               opening.successTarget.focus();
             }
+            if (mounted.current && activeOpening.current === opening && opening.successTarget)
+              onCompletedClose?.();
             opening.opener = null;
             opening.dismissed = false;
           }}
@@ -182,9 +208,10 @@ export function TaskRequestDecisionDialog({
             <DialogTitle>{details.title}</DialogTitle>
             <DialogDescription>{details.description}</DialogDescription>
           </DialogHeader>
+          {successfulClose && recovery}
           <form
             onSubmit={(event) => {
-              if (isSubmitting) event.preventDefault();
+              if (isSubmitting || successfulClose) event.preventDefault();
               else onSubmit(event);
             }}
             className="flex flex-col gap-4"
@@ -196,8 +223,8 @@ export function TaskRequestDecisionDialog({
                 rows={3}
                 value={content.value}
                 onChange={(event) => onChange(event.target.value)}
-                disabled={isSubmitting}
-                aria-invalid={content.error !== null}
+                disabled={isSubmitting || successfulClose}
+                aria-invalid={content.error !== null && content.reasonInvalid !== false}
               />
               {details.required && (
                 <span className="text-xs text-text-muted">필수 입력 항목입니다.</span>
@@ -212,13 +239,17 @@ export function TaskRequestDecisionDialog({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={isSubmitting}
+                disabled={isSubmitting || successfulClose}
                 onClick={dismiss}
                 data-testid="task-request-decision-cancel"
               >
                 취소
               </Button>
-              <Button type="submit" aria-busy={isSubmitting} aria-disabled={isSubmitting}>
+              <Button
+                type="submit"
+                aria-busy={isSubmitting}
+                aria-disabled={isSubmitting || successfulClose}
+              >
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {details.submitLabel}
               </Button>

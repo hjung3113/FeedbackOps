@@ -1,8 +1,8 @@
-import { createVocClusterSuggestionsService } from './modules/voc/cluster-suggestions/service.js';
-import { vocClusterSuggestionsRoutes } from './modules/voc/cluster-suggestions/routes.js';
-import { createOutcomeRecoveryRecorder } from './modules/surveys/recovery-presentation.js';
-import { createOwnerRecoveryRecorder } from './modules/dashboard/truth.js';
 import type { NotificationSubjectReference } from '@fops/shared';
+import { createOwnerRecoveryRecorder } from './modules/dashboard/truth.js';
+import { createOutcomeRecoveryRecorder } from './modules/surveys/recovery-presentation.js';
+import { vocClusterSuggestionsRoutes } from './modules/voc/cluster-suggestions/routes.js';
+import { createVocClusterSuggestionsService } from './modules/voc/cluster-suggestions/service.js';
 
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -14,15 +14,20 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod';
+import pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { buildEntityLinkProviders } from './entity-link-providers.js';
 import { registerHttpErrorHandler } from './lib/http-error-handler.js';
+import { toJobLog } from './lib/job-log.js';
 import { reqLogSerializer } from './lib/logger.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
-import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
+import {
+  createPgRateLimitStore,
+  createSensitiveActorRateLimit,
+} from './lib/rate-limit-pg-store.js';
 import { buildRateLimitTiers } from './lib/rate-limit-tiers.js';
 import { getStorage } from './lib/storage/factory.js';
 import type { StorageBackend } from './lib/storage/index.js';
@@ -90,9 +95,6 @@ import { createTasksService, taskRecoveryProjection, tasksRoutes } from './modul
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 import type { EmbeddingProvider } from './modules/voc/embedding/port.js';
-import { createSimilarityPreviewService } from './modules/voc/similarity-preview/service.js';
-import { similarityPreviewRoutes } from './modules/voc/similarity-preview/routes.js';
-import { toJobLog } from './lib/job-log.js';
 import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
@@ -110,6 +112,8 @@ import {
   createPreSubmitVocPeersService,
   preSubmitVocPeersRoutes,
 } from './modules/voc/pre-submit-peers/index.js';
+import { similarityPreviewRoutes } from './modules/voc/similarity-preview/routes.js';
+import { createSimilarityPreviewService } from './modules/voc/similarity-preview/service.js';
 import {
   createWorkspaceSettingsService,
   getResolvedWorkspaceSettings,
@@ -550,7 +554,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
+  // The independent increment runs while the command holds a transaction
+  // connection. A separate bounded pool prevents command-pool starvation.
+  const selfApprovalPool = new pg.Pool({
+    ...dbHandle.pool.options,
+    max: 2,
+    connectionTimeoutMillis: 5_000,
+  });
+  app.addHook('onClose', async () => selfApprovalPool.end());
   const taskRequestsService = createTaskRequestsService({
+    consumeSelfApprovalRateLimit: createSensitiveActorRateLimit(selfApprovalPool),
     recoveryRecorder,
     db: dbHandle.db,
     auditService,

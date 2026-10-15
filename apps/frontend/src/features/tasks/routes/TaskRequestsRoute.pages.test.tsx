@@ -85,7 +85,7 @@ function mount(selectedParam?: string, managedSystem?: string) {
 
 describe('Task Request cursor screens', () => {
   afterEach(() => vi.unstubAllGlobals());
-  it('retains an auto-selected decided request when the result tab has no loaded rows', async () => {
+  it('accepts fresh current-tab data after an auto-selected decision overlay expires', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -106,7 +106,10 @@ describe('Task Request cursor screens', () => {
     expect(await screen.findByTestId('selected-request')).toHaveTextContent('REQ-1');
     fireEvent.click(screen.getByRole('button', { name: 'Approve selected' }));
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true'),
+      expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
     );
     await waitFor(() => expect(client.isFetching()).toBe(0));
     await act(async () => {
@@ -217,9 +220,12 @@ describe('Task Request cursor screens', () => {
     expect(screen.getByRole('tab', { name: '전체 , 69' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Approve selected' }));
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true'),
+      expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
     );
-    expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-2');
+    expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-1');
   });
 
   it('AC-981 zero pending with approved rows shows summary badges and the filtered-empty copy', async () => {

@@ -82,6 +82,29 @@ describe('useTaskRequestsQueue tab counts (#706)', () => {
     resolveActorsMock.mockResolvedValue({ actors: [], teams: [] });
   });
 
+  it('renders fresh all-tab status and assignment after a completed decision', async () => {
+    fetchTaskRequestsMock.mockResolvedValue({ items: [taskRequest] });
+    const { result } = renderQueue();
+    await waitFor(() => expect(result.current.selected?.id).toBe(taskRequest.id));
+    act(() => result.current.setActiveTab('all'));
+    await waitFor(() => expect(result.current.queueSettled).toBe(true));
+    const approved = { ...taskRequest, status: 'approved' as const };
+    const fresh = {
+      ...approved,
+      status: 'converted' as const,
+      assigned_reviewer_actor_id: 'fresh-reviewer',
+    };
+    fetchTaskRequestsMock.mockResolvedValue({ items: [fresh] });
+    act(() => result.current.onDecisionComplete(approved));
+    await waitFor(() =>
+      expect(result.current.selected).toMatchObject({
+        status: 'converted',
+        assigned_reviewer_actor_id: 'fresh-reviewer',
+      }),
+    );
+    expect(result.current.selectedId).toBe(taskRequest.id);
+  });
+
   it.each(['pending', 'failed', 'loaded', 'loaded-empty'] as const)(
     'shows tab counts only after the read succeeds (%s)',
     async (state) => {

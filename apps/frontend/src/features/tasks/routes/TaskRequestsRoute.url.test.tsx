@@ -261,20 +261,38 @@ it('keeps the new cross-scope param while the previous off-page detail is cached
   expect(mounted.router.state.location.search.param).toBe('b1');
 });
 
-it('replaces the URL with the decided request and keeps its result-tab detail', async () => {
+it('reconciles cleared selection to fresh current-tab data after the decision overlay expires', async () => {
   vi.mocked(getTaskRequest).mockResolvedValue({ ...first, status: 'approved' });
   const mounted = mount(initial);
   fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-  await waitFor(() => expect(mounted.router.state.location.search.param).toBe('a1'));
+  await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
+  await settledQueue(mounted);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
   expect(mounted.history.length).toBe(1);
   expect(mounted.router.state.location.search).toEqual({
     view: 'requests',
     managedSystem: A,
     public_update: 'missing',
-    param: 'a1',
+    param: first.id,
   });
-  expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByTestId('detail')).toHaveTextContent('REQ-A');
+  expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('lets a newer explicit off-page selection own the queue after decision completion', async () => {
+  mockQueue([first, { ...second, primary_managed_system_id: A }], [second.id]);
+  const mounted = mount(`${initial}&param=a1`);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
+  await act(async () => {
+    await mounted.router.navigate({
+      to: '/tasks',
+      search: { view: 'requests', managedSystem: A, param: second.id },
+    });
+  });
+  expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-B');
+  await settledQueue(mounted);
+  expect(mounted.router.state.location.search.param).toBe(second.id);
+  expect(screen.getByTestId('detail')).toHaveTextContent('REQ-B');
 });
 
 // #1022 mocks parse the strict API query and keep summary reads separate from pages.

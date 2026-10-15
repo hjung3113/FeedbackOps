@@ -58,6 +58,7 @@ export interface TaskRequestsActor {
 
 export interface TaskRequestsServiceDeps {
   recoveryRecorder?: RecoveryRecorder;
+  consumeSelfApprovalRateLimit?: (actor: TaskRequestsActor) => Promise<void>;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -807,6 +808,10 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
           const reasonPresent = (reasonOrNote?.trim().length ?? 0) > 0;
 
           if (args.action === 'approve' && taskRequest.requester_actor_id === args.actor.actor_id) {
+            // Trusted locked row, before even the denied-approval audit. The limiter
+            // uses its own store transaction; throwing rolls back this command and
+            // skips runIdempotent's response record, while preserving the counter.
+            await deps.consumeSelfApprovalRateLimit?.(args.actor);
             const capabilityPresent = await hasSelfApprovalCapability(
               deps,
               args.actor,

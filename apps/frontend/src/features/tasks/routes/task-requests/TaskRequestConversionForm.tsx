@@ -1,4 +1,5 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
 import { shortId } from '@/lib/identity';
@@ -148,6 +149,9 @@ export function TaskRequestConversionForm({
             ))}
           </SelectContent>
         </Select>
+        {conversion.responsibilityMode === 'automatic' && (
+          <p className="text-xs text-text-muted">{TASK_REQUEST_COPY.automaticNote}</p>
+        )}
         {conversion.responsibilityMode === 'actor' && (
           <Select
             value={conversion.assigneeId || NO_SELECTION}

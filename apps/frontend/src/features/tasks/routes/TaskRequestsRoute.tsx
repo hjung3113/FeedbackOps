@@ -6,7 +6,9 @@ import { TASK_REQUEST_LINK_MISSING_MESSAGE } from '@/lib/copy/task-requests';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { shortId } from '@/lib/identity';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import type { TaskRequestDto } from '@fops/shared';
 import {
+  Button,
   Select,
   SelectContent,
   SelectGroup,
@@ -16,13 +18,13 @@ import {
   SelectValue,
 } from '@fops/ui';
 import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
 import { useEligibleResponsibilityActors } from '../components/ResponsibilityEditor';
 import { useCloseFocusReturn } from '../hooks/useCloseFocusReturn';
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
-import { TaskRequestRow } from './task-requests/TaskRequestRow';
+import { type NameMaps, TaskRequestRow } from './task-requests/TaskRequestRow';
 import { type TaskRequestTab, useTaskRequestsQueue } from './task-requests/useTaskRequestsQueue';
 
 export {
@@ -56,12 +58,31 @@ export function TaskRequestsRoute({
     if (onReviewerChange) onReviewerChange(actor, team);
     else setLocalFilter({ ...(actor ? { reviewer: actor } : {}), ...(team ? { team } : {}) });
   };
+  const [handoff, setHandoff] = useState<{
+    item: TaskRequestDto;
+    names: NameMaps;
+    context: string;
+    result: TaskRequestDto;
+    originParam: string | null;
+    expectedId: string | null;
+  } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const replaceSelection = useCallback(
+    (id: string | null, replace: boolean) => {
+      if (replace)
+        setHandoff((current) =>
+          current ? { ...current, originParam: selectedParam ?? null, expectedId: id } : null,
+        );
+      onSelectionChange?.(id, replace);
+    },
+    [onSelectionChange, selectedParam],
+  );
   const queue = useTaskRequestsQueue({
     selectedParam,
     managedSystem,
     reviewer: activeReviewer,
     reviewerTeam: activeTeam,
-    onSelectionChange,
+    onSelectionChange: replaceSelection,
   });
   // The reviewer filter is fully controlled by the committed search state
   // (route props on history navigation), so Back/Forward always re-sync it.
@@ -103,6 +124,63 @@ export function TaskRequestsRoute({
     activeReviewer,
     activeTeam,
   ]);
+  const retainedPanel =
+    !queue.permissionDeniedError &&
+    handoff?.context === context &&
+    ((selectedParam ?? null) === handoff.originParam ||
+      (selectedParam ?? null) === handoff.expectedId)
+      ? handoff
+      : null;
+  useEffect(() => {
+    if (!queue.permissionDeniedError || !handoff) return;
+    const frame = requestAnimationFrame(() => {
+      const heading = listRef.current?.querySelector<HTMLElement>('[data-state="denied"] h4');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus();
+        setHandoff(null);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [queue.permissionDeniedError, handoff]);
+  const panelItem = retainedPanel?.item ?? queue.selected;
+  const completeDecision = (result: TaskRequestDto) => {
+    if (
+      document.activeElement?.closest('[role="dialog"]') &&
+      queue.selected?.id === result.id &&
+      ['approved', 'rejected', 'needs_more_evidence'].includes(result.status)
+    ) {
+      setHandoff({
+        item: queue.selected,
+        names: queue.names,
+        context,
+        result,
+        originParam: selectedParam ?? null,
+        expectedId: queue.selectedId,
+      });
+    }
+    queue.onDecisionComplete(result);
+  };
+  const completedFocusTarget = (result: TaskRequestDto) => {
+    if (!retainedPanel || retainedPanel.result !== result || queue.hasError || queue.isLoading)
+      return null;
+    if (queue.selectedId !== null) {
+      return (
+        listRef.current?.querySelector<HTMLElement>(`[data-request-id="${queue.selectedId}"]`) ??
+        null
+      );
+    }
+    if (!queue.queueSettled || queue.hasMore) return null;
+    const heading = listRef.current?.querySelector<HTMLElement>(
+      '[data-testid="list-state-message"] p',
+    );
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.setAttribute('role', 'heading');
+      heading.setAttribute('aria-level', '3');
+    }
+    return heading ?? null;
+  };
   const { rowRef, returnFocus, cancel } = useCloseFocusReturn(context);
   const [settlement, setSettlement] = useState({ context, settled: queue.queueSettled });
   const settledOnce = queue.queueSettled || (settlement.context === context && settlement.settled);
@@ -152,7 +230,10 @@ export function TaskRequestsRoute({
           <ListToolbar
             tabs={queue.tabs}
             activeTab={queue.activeTab}
-            onTabChange={(next) => queue.setActiveTab(next as TaskRequestTab)}
+            onTabChange={(next) => {
+              setHandoff(null);
+              queue.setActiveTab(next as TaskRequestTab);
+            }}
             action={
               showReviewerFilter ? (
                 <Select value={filterValue} onValueChange={applyFilterValue}>
@@ -196,90 +277,100 @@ export function TaskRequestsRoute({
               ) : undefined
             }
           />
-          {queue.isLoading ? (
-            <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>
-          ) : queue.permissionDeniedError ? (
-            <PermissionBlockedPanel
-              state="denied"
-              category="Task Request queue"
-              reason={PERMISSION_BLOCKED_REASONS.taskRequestQueue}
-              className="m-4"
-            />
-          ) : queue.hasError ? (
-            <ListStateMessage
-              variant="error"
-              title="Task Request 목록을 불러오지 못했습니다"
-              body="잠시 후 다시 시도하세요."
-              action={{ label: '다시 시도', onClick: queue.refetch }}
-            />
-          ) : (
-            <div
-              key={JSON.stringify([context, phase])}
-              ref={listMotion}
-              className="min-h-0 flex-1 overflow-y-auto"
-            >
-              {queue.shown.map((item) => (
-                <TaskRequestRow
-                  key={item.id}
-                  item={item}
-                  selected={queue.selected?.id === item.id}
-                  names={queue.names}
-                  onSelect={queue.setSelectedId}
-                  rowRef={rowRef(item.id)}
-                />
-              ))}
-              <ListLoadMore
-                hasMore={queue.hasMore}
-                loadingMore={queue.loadingMore}
-                failed={queue.loadMoreError}
-                onLoadMore={queue.loadMore}
+          <div ref={listRef} className="flex min-h-0 flex-1 flex-col">
+            {queue.isLoading ? (
+              <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>
+            ) : queue.permissionDeniedError ? (
+              <PermissionBlockedPanel
+                state="denied"
+                category="Task Request queue"
+                reason={PERMISSION_BLOCKED_REASONS.taskRequestQueue}
+                className="m-4"
               />
-              {queue.shown.length === 0 &&
-                (isReviewFilteredEmpty ? (
-                  <ListStateMessage
-                    variant="filtered"
-                    title="현재 조건에 맞는 Task Request가 없습니다"
-                    body={`검토자 필터가 설정되어 있습니다. 선택한 상태: ${activeTabLabel}`}
-                    action={{
-                      label: '필터 초기화',
-                      onClick: () => changeReviewer(undefined, undefined),
+            ) : queue.hasError ? (
+              <ListStateMessage
+                variant="error"
+                title="Task Request 목록을 불러오지 못했습니다"
+                body="잠시 후 다시 시도하세요."
+                action={{ label: '다시 시도', onClick: queue.refetch }}
+              />
+            ) : (
+              <div
+                key={JSON.stringify([context, phase])}
+                ref={listMotion}
+                className="min-h-0 flex-1 overflow-y-auto"
+              >
+                {queue.shown.map((item) => (
+                  <TaskRequestRow
+                    key={item.id}
+                    item={item}
+                    selected={queue.selected?.id === item.id}
+                    names={retainedPanel?.names ?? queue.names}
+                    onSelect={(id) => {
+                      setHandoff(null);
+                      queue.setSelectedId(id);
                     }}
-                  />
-                ) : isPendingEmpty ? (
-                  <ListStateMessage
-                    variant="filtered"
-                    title="검토 대기 중인 Task Request가 없습니다"
-                    body="다른 상태의 Task Request가 있습니다."
-                  />
-                ) : isStatusFilteredEmpty ? (
-                  <ListStateMessage
-                    variant="filtered"
-                    title="현재 조건에 맞는 Task Request가 없습니다"
-                    body={`선택한 상태: ${activeTabLabel}`}
-                    action={{
-                      label: '필터 초기화',
-                      onClick: () => queue.setActiveTab('pending_review'),
+                    rowRef={(element) => {
+                      rowRef(item.id)(element);
+                      if (element) element.dataset.requestId = item.id;
                     }}
-                  />
-                ) : (
-                  <ListStateMessage
-                    variant="empty"
-                    title="Task Request가 없습니다."
-                    body="검토 요청이 접수되면 이 목록에 표시됩니다."
                   />
                 ))}
-            </div>
-          )}
+                <ListLoadMore
+                  hasMore={queue.hasMore}
+                  loadingMore={queue.loadingMore}
+                  failed={queue.loadMoreError}
+                  onLoadMore={queue.loadMore}
+                />
+                {queue.shown.length === 0 &&
+                  !queue.hasMore &&
+                  (!retainedPanel || queue.queueSettled) &&
+                  (isReviewFilteredEmpty ? (
+                    <ListStateMessage
+                      variant="filtered"
+                      title="현재 조건에 맞는 Task Request가 없습니다"
+                      body={`검토자 필터가 설정되어 있습니다. 선택한 상태: ${activeTabLabel}`}
+                      action={{
+                        label: '필터 초기화',
+                        onClick: () => changeReviewer(undefined, undefined),
+                      }}
+                    />
+                  ) : isPendingEmpty ? (
+                    <ListStateMessage
+                      variant="filtered"
+                      title="검토 대기 중인 Task Request가 없습니다"
+                      body="다른 상태의 Task Request가 있습니다."
+                    />
+                  ) : isStatusFilteredEmpty ? (
+                    <ListStateMessage
+                      variant="filtered"
+                      title="현재 조건에 맞는 Task Request가 없습니다"
+                      body={`선택한 상태: ${activeTabLabel}`}
+                      action={{
+                        label: '필터 초기화',
+                        onClick: () => queue.setActiveTab('pending_review'),
+                      }}
+                    />
+                  ) : (
+                    <ListStateMessage
+                      variant="empty"
+                      title="Task Request가 없습니다."
+                      body="검토 요청이 접수되면 이 목록에 표시됩니다."
+                    />
+                  ))}
+              </div>
+            )}
+          </div>
         </>
       }
       detailPanel={
-        queue.hasError ? null : queue.linkMissing ? (
+        queue.hasError && !retainedPanel ? null : queue.linkMissing ? (
           <LinkTargetMissingNotice message={TASK_REQUEST_LINK_MISSING_MESSAGE} />
-        ) : queue.selected ? (
+        ) : panelItem ? (
           <TaskRequestPanel
-            key={queue.selected.id}
-            item={queue.selected}
-            names={queue.names}
+            key={panelItem.id}
+            item={panelItem}
+            names={retainedPanel?.names ?? queue.names}
             eligibleActors={eligibleActors}
             currentActorId={queue.currentActorId}
             currentRole={queue.currentRole}
@@ -287,7 +378,24 @@ export function TaskRequestsRoute({
               if (queue.selectedId !== null) returnFocus(queue.selectedId);
               queue.setSelectedId(null);
             }}
-            onDecisionComplete={queue.onDecisionComplete}
+            onDecisionComplete={completeDecision}
+            getCompletedFocusTarget={completedFocusTarget}
+            onDecisionCloseComplete={() => setHandoff(null)}
+            decisionRecovery={
+              retainedPanel && (queue.hasError || queue.loadMoreError) ? (
+                <div role="alert">
+                  <p>Task Request 목록을 불러오지 못했습니다</p>
+                  <Button
+                    type="button"
+                    onClick={queue.loadMoreError ? queue.loadMore : queue.refetch}
+                  >
+                    다시 시도
+                  </Button>
+                </div>
+              ) : retainedPanel && queue.selectedId === null ? (
+                <output>Task Request을 불러오는 중…</output>
+              ) : null
+            }
           />
         ) : null
       }

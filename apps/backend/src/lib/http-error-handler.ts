@@ -19,6 +19,10 @@ export function registerHttpErrorHandler(app: FastifyInstance): void {
       if (parsed.success) {
         const status = statusForCode(parsed.data);
         const errDetail = (err as { detail?: Record<string, unknown> }).detail;
+        if (status === 429 && typeof errDetail?.retry_after_seconds === 'number') {
+          reply.header('Retry-After', String(errDetail.retry_after_seconds));
+          req.log.warn({ code: parsed.data }, 'rate limit exceeded');
+        }
         // F3: `requestable_permission` belongs at the top level of ErrorEnvelope
         // (ADR-0012 / packages/shared/src/errors/codes.ts:67-71). Hoist it out
         // of `detail` when present so the wire format matches the typed contract.

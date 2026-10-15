@@ -73,7 +73,14 @@ export function useTaskRequestsQueue({
   const queryClient = useQueryClient();
   const meQuery = useMe();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
-  const [decisionSelection, setDecisionSelection] = React.useState<string | null>(null);
+  const [completedDecision, setCompletedDecision] = React.useState<{
+    item: TaskRequestDto;
+    context: string;
+    originParam: string | null;
+    selectionId: string | null;
+    overlayData: InfiniteData<ListTaskRequestsResponse> | undefined;
+  } | null>(null);
+  const decisionContext = JSON.stringify([activeTab, managedSystem, reviewer, reviewerTeam]);
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
   const summaryQuery = useQuery({
     queryKey: ['task-requests', managedSystem, 'summary'] as const,
@@ -103,9 +110,21 @@ export function useTaskRequestsQueue({
       }),
     getNextPageParam: (last) => (last.page?.has_more ? last.page.cursor : undefined),
   });
+  // Fresh pages own row content; retain completion separately for selection/focus.
   const items = React.useMemo(
-    () => taskRequestsQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [taskRequestsQuery.data],
+    () =>
+      (taskRequestsQuery.data?.pages.flatMap((page) => page.items) ?? []).flatMap((item) => {
+        if (
+          completedDecision?.context !== decisionContext ||
+          completedDecision.overlayData !== taskRequestsQuery.data ||
+          completedDecision.item.id !== item.id
+        )
+          return [item];
+        return activeTab === 'all' || completedDecision.item.status === activeTab
+          ? [completedDecision.item]
+          : [];
+      }),
+    [taskRequestsQuery.data, completedDecision, decisionContext, activeTab],
   );
   const { selectedId, linkMissing, setLocalSelectedId, selectRow, closePanel, markLinkMissing } =
     useTaskPanelSelection({
@@ -114,13 +133,9 @@ export function useTaskRequestsQueue({
       context: [JSON.stringify([activeTab, reviewer, reviewerTeam]), managedSystem],
       onSelectionChange,
     });
-  if (decisionSelection !== null) {
-    // Apply after the hook reconciles the result tab, so its context reset cannot drop the decision.
-    setLocalSelectedId(decisionSelection);
-    setDecisionSelection(null);
-  }
   const setSelectedId = React.useCallback(
     (id: string | null) => {
+      setCompletedDecision(null);
       if (id === null) closePanel();
       else selectRow(id);
     },
@@ -137,7 +152,15 @@ export function useTaskRequestsQueue({
     retry: false,
   });
   const selected =
-    !linkMissing && selectedId
+    !linkMissing &&
+    selectedId &&
+    !(
+      completedDecision?.context === decisionContext &&
+      completedDecision.overlayData === taskRequestsQuery.data &&
+      completedDecision.item.id === selectedId &&
+      activeTab !== 'all' &&
+      completedDecision.item.status !== activeTab
+    )
       ? (items.find((item) => item.id === selectedId) ?? selectedDetail.data ?? null)
       : null;
   React.useEffect(() => {
@@ -154,12 +177,8 @@ export function useTaskRequestsQueue({
       markLinkMissing();
     }
   }, [selectedDetail.data, selectedDetail.error, managedSystem, selectedId, markLinkMissing]);
-  const restoredDetail =
-    selected?.id === selectedParam
-      ? selectedDetail.data?.id === selectedParam
-        ? selectedDetail.data
-        : selected
-      : null;
+  // `selected` already prefers the current queue row over a cached detail.
+  const restoredDetail = selected?.id === selectedParam ? selected : null;
   const followedParam = React.useRef({ param: selectedParam, consumed: false });
   React.useEffect(() => {
     followedParam.current = { param: selectedParam, consumed: false };
@@ -277,30 +296,119 @@ export function useTaskRequestsQueue({
   const onDecisionComplete = React.useCallback(
     (updatedItem: TaskRequestDto) => {
       queryClient.setQueryData(['task-request', updatedItem.id], updatedItem);
-      queryClient.setQueriesData<InfiniteData<ListTaskRequestsResponse>>(
-        { queryKey: ['task-requests', managedSystem, 'pages'] },
-        (current) =>
-          current
-            ? {
-                ...current,
-                pages: current.pages.map((page) => ({
-                  ...page,
-                  items: page.items.filter((item) => item.id !== updatedItem.id),
-                })),
-              }
-            : current,
-      );
+      // Patch each cached status according to membership, retaining all-tab order.
+      for (const query of queryClient
+        .getQueryCache()
+        .findAll({ queryKey: ['task-requests', managedSystem, 'pages'] })) {
+        const tab = query.queryKey[3];
+        queryClient.setQueryData<InfiniteData<ListTaskRequestsResponse>>(
+          query.queryKey,
+          (current) =>
+            current
+              ? {
+                  ...current,
+                  pages: current.pages.map((page) => ({
+                    ...page,
+                    items: page.items.flatMap((item) =>
+                      item.id !== updatedItem.id
+                        ? [item]
+                        : tab === 'all' || tab === updatedItem.status
+                          ? [updatedItem]
+                          : [],
+                    ),
+                  })),
+                }
+              : current,
+        );
+      }
+      // A late result may update caches, but cannot take a newer selection's focus.
+      if (selectedId === updatedItem.id) {
+        const index = items.findIndex((item) => item.id === updatedItem.id);
+        const nextId =
+          activeTab === 'all' || activeTab === updatedItem.status
+            ? updatedItem.id
+            : (items[index + 1]?.id ?? items[index - 1]?.id ?? null);
+        setCompletedDecision({
+          item: updatedItem,
+          context: decisionContext,
+          originParam: selectedParam ?? null,
+          selectionId: nextId,
+          overlayData: queryClient.getQueryData<InfiniteData<ListTaskRequestsResponse>>([
+            'task-requests',
+            managedSystem,
+            'pages',
+            activeTab,
+            ...(reviewer === undefined && reviewerTeam === undefined
+              ? []
+              : [reviewer, reviewerTeam, reviewer === 'me' ? meQuery.data?.actor.id : null]),
+          ]),
+        });
+        setLocalSelectedId(nextId);
+        onSelectionChange?.(nextId, true);
+      }
       void queryClient.invalidateQueries({ queryKey: ['task-requests', managedSystem] });
-      setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
-      setDecisionSelection(updatedItem.id);
-      onSelectionChange?.(updatedItem.id, true);
     },
-    [managedSystem, queryClient, onSelectionChange],
+    [
+      managedSystem,
+      queryClient,
+      onSelectionChange,
+      selectedId,
+      items,
+      activeTab,
+      decisionContext,
+      setLocalSelectedId,
+      selectedParam,
+      reviewer,
+      reviewerTeam,
+      meQuery.data?.actor.id,
+    ],
   );
+
+  React.useEffect(() => {
+    if (!completedDecision || completedDecision.context !== decisionContext) return;
+    if (
+      (selectedParam ?? null) !== completedDecision.originParam &&
+      (selectedParam ?? null) !== completedDecision.selectionId
+    ) {
+      setCompletedDecision(null);
+      return;
+    }
+    if (items.length === 0 && taskRequestsQuery.hasNextPage) {
+      if (!taskRequestsQuery.isFetching && !taskRequestsQuery.isError)
+        void taskRequestsQuery.fetchNextPage();
+      return;
+    }
+    if (taskRequestsQuery.isFetching || !taskRequestsQuery.isSuccess) return;
+    if (
+      !items.some((item) => item.id === selectedId) &&
+      (selectedId !== null || items.length > 0)
+    ) {
+      const nextId = items[0]?.id ?? null;
+      setCompletedDecision({ ...completedDecision, selectionId: nextId });
+      setLocalSelectedId(nextId);
+      onSelectionChange?.(nextId, true);
+    }
+  }, [
+    completedDecision,
+    selectedParam,
+    decisionContext,
+    items,
+    selectedId,
+    taskRequestsQuery.isFetching,
+    taskRequestsQuery.isSuccess,
+    taskRequestsQuery.isError,
+    taskRequestsQuery.hasNextPage,
+    taskRequestsQuery.fetchNextPage,
+    setLocalSelectedId,
+    onSelectionChange,
+  ]);
 
   return {
     activeTab,
-    setActiveTab,
+    setActiveTab: (tab) => {
+      setCompletedDecision(null);
+      setActiveTab(tab);
+    },
     hasItems: summaryQuery.isSuccess && (summaryQuery.data.page?.total ?? 0) > 0,
     selectedId,
     linkMissing,

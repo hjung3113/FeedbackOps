@@ -5,6 +5,7 @@ import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import {
+  DetailPanelFullscreenContext,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
@@ -47,6 +48,9 @@ interface TaskRequestPanelProps {
   currentRole: string | null;
   onClose: () => void;
   onDecisionComplete?: (item: TaskRequestDto) => void;
+  getCompletedFocusTarget?: (result: TaskRequestDto) => HTMLElement | null;
+  onDecisionCloseComplete?: () => void;
+  decisionRecovery?: React.ReactNode;
 }
 
 export function TaskRequestPanel({
@@ -57,7 +61,11 @@ export function TaskRequestPanel({
   currentRole,
   onClose,
   onDecisionComplete,
+  getCompletedFocusTarget,
+  onDecisionCloseComplete,
+  decisionRecovery,
 }: TaskRequestPanelProps) {
+  const fullscreen = React.useContext(DetailPanelFullscreenContext);
   const decisionHeadingRef = React.useRef<HTMLHeadingElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const requester = names.actorsById[item.requester_actor_id];
@@ -69,8 +77,9 @@ export function TaskRequestPanel({
     const result = decision.result;
     if (result === null || result === deliveredDecisionResultRef.current) return;
     deliveredDecisionResultRef.current = result;
+    if (fullscreen?.expanded) fullscreen.toggle();
     onDecisionComplete?.(result);
-  }, [decision.result, onDecisionComplete]);
+  }, [decision.result, onDecisionComplete, fullscreen]);
 
   const { sourceFindingQuery, conversion, link, resultingTask, taskForOutcome } =
     useTaskRequestPanelController({ item, currentRole });
@@ -184,15 +193,19 @@ export function TaskRequestPanel({
         key={item.id}
         dialog={decision.dialog}
         completedResult={decision.result}
-        getCompletedFocusTarget={(result) =>
-          result.id === item.id &&
-          result.status === item.status &&
-          (result.status === 'approved' ||
-            result.status === 'rejected' ||
-            result.status === 'needs_more_evidence')
-            ? decisionHeadingRef.current
-            : null
+        getCompletedFocusTarget={
+          getCompletedFocusTarget ??
+          ((result) =>
+            result.id === item.id &&
+            result.status === item.status &&
+            (result.status === 'approved' ||
+              result.status === 'rejected' ||
+              result.status === 'needs_more_evidence')
+              ? decisionHeadingRef.current
+              : null)
         }
+        {...(onDecisionCloseComplete ? { onCompletedClose: onDecisionCloseComplete } : {})}
+        recovery={decisionRecovery}
         request={item}
         isSelfApproval={decision.isSelfApproval}
         isSubmitting={decision.isSubmitting}
