@@ -7,7 +7,6 @@ import { GLOSSARY } from '@/lib/copy/glossary';
 import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
-import { InternalLink } from '@/lib/router/InternalLink';
 import {
   type MilestoneDto,
   type TaskDto,
@@ -17,6 +16,7 @@ import {
   taskPrioritySchema,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -88,6 +88,7 @@ export function useTaskRequestConversion({
   defaultAnalyticsAreaResolved = true,
 }: UseTaskRequestConversionArgs): UseTaskRequestConversionResult {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const itemRef = React.useRef(item);
   React.useEffect(() => {
     itemRef.current = item;
@@ -306,13 +307,13 @@ export function useTaskRequestConversion({
           : `팀 · ${identities?.teams.find((team) => team.id === task.assignee_team_id)?.name ?? TASK_REQUEST_COPY.unknownTeam}`;
       }
       toast.success(TASK_REQUEST_COPY.converted(task.display_id, assignee), {
-        description: React.createElement(
-          InternalLink,
-          {
-            href: `/tasks?view=backlog&param=${task.id}`,
+        duration: Number.POSITIVE_INFINITY,
+        action: {
+          label: TASK_REQUEST_COPY.openTask,
+          onClick: () => {
+            void navigate({ to: '/tasks', search: { view: 'backlog', param: task.id } });
           },
-          TASK_REQUEST_COPY.openTask,
-        ),
+        },
       });
       setConvertOpen(false);
     },

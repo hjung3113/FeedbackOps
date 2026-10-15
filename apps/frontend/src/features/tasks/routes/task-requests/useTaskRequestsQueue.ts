@@ -78,6 +78,7 @@ export function useTaskRequestsQueue({
     context: string;
     originParam: string | null;
     selectionId: string | null;
+    overlayData: InfiniteData<ListTaskRequestsResponse> | undefined;
   } | null>(null);
   const decisionContext = JSON.stringify([activeTab, managedSystem, reviewer, reviewerTeam]);
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
@@ -109,10 +110,15 @@ export function useTaskRequestsQueue({
       }),
     getNextPageParam: (last) => (last.page?.has_more ? last.page.cursor : undefined),
   });
+  // Fresh pages own row content; retain completion separately for selection/focus.
   const items = React.useMemo(
     () =>
       (taskRequestsQuery.data?.pages.flatMap((page) => page.items) ?? []).flatMap((item) => {
-        if (completedDecision?.context !== decisionContext || completedDecision.item.id !== item.id)
+        if (
+          completedDecision?.context !== decisionContext ||
+          completedDecision.overlayData !== taskRequestsQuery.data ||
+          completedDecision.item.id !== item.id
+        )
           return [item];
         return activeTab === 'all' || completedDecision.item.status === activeTab
           ? [completedDecision.item]
@@ -150,6 +156,7 @@ export function useTaskRequestsQueue({
     selectedId &&
     !(
       completedDecision?.context === decisionContext &&
+      completedDecision.overlayData === taskRequestsQuery.data &&
       completedDecision.item.id === selectedId &&
       activeTab !== 'all' &&
       completedDecision.item.status !== activeTab
@@ -170,12 +177,8 @@ export function useTaskRequestsQueue({
       markLinkMissing();
     }
   }, [selectedDetail.data, selectedDetail.error, managedSystem, selectedId, markLinkMissing]);
-  const restoredDetail =
-    selected?.id === selectedParam
-      ? selectedDetail.data?.id === selectedParam
-        ? selectedDetail.data
-        : selected
-      : null;
+  // `selected` already prefers the current queue row over a cached detail.
+  const restoredDetail = selected?.id === selectedParam ? selected : null;
   const followedParam = React.useRef({ param: selectedParam, consumed: false });
   React.useEffect(() => {
     followedParam.current = { param: selectedParam, consumed: false };
@@ -330,6 +333,15 @@ export function useTaskRequestsQueue({
           context: decisionContext,
           originParam: selectedParam ?? null,
           selectionId: nextId,
+          overlayData: queryClient.getQueryData<InfiniteData<ListTaskRequestsResponse>>([
+            'task-requests',
+            managedSystem,
+            'pages',
+            activeTab,
+            ...(reviewer === undefined && reviewerTeam === undefined
+              ? []
+              : [reviewer, reviewerTeam, reviewer === 'me' ? meQuery.data?.actor.id : null]),
+          ]),
         });
         setLocalSelectedId(nextId);
         onSelectionChange?.(nextId, true);
@@ -346,6 +358,9 @@ export function useTaskRequestsQueue({
       decisionContext,
       setLocalSelectedId,
       selectedParam,
+      reviewer,
+      reviewerTeam,
+      meQuery.data?.actor.id,
     ],
   );
 

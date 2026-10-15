@@ -63,16 +63,19 @@ export function TaskRequestsRoute({
     names: NameMaps;
     context: string;
     result: TaskRequestDto;
-    originParam: string | undefined;
+    originParam: string | null;
     expectedId: string | null;
   } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const replaceSelection = useCallback(
     (id: string | null, replace: boolean) => {
-      if (replace) setHandoff((current) => (current ? { ...current, expectedId: id } : null));
+      if (replace)
+        setHandoff((current) =>
+          current ? { ...current, originParam: selectedParam ?? null, expectedId: id } : null,
+        );
       onSelectionChange?.(id, replace);
     },
-    [onSelectionChange],
+    [onSelectionChange, selectedParam],
   );
   const queue = useTaskRequestsQueue({
     selectedParam,
@@ -122,10 +125,24 @@ export function TaskRequestsRoute({
     activeTeam,
   ]);
   const retainedPanel =
+    !queue.permissionDeniedError &&
     handoff?.context === context &&
-    (selectedParam === handoff.originParam || selectedParam === handoff.expectedId)
+    ((selectedParam ?? null) === handoff.originParam ||
+      (selectedParam ?? null) === handoff.expectedId)
       ? handoff
       : null;
+  useEffect(() => {
+    if (!queue.permissionDeniedError || !handoff) return;
+    const frame = requestAnimationFrame(() => {
+      const heading = listRef.current?.querySelector<HTMLElement>('[data-state="denied"] h4');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus();
+        setHandoff(null);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [queue.permissionDeniedError, handoff]);
   const panelItem = retainedPanel?.item ?? queue.selected;
   const completeDecision = (result: TaskRequestDto) => {
     if (
@@ -138,7 +155,7 @@ export function TaskRequestsRoute({
         names: queue.names,
         context,
         result,
-        originParam: selectedParam,
+        originParam: selectedParam ?? null,
         expectedId: queue.selectedId,
       });
     }

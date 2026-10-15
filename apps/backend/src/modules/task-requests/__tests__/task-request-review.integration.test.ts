@@ -495,6 +495,44 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(notifications.jobs).toEqual([]);
   });
 
+  it('settles concurrent self-approvals beyond main-pool capacity without deadlock', async () => {
+    const count = dbHandle.pool.options.max + 2;
+    const rows = await Promise.all(
+      Array.from({ length: count }, () => seedTaskRequest({ requesterActorId: adminActorId })),
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const responses = await Promise.race([
+        Promise.all(
+          rows.map((row) =>
+            decide(adminCookie, row.id, 'approve', {
+              reason: 'Concurrent owner approval.',
+            }),
+          ),
+        ),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('self-approvals did not settle within 10 seconds')),
+            10_000,
+          );
+        }),
+      ]);
+      expect(responses.every((response) => [200, 429].includes(response.statusCode))).toBe(true);
+      expect(responses.filter((response) => response.statusCode === 200)).toHaveLength(5);
+      const stored = await migrateHandle.pool.query<{ id: string; status: string }>(
+        'select id, status from task_request.task_requests where id = any($1::uuid[])',
+        [rows.map((row) => row.id)],
+      );
+      for (const [index, response] of responses.entries()) {
+        expect(stored.rows.find((row) => row.id === rows[index]?.id)?.status).toBe(
+          response.statusCode === 200 ? 'approved' : 'pending_review',
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }, 15_000);
+
   it('self-approval by requester with admin role and reason is approved with sensitive audit detail', async () => {
     const request = await seedTaskRequest({ requesterActorId: adminActorId });
 

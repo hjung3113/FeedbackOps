@@ -20,6 +20,7 @@ export interface DecisionDialogState {
   action: DecisionAction;
   value: string;
   error: string | null;
+  reasonInvalid?: boolean;
 }
 
 export function TaskRequestDecisionDialog({
@@ -105,11 +106,21 @@ export function TaskRequestDecisionDialog({
       !completedResult
     )
       return;
-    const target = getCompletedFocusTarget?.(completedResult);
-    if (!target?.isConnected) return;
-    target.focus();
-    opening.successTarget = target;
-    setHandedOff(opening);
+    let frame: number;
+    const transfer = () => {
+      const target = getCompletedFocusTarget?.(completedResult);
+      if (target?.isConnected && !target.closest('[hidden], [inert]')) {
+        target.focus();
+        if (document.activeElement === target) {
+          opening.successTarget = target;
+          setHandedOff(opening);
+          return;
+        }
+      }
+      frame = requestAnimationFrame(transfer);
+    };
+    transfer();
+    return () => cancelAnimationFrame(frame);
   }, [successfulClose, handedOff, opening, completedResult, getCompletedFocusTarget]);
 
   function dismiss() {
@@ -204,7 +215,7 @@ export function TaskRequestDecisionDialog({
                 value={content.value}
                 onChange={(event) => onChange(event.target.value)}
                 disabled={isSubmitting || successfulClose}
-                aria-invalid={content.error !== null}
+                aria-invalid={content.error !== null && content.reasonInvalid !== false}
               />
               {details.required && (
                 <span className="text-xs text-text-muted">필수 입력 항목입니다.</span>

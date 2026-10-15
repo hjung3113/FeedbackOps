@@ -5,6 +5,7 @@ import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import {
+  DetailPanelFullscreenContext,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
@@ -64,6 +65,7 @@ export function TaskRequestPanel({
   onDecisionCloseComplete,
   decisionRecovery,
 }: TaskRequestPanelProps) {
+  const fullscreen = React.useContext(DetailPanelFullscreenContext);
   const decisionHeadingRef = React.useRef<HTMLHeadingElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const requester = names.actorsById[item.requester_actor_id];
@@ -75,8 +77,9 @@ export function TaskRequestPanel({
     const result = decision.result;
     if (result === null || result === deliveredDecisionResultRef.current) return;
     deliveredDecisionResultRef.current = result;
+    if (fullscreen?.expanded) fullscreen.toggle();
     onDecisionComplete?.(result);
-  }, [decision.result, onDecisionComplete]);
+  }, [decision.result, onDecisionComplete, fullscreen]);
 
   const { sourceFindingQuery, conversion, link, resultingTask, taskForOutcome } =
     useTaskRequestPanelController({ item, currentRole });

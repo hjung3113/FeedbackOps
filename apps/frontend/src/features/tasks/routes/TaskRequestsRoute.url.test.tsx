@@ -261,16 +261,19 @@ it('keeps the new cross-scope param while the previous off-page detail is cached
   expect(mounted.router.state.location.search.param).toBe('b1');
 });
 
-it('replaces the URL with no selection and keeps the empty current tab', async () => {
+it('reconciles cleared selection to fresh current-tab data after the decision overlay expires', async () => {
   vi.mocked(getTaskRequest).mockResolvedValue({ ...first, status: 'approved' });
   const mounted = mount(initial);
   fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
   await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
+  await settledQueue(mounted);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
   expect(mounted.history.length).toBe(1);
   expect(mounted.router.state.location.search).toEqual({
     view: 'requests',
     managedSystem: A,
     public_update: 'missing',
+    param: first.id,
   });
   expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute('aria-selected', 'true');
 });

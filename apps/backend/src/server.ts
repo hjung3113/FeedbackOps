@@ -14,6 +14,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod';
+import pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
 import type { AppConfig } from './config.js';
@@ -553,8 +554,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
+  // The independent increment runs while the command holds a transaction
+  // connection. A separate bounded pool prevents command-pool starvation.
+  const selfApprovalPool = new pg.Pool({
+    ...dbHandle.pool.options,
+    max: 2,
+    connectionTimeoutMillis: 5_000,
+  });
+  app.addHook('onClose', async () => selfApprovalPool.end());
   const taskRequestsService = createTaskRequestsService({
-    consumeSelfApprovalRateLimit: createSensitiveActorRateLimit(dbHandle.pool),
+    consumeSelfApprovalRateLimit: createSensitiveActorRateLimit(selfApprovalPool),
     recoveryRecorder,
     db: dbHandle.db,
     auditService,

@@ -115,7 +115,7 @@ export function useTaskRequestDecision({
       // there (a non-ApiError has no envelope) would take down the whole screen.
       const message = mapUnknownError(err).message;
       setDecisionDialog((current) => {
-        if (current) return { ...current, error: message };
+        if (current) return { ...current, error: message, reasonInvalid: err.status !== 429 };
         toast.error(message);
         return current;
       });
@@ -156,7 +156,9 @@ export function useTaskRequestDecision({
             ? '반려 사유를 입력해 주세요.'
             : null;
     if (error) {
-      setDecisionDialog((current) => (current ? { ...current, error } : current));
+      setDecisionDialog((current) =>
+        current ? { ...current, error, reasonInvalid: true } : current,
+      );
       return;
     }
     decisionSubmittingRef.current = true;

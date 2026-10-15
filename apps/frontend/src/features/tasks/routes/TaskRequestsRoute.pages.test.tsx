@@ -85,7 +85,7 @@ function mount(selectedParam?: string, managedSystem?: string) {
 
 describe('Task Request cursor screens', () => {
   afterEach(() => vi.unstubAllGlobals());
-  it('clears an auto-selected decision and stays on the now empty current tab', async () => {
+  it('accepts fresh current-tab data after an auto-selected decision overlay expires', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -115,7 +115,7 @@ describe('Task Request cursor screens', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByTestId('selected-request')).not.toBeInTheDocument();
+    expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-1');
   });
 
   it.each(['empty', 'populated'] as const)(

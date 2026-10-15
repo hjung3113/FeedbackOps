@@ -205,10 +205,13 @@ conversion until another explicit choice is made. Preserve an explicit Area or
 `없음` choice across same-request refetches; selecting a different Task Request
 resets the conversion form.
 
-A successful review decision updates the canonical queue row and follows its
-result status tab once, keeping that Task Request selected. Use All if the
-result has no status tab. Revisiting the request must not replay an old result
-over newer row state or change the current tab.
+A successful review decision updates the canonical queue row and keeps the
+current tab. Keep the request selected if it still belongs to that tab; otherwise
+select the next row, or the previous row when deciding the last loaded row.
+Retain the decision panel/dialog until focus reaches the next selection or the
+confirmed empty-state heading after fresh data and remaining pages settle.
+Revisiting the request must not replay an old result over newer row state or
+change the current tab.
 
 `POST /task-requests/:id/link-task` is the alternative path when suitable work
 already exists. It requires an approved request and an existing Task in the same

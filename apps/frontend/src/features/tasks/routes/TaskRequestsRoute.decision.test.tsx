@@ -1,4 +1,5 @@
 import { getTaskRequest } from '@/lib/api';
+import { ApiError } from '@/lib/api/types';
 import { taskRequestPage } from '@/test/task-request-pages';
 import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
@@ -163,6 +164,54 @@ describe('TaskRequestsRoute decision dialogs', () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it('keeps a rate-limit alert without marking the reason invalid', async () => {
+    api.approveTaskRequest.mockRejectedValue(
+      new ApiError(429, {
+        code: 'rate_limited.actor',
+        message: 'rate limit exceeded',
+        detail: { retry_after_seconds: 30 },
+      }),
+    );
+    const dialog = await openDialog('승인', 'Task Request 승인');
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await within(dialog).findByRole('alert');
+    expect(within(dialog).getByRole('textbox')).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('discards retained content and focuses the blocked heading after post-decision denial', async () => {
+    api.resolveActors.mockResolvedValue({
+      actors: [
+        { id: requesterId, display_name: 'Retained requester', email: 'requester@example.test' },
+      ],
+      teams: [],
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TaskRequestsRoute />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: '검토 결정' });
+    await screen.findAllByText('Retained requester');
+    api.approveTaskRequest.mockResolvedValue({ ...taskRequest, status: 'approved' });
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog');
+    api.fetchTaskRequests.mockRejectedValue(
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'Denied',
+      }),
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    const heading = await screen.findByRole('heading', { name: 'Task Request queue' });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(dialog).not.toBeInTheDocument();
+    expect(screen.queryByText(taskRequest.requested_outcome)).not.toBeInTheDocument();
+    expect(screen.queryByText(taskRequest.evidence_summary)).not.toBeInTheDocument();
+    expect(screen.queryByText('Retained requester')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '출처 Finding' })).not.toBeInTheDocument();
+  });
 
   it('keeps the clicked status tab focused through a cold fetch and cached arrow navigation', async () => {
     const user = userEvent.setup();

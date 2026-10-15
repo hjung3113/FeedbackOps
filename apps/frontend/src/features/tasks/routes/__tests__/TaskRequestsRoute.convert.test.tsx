@@ -711,12 +711,10 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     );
     const body = convertTaskRequestRequestSchema.parse(api.convertTaskRequest.mock.calls[0]?.[1]);
     expect(body).not.toHaveProperty('assignee_actor_id');
-    const description = toast.success.mock.calls[0]?.[1]?.description;
-    const result = render(description);
-    expect(result.getByRole('link', { name: 'Task 열기' })).toHaveAttribute(
-      'href',
-      `/tasks?view=backlog&param=${taskRequest.id}`,
-    );
+    expect(toast.success.mock.calls[0]?.[1]).toMatchObject({
+      duration: Number.POSITIVE_INFINITY,
+      action: { label: 'Task 열기', onClick: expect.any(Function) },
+    });
   });
 
   // R2 (Astra P2-3) — after a successful picker read, a denied refetch must
