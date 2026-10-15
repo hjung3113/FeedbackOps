@@ -3,6 +3,7 @@ import type { ListTasksResponse } from '@fops/shared';
 import { apiRequest } from './client';
 export type { ListTasksResponse } from '@fops/shared';
 import type {
+  AssignTaskMilestoneRequest,
   ConvertTaskRequestRequest,
   FindingDto,
   LinkExistingTaskRequest,
@@ -119,6 +120,22 @@ export async function assignTaskResponsibility(
   ifMatch: string,
 ) {
   const response = await apiRequest('POST', `/tasks/${id}/responsibility`, taskDtoSchema, {
+    body,
+    idempotencyKey,
+    ifMatch,
+  });
+  return response.data;
+}
+
+// #1181 — POST /tasks/:id/milestone. `null` clears the assignment; If-Match is
+// the Task's updated_at (docs/implementation/api/tasks.md §POST /tasks/:id/milestone).
+export async function assignTaskMilestone(
+  id: string,
+  body: AssignTaskMilestoneRequest,
+  idempotencyKey: string,
+  ifMatch: string,
+) {
+  const response = await apiRequest('POST', `/tasks/${id}/milestone`, taskDtoSchema, {
     body,
     idempotencyKey,
     ifMatch,
