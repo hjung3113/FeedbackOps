@@ -383,6 +383,10 @@ function DirectGrantFields({
       candidate.managed_system_id === readPrerequisite.managed_system_id &&
       candidate.preflight.state === 'deny_lift',
   );
+  const readDenyLiftRoute =
+    readDenyLift?.preflight.state === 'deny_lift'
+      ? readDenyLift.preflight.lift_route
+      : '/admin/permissions/grants?tab=denies';
   const sessionReady = actorId !== null;
   const reasonReady = reason.trim().length > 0 && reason.trim().length <= 2000;
   const canSubmit =
@@ -565,15 +569,13 @@ function DirectGrantFields({
         {readPrerequisite?.state === 'denied' ? (
           <div className="flex flex-col gap-1 text-sm text-text-secondary">
             <p>{DIRECT_GRANT_COPY.deniedReadPrerequisite}</p>
-            {readDenyLift?.preflight.state === 'deny_lift' ? (
-              <InternalLink
-                className="w-fit text-accent-primary underline underline-offset-2"
-                href={readDenyLift.preflight.lift_route}
-                onClick={onClose}
-              >
-                {DIRECT_GRANT_COPY.denyLink}
-              </InternalLink>
-            ) : null}
+            <InternalLink
+              className="w-fit text-accent-primary underline underline-offset-2"
+              href={readDenyLiftRoute}
+              onClick={onClose}
+            >
+              {DIRECT_GRANT_COPY.denyLink}
+            </InternalLink>
           </div>
         ) : null}
         <label className="flex flex-col gap-2 text-sm text-text-secondary" htmlFor={reasonId}>
