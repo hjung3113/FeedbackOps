@@ -104,6 +104,14 @@ Public Update, Reporter Reply, Internal Comment, and VOC description fields use
 rich content. Backend validation must sanitize/render safely, enforce
 attachment visibility, reject base64 inline body images, and prevent external
 image URLs from rendering inline.
+Attachment downloads enforce the same per-entry visibility as the conversation
+read, through VOC's `canReadConversationEntry` read seam. After the VOC conversation
+access gate, Public Updates are visible to conversation readers; Internal Comments
+require deny-aware `voc.triage` scope on the VOC's Managed System. Reporter Replies
+require that triage scope, or both that the caller is the VOC Reporter and that the
+reply's `actor_id` equals the caller. Full VOC detail alone does not authorize a
+private conversation attachment.
+
 
 VOC Cluster is not a reporter-visible object in MVP. Cluster-level bulk update
 behavior may generate a candidate only; applying it creates separate Public

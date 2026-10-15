@@ -60,6 +60,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     resolveVocReference: referenceReader.resolveVocReference,
     resolveDisplayId: detailReaders.resolveVocDisplayId,
     getConversation: conversationReader.getConversation,
+    canReadConversationEntry: conversationReader.canReadConversationEntry,
     composeDetailEnvelope: detailReaders.composeDetailEnvelope,
   };
 }

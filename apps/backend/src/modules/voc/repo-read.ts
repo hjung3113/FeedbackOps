@@ -25,7 +25,10 @@ export {
   selectPermissionDecisionsSeed,
 } from './read/repository-detail.js';
 
-export { selectConversationPage } from './read/repository-conversation.js';
+export {
+  selectConversationPage,
+  selectConversationEntryParent,
+} from './read/repository-conversation.js';
 export type {
   ConversationKind,
   ConversationRow,

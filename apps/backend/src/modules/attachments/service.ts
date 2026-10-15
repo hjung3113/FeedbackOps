@@ -35,7 +35,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import type { VocDetailReader } from '../voc/index.js';
+import type { VocAttachmentReader } from '../voc/index.js';
 import { insertAttachment } from './repo.js';
 
 export interface UploadAttachmentActor {
@@ -65,7 +65,7 @@ export interface AttachmentsServiceDeps {
   auditService: AuditService;
   db: Db;
   idempotencyService: IdempotencyService;
-  vocReadService: VocDetailReader;
+  vocReadService: VocAttachmentReader;
 }
 
 export interface DownloadAttachmentActor {
@@ -189,10 +189,8 @@ export function createAttachmentsService(deps: AttachmentsServiceDeps) {
   //   * Linked to a VOC: reuse vocReadService.getVocDetail. `kind: 'full'`
   //     → permit. `kind: 'summary'` → 403. getVocDetail throwing
   //     not_found.record → 403 (caller cannot see the parent).
-  //   * Linked to a comment: not in C4a scope — comment entitlement helper
-  //     does not exist as a standalone service yet. We fall back to the
-  //     parent-VOC entitlement via the comment_id → voc_id resolution
-  //     query; if no parent VOC is reachable, treat as 403.
+  //   * Linked to a comment: VOC's exact-entry conversation read seam owns
+  //     both parent resolution and visibility (including deny-aware triage).
   //   * Unlinked (voc_id IS NULL AND comment_id IS NULL): permit only the
   //     original uploader.
   async function downloadAttachment(
@@ -259,39 +257,13 @@ export function createAttachmentsService(deps: AttachmentsServiceDeps) {
         throw err;
       }
     } else if (row.comment_id) {
-      // Resolve parent VOC for the comment (works for public_update /
-      // reporter_reply / internal_comment — all carry voc_id).
-      let parentVocId: string | null = null;
-      const kind = row.comment_kind;
-      if (kind === 'public_update') {
-        const q = await deps.db.execute<{ voc_id: string }>(sql`
-          select voc_id from voc.voc_public_updates where id = ${row.comment_id} limit 1
-        `);
-        parentVocId = q.rows[0]?.voc_id ?? null;
-      } else if (kind === 'reporter_reply') {
-        const q = await deps.db.execute<{ voc_id: string }>(sql`
-          select voc_id from voc.voc_reporter_replies where id = ${row.comment_id} limit 1
-        `);
-        parentVocId = q.rows[0]?.voc_id ?? null;
-      } else if (kind === 'internal_comment') {
-        const q = await deps.db.execute<{ voc_id: string }>(sql`
-          select voc_id from voc.voc_internal_comments where id = ${row.comment_id} limit 1
-        `);
-        parentVocId = q.rows[0]?.voc_id ?? null;
-      }
-      if (!parentVocId) {
+      const allowed = await deps.vocReadService.canReadConversationEntry({
+        actor,
+        kind: row.comment_kind ?? '',
+        entryId: row.comment_id,
+      });
+      if (!allowed) {
         throw new HttpError('permission.denied', 'attachment not accessible to caller');
-      }
-      try {
-        const detail = await deps.vocReadService.getVocDetail({ actor, vocId: parentVocId });
-        if (detail.kind !== 'full') {
-          throw new HttpError('permission.denied', 'attachment not accessible to caller');
-        }
-      } catch (err) {
-        if (err instanceof HttpError && err.code === 'not_found.record') {
-          throw new HttpError('permission.denied', 'attachment not accessible to caller');
-        }
-        throw err;
       }
     } else {
       // Unlinked: only the uploader.
