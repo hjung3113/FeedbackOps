@@ -3,6 +3,7 @@ import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fix
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -67,6 +68,19 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     developer = await createActor('developer');
     user = await createActor('user');
     reporter = await createActor('user');
+    // #1172: a VOC owner needs voc.triage and voc.read on the VOC's Managed System.
+    for (const eligibleOwner of [owner, replacementOwner]) {
+      for (const capability of ['voc.triage', 'voc.read']) {
+        await grantCapability(
+          migrateHandle,
+          workspaceId,
+          eligibleOwner.id,
+          capability,
+          managedSystemId,
+          admin.id,
+        );
+      }
+    }
 
     boss = await initBoss({
       connectionString: APP_URL,
@@ -131,6 +145,10 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
       actorIds,
     ]);
     await migrateHandle.pool.query('delete from core.teams where id = $1', [teamId]);
+    await migrateHandle.pool.query(
+      'delete from permission.permission_grants where workspace_id = $1',
+      [workspaceId],
+    );
     await deleteRecoveryFixtureParents(
       migrateHandle,
       'delete from core.managed_systems where id = $1',
