@@ -23,6 +23,15 @@ export const RESPONSIBILITY_COPY = {
   ineligible: '지정할 수 없음',
 };
 
+// #1181 Task detail Milestone row: inline assign/move/clear editor.
+export const TASK_MILESTONE_COPY = {
+  edit: '수정',
+  select: 'Milestone 선택',
+  none: 'Milestone 없음',
+  save: '저장',
+  saved: 'Milestone을 저장했습니다.',
+} as const;
+
 export const TASK_REPORT_FILTER_COPY = {
   status: (label: string) => `상태: ${label}`,
   inFlight: '상태: Todo·Doing·Review',

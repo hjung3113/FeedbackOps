@@ -58,6 +58,14 @@ const STATUS_META: Record<
 // badge silently renders as black text on a transparent background
 // (.review/pixel-514-findings.md finding 2); same consumption as
 // packages/ui ReporterStatusBadge.
+/** Plain-text Korean status labels (Task detail Milestone editor options); same source as the badge. */
+export const MILESTONE_STATUS_LABELS: Record<MilestoneStatus, string> = {
+  planning: STATUS_META.planning.label,
+  in_progress: STATUS_META.in_progress.label,
+  blocked: STATUS_META.blocked.label,
+  released: STATUS_META.released.label,
+};
+
 export function MilestoneStatusBadge({ status, className }: MilestoneStatusBadgeProps) {
   const normalizedStatus: MilestoneStatus = Object.hasOwn(STATUS_META, status)
     ? (status as MilestoneStatus)

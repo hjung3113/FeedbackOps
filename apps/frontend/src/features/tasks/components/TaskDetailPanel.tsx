@@ -3,7 +3,7 @@ import { ProgressNotesSection } from '@/features/cross-system/progress-notes/Pro
 import { getTask } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getMilestone } from '@/lib/api/milestones';
-import { assignTaskResponsibility } from '@/lib/api/tasks';
+import { assignTaskMilestone, assignTaskResponsibility } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
@@ -36,6 +36,7 @@ import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
 import { useTaskManagedSystems } from '../adapters/taskDisplayAdapters';
 import { ResponsibilityEditor } from './ResponsibilityEditor';
+import { TaskMilestoneEditor } from './TaskMilestoneEditor';
 
 const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'high' | 'critical'> =
   {
@@ -163,8 +164,8 @@ export function TaskDetailPanel({
         })
       : null,
   );
-  // #514 B3b: the Milestone row is a read — GET /milestones/:id only. The
-  // assign/unassign POST has no control in this panel.
+  // #514 B3b + #1181: the Milestone row reads GET /milestones/:id, and
+  // TaskMilestoneEditor below owns the assign/move/clear POST.
   const milestoneId = taskQuery.data?.milestone_id ?? null;
   const milestoneQuery = useQuery({
     queryKey: ['milestone', milestoneId] as const,
@@ -187,6 +188,10 @@ export function TaskDetailPanel({
   });
   const canManageNotes =
     me?.actor.role_level === 'admin' || notesManageQuery.data?.state === 'approved';
+  // Status-PATCH authority: Admin, or Developer with finding.manage on the
+  // Task's Managed System — the same rule behind the responsibility editor.
+  const canManageAssignment =
+    me?.actor.role_level === 'admin' || (me?.actor.role_level === 'developer' && canManageNotes);
 
   if (taskQuery.isLoading) {
     return (
@@ -282,10 +287,7 @@ export function TaskDetailPanel({
               label="담당자"
               actorId={task.assignee_actor_id}
               teamId={task.assignee_team_id}
-              canEdit={
-                me?.actor.role_level === 'admin' ||
-                (me?.actor.role_level === 'developer' && canManageNotes)
-              }
+              canEdit={canManageAssignment}
               teamCandidates={[
                 ...new Set(
                   [
@@ -316,13 +318,26 @@ export function TaskDetailPanel({
             />
           </FieldRow>
           <FieldRow label="Milestone">
-            {milestoneQuery.data && milestoneQuery.error === null ? (
-              <span className="text-sm text-text-primary">
-                {milestoneQuery.data.display_id} {milestoneQuery.data.title}
-              </span>
-            ) : (
-              <span className="text-text-muted">—</span>
-            )}
+            <TaskMilestoneEditor
+              key={task.id}
+              taskId={task.id}
+              managedSystemId={task.primary_managed_system_id}
+              milestoneId={milestoneId}
+              valueLabel={
+                milestoneQuery.data && milestoneQuery.error === null
+                  ? `${milestoneQuery.data.display_id} ${milestoneQuery.data.title}`
+                  : null
+              }
+              canEdit={canManageAssignment}
+              onSave={(nextMilestoneId, key) =>
+                assignTaskMilestone(
+                  task.id,
+                  { milestone_id: nextMilestoneId },
+                  key,
+                  task.updated_at,
+                )
+              }
+            />
           </FieldRow>
         </div>
 
