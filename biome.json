@@ -9,6 +9,7 @@
       "**/coverage",
       "**/node_modules",
       ".claude/skills/**",
+      ".claude/conductor/**",
       ".agents/skills/**"
     ]
   },

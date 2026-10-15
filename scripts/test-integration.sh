@@ -7,7 +7,8 @@
 # DATABASE_URL and re-seeds before the run — that reset is what makes the
 # failure count independent of how many runs came before it (#205). Point
 # DATABASE_URL / DATABASE_URL_MIGRATE at a throwaway database if the contents
-# of the one in `.env` matter to you.
+# of the one in `.env` matter to you. A target on port 5434 (the development
+# database) is refused unless FEEDBACKOPS_ALLOW_DEV_DB=1 is set.
 #
 # Usage:
 #   pnpm --filter backend test:integration
@@ -34,6 +35,18 @@ for var in DATABASE_URL DATABASE_URL_MIGRATE WORKSPACE_ID; do
   if [ -z "${!var:-}" ]; then
     echo "test:integration: $env_file does not set $var" >&2
     echo "  all three are required; without them the suites skip and the run proves nothing" >&2
+    exit 1
+  fi
+done
+
+# 5434 is the development database (docker-compose.dev.yml), and this run truncates it.
+# Agents and workers must never reach it; a person who means it sets FEEDBACKOPS_ALLOW_DEV_DB=1.
+for var in DATABASE_URL DATABASE_URL_MIGRATE; do
+  host_port="${!var##*@}"
+  host_port="${host_port%%[/?]*}"
+  if [ "${host_port##*:}" = "5434" ] && [ "${FEEDBACKOPS_ALLOW_DEV_DB:-}" != "1" ]; then
+    echo "test:integration: refusing $var on port 5434 (the development database) from $env_file" >&2
+    echo "  point FEEDBACKOPS_ENV_FILE at a throwaway database, or set FEEDBACKOPS_ALLOW_DEV_DB=1 to truncate the dev data" >&2
     exit 1
   fi
 done

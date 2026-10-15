@@ -42,7 +42,27 @@ defects that would cost a review or fix round; style and wording preferences are
     superseded mutations — use `mutateAsync` or the hook). s70: both #995 first designs and #997's first fix broke
     on these.
 
+Added after s81 (each a `grep`, not a review round; together they cost five fix rounds there):
+
+13. **Changed field, predicate or contract: every consumer listed.** When the brief removes, hides or renames a
+    response field, permission predicate or scope rule, or changes a shared contract, the brief lists every
+    serializer, projection and endpoint that emits the field or applies the predicate (recommendation candidates,
+    sorts, counts, lists and summaries, Admin shortcuts, archived-scope variants) and every existing test, backend
+    and frontend, that pins the old value or builds the now-invalid state (#1173, #1170a, #1179, #1172).
+14. **Shared component given a new meaning.** When the brief changes a shared component's accessible name, label or
+    markup, it lists the component's other consumers (`rg '<Component'`) and decides each one (#1173: Priority
+    picked up the Severity name).
+15. **New link or label on a screen.** The brief lists the visual specs and tests whose
+    `getByRole(…, { name })` locator could now match twice under strict mode (#1174b).
+16. **Values the UI sends are accepted.** Every value the brief tells the UI to send (a `null` scope, an enum, an
+    omitted field) is checked against the receiving endpoint's validator: strict schemas, supported scope
+    candidates (s81: `POST /permission-requests` rejects a workspace-wide `voc.read` with 422
+    `supportedScopeCandidates`).
+
 ## Report
 
-Write the report your task names: a verdict line (`ready` or `fix brief`), then findings ordered by
-the round they would cost. End with the sentinel line your task gives, exactly.
+Write the report your task names. It starts with `## Summary`, **at most 25 lines**: the verdict (`ready` or
+`fix brief`), then one line per finding (ID, check item, brief line, the defect). Then `## Patch`: each correction
+as a replacement pair (`Replace:` the brief's sentence / `With:` the corrected sentence) the conductor can apply
+without rereading a narrative, ordered by the round it would cost. Evidence goes in `## Details`. End with the
+sentinel line your task gives, exactly.

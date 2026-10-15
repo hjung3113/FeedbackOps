@@ -42,8 +42,11 @@ findings is a valid result; do not pad.
 
 ## Report
 
-Write only the report file named in your task:
+Write only the report file named in your task. It starts with `## Summary`, **at most 25 lines**: the conductor
+reads only this unless it disputes a finding, and fix tasks cite your finding IDs instead of restating them.
 1. Verdict: `PASS` / `PASS-WITH-NITS` / `CHANGES-REQUIRED`.
-2. Findings table, ranked by severity: `Sev (blocker/major/minor/nit) | path:line | problem | fix`.
-3. What you checked and found fine (short), and anything unverified.
+2. Findings table, ranked by severity, with stable IDs (`C1`, `C2`, …):
+   `ID | Sev (blocker/major/minor/nit) | path:line | problem (one line)`.
+3. One line for anything unverified.
+Then `## Details`: per finding ID, the evidence and the fix; then what you checked and found fine (short).
 Last line: the sentinel given at the end of your task, written only after the report is finished.

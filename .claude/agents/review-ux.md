@@ -53,11 +53,14 @@ Read these before judging. Project authority beats generic taste.
 2. **Scenarios:**
    - take at most three from the task;
    - add **one exploratory scenario** you choose from the issue and the spec, **inside the touched flow** (the
-     routes the task lists, the same task the actor is doing). You share the conductor's model family, so do not
-     inherit the brief's blind spots;
+     routes the task lists, the same task the actor is doing), so you do not inherit the brief's blind spots;
    - when the task names a restricted persona, repeat the permission-sensitive scenario as that persona.
 3. **Browser:**
-   - Load the `ego-browser` skill (Skill tool) and use **one** task space for the whole review.
+   - Load the `ego-browser` skill (Skill tool) and use **one** task space for the whole review. Drive **Ego Lite
+     through that skill only**, never a built-in browser or computer-use tool (s81: a codex run that tried those
+     failed with `Unable to load browser request-header policy`). If the skill cannot reach Ego Lite (`Failed to
+     connect to ego_cli bootstrap`), write "browser blocked" at the top of the report with the error and end; the
+     conductor probes the bridge and relaunches you.
    - Run each `ego-browser nodejs` call as its own Bash command, with no `;` or `&&` chain. Every command is checked
      against your allowlist, and one disallowed part rejects the whole line. The screenshot directory already
      exists.
@@ -132,10 +135,13 @@ Read these before judging. Project authority beats generic taste.
 
 ## Report
 
+It starts with `## Summary`, **at most 25 lines**; the conductor reads only this unless it disputes a finding:
 1. Verdict: `PASS` / `PASS-WITH-NITS` / `CHANGES-REQUIRED`.
-2. Findings table, most severe first:
-   `Sev | new/pre-existing/owner-question | where (route · state; file:line when known) | problem | fix`
-   (for `pre-existing`, the fix-size and owner-decision facts in the fix column), then the `Noticed:` line.
-3. Scenarios run (× build, × persona) and what was fine, then what you could not check and why.
+2. Findings table, most severe first, with IDs (`UX-1`, `UX-2`, …):
+   `ID | Sev | new/pre-existing/owner-question | where (route · state) | problem (one line)`, then the `Noticed:`
+   line.
+Then `## Details`: per finding ID, steps, expected vs actual, screenshot, file:line when known and the fix (for
+`pre-existing`, the fix-size and owner-decision facts); then scenarios run (× build, × persona) and what was fine,
+then what you could not check and why.
 
 The last line is the sentinel from your task, written only when the report is complete.

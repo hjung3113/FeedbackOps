@@ -72,8 +72,11 @@ You run in a disposable worktree detached at `origin/develop`, never the owner's
 
 ## Report
 
+It starts with `## Summary`, **at most 25 lines**; the conductor reads only this unless it disputes a finding:
 1. Verdict: `PASS` / `PASS-WITH-NITS` / `CHANGES-REQUIRED` (`CHANGES-REQUIRED` only for a release-blocker).
-2. Findings table: `Class | Sev | path:line | problem | fix`, ordered release-blocker → fix-in-slice → follow-up.
-3. What you checked and found fine, and what you did not cover.
+2. Findings table with IDs (`Q1`, `Q2`, …): `ID | Class | Sev | path:line | problem (one line)`, ordered
+   release-blocker → fix-in-slice → follow-up.
+Then `## Details`: per finding ID, the evidence and the fix; then what you checked and found fine, and what you did
+not cover.
 
 The last line is the sentinel from your task, written only after the report is complete.

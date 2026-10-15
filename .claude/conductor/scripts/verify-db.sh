@@ -4,7 +4,7 @@
 set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-SCRIPT_ROOT=$(cd -- "$SCRIPT_DIR/../../../.." && pwd)
+SCRIPT_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd)
 ROOT=${VERIFY_DB_ROOT:-$SCRIPT_ROOT}
 CONTAINER=fops-verify
 DB_HOST=localhost
