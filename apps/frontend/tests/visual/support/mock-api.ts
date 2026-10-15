@@ -1,3 +1,4 @@
+import { vocOwnerCandidatesSchema } from '@fops/shared';
 import type { Page } from '@playwright/test';
 import {
   populatedInboxNotifications,
@@ -24,7 +25,7 @@ import {
   createPermissionRequestHandlers,
 } from './mock-api/permissions';
 import { createSavedViewHandlers } from './mock-api/saved-views';
-import { matchMockApiHandler } from './mock-api/shared';
+import { json, matchMockApiHandler } from './mock-api/shared';
 import {
   createSurveyActorHandlers,
   createSurveyHandlers,
@@ -40,6 +41,8 @@ import {
 
 export type { InstalledMockApi, RoleLevel } from './mock-api/types';
 export { parsePermissionDecisionBody } from './mock-api/permissions';
+
+const ownerCandidates = vocOwnerCandidatesSchema.parse({ actors: [] });
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
 
@@ -88,6 +91,11 @@ export async function installMockApi(
 
   // Array order is the first-match precedence from the original handler chain.
   const handlers = [
+    {
+      method: 'GET',
+      path: /^\/vocs\/[^/]+\/owner-candidates$/,
+      handle: (route: import('@playwright/test').Route) => json(route, 200, ownerCandidates),
+    },
     ...createCommonHandlers(context),
     ...createDashboardHandlers(context),
     ...createMilestoneHandlers(context),

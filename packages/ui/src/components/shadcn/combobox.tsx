@@ -37,6 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover.js';
 export interface ComboboxOption {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 export interface ComboboxProps {
@@ -109,11 +110,20 @@ export function Combobox({
       : undefined;
 
   function selectOption(option: ComboboxOption) {
+    if (option.disabled) return;
     onChange(option.value);
     setOpen(false);
     setSearch('');
     onSearchChange?.('');
     setActiveIndex(-1);
+  }
+
+  function nextEnabledIndex(from: number, direction: 1 | -1): number {
+    for (let step = 1; step <= filtered.length; step += 1) {
+      const index = (from + direction * step + filtered.length) % filtered.length;
+      if (!filtered[index]?.disabled) return index;
+    }
+    return -1;
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -122,22 +132,22 @@ export function Combobox({
     switch (e.key) {
       case 'ArrowDown': {
         e.preventDefault();
-        setActiveIndex((prev) => (prev + 1 < filtered.length ? prev + 1 : 0));
+        setActiveIndex((prev) => nextEnabledIndex(prev, 1));
         break;
       }
       case 'ArrowUp': {
         e.preventDefault();
-        setActiveIndex((prev) => (prev - 1 >= 0 ? prev - 1 : filtered.length - 1));
+        setActiveIndex((prev) => nextEnabledIndex(prev < 0 ? 0 : prev, -1));
         break;
       }
       case 'Home': {
         e.preventDefault();
-        setActiveIndex(0);
+        setActiveIndex(nextEnabledIndex(-1, 1));
         break;
       }
       case 'End': {
         e.preventDefault();
-        setActiveIndex(filtered.length - 1);
+        setActiveIndex(nextEnabledIndex(0, -1));
         break;
       }
       case 'Enter': {
@@ -166,7 +176,7 @@ export function Combobox({
     ) {
       e.preventDefault();
       setOpen(true);
-      setActiveIndex(0);
+      setActiveIndex(nextEnabledIndex(-1, 1));
     }
   }
 
@@ -244,14 +254,18 @@ export function Combobox({
                 // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <li role="option"> is canonical ARIA listbox option per APG §combobox
                 role="option"
                 aria-selected={option.value === value}
+                aria-disabled={option.disabled || undefined}
                 tabIndex={-1}
                 className={cn(
                   'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-text-primary outline-hidden',
                   'hover:bg-surface-card focus:bg-surface-card',
                   option.value === value && 'font-medium',
                   activeIndex === idx && 'bg-surface-card',
+                  option.disabled && 'cursor-not-allowed opacity-50',
                 )}
-                onMouseEnter={() => setActiveIndex(idx)}
+                onMouseEnter={() => {
+                  if (!option.disabled) setActiveIndex(idx);
+                }}
                 onClick={() => selectOption(option)}
               >
                 <Check

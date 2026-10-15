@@ -109,8 +109,10 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | `<TriageQueueRow>` (expanded 96px row) | `<TriageRow>` in `features/voc/components/triage/` | none | `voc: TriageQueueItem`, `selected`, `onSelect` | default · selected · stale (when optimistic-removed elsewhere) |
 | `<TriagePanel>` | `<TriagePanel>` in `features/voc/components/triage/` | shadcn `<RadioGroup>` for severity, `<Button>` ghost for cluster decision | `voc: VocDetail`, `onAct: (kind: 'confirm' \| 'finding' \| 'skip') => void` | dirty · clean · submitting (button spinner) |
 | Severity picker grid | `<SeverityPicker>` in `features/voc/components/triage/` | shadcn `<ToggleGroup>` | `value`, `onChange`, `disabled?` | 4 options, color bar per option |
-| Owner picker rows | `<OwnerPicker>` in `features/voc/components/triage/` | shadcn `<Combobox>` (when count > 5) or `<RadioGroup>` rows | `candidates: ActorChoice[]`, `value: string \| null`, `onChange`, `loadMore?` | default · loading suggestions · empty |
+| Owner picker rows | `<OwnerPicker>` in `features/voc/components/triage/` | shadcn `<Combobox>` (when count > 5) or `<RadioGroup>` rows | `candidates: OwnerCandidate[]`, `value: string \| null`, `onChange`, `loadMore?` | default · loading suggestions · empty |
 | Triage undo toast | `<UndoToast>` in `packages/ui/src/feedback/` | shadcn `<Toast>` from `sonner` (per `apps/frontend/AGENTS.md` "use installed libraries" rule) | `message`, `actionLabel: '실행 취소'`, `onAction`, `duration: 4000` | visible · dismissing · paused — `duration` counts active time only: keyboard focus anywhere inside the sonner toast (its `<li data-sonner-toast>` wrapper included) or pointer over the card pauses it, and resume continues with the remaining time; a `duration` change restarts the full budget; Escape while focus is inside the toast dismisses it |
+
+Actor candidates come from schema-parsed `GET /vocs/:id/owner-candidates`, requiring effective `voc.triage` and `voc.read` for the VOC Managed System. Retained ineligible current owners are labelled with the Admin registry ineligible copy and disabled in both picker branches. Teams keep their existing source; explicit unassign remains available. Owner 422 races use the existing originating-VOC restore/reselect and toast path, without draft field-error state.
 
 ### 3.4 Create form
 

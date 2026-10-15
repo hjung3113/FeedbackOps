@@ -15,6 +15,7 @@
  * Decision D-2.3: "(미지정)" maps to { ownerUserId: null, ownerTeamId: null }.
  */
 
+import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
 import { Combobox, UserAvatar, cn } from '@fops/ui';
 import { Check } from 'lucide-react';
 import type * as React from 'react';
@@ -26,6 +27,7 @@ export interface OwnerCandidate {
   id: string;
   display_name: string;
   kind: 'user' | 'team';
+  eligible?: boolean;
   /** Optional meta description line, e.g. "담당 시스템: Tableau Revenue · 대기 4건" */
   meta?: string;
 }
@@ -37,7 +39,7 @@ export interface OwnerValue {
 
 export interface OwnerPickerProps {
   candidates: OwnerCandidate[];
-  value: string | null;  // selected actor id (user or team), or null for 미지정
+  value: string | null; // selected actor id (user or team), or null for 미지정
   onChange: (value: OwnerValue) => void;
   disabled?: boolean;
 }
@@ -55,7 +57,6 @@ export function OwnerPicker({
   onChange,
   disabled = false,
 }: OwnerPickerProps): React.ReactElement {
-
   function toOwnerValue(candidateId: string | null): OwnerValue {
     if (candidateId === null || candidateId === UNASSIGNED_ID) {
       return { ownerUserId: null, ownerTeamId: null };
@@ -67,11 +68,21 @@ export function OwnerPicker({
       : { ownerUserId: actor.id, ownerTeamId: null };
   }
 
+  function candidateLabel(candidate: OwnerCandidate): string {
+    return candidate.eligible === false
+      ? `${candidate.display_name} · ${MANAGED_SYSTEM_COPY.categories.ineligible_actor}`
+      : candidate.display_name;
+  }
+
   // Combobox mode (>5 candidates)
   if (candidates.length > COMBOBOX_THRESHOLD) {
     const options = [
       { value: UNASSIGNED_ID, label: '(미지정)' },
-      ...candidates.map((c) => ({ value: c.id, label: c.display_name })),
+      ...candidates.map((c) => ({
+        value: c.id,
+        label: candidateLabel(c),
+        disabled: c.eligible === false,
+      })),
     ];
 
     return (
@@ -96,7 +107,9 @@ export function OwnerPicker({
         id={UNASSIGNED_ID}
         displayName="(미지정)"
         isActive={value === null}
-        onClick={() => { onChange({ ownerUserId: null, ownerTeamId: null }); }}
+        onClick={() => {
+          onChange({ ownerUserId: null, ownerTeamId: null });
+        }}
         disabled={disabled}
       />
 
@@ -104,12 +117,14 @@ export function OwnerPicker({
         <OwnerRow
           key={actor.id}
           id={actor.id}
-          displayName={actor.display_name}
+          displayName={candidateLabel(actor)}
           meta={actor.meta}
           isActive={value === actor.id}
           user={actor.kind === 'user' ? { display_name: actor.display_name } : undefined}
-          onClick={() => { onChange(toOwnerValue(actor.id)); }}
-          disabled={disabled}
+          onClick={() => {
+            onChange(toOwnerValue(actor.id));
+          }}
+          disabled={disabled || actor.eligible === false}
         />
       ))}
     </div>

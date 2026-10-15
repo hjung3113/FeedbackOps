@@ -5,7 +5,7 @@ Frontend docs translate product intent into implementable UI contracts.
 Surface specs live under `docs/frontend/specs/`:
 
 - `docs/frontend/specs/voc.md`: as-built VOC surface spec. API authority is `docs/implementation/api/voc.md`.
-- `docs/frontend/specs/actors.md`: the `GET /actors` workspace actor list contract, used by the Triage owner picker.
+- `docs/frontend/specs/actors.md`: the general `GET /actors` workspace identity list contract. Triage owner candidates follow `docs/implementation/api/voc.md`.
 
 The user-facing mirror of these surfaces is `docs/USER-MANUAL.md` (text) and `docs/user-guide/README.md` (interactive guide); the two are updated together.
 

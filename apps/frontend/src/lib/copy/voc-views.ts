@@ -21,3 +21,5 @@ export const VOC_INBOX_NO_LINK_TAB_LABEL = GLOSSARY.noLink;
 
 export const VOC_POSTPONE_INVALID_STATE_LABEL = '미분류 VOC만 보류할 수 있습니다.';
 export const VOC_ALREADY_POSTPONED_LABEL = '이미 보류된 VOC입니다.';
+
+export const VOC_OWNER_FAILURE_PREFIX = '담당자를 배정할 수 없습니다.';

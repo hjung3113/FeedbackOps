@@ -11,6 +11,7 @@ import { cleanupResponsibilityFailures } from '../../../test-support/responsibil
 // runs but skips audit-log assertions gracefully (matches POST suite).
 
 import { randomUUID } from 'node:crypto';
+import { vocOwnerCandidatesSchema } from '@fops/shared';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -19,11 +20,18 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { insertActorRow } from '../../../test-support/actor-fixtures.js';
+import { insertMsDirectly, insertTeamDirectly } from '../../../test-support/core-fixtures.js';
 import {
   denyCapability,
   expireCapabilityGrant,
+  grantCapability,
   revokeCapabilityGrant,
 } from '../../../test-support/permissions-fixtures.js';
+import {
+  cleanupTestActorsByExternalIdPrefix,
+  insertVocDirectly,
+} from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -2133,5 +2141,399 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       ...Array(10).fill(422),
       429,
     ]);
+  });
+});
+
+describe.skipIf(!runIntegration)('VOC actionable ownership (#1172)', () => {
+  const PREFIX = 'it-1172-owner';
+  const rejected = [
+    ['reporter', 'ineligible_actor'],
+    ['system', 'ineligible_actor'],
+    ['otherScope', 'ineligible_actor'],
+    ['triageOnly', 'ineligible_actor'],
+    ['expired', 'ineligible_actor'],
+    ['deniedAdmin', 'ineligible_actor'],
+    ['missing', 'foreign_workspace'],
+    ['foreign', 'foreign_workspace'],
+  ] as const;
+
+  let handle: DbHandle;
+  let migrate: DbHandle;
+  let app: FastifyInstance;
+  let ms: string;
+  let otherMs: string;
+  let foreignWorkspace: string;
+  let team: string;
+  let cookie: string;
+  let reporterCookie: string;
+  let triageOnlyCookie: string;
+  let unrelatedCookie: string;
+  const ids: Record<string, string> = { missing: randomUUID() };
+  const vocIds: string[] = [];
+
+  function requestHeaders(session = cookie) {
+    return { cookie: `${SESSION_COOKIE_NAME}=${session}`, 'idempotency-key': randomUUID() };
+  }
+  async function fixture(ownerUserId?: string) {
+    const voc = await insertVocDirectly(
+      handle,
+      WORKSPACE_ID,
+      ms,
+      ids.reporter as string,
+      '1172 ownership',
+      ownerUserId ? { ownerUserId } : {},
+    );
+    vocIds.push(voc.id);
+    return { ...voc, updated_at: new Date(voc.updated_at).toISOString() };
+  }
+  function create(owner: Record<string, unknown> = {}) {
+    return app.inject({
+      method: 'POST',
+      url: '/vocs',
+      headers: requestHeaders(),
+      payload: {
+        primary_managed_system_id: ms,
+        title: '1172 create',
+        description_rich_content: paragraphDoc('Actionable ownership'),
+        ...owner,
+      },
+    });
+  }
+  async function rememberCreated(response: Awaited<ReturnType<typeof create>>) {
+    expect(response.statusCode, response.body).toBe(201);
+    vocIds.push(response.json().id);
+    return response.json();
+  }
+  async function state(vocId: string) {
+    const row = await handle.pool.query('select * from voc.vocs where id=$1', [vocId]);
+    const audit = await migrate.pool.query(
+      'select * from core.audit_log where subject_id=$1 order by id',
+      [vocId],
+    );
+    return { row: row.rows, audit: audit.rows };
+  }
+  async function patch(voc: { id: string; updated_at: string }, payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/vocs/${voc.id}`,
+      headers: { ...requestHeaders(), 'if-match': voc.updated_at },
+      payload,
+    });
+  }
+  function candidates(vocId: string, session = cookie) {
+    return app.inject({
+      method: 'GET',
+      url: `/vocs/${vocId}/owner-candidates`,
+      headers: requestHeaders(session),
+    });
+  }
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'test';
+    handle = createDb(APP_URL);
+    migrate = createDb(MIGRATE_URL);
+    app = await buildServer({ config: loadConfig(), dbHandle: handle });
+    await app.ready();
+    for (const [name, roleLevel] of [
+      ['admin', 'admin'],
+      ['reporter', 'user'],
+      ['system', 'admin'],
+      ['otherScope', 'developer'],
+      ['triageOnly', 'developer'],
+      ['expired', 'developer'],
+      ['deniedAdmin', 'admin'],
+      ['eligibleDev', 'developer'],
+      ['unrelated', 'user'],
+    ] as const) {
+      ids[name] = (
+        await insertActorRow(handle, {
+          workspaceId: WORKSPACE_ID,
+          externalId: `${PREFIX}-${name}`,
+          roleLevel,
+        })
+      ).id;
+    }
+    await migrate.pool.query("update core.actors set actor_type='system' where id=$1", [
+      ids.system,
+    ]);
+    cookie = await loginAs(app, `${PREFIX}-admin`);
+    reporterCookie = await loginAs(app, `${PREFIX}-reporter`);
+    triageOnlyCookie = await loginAs(app, `${PREFIX}-triageOnly`);
+    unrelatedCookie = await loginAs(app, `${PREFIX}-unrelated`);
+    ms = await insertMsDirectly(handle, WORKSPACE_ID, `${PREFIX}-a`, '1172 A');
+    otherMs = await insertMsDirectly(handle, WORKSPACE_ID, `${PREFIX}-b`, '1172 B');
+    team = await insertTeamDirectly(migrate, WORKSPACE_ID, PREFIX);
+    foreignWorkspace = randomUUID();
+    await migrate.pool.query('insert into core.workspaces (id,name) values ($1,$2)', [
+      foreignWorkspace,
+      PREFIX,
+    ]);
+    ids.foreign = (
+      await insertActorRow(handle, {
+        workspaceId: foreignWorkspace,
+        externalId: `${PREFIX}-foreign`,
+        roleLevel: 'admin',
+      })
+    ).id;
+    for (const [name, scope] of [
+      ['eligibleDev', ms],
+      ['expired', ms],
+      ['otherScope', otherMs],
+    ] as const) {
+      for (const capability of ['voc.read', 'voc.triage']) {
+        const grant = await grantCapability(
+          handle,
+          WORKSPACE_ID,
+          ids[name] as string,
+          capability,
+          scope,
+          ids.admin as string,
+        );
+        if (name === 'expired' && capability === 'voc.triage')
+          await expireCapabilityGrant(handle, grant);
+      }
+    }
+    await grantCapability(
+      handle,
+      WORKSPACE_ID,
+      ids.triageOnly as string,
+      'voc.triage',
+      ms,
+      ids.admin as string,
+    );
+    await denyCapability(
+      handle,
+      WORKSPACE_ID,
+      ids.deniedAdmin as string,
+      'voc.read',
+      ms,
+      ids.admin as string,
+    );
+  });
+
+  beforeEach(async () => {
+    // Rate-limit keys are `<workspace_id>:<actor_id>` (server.ts keyGenerator).
+    await handle.pool.query('delete from core.rate_limits where key=any($1::text[])', [
+      Object.values(ids).map((id) => `${WORKSPACE_ID}:${id}`),
+    ]);
+  });
+
+  afterAll(async () => {
+    await handle.pool.query('delete from voc.vocs where id=any($1::uuid[])', [vocIds]);
+    await migrate.pool.query('delete from core.notifications where actor_id=any($1::uuid[])', [
+      Object.values(ids),
+    ]);
+    await handle.pool.query(
+      'update core.managed_systems set default_owner_actor_id=null where id=$1',
+      [ms],
+    );
+    // Grants and denies reference the suite's Managed Systems.
+    await handle.pool.query(
+      'delete from permission.permission_grants where actor_id=any($1::uuid[])',
+      [Object.values(ids)],
+    );
+    await handle.pool.query(
+      'delete from permission.permission_denies where actor_id=any($1::uuid[])',
+      [Object.values(ids)],
+    );
+    await deleteRecoveryFixtureParents(
+      handle,
+      'delete from core.managed_systems where id=any($1::uuid[])',
+      [[ms, otherMs]],
+    );
+    await migrate.pool.query('delete from core.teams where id=$1', [team]);
+    await cleanupTestActorsByExternalIdPrefix(handle, WORKSPACE_ID, PREFIX);
+    await cleanupTestActorsByExternalIdPrefix(handle, foreignWorkspace, PREFIX);
+    await deleteRecoveryFixtureParents(migrate, 'delete from core.workspaces where id=$1', [
+      foreignWorkspace,
+    ]);
+    await app.close();
+    await handle.close();
+    await migrate.close();
+  });
+
+  it.each(rejected)(
+    'rejects %s on PATCH and explicit create atomically (%s)',
+    async (name, code) => {
+      const voc = await fixture();
+      const before = await state(voc.id);
+      const response = await patch(voc, {
+        owner_user_id: ids[name],
+        severity: 'high',
+        triage_state: 'triaged',
+      });
+      expect(response.statusCode, response.body).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: {
+          fields: [{ path: ['owner_user_id'], code }],
+        },
+      });
+      expect(await state(voc.id)).toEqual(before);
+      const created = await create({ owner_user_id: ids[name] });
+      expect(created.statusCode, created.body).toBe(422);
+      expect(created.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: {
+          fields: [{ path: ['owner_user_id'], code }],
+        },
+      });
+    },
+  );
+
+  // A nonexistent UUID cannot be stored as an MS default (FK); all storable rejected actors are covered.
+  it.each(rejected.filter(([name]) => name !== 'missing'))(
+    'falls back and diagnoses the configured %s default',
+    async (name, category) => {
+      await handle.pool.query(
+        'update core.managed_systems set default_owner_actor_id=$1 where id=$2',
+        [ids[name], ms],
+      );
+      try {
+        const before = await migrate.pool.query(
+          'select id from core.responsibility_default_failures where managed_system_id=$1',
+          [ms],
+        );
+        const created = await rememberCreated(await create());
+        expect(created).toMatchObject({
+          owner_user_id: null,
+          owner_team_id: null,
+          default_resolved: false,
+          source_rule: 'workspace_fallback_queue',
+        });
+        const diagnostics = await migrate.pool.query(
+          'select id,rule,category from core.responsibility_default_failures where managed_system_id=$1',
+          [ms],
+        );
+        expect(
+          diagnostics.rows.filter((row) => !before.rows.some((old) => old.id === row.id)),
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ rule: 'managed_system_owner', category }),
+          ]),
+        );
+      } finally {
+        await handle.pool.query(
+          'update core.managed_systems set default_owner_actor_id=null where id=$1',
+          [ms],
+        );
+      }
+    },
+  );
+
+  it.each(['eligibleDev', 'admin', 'team', 'unassign'] as const)(
+    'accepts %s on PATCH and explicit create',
+    async (name) => {
+      const owner = {
+        owner_user_id: name === 'team' || name === 'unassign' ? null : ids[name],
+        owner_team_id: name === 'team' ? team : null,
+      };
+      const voc = await fixture(ids.reporter);
+      const response = await patch(voc, owner);
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json()).toMatchObject(owner);
+      expect(await rememberCreated(await create(owner))).toMatchObject(owner);
+    },
+  );
+
+  it.each(['eligibleDev', 'admin', 'team'] as const)(
+    'resolves an eligible %s automatic default',
+    async (name) => {
+      await handle.pool.query(
+        'update core.managed_systems set default_owner_actor_id=$1,default_owner_team_id=$2 where id=$3',
+        [name === 'team' ? null : ids[name], name === 'team' ? team : null, ms],
+      );
+      try {
+        expect(await rememberCreated(await create())).toMatchObject({
+          owner_user_id: name === 'team' ? null : ids[name],
+          owner_team_id: name === 'team' ? team : null,
+          default_resolved: true,
+          source_rule: 'managed_system_owner',
+        });
+      } finally {
+        await handle.pool.query(
+          'update core.managed_systems set default_owner_actor_id=null,default_owner_team_id=null where id=$1',
+          [ms],
+        );
+      }
+    },
+  );
+
+  it('allows unrelated severity edits without revalidating historical ownership', async () => {
+    const voc = await fixture(ids.reporter);
+    const response = await patch(voc, { severity: 'high' });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({ severity: 'high', owner_user_id: ids.reporter });
+  });
+
+  it('lists the eligible fixture actors, retains an ineligible current owner, and writes nothing', async () => {
+    const voc = await fixture(ids.reporter);
+    const before = await state(voc.id);
+    const response = await candidates(voc.id);
+    expect(response.statusCode, response.body).toBe(200);
+    const body = vocOwnerCandidatesSchema.parse(response.json());
+    // Scope exactness to this suite's fixtures: other suites also create workspace Actors.
+    expect(body.actors.filter((actor) => Object.values(ids).includes(actor.id))).toEqual(
+      expect.arrayContaining([
+        { id: ids.admin, display_name: `${PREFIX}-admin`, eligible: true },
+        { id: ids.eligibleDev, display_name: `${PREFIX}-eligibleDev`, eligible: true },
+        { id: ids.reporter, display_name: `${PREFIX}-reporter`, eligible: false },
+      ]),
+    );
+    expect(
+      body.actors
+        .filter((actor) => Object.values(ids).includes(actor.id))
+        .map((actor) => actor.id)
+        .sort(),
+    ).toEqual([ids.admin, ids.eligibleDev, ids.reporter].sort());
+    expect(response.body).not.toContain('email');
+    expect(await state(voc.id)).toEqual(before);
+  });
+
+  it('retains a historical System owner disabled without listing other ineligible actors', async () => {
+    const voc = await fixture(ids.system);
+    const response = await candidates(voc.id);
+    expect(response.statusCode).toBe(200);
+    expect(vocOwnerCandidatesSchema.parse(response.json()).actors).toContainEqual({
+      id: ids.system,
+      display_name: `${PREFIX}-system`,
+      eligible: false,
+    });
+  });
+
+  it('matches PATCH denial for a visible reporter without triage; hides unreadable VOCs', async () => {
+    const voc = await fixture();
+    const response = await candidates(voc.id, reporterCookie);
+    const deniedPatch = await app.inject({
+      method: 'PATCH',
+      url: `/vocs/${voc.id}`,
+      headers: { ...requestHeaders(reporterCookie), 'if-match': voc.updated_at },
+      payload: { severity: 'low' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      code: deniedPatch.json().code,
+      detail: deniedPatch.json().detail,
+    });
+    const developerCookie = await loginAs(app, `${PREFIX}-expired`);
+    const developerDenied = await candidates(voc.id, developerCookie);
+    const developerDeniedPatch = await app.inject({
+      method: 'PATCH',
+      url: `/vocs/${voc.id}`,
+      headers: { ...requestHeaders(developerCookie), 'if-match': voc.updated_at },
+      payload: { severity: 'low' },
+    });
+    expect(developerDenied.statusCode).toBe(403);
+    expect(developerDeniedPatch.statusCode).toBe(403);
+    expect(developerDenied.json()).toMatchObject({
+      code: 'permission.scope_required',
+      detail: developerDeniedPatch.json().detail,
+    });
+    expect(developerDenied.json().detail.requiredScope).toEqual([ms]);
+    const hidden = await candidates(voc.id, unrelatedCookie);
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json().code).toBe('not_found.record');
+    // Detail's summary-visible triage-only arm stays visible and can use the picker.
+    expect((await candidates(voc.id, triageOnlyCookie)).statusCode).toBe(200);
   });
 });

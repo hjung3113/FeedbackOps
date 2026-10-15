@@ -23,18 +23,19 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
   // can never disagree with the VOC detail read. Throws `not_found.record` when
   // the actor may not see the VOC at all (existence is not revealed).
 
-  async function resolveVocAccess(args: { actor: ReadActorContext; vocId: string }) {
+  async function resolveVocAccess(args: { actor: ReadActorContext; vocId: string; tx?: Tx }) {
     const { actor, vocId } = args;
+    const db = args.tx ?? deps.db;
 
     // ── 1. Fetch VOC ────────────────────────────────────────────────────────
-    const row = await repoRead.selectVocByIdForRead(deps.db, actor.workspace_id, vocId);
+    const row = await repoRead.selectVocByIdForRead(db, actor.workspace_id, vocId);
     if (!row) throw new HttpError('not_found.record', 'VOC not found');
 
     // ── 2. Resolve scopes in parallel ───────────────────────────────────────
     const [readScope, effectiveScope, triageScope] = await Promise.all([
-      actorReadScope(deps.db, actor),
-      actorEffectiveScope(deps.db, actor),
-      actorTriageScope(deps.db, actor),
+      actorReadScope(db, actor),
+      actorEffectiveScope(db, actor),
+      actorTriageScope(db, actor),
     ]);
 
     // ── 3. Compute access flags ──────────────────────────────────────────────

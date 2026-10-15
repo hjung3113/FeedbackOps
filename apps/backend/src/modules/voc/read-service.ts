@@ -19,6 +19,7 @@ import type { CheckService } from '../permissions/check-service.js';
 import { createVocConversationReader } from './read/conversation.js';
 import { createVocDetailReaders } from './read/detail.js';
 import { createVocListReaders } from './read/list.js';
+import { createVocOwnerCandidatesReader } from './read/owner-candidates.js';
 import { createVocReferenceReader } from './read/reference.js';
 
 // ── Public interface ─────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     countVocs: listReaders.countVocs,
     countGroupedVocs: listReaders.countGroupedVocs,
     getVocDetail: detailReaders.getVocDetail,
+    getOwnerCandidates: createVocOwnerCandidatesReader(deps, detailReaders.resolveVocAccess),
     resolveVocReference: referenceReader.resolveVocReference,
     resolveDisplayId: detailReaders.resolveVocDisplayId,
     getConversation: conversationReader.getConversation,

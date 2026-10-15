@@ -32,7 +32,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment; `RichContentRenderer size=sm` | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
 | Select | single, multi; `SelectTrigger appearance=canvas`, `appearance=field`, `density=compact` | focus, disabled, invalid, loading | keyboard navigable |
 | DatePicker | typed date, calendar; `appearance=detail` | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
-| Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
+| Combobox | user, analytics-area, entity | focus, empty, loading, error, disabled option | keyboard navigable; disabled options are labelled, `aria-disabled`, skipped by keyboard and cannot be selected |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented; `spacing=compact` | focus, selected, disabled | group label required |
 | TabsList / TabsTrigger | default | focus, selected, disabled | keyboard navigable; Tabs semantics preserved |
