@@ -58,6 +58,8 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     analyticsAreasById,
     linkedVocTitle,
     linkedVocDisplayId,
+    linkedClusterTitle,
+    linkedClusterDisplayId,
     linkedTaskQuery,
     canManage,
     handleMarkNotActionable,
@@ -163,7 +165,12 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           {/* Linked VOC — why this Finding exists */}
           <div data-anchor="links" className="flex flex-col gap-2">
             <PanelSectionTitle>연결된 VOC / Task</PanelSectionTitle>
-            <FieldRow label={GLOSSARY.linkedVoc} inset="none">
+            <FieldRow
+              label={
+                finding.source_type === 'voc_cluster' ? GLOSSARY.linkedCluster : GLOSSARY.linkedVoc
+              }
+              inset="none"
+            >
               {finding.source_type === 'voc' && finding.source_id !== null ? (
                 <Link
                   to="/vocs"
@@ -173,6 +180,21 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                   <span>{linkedVocTitle ?? GLOSSARY.linkedVoc}</span>
                   <span className="font-mono text-xs text-text-muted">
                     {linkedVocDisplayId ?? shortId(finding.source_id)}
+                  </span>
+                </Link>
+              ) : finding.source_type === 'voc_cluster' &&
+                finding.source_id !== null &&
+                linkedClusterDisplayId !== null ? (
+                // #1174b U2-2: named only after an authorized Cluster read succeeds;
+                // a denied or not-found read renders the safe placeholder below.
+                <Link
+                  to="/voc-clusters/$clusterId"
+                  params={{ clusterId: finding.source_id }}
+                  className="inline-flex items-center gap-1.5 text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
+                >
+                  <span>{linkedClusterTitle ?? GLOSSARY.linkedCluster}</span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {linkedClusterDisplayId}
                   </span>
                 </Link>
               ) : (

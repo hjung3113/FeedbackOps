@@ -5,6 +5,7 @@ import {
 } from '@/lib/copy/enum-labels';
 import type { EvidenceHighlightDto } from '@fops/shared';
 import { EmptyState, SkeletonBlocks } from '@fops/ui';
+import { Link } from '@tanstack/react-router';
 import type * as React from 'react';
 import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
 import { FitBadge } from './detail-primitives';
@@ -25,7 +26,8 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
       data-testid="evidence-highlight-row"
       data-evidence-id={highlight.id}
     >
-      {/* Source reference */}
+      {/* Source reference (#1174b U2-6: a readable VOC source is named by its
+          display id and links to the VOC; never a UUID fragment). */}
       <div className="flex items-center gap-2 flex-wrap">
         <FitBadge data-testid="evidence-source-type">
           {EVIDENCE_SOURCE_TYPE_LABELS[highlight.source_type]}
@@ -33,11 +35,25 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
         {highlight.source_type === 'survey_response' && highlight.source_meta && (
           <span className="text-xs text-text-muted">{highlight.source_meta}</span>
         )}
-        {highlight.source_type !== 'survey_response' && highlight.source_id !== null && (
-          <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
-            {highlight.source_id.slice(0, 8)}
-          </span>
-        )}
+        {highlight.source_type === 'voc' &&
+          highlight.source_meta &&
+          highlight.source_id !== null && (
+            <Link
+              to="/vocs"
+              search={{ view: 'inbox', selected: highlight.source_id }}
+              className="text-xs font-mono text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
+              data-testid="evidence-source-id"
+            >
+              {highlight.source_meta}
+            </Link>
+          )}
+        {highlight.source_type !== 'survey_response' &&
+          highlight.source_type !== 'voc' &&
+          highlight.source_id !== null && (
+            <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
+              {highlight.source_id.slice(0, 8)}
+            </span>
+          )}
         {highlight.sentiment !== null && (
           <FitBadge data-testid="evidence-sentiment">
             {EVIDENCE_SENTIMENT_LABELS[highlight.sentiment]}
