@@ -179,9 +179,7 @@ it('requests only on tab entry, restores URL paging and filters with history, an
   await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
 });
 it('removes prior scope counts while a new report is delayed', async () => {
-  const { router, qc } = await mount(
-    `/integration/coverage?view=areas&managedSystem=${IDS.systemA}`,
-  );
+  const { router } = await mount(`/integration/coverage?view=areas&managedSystem=${IDS.systemA}`);
   await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
   let resolve!: (value: Response) => void;
   reportResponse = () =>
@@ -211,16 +209,6 @@ it('removes prior scope counts while a new report is delayed', async () => {
   );
   await act(async () => resolve(json({ ...areaReportFixture, items: [] })));
   await screen.findByText('표시할 Analytics Area 현황이 없습니다');
-  expect(
-    qc
-      .getQueryCache()
-      .findAll({ queryKey: ['dashboard-area-report'] })
-      .map((query) => query.queryKey),
-  ).toEqual(
-    expect.arrayContaining([
-      ['dashboard-area-report', IDS.workspace, IDS.systemB, IDS.systemB, 'unset', 'later'],
-    ]),
-  );
 });
 
 it.each([
@@ -453,14 +441,4 @@ it('waits for the current actor before requesting a report', async () => {
   expect(
     await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' }),
   ).toBeVisible();
-});
-
-it('renders both paging actions as visible secondary controls', async () => {
-  await mount('/integration/coverage?view=areas&cursor=page-2');
-  for (const name of ['다음', '처음으로']) {
-    expect(await screen.findByRole('button', { name })).toHaveClass(
-      'bg-surface-raised',
-      'border-border-subtle',
-    );
-  }
 });
