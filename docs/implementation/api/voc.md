@@ -80,6 +80,7 @@ itself still succeeds with its normal status; triage never implies read.
 | `POST /vocs/:id/public-updates` | `voc` (detail) | `voc` is the summary |
 | `POST /vocs/:id/internal-comments` | `voc` (detail) | `voc` is the summary |
 | `POST /vocs/:id/apply-public-update-candidate` (apply) | `public_update.voc` (detail) | summary |
+| `POST /vocs/:id/no-follow-up`, `DELETE /vocs/:id/no-follow-up` | detail (internal full readers) | `VocSummaryEnvelope` |
 | `PATCH /vocs/:id` (including the no-op diff) | flat `VocEnvelope` | `VocSummaryEnvelope` |
 | `POST /vocs/:id/reporter-replies` | `voc` (reporter-only write) | unchanged |
 | `PATCH /vocs/:id/description`, `POST /vocs` | flat reporter envelope (#1173) | unchanged |
@@ -100,6 +101,8 @@ GET /vocs
 GET /vocs/pre-submit-peers?managed_system_id=<uuid>
 GET /vocs/:id
 GET /vocs/:id/conversation
+POST /vocs/:id/no-follow-up
+DELETE /vocs/:id/no-follow-up
 PATCH /vocs/:id
 PATCH /vocs/:id/description
 GET /vocs/:id/public-update-candidates
@@ -555,8 +558,9 @@ including resolved/closed VOCs. `tab=unassigned` requires both owner fields null
 `tab=no-task` is the direct active VOC→Task complement, a connection inspection rather than
 mandatory work. `tab=high-no-link` matches high/critical severity and missing canonical expected
 follow-up: no direct or qualifying cluster-origin Finding/Task Request/Task follow-up, using the
-existing shared `buildVocListPredicate` / recovery predicate. No VOC no-follow-up resolution
-storage exists after #1045; #1077 does not introduce it or a second lifecycle. Count each VOC once.
+existing shared `buildVocListPredicate` / recovery predicate. #1226 also excludes a current
+VOC-owned no-follow-up decision from this gap; #1045/#1077 introduced no separate VOC
+resolution lifecycle. Count each VOC once.
 Report links include the source Managed System UUID and Area UUID/unset. Existing Triage's archived
 Managed System exclusions remain; report links use Inbox so retained context is still readable.
 
@@ -734,3 +738,52 @@ Cleanup nulls expired vectors while preserving vector_expires_at, deletes reques
 tombstones only after 24h, and deletes only ended UTC budget windows. New app
 SELECT/INSERT/UPDATE/DELETE grants are confined to these two operational tables;
 invoker triggers deny fops_app DELETE of live tombstones/windows.
+
+
+## Authorized VOC no-follow-up decision (#1226)
+
+`POST /vocs/:id/no-follow-up` records `후속 조치 불필요` with a strict
+`{ reason: string }` body. The raw reason is limited to 2000 characters, trimmed,
+and required to remain nonblank. `DELETE /vocs/:id/no-follow-up` has no body and
+withdraws the current decision; it never physically deletes it and needs no reopen reason.
+Both commands require a UUIDv4 `Idempotency-Key`, use the mutation rate tier,
+and return HTTP 200 with the existing detail-or-summary write-response matrix.
+Replay follows #1196; route, method, subject and parsed input distinguish intents.
+
+Both check workspace ownership and deny-first `voc.triage` inside the transaction.
+An Admin explicit deny returns `permission.denied`; Developer missing, expired or
+revoked grant returns `permission.scope_required` with the existing requestable permission.
+Missing/foreign VOC returns `not_found.record`; archived VOC/parent retains
+`conflict.record_archived`/`conflict.parent_archived`. Authorization precedes
+state-dependent conflict disclosure. POST requires high/critical severity, no
+qualifying active direct or member-Cluster follow-up, and no current decision.
+DELETE requires a current decision. Unavailable actions return HTTP 409
+`conflict.stale_write`, `detail.failure_code=action_no_longer_available`.
+Failures write no decision, source audit or recovery history.
+
+Internal full detail readers receive optional typed `follow_up`:
+`{ decision: null | { decision: 'no_follow_up', reason, actor_id, decided_at },
+can_record: boolean, can_withdraw: boolean }`. Availability includes scoped triage
+permission and archived-parent checks, and uses the canonical follow-up predicate
+without exposing hidden linked identities. GET and composed post-write detail
+use the same projection. Summary and `isReporterArm` omit the entire field;
+`voc.triage` alone grants no full read. The detail UI additionally waits for an
+approved scoped permission check, presents a required-reason dialog, and shows
+current reason, actor, time and withdrawal.
+
+VOC owns `voc.no_follow_up_decisions`: one state row per workspace/VOC, updated
+on record/withdraw; audit events `voc_no_follow_up_recorded` (VOC, actor, reason)
+and `voc_no_follow_up_withdrawn` (VOC, actor) retain history. The workspace recovery
+lock precedes idempotency/capture/source locks. Recording resolves the
+`high-severity-unlinked` occurrence with command evidence. Withdrawal reactivates
+and clears personal hiding only if the current VOC is still an eligible gap;
+a new link, lower severity or archival must not fabricate an active gap.
+
+A current decision clears `no-link`/`high-no-link`, nav counts, Dashboard high
+follow-up coverage, recovery and the Area report's `voc.high_no_followup` through
+the VOC-owned canonical predicate. It changes neither `no-task`/`with_task` nor
+reporter-facing status or unrelated queues. Direct active VOC→Finding/Task/Task
+Request and member-Cluster→Finding/Task Request links still count independently
+of relation, target status and target visibility. Frontend settlement refreshes
+VOC detail/lists, nav, recovery, Dashboard summary and Area reports; drafts and
+keys belong to the selected VOC/scope/action and are discarded on context loss.

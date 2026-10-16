@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { entityLinkDtoSchema, entityLinkTargetSummarySchema } from '../entity-links.js';
 import { LinkedAttachmentSchema } from './attachment.js';
 import { conversationEntrySchema } from './conversation.js';
+import { vocFollowUpStateSchema } from './follow-up-state.js';
 import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
 
 // Postponement is a list-only projection; preserve the existing detail read surface.
 const vocDetailBaseSchema = vocListItemSchema.omit({ review_postponed_at: true });
 export const vocDetailEnvelopeSchema = vocDetailBaseSchema.extend({
+  follow_up: vocFollowUpStateSchema.optional(),
   // The capped peer preview uses the same authorized peer set as similar_count.
   // similar_count remains the sole total; this array is intentionally not paginated.
   similar: z

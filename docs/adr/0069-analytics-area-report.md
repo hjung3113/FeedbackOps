@@ -86,7 +86,11 @@ after release. Extensions needing a new decision are recorded in the post-MVP ba
 Historical planning text (#1071). The chunks below were filed and shipped as #1077 (PRs #1161,
 #1162), #1078 (PR #1163) and #1079 (PR #1164). The recovery dependency resolved to #1045
 (ADR-0059 D3), which shipped no VOC no-follow-up resolution storage; VOC `tab=high-no-link` keeps
-the list predicate the Dashboard recovery queue already uses.
+the list predicate the Dashboard recovery queue already uses. #1226 adds
+VOC-owned current no-follow-up decision storage and audited `voc.triage`
+record/withdraw commands. Its current decision is included in that same owner
+predicate for recovery, navigation, coverage and this report; it does not change
+report grain or the `no-task` direct-link complement.
 
 Implement in this order; each issue includes affected canonical docs and tests, not a separate copy-only round. When #1071 was written, the report route, query keys and grouped read projections did not exist; they shipped in the PRs above.
 

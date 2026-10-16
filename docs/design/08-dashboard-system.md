@@ -159,6 +159,16 @@ Active Dashboard queues hide recovery items resolved by no-follow-up-needed.
 Dashboard history and source object detail show that the gap was resolved by a
 no-follow-up decision.
 
+VOC #1226 implements this with `voc.triage` (deny-first on the VOC's Managed
+System), required reason and audited POST/DELETE `/vocs/:id/no-follow-up`.
+Only high/critical VOCs without direct or Cluster-origin follow-up may record a
+current decision. That decision clears the canonical `no-link`/`high-no-link`
+predicate, navigation counts, high-follow-up coverage and Area report counts.
+Withdrawal re-evaluates current truth; it creates a new visible recovery
+occurrence only while severity, archival and links still leave an active gap.
+Reporter-facing status and direct Task-link coverage remain separate.
+
+
 Milestone progress is a Task Dashboard grouping in MVP. Milestone-to-Outcome-Survey gap detection is a future cross-system workflow, not an MVP action queue.
 
 Finding is optional in MVP. High Severity VOC follow-up is considered present

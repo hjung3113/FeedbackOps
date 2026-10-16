@@ -32,6 +32,8 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'analytics_area_registered',
   'analytics_area_updated',
   'analytics_area_archived',
+  'voc_no_follow_up_recorded',
+  'voc_no_follow_up_withdrawn',
   'voc_created',
   'voc_triage_committed',
   'voc_severity_set',
@@ -105,7 +107,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(85);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(87);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

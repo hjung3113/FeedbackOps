@@ -34,6 +34,7 @@ export interface InstallOptions {
   scenario?: ScenarioName;
   /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
   vocReview?: boolean;
+  vocNoFollowUp?: 'eligible' | 'decided';
   /** Supplies a schema-validated VOC list for the High · no link inbox state. */
   inboxHighNoLink?: boolean;
   /** Issue #179 reporter-safe linked Task summary surface. */

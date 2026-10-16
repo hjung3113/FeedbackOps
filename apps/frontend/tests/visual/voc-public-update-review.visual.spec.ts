@@ -45,3 +45,27 @@ test.describe('VOC public-update review visual harness (#180)', () => {
     await expectVisual(page, dialog, 'voc-public-update-review-dismiss-reason.png');
   });
 });
+
+// #1226 extends the shipped full-detail regression states; host owns PNG generation.
+test('VOC no-follow-up action and required-reason dialog', async ({ page }) => {
+  await installMockApi(page, { vocReview: true, vocNoFollowUp: 'eligible' });
+  await page.goto(`/vocs?view=inbox&selected=${VOC_REVIEW_IDS.voc}`);
+  const action = page.getByRole('button', { name: '후속 조치 불필요로 결정' });
+  await page.evaluate(() => document.fonts.ready);
+  await action.scrollIntoViewIfNeeded();
+  await expectVisual(page, page.getByTestId('voc-detail-panel'), 'voc-no-follow-up-eligible.png');
+  await action.click();
+  await page.getByLabel('결정 사유').fill('기존 안내로 해결되어 추가 조치가 필요하지 않습니다.');
+  await expect(page.getByTestId('voc-no-follow-up-submit')).toBeEnabled();
+  await expectVisual(page, page.getByRole('dialog'), 'voc-no-follow-up-reason-dialog.png');
+});
+
+test('VOC current no-follow-up decision and withdrawal', async ({ page }) => {
+  await installMockApi(page, { vocReview: true, vocNoFollowUp: 'decided' });
+  await page.goto(`/vocs?view=inbox&selected=${VOC_REVIEW_IDS.voc}`);
+  const withdraw = page.getByRole('button', { name: '결정 철회' });
+  await page.evaluate(() => document.fonts.ready);
+  await withdraw.scrollIntoViewIfNeeded();
+  await expect(page.getByText('기존 안내로 해결되어 추가 조치가 필요하지 않습니다.')).toBeVisible();
+  await expectVisual(page, page.getByTestId('voc-detail-panel'), 'voc-no-follow-up-decided.png');
+});

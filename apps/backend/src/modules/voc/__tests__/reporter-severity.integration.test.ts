@@ -141,6 +141,46 @@ describe.skipIf(!APP_URL || !MIGRATE_URL || !WORKSPACE_ID)(
       await handle.close();
     });
 
+    it('no-follow-up decision and eligibility stay internal on GET and reporter reply envelopes', async () => {
+      const grant = await grantCapability(
+        handle,
+        WORKSPACE_ID,
+        actors.operator,
+        'voc.triage',
+        ms,
+        actors['denied-admin'],
+      );
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: `/vocs/${vocs.reporter}/no-follow-up`,
+          headers: headers('operator'),
+          payload: { reason: 'Internal no-follow-up reason' },
+        });
+        expect(response.statusCode, response.body).toBe(200);
+        expect(response.json().follow_up.decision.reason).toBe('Internal no-follow-up reason');
+        const reporter = await get('reporter', `/vocs/${vocs.reporter}`);
+        expect(reporter.statusCode).toBe(200);
+        expect(reporter.json()).not.toHaveProperty('follow_up');
+        const reply = await app.inject({
+          method: 'POST',
+          url: `/vocs/${vocs.reporter}/reporter-replies`,
+          headers: headers('reporter'),
+          payload: { body_rich_content: paragraphDoc('Reporter reply') },
+        });
+        expect(reply.statusCode, reply.body).toBe(201);
+        expect(reply.body).not.toContain('Internal no-follow-up reason');
+        const withdrawn = await app.inject({
+          method: 'DELETE',
+          url: `/vocs/${vocs.reporter}/no-follow-up`,
+          headers: headers('operator'),
+        });
+        expect(withdrawn.statusCode).toBe(200);
+      } finally {
+        await handle.pool.query('delete from permission.permission_grants where id=$1', [grant]);
+      }
+    });
+
     it.each(personas)(
       '%s: raw list/detail/edit/reply/create respect the reporter arm',
       async (persona) => {

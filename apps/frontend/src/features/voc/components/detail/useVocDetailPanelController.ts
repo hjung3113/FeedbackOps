@@ -204,6 +204,7 @@ export function useVocDetailPanelController({
     actorNamesById,
     analyticsAreasById,
     canTriage,
+    noFollowUpScope: `${vocId}:${voc.primary_managed_system_id}:${permissionManagedSystemId}:${canTriage}:${voc.follow_up?.can_record}:${voc.follow_up?.can_withdraw}`,
     linkedTask,
     requestTaskIsPending: requestTaskMutation.isPending,
     pendingReviewCount,
