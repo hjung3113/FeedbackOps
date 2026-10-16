@@ -2,10 +2,11 @@
 
 ## Status
 
-Accepted 2026-10-13 by the owner (MVP close-out decisions)
+Accepted 2026-10-13 by the owner (MVP close-out decisions); implemented by
+#1080–#1086, including the governed direct-grant UI.
+The implementation issues below are historical planning notes, not pending work.
 
-Docs-only decision; the new commands, fields, events, and read models below are
-proposed/new implementation work, not shipped behavior. Partially supersedes
+Partially supersedes
 ADR-0044's requester cancel/edit exclusion; extends ADR-0061's grant lifecycle
 and ADR-0041's `permission_self_approval` coverage. Reopens FR-PERM-002 in
 `docs/design/09-permission-access.md` and the Admin decision lifecycle in

@@ -10,10 +10,10 @@ This document groups release scope and includes short shipped/open notes for par
 ## Phase 1
 
 ```text
-- VOC Cluster 제안 자동 생성 (shadow measurement shipped; human-confirmed suggestions, ADR-0054 choice b, accepted by ADR-0068; implementation pending)
-- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester withdrawal / pending edit, revision-safe narrowed approval, governed direct grant and four explained server risk indicators are accepted close-out work, not built (ADR-0066); active grant revoke and deny lifting shipped in #762 per ADR-0061; single-object authorization is post-MVP)
-- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; five editable bands/neutral empty state accepted by ADR-0067, shipped in #1087/#1088)
-- Analytics Area별 리포트
+- VOC Cluster 제안 자동 생성 (shadow measurement and human-confirmed suggestions shipped in #1097 per ADR-0068; provider calibration/value evidence is post-MVP)
+- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester withdrawal/edit, revision-safe narrowed approval, governed direct grant and risk indicators shipped in #1080–#1086 per ADR-0066; active grant revoke and deny lifting shipped in #762 per ADR-0061; single-object authorization is post-MVP)
+- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; five editable bands/neutral empty state shipped in #1087/#1088 per ADR-0067)
+- Analytics Area별 리포트 (shipped in #1077–#1079 per ADR-0069)
 ```
 
 ## Phase 2
@@ -30,18 +30,24 @@ This document groups release scope and includes short shipped/open notes for par
 
 ## MVP Close-Out
 
-Decided by the owner on 2026-10-13. MVP closes when every item below ships and the Release Value Gate passes; after that release, new work comes from real use. Progress is the GitHub milestones Slice 53 to Slice 63.
+Decided by the owner on 2026-10-13. MVP closes when the remaining release scope ships and the Release Value Gate passes; after that release, new work comes from real use. Progress is the GitHub milestones Slice 53 to Slice 63.
 
 Scope:
 
 ```text
-- Open issues and filed follow-ups, including the ones deferred by the value gate (#739, #740, #816, #340, #1015, #1012)
-- ADR-0059 D2: Survey templates; ADR-0067 supersedes D1/D3 deferrals with accepted responsibility defaults and bounded Dashboard recovery, shipped (#1088–#1094)
-- Phase 1 remainder: Evidence route, VOC Cluster suggestions with human creation (ADR-0054 choice b, superseding choice c by the 2026-10-13 owner decision in ADR-0068), requester cancel / pending edit, direct grant, risk indicators, editable coverage thresholds (shipped in #1088), Analytics Area report
+- Completed close-out dependencies: #739, #740, #816, #340, #1015, and #1012 are closed.
+- ADR-0059 D2 Survey templates, reuse, and dialog selection shipped in #1073–#1075; ADR-0067 D1/D3 responsibility defaults and bounded Dashboard recovery shipped in #1087–#1094. See Phase 1 above for current item-level statuses.
+- Evidence inventory, route, and approved excerpt attachment shipped (#816, #1040, #1107, #1109 per ADR-0065).
+- Release documentation and deferral record (#1186, #1065, #1066).
 - A whole-system review (architecture, docs, UI/UX, performance, Impeccable audit and critique), then hardening from its findings
 - Production images (backend, frontend, migration job) per ADR-0013, and a login check against an OIDC provider
 - Release docs: keep the docs that explain the project (design and decision records, the doc index, a code index, the glossary) and remove plan, review, and stale docs; the development environment stays intact because development continues after release
 ```
+
+### Release obligations (Slice 63)
+
+- Measure PS-5 recovery reconcile lock hold on a high-response Survey.
+- Run the Reporter persona and the full MVP Success Flow in the Release Value Gate.
 
 Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected). Every item deferred or dropped before release is recorded in `14-post-mvp-backlog.md`.
 

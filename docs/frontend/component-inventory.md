@@ -179,7 +179,6 @@ Task Request Status:
 Milestone Detail:
 - Header with title, Primary Managed System, Analytics Area, owner, status, due date, and actions
 - Overview section for why the milestone exists and source context
-- Timeline section with child Task Gantt chart
 - Tasks section with child Task list
 - Evidence section with linked Evidence Highlights and source objects
 - Activity section with decisions, audit events, and updates
@@ -188,7 +187,6 @@ Milestone List Row:
 - Title and source context
 - Managed System and Analytics Area
 - Owner, status, due date, and progress
-- Mini timeline for schedule risk scanning
 
 Finding Status:
 - draft

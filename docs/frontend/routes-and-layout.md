@@ -394,12 +394,10 @@ caller's effective scope. Shipped queue routes:
 
 ```text
 - Tasks views remain list-first or board-first operational surfaces.
-- `view=milestones` shows a compact Milestone list with a mini timeline per row for schedule risk scanning.
+- `view=milestones` shows a compact Milestone list with source, scope, owner, status, due date, and progress.
 - Selecting a Milestone opens RightDetailPanel as Milestone Detail.
-- Milestone Detail uses tabs or anchored sections for Overview, Timeline, Tasks, Evidence, and Activity.
-- The full Gantt chart lives in the Timeline section of Milestone Detail and shows child Tasks by date and internal Task status.
-- The mini timeline in the list is a scan affordance only; it must not replace Milestone Detail.
-- Reporter-safe summaries derived from Milestone or Task work must use explicit public-safe fields and must not expose raw Gantt internals.
+- Milestone Detail presents Overview, Tasks, Evidence, and Activity.
+- Reporter-safe summaries derived from Milestone or Task work use explicit public-safe fields and do not expose internal Task status, backlog priority, private due dates, or Developer discussion.
 ```
 
 ## AppShell Layout

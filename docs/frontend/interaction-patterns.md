@@ -251,16 +251,13 @@ MVP conversation constraints:
 - Assigned Backlog Tasks may appear in My Tasks (`/tasks?view=my`) or Home's assigned-to-you panel as planned work, but execution starts only when the Task moves to Todo or Doing.
 ```
 
-## Milestone Timeline Boundary
+## Milestone Boundary
 
 ```text
 - Milestones are internal Task grouping surfaces.
-- The Milestones list shows compact rows and a mini timeline for schedule risk scanning.
 - Selecting a Milestone opens Milestone Detail in RightDetailPanel on desktop.
-- Milestone Detail owns the full context: Overview, Timeline, Tasks, Evidence, and Activity.
-- The full Gantt chart appears only as the Timeline section inside Milestone Detail.
-- The Gantt shows child Tasks by date and internal Task status for authorized internal users.
-- Reporter-facing summaries must not expose raw Gantt bars, internal Task status, backlog priority, private due dates, or Developer discussion.
+- Milestone Detail owns the full context: Overview, Tasks, Evidence, and Activity.
+- Reporter-facing summaries use explicit public-safe fields and do not expose internal Task status, backlog priority, private due dates, or Developer discussion.
 ```
 
 ## Permission Request State Machine

@@ -437,13 +437,14 @@ revoked
 
 The backend decides which state applies.
 
-## Accepted close-out extensions (ADR-0066; proposed/new)
+## Accepted close-out extensions (ADR-0066; implemented)
 
 The rules above incorporating revision, withdrawal and narrowing replace older
 scope-copy/default-expiration text. #1080 implements versioned requester
 mutations, supported-scope validation and narrowed Admin decisions; #1081 adds
 selected owner/Admin reads and explained risk; #1085 adds the governed direct
-grant and audited expired reissue (BE). The direct-grant UI remains #1086.
+grant and audited expired reissue; #1086 adds the direct-grant UI. The complete
+close-out implementation shipped in #1080–#1086.
 `api/permissions.md` owns exact bodies, reads, responses and errors.
 
 One Permission capability/scope policy supplies server candidates and validates

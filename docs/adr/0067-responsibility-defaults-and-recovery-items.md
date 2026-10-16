@@ -9,8 +9,9 @@ Supersedes ADR-0059 D1/D3 deferrals and the automatic-default rejection clauses 
 `docs/implementation/05-permission-policy.md`. Amends ADR-0017's registry inputs;
 retains ADR-0018/0044's team administration boundary, ADR-0045's optional VOC owner,
 ADR-0026's review authority, and ADR-0055's Survey-owned follow-up exception.
-This is an accepted implementation contract, not a claim that the features ship today.
-All additions labeled proposed/new below require implementation issues.
+Responsibility defaults, Coverage bands and bounded Dashboard recovery shipped
+in #1087–#1094. This ADR records the implemented contract; later deferrals are
+listed in the post-MVP backlog.
 
 ## Context
 
@@ -218,8 +219,8 @@ and affected source queries; React cannot infer resolution from link presence.
 Acceptance budget, adopted from memo §4: on identical throwaway datasets of about 5k VOCs
 and 5k Tasks, warm summary/list/detail API p95 <= 500ms; summary p95 also <= develop p95
 × 1.2 + 50ms. Record median/p95 across several scopes/system counts. Existing UI regression
-threshold remains median `readyMs > develop × 1.2 + 50ms`, a reload, or two extra API calls
-(`.claude/skills/issue-wave-conductor/templates/review-rules-perf.md`). Measure recorder
+threshold remains median `readyMs > develop × 1.2 + 50ms`, a reload, or two extra API calls.
+Measure recorder
 mutation latency and multi-VOC fanout too. Group per-system reads if the baseline fails,
 batch labels/readability by distinct system, and index active workspace/scope/category,
 history `(workspace_id, resolved_at, id)`, and source/Actor identity keys. EXPLAIN representative
