@@ -52,7 +52,9 @@ vi.mock('@/features/voc/components/detail/IdentitySection', () => ({
   IdentitySection: () => null,
 }));
 vi.mock('@/features/voc/components/detail/LinkedEntityTrailSection', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/voc/components/detail/LinkedEntityTrailSection')>()),
+  ...(await importOriginal<
+    typeof import('@/features/voc/components/detail/LinkedEntityTrailSection')
+  >()),
   LinkedEntityTrailSection: () => null,
 }));
 vi.mock('@/features/voc/components/detail/LinkedExecutionSection', () => ({
