@@ -478,3 +478,4 @@ apps/backend/src/modules/core/jobs/purge-unlinked-attachments.ts format -- pre-e
 apps/backend/src/modules/core/jobs/purge-unlinked-attachments.ts organizeImports -- pre-existing on develop (measured 2026-10-15); #1171 adds no imports to the sorted block
 apps/backend/src/modules/core/jobs/__tests__/purge-unlinked-attachments.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-15); #1171 adds interleaving cases
 apps/backend/src/modules/attachments/__tests__/get-attachments-download.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-15); #1171 adds privacy cases
+apps/backend/src/modules/voc-clusters/routes.ts organizeImports -- pre-existing on develop (measured 2026-10-16); #1176 adds one schema import to the unsorted block
