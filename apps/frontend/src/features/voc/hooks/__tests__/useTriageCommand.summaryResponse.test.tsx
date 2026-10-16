@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,6 +60,18 @@ const VOC_LIST_ITEM = vocListItemSchema.parse({
   attachment_count: 0,
 });
 
+const FULL_VOC = vocDetailEnvelopeSchema.parse({
+  ...VOC_LIST_ITEM,
+  description_rich_content: { type: 'doc', content: [] },
+  next_actions: [],
+  next_reporter_states: { allowed: ['reviewing'], forbidden: {} },
+  linked_execution: { findingRef: null, taskRef: null },
+  conversation_timeline: [],
+  conversation_page: { has_more: false },
+  permission_decisions: {},
+  attachments: [],
+});
+
 const INPUT: TriageInput = {
   kind: 'confirm',
   vocId: VOC_ID,
@@ -70,12 +83,7 @@ const INPUT: TriageInput = {
 };
 
 function SummaryCacheObserver() {
-  useQuery({
-    queryKey: ['voc', VOC_ID],
-    queryFn: async () => SUMMARY_VOC,
-    initialData: SUMMARY_VOC,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  useVocDetail(VOC_ID);
   return null;
 }
 
@@ -127,6 +135,7 @@ describe('useTriageCommand with a summary response (#1187)', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
+    queryClient.setQueryData(['voc', VOC_ID], FULL_VOC);
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>
         <SummaryCacheObserver />
@@ -147,9 +156,11 @@ describe('useTriageCommand with a summary response (#1187)', () => {
     await waitFor(() => expect(result.current.isSubmitting).toBe(false));
     expect(toastMock.error).not.toHaveBeenCalled();
 
+    await waitFor(() => expect(queryClient.getQueryData(['voc', VOC_ID])).toEqual(SUMMARY_VOC));
     const forwardCacheValue = queryClient.getQueryData(['voc', VOC_ID]);
     expect(vocSummaryEnvelopeSchema.parse(forwardCacheValue)).toEqual(SUMMARY_VOC);
     expect(forwardCacheValue).toEqual(SUMMARY_VOC);
+    expect(forwardCacheValue).not.toHaveProperty('title');
     expect(vocDetailEnvelopeSchema.safeParse(forwardCacheValue).success).toBe(false);
 
     act(() => {
@@ -164,5 +175,45 @@ describe('useTriageCommand with a summary response (#1187)', () => {
     expect(vocSummaryEnvelopeSchema.parse(refetchedCacheValue)).toEqual(SUMMARY_VOC);
     expect(refetchedCacheValue).toEqual(SUMMARY_VOC);
     expect(vocDetailEnvelopeSchema.safeParse(refetchedCacheValue).success).toBe(false);
+  });
+
+  it('keeps the fresh detail cache without refetching after a full PATCH response', async () => {
+    let detailReads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(`/vocs/${VOC_ID}`);
+      if (init?.method === 'PATCH') {
+        return jsonResponse({
+          ...FULL_VOC,
+          triage_state: 'triaged',
+          updated_at: '2026-05-01T00:01:00.000Z',
+        });
+      }
+      if (init?.method === 'GET') {
+        detailReads += 1;
+        return jsonResponse(SUMMARY_VOC);
+      }
+      throw new Error(`Unexpected request method: ${String(init?.method)}`);
+    }) as typeof globalThis.fetch;
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    queryClient.setQueryData(['voc', VOC_ID], FULL_VOC);
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <SummaryCacheObserver />
+        {children}
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(() => useTriageCommand({ voc: VOC_LIST_ITEM }), { wrapper });
+
+    await act(async () => {
+      result.current.commit(INPUT);
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(false));
+
+    expect(detailReads).toBe(0);
+    expect(queryClient.getQueryState(['voc', VOC_ID])?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryData(['voc', VOC_ID])).toEqual(FULL_VOC);
   });
 });
