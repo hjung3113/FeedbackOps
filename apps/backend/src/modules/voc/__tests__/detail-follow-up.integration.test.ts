@@ -1,6 +1,6 @@
 import { type VocDetailEnvelope, vocDetailEnvelopeSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
@@ -64,6 +64,10 @@ describe.skipIf(!runIntegration)('VOC detail follow-up provenance (#1225)', () =
     actorIds.push(developer.id);
     grantIds.push(await grantCapability(db, workspaceId, developer.id, 'voc.read', msId, actorId));
     readOnlyCookie = await loginAs(app, developer.externalId);
+  });
+
+  beforeEach(async () => {
+    await db.pool.query('delete from core.rate_limits');
   });
 
   afterAll(async () => {
@@ -187,6 +191,72 @@ describe.skipIf(!runIntegration)('VOC detail follow-up provenance (#1225)', () =
       });
     },
   );
+  it.each(['bare membership', 'hidden execution'] as const)(
+    'does not disclose a Cluster to a granted User with %s',
+    async (shape) => {
+      const externalId = uid('follow-up-granted-user');
+      const user = await insertActorRow(db, { workspaceId, externalId, roleLevel: 'user' });
+      actorIds.push(user.id);
+      grantIds.push(await grantCapability(db, workspaceId, user.id, 'finding.read', msId, actorId));
+      const userCookie = await loginAs(app, externalId);
+      const voc = await insertVocDirectly(db, workspaceId, msId, user.id, 'User-owned VOC');
+      vocIds.push(voc.id);
+      const title = uid('Private Cluster');
+      const summary = uid('Private Cluster summary');
+      const cluster = await insertVocClusterRow(db, {
+        workspaceId,
+        primaryManagedSystemId: msId,
+        createdBy: actorId,
+        title,
+        summary,
+      });
+      clusterIds.push(cluster.id);
+      await insertVocClusterMemberRow(db, {
+        clusterId: cluster.id,
+        vocId: voc.id,
+        addedBy: actorId,
+      });
+      if (shape === 'hidden execution') {
+        const finding = await insertFindingRow(db, {
+          workspaceId,
+          primaryManagedSystemId: msId,
+          sourceType: 'voc_cluster',
+          sourceId: cluster.id,
+          createdBy: actorId,
+        });
+        findingIds.push(finding.id);
+        await db.db.transaction((tx) =>
+          createEntityLink(tx, {
+            workspaceId,
+            sourceType: 'voc_cluster',
+            sourceId: cluster.id,
+            targetType: 'finding',
+            targetId: finding.id,
+            relationType: 'evidence_of',
+            managedSystemId: msId,
+            createdBy: actorId,
+            visibility: 'internal_only',
+          }),
+        );
+      }
+      const headers = { cookie: `${SESSION_COOKIE_NAME}=${userCookie}` };
+      const clusterResponse = await app.inject({
+        method: 'GET',
+        url: `/voc-clusters/${cluster.id}`,
+        headers,
+      });
+      expect(clusterResponse.statusCode).toBe(404);
+      const response = await app.inject({ method: 'GET', url: `/vocs/${voc.id}`, headers });
+      expect(response.statusCode).toBe(200);
+      const body = vocDetailEnvelopeSchema.parse(response.json());
+      expect(body.linked_execution).toEqual({ findingRef: null, taskRef: null });
+      expect(body.links).toEqual([]);
+      for (const secret of [cluster.id, cluster.display_id, title, summary]) {
+        expect(response.body).not.toContain(secret);
+      }
+    },
+  );
+
   it('retains multiple Clusters and every Finding/Request/Task branch without convenience columns', async () => {
     const voc = await insertVocDirectly(db, workspaceId, msId, reporterId, 'Branched follow-up');
     vocIds.push(voc.id);

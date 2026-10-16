@@ -304,11 +304,13 @@ function FollowUpTrail({
       display_id: summary.display_id,
       title,
       meta:
-        summary.type === 'task'
-          ? (TASK_STATUS_LABELS[summary.status as TaskStatus] ?? summary.status)
-          : summary.type === 'task_request'
-            ? (TASK_REQUEST_STATUS_LABELS[summary.status as TaskRequestStatus] ?? summary.status)
-            : summary.status,
+        summary.type === 'finding'
+          ? summary.display_id
+          : summary.type === 'task'
+            ? (TASK_STATUS_LABELS[summary.status as TaskStatus] ?? summary.status)
+            : summary.type === 'task_request'
+              ? (TASK_REQUEST_STATUS_LABELS[summary.status as TaskRequestStatus] ?? summary.status)
+              : summary.status,
       ...(open ? { onNavigate: () => open(summary.id) } : {}),
     };
   }

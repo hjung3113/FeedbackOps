@@ -261,6 +261,45 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
   }
 
+  it.each(['draft', 'active', 'converted'] as const)(
+    'keeps the Finding display ID in paired links and trails for %s status',
+    (status) => {
+      const base = allowedFindingTrailLink('evidence_of');
+      if (base.visibility_state !== 'allowed' || base.target_summary?.type !== 'finding') {
+        throw new Error('expected Finding fixture');
+      }
+      const link: EntityLinkDto = {
+        ...base,
+        target_summary: { ...base.target_summary, status },
+      };
+      vi.mocked(useVocDetail).mockReturnValue(
+        makeDetailQuery({
+          data: {
+            ...DETAIL_ENVELOPE,
+            links: [link],
+            linked_execution: {
+              findingRef: { type: 'finding', id: FINDING_TRAIL_ID },
+              taskRef: null,
+              trails: [{ origin: 'direct', links: [link] }],
+            },
+          },
+        }),
+      );
+      vi.mocked(useMe).mockReturnValue(
+        makeMeQuery({
+          data: {
+            ...ME_RESPONSE,
+            actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'developer' },
+          },
+        }),
+      );
+      renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+      const row = screen.getByRole('button', { name: /로그 유실 Finding/ });
+      expect(within(row).getByText('FIN-1200')).toBeInTheDocument();
+      expect(screen.queryByText(/^(draft|active|converted)$/)).not.toBeInTheDocument();
+    },
+  );
+
   it('shows Cluster-origin Finding provenance and selects the linked-state CTA', async () => {
     const clusterId = '77777777-7777-4777-8777-777777777777';
     const cluster = {

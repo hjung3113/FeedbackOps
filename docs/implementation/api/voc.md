@@ -35,7 +35,9 @@ reader) project `linked_execution` as follows. SUMMARY envelopes are unchanged.
   `cluster` summary, and `links: EntityLinkDto[]`. Link source identities remain
   canonical; inherited edges are never rewritten as VOC-source edges.
 - A readable Cluster membership with no disclosed follow-up has a Cluster
-  trail with `links: []`. Membership is not a persisted entity-link tuple and
+  trail with `links: []`. Membership disclosure requires the same elevated-role,
+  deny-aware `finding.read` scope as `GET /voc-clusters/:id`; a User grant alone
+  does not disclose membership. Membership is not a persisted entity-link tuple and
   is not execution. Multiple Clusters, Findings, Requests and Tasks are kept.
   A Request without a Task already constitutes follow-up.
 - Every edge uses Entity Links' provider authorization, visibility evaluator

@@ -14,6 +14,7 @@ import type {
 import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
 import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
+import { actorFindingReadScope, isFindingInReadScope } from '../findings/authorization.js';
 import type { FindingExecutionReconciler } from '../findings/execution-projection.js';
 import { readVocClusterMemberships } from '../voc-clusters/read-projections.js';
 
@@ -877,7 +878,14 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         actor.workspace_id,
         membership.id,
       );
-      if (!subject || !(await provider.canRead(readDeps, actor, subject))) continue;
+      if (
+        !subject ||
+        !isFindingInReadScope(
+          await actorFindingReadScope(db, actor, { requireElevatedRole: true }),
+          subject.managed_system_id,
+        )
+      )
+        continue;
       const cluster = await provider.getInternalSummary(
         db as Db,
         actor.workspace_id,
