@@ -128,3 +128,4 @@ below that cut line and are on the GitHub Post-MVP milestone.
 | Home recovery visual-label flake (#1192) | below the cut line | Post-MVP planning |
 | Admin and inventory presentation polish, remaining #1184 work (#1219) | below the cut line | Post-MVP planning |
 | Grouped polish backlog (#1214) | below the cut line | Post-MVP planning |
+| Slice 62 quality follow-ups: owner-candidates row locking, duplicated reporter-arm and source-read rules, test pruning candidates (#1222) | below the cut line; test deletion needs owner approval | Post-MVP planning, or owner-picker latency/lock waits observed at 5k scale |
