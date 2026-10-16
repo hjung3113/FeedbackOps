@@ -14,6 +14,7 @@ import {
   vocCreatePreviewAvailability,
   vocCreateSimilarityPreview,
 } from '../../fixtures/voc-create';
+import { workspaceActorsFixture } from '../../fixtures/permissions';
 import { decidedNoFollowUpVoc, eligibleNoFollowUpVoc } from '../../fixtures/voc-no-follow-up';
 import {
   VOC_REVIEW_IDS,
@@ -42,6 +43,12 @@ export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
         method: 'GET',
         path: `/vocs/${VOC_REVIEW_IDS.voc}`,
         handle: (route) => json(route, 200, voc),
+      },
+      // The decider renders by name only when /actors knows them.
+      {
+        method: 'GET',
+        path: '/actors',
+        handle: (route) => json(route, 200, workspaceActorsFixture),
       },
     );
   }

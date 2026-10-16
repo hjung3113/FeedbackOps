@@ -1,5 +1,5 @@
 import { vocDetailEnvelopeSchema } from '@fops/shared';
-import { VOC_REVIEW_IDS, populatedReviewVoc } from './voc-public-update-review';
+import { populatedReviewVoc } from './voc-public-update-review';
 
 export const eligibleNoFollowUpVoc = vocDetailEnvelopeSchema.parse({
   ...populatedReviewVoc,
@@ -11,7 +11,8 @@ export const decidedNoFollowUpVoc = vocDetailEnvelopeSchema.parse({
     decision: {
       decision: 'no_follow_up',
       reason: '기존 안내로 해결되어 추가 조치가 필요하지 않습니다.',
-      actor_id: VOC_REVIEW_IDS.reporter,
+      // Admin One from the default /actors fixture, so the decider renders by name.
+      actor_id: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       decided_at: '2026-07-18T09:00:00.000Z',
     },
     can_record: false,
