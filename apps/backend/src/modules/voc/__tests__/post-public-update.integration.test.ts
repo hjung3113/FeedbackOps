@@ -983,16 +983,14 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     },
   );
 
-  // ── ADR-0047 follow-up: admin with explicit voc.read deny ─────────────────
-  // actorReadScope returns 'all' for admins, ignoring explicit denies
-  // (repo-read.ts / scope-service.ts), while listLinks' canRead applies the
-  // deny first. composeDetailEnvelope must not duplicate the read check — it
-  // delegates to listLinks with onUnreadableFocus: 'empty', so a triage-
-  // capable admin whose voc.read is explicitly denied gets a 201 with
-  // voc.links: [] instead of a rolled-back write.
+  // ── ADR-0047 / #1187: admin with explicit voc.read deny ─────────────────
+  // Read scopes honour explicit Admin denies (#1188), and the post-write
+  // envelope follows the read matrix (#1187): a triage-capable Admin whose
+  // voc.read is explicitly denied still gets a 201, and its `voc` is the
+  // six-key summary — no `links` key at all.
 
   it.skipIf(!MIGRATE_URL)(
-    'admin with explicit voc.read deny → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
+    'admin with explicit voc.read deny → 201 and the summary envelope carries no links despite an active link (ADR-0047, #1187)',
     async () => {
       const msId = await insertMsDirectly(
         dbHandle,

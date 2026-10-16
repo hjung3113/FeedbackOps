@@ -106,7 +106,8 @@ in the Context section move in the same change; this ADR does not replace them.
 
    ```text
    permissions/scope-service.ts actorScopeForCapability
-     admin → { kind: 'all' } without reading grants
+     delegates to resolveCapabilityScope (deny-first); Admin gets
+     { kind: 'all' } only when no explicit deny narrows it (#1188)
    findings/authorization.ts
      admin → allow via role before the capability check
      hasElevatedFindingRole = admin or developer
@@ -122,10 +123,14 @@ in the Context section move in the same change; this ADR does not replace them.
    surveys/authorization.ts
      admin bypasses survey.read and survey.manage unless explicit_deny
      personal-response read has no role short-circuit
-   task-requests/service.ts canReadSourceVoc, hasSelfApprovalCapability
-     admin returns true before the capability check
-   voc/repo-read.ts actorEffectiveScope
-     admin → { kind: 'all' }
+   task-requests/service.ts hasSelfApprovalCapability
+     admin returns true before the capability check (adminModuleBypass 'always')
+   task-requests/service.ts canReadSourceVoc
+     Reporter first, then a deny-first voc.read check for every role,
+     Admin included (#1216)
+   voc/authorization.ts actorEffectiveScope
+     deny-aware through the permission scope resolver; no Admin
+     short-circuit (#1188)
    voc/service.ts and voc/conversation-service.ts
      developer + no_grant on voc.triage → permission.scope_required
      every other denied role → permission.denied
@@ -140,7 +145,8 @@ in the Context section move in the same change; this ADR does not replace them.
      every other role → permission.denied
    voc-clusters/service.ts
      listClusters allows only admin or developer
-     admin skips member filtering and keeps the raw member_count
+     member counts use the VOC visibility predicate for every actor,
+     Admin included (#1188)
      linkExistingFinding and unlinkExistingFinding: developer + finding.manage
        no_grant → permission.scope_required
      unlinkExistingFinding skips the manage check when role is admin
@@ -175,7 +181,8 @@ in the Context section move in the same change; this ADR does not replace them.
 
    ```text
    apps/frontend/src/lib/layout/AppFrame.tsx
-     isAdmin skips the voc.read scope query
+     isAdmin drives workspace-wide chrome; the voc.read scope query runs
+     for Admins too, so explicit denies show as out of scope (#1211)
    apps/frontend/src/features/admin/permissions/permission-state-view.tsx
      "contact admin" lists role_level === 'admin'
    apps/frontend/src/routes/_authed/voc-clusters/index.tsx
@@ -257,9 +264,8 @@ the example to copy.
 
 Developer is already in `ROLE_LEVEL_VALUES`, `ROLE_LEVEL_LABELS`, and the
 CHECK. `roleSatisfies` has no Developer arm, so it satisfies nothing; Managed
-System grants carry it. It is not `admin`, so `applyAdminModuleBypass`,
-`actorScopeForCapability`, and the Finding/Survey/Task Request short-circuits
-do not apply. `hasElevatedFindingRole` and `listClusters` admit it beside
+System grants carry it. It is not `admin`, so `applyAdminModuleBypass` and the remaining
+Finding/Survey/Task Request self-approval short-circuits do not apply. `hasElevatedFindingRole` and `listClusters` admit it beside
 Admin, then scope it with grants. A `no_grant` on `voc.triage`, inbox
 `voc.read`, or `finding.manage` becomes `permission.scope_required` only
 because those sites test `=== 'developer'`. Link visibility allows Developer
