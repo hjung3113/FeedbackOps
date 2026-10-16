@@ -682,6 +682,7 @@ describe('TaskRequestsRoute decision dialogs', () => {
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(scenario.message);
     expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: scenario.textboxName })).toHaveFocus();
     expect(api.approveTaskRequest).not.toHaveBeenCalled();
     expect(api.requestMoreEvidenceForTaskRequest).not.toHaveBeenCalled();
     expect(api.rejectTaskRequest).not.toHaveBeenCalled();
@@ -698,6 +699,27 @@ describe('TaskRequestsRoute decision dialogs', () => {
           : api.rejectTaskRequest;
     await waitFor(() => expectDecisionCall(mutation, scenario.payload));
   });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   '],
+  ])(
+    '#1184 U3-4 keyboard reject with %s reason shows the error, focuses the field and sends nothing',
+    async (_label, text) => {
+      const user = userEvent.setup();
+      const dialog = await openDialog('반려', 'Task Request 반려');
+      const field = screen.getByRole('textbox', { name: '반려 사유' });
+      if (text) fireEvent.change(field, { target: { value: text } });
+      within(dialog).getByRole('button', { name: '반려' }).focus();
+      await user.keyboard('{Enter}');
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        '반려 사유를 입력해 주세요.',
+      );
+      expect(field).toHaveFocus();
+      expect(api.rejectTaskRequest).not.toHaveBeenCalled();
+    },
+  );
 
   it('cancels without dispatching a mutation', async () => {
     await openDialog('승인', 'Task Request 승인');

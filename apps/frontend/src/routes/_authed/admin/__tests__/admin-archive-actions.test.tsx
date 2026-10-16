@@ -7,7 +7,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -133,6 +133,64 @@ describe('admin archive actions', () => {
     expect(screen.getByText('이미 보관됨')).toBeInTheDocument();
     expect(screen.queryByTestId(`archive-${ARCHIVED_MS_SLUG}`)).not.toBeInTheDocument();
   });
+
+  test.each([
+    {
+      label: 'Managed System',
+      path: '/admin/managed-systems',
+      page: ManagedSystemsAdminPage,
+      trigger: `archive-${ACTIVE_MS_SLUG}`,
+      name: 'Active',
+      archiveUrl: '/managed-systems/ms-active/archive',
+      open: async () => {
+        await waitFor(() =>
+          expect(screen.getByTestId(`managed-system-row-${ACTIVE_MS_SLUG}`)).toBeInTheDocument(),
+        );
+        fireEvent.click(screen.getByTestId(`ms-configure-${ACTIVE_MS_SLUG}`));
+      },
+    },
+    {
+      label: 'Analytics Area',
+      path: '/admin/analytics-areas',
+      page: AnalyticsAreasAdminPage,
+      trigger: `aa-archive-${ACTIVE_AREA_SLUG}`,
+      name: 'Active Area',
+      archiveUrl: '/analytics-areas/aa-active/archive',
+      open: async () => {
+        fireEvent.click(await screen.findByTestId(`aa-detail-${ACTIVE_AREA_SLUG}`));
+        fireEvent.click(await screen.findByTestId('aa-edit-button'));
+      },
+    },
+  ])(
+    '$label 보관 asks for confirmation; cancel runs nothing and returns focus; confirm archives once',
+    async ({ path, page, trigger, name, archiveUrl, open }) => {
+      installFetch();
+      const archiveCalls = () =>
+        vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input) === archiveUrl)
+          .length;
+      renderPage(path, page);
+      await open();
+
+      const archiveButton = await screen.findByTestId(trigger);
+      fireEvent.click(archiveButton);
+      const dialog = await screen.findByTestId(`${trigger}-confirm-dialog`);
+      expect(within(dialog).getByText('보관할까요?')).toBeInTheDocument();
+      expect(
+        within(dialog).getByText(`${name}을(를) 보관하면 되돌릴 수 없습니다.`),
+      ).toBeInTheDocument();
+      expect(archiveCalls()).toBe(0);
+
+      fireEvent.click(within(dialog).getByRole('button', { name: '취소' }));
+      await waitFor(() => expect(screen.queryByTestId(`${trigger}-confirm-dialog`)).toBeNull());
+      expect(archiveCalls()).toBe(0);
+      expect(archiveButton).toHaveFocus();
+
+      fireEvent.click(archiveButton);
+      const again = await screen.findByTestId(`${trigger}-confirm-dialog`);
+      fireEvent.click(within(again).getByRole('button', { name: '보관' }));
+      await waitFor(() => expect(archiveCalls()).toBe(1));
+    },
+  );
 
   test('#324 an archived Managed System offers re-registration instead of a Save that must 409', async () => {
     installFetch();

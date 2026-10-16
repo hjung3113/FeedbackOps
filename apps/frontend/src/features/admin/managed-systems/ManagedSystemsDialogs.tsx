@@ -32,6 +32,7 @@ import {
   registerManagedSystem,
   updateManagedSystem,
 } from '../../../lib/api';
+import { ArchiveConfirmButton } from '../lib/ArchiveConfirmButton';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 
 import { useKnownOwnerTeam, useRegistryActorOptions } from './useManagedSystemsRegistry.js';
@@ -506,15 +507,12 @@ function EditForm({
           {isArchived ? (
             <span className="text-sm text-text-muted">이미 보관됨</span>
           ) : (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => archiveMutation.mutate()}
+            <ArchiveConfirmButton
+              name={target.name}
               disabled={archiveMutation.isPending}
-              data-testid={`archive-${target.slug}`}
-            >
-              보관
-            </Button>
+              onConfirm={() => archiveMutation.mutate()}
+              testId={`archive-${target.slug}`}
+            />
           )}
           {isArchived ? (
             // No Save: PATCH against an archived row is 409 conflict.record_archived

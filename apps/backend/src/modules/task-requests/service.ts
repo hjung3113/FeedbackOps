@@ -153,7 +153,6 @@ async function canReadSourceVoc(
   reporterId: string,
   options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
   if (actor.actor_id === reporterId) return true;
   const decision = await deps.checkService.checkCapability(
     actor,
