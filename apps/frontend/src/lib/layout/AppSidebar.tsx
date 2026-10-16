@@ -85,6 +85,8 @@ export interface AppSidebarProps {
   /** False on a route whose data is not scoped by Managed System (e.g. most of Admin). */
   scopeControlEnabled?: boolean;
   isAdmin?: boolean;
+  /** Whether the actor's current scope is workspace-wide, rather than a granted union. */
+  workspaceWideScope?: boolean;
   canAccessWorkspaceAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
@@ -127,6 +129,7 @@ export function AppSidebar({
   selectedManagedSystemId,
   scopeControlEnabled = true,
   isAdmin = true,
+  workspaceWideScope = isAdmin,
   canAccessWorkspaceAdmin = false,
   onManagedSystemChange,
   savedViews = [],
@@ -140,7 +143,7 @@ export function AppSidebar({
   const [scopeOpen, setScopeOpen] = React.useState(false);
   const selectedSystem = managedSystems.find((system) => system.id === selectedManagedSystemId);
   const grantedSystems = managedSystems.filter((system) => system.granted);
-  const isUnion = !isAdmin && selectedManagedSystemId === undefined;
+  const isUnion = !workspaceWideScope && selectedManagedSystemId === undefined;
   const scopeName = scopeControlEnabled
     ? (selectedSystem?.name ?? SCOPE_SELECTOR_COPY.allLabel)
     : SCOPE_SELECTOR_COPY.workspaceAll;
@@ -235,7 +238,7 @@ export function AppSidebar({
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{SCOPE_SELECTOR_COPY.allLabel}</span>
                   <span className="block text-caption text-text-muted">
-                    {isAdmin
+                    {workspaceWideScope
                       ? SCOPE_SELECTOR_COPY.workspaceAll
                       : `${SCOPE_SELECTOR_COPY.assignedCountPrefix} ${grantedSystems.length} / ${managedSystems.length}`}
                   </span>

@@ -82,14 +82,13 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
   });
   const grantsQuery = useQuery({
     queryKey: ['managed-system-scope', actorId, 'voc.read'] as const,
-    enabled: actorId !== undefined && !isAdmin,
+    enabled: actorId !== undefined,
     queryFn: ({ signal }) => fetchCapabilityScope('voc.read', { signal }),
     staleTime: 60_000,
     retry: false,
   });
   const awaitingInitialScope =
     actorId !== undefined &&
-    !isAdmin &&
     grantsQuery.data === undefined &&
     grantsQuery.fetchStatus === 'fetching';
   const countsQuery = useQuery({
@@ -121,7 +120,6 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     name: system.name,
     // Keep the initial permission fetch from briefly marking every system out of scope.
     granted:
-      isAdmin ||
       awaitingInitialScope ||
       grantsQuery.data?.scope.kind === 'all' ||
       (grantsQuery.data?.scope.kind === 'scoped' &&
@@ -156,6 +154,7 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     managedSystems,
     scopeControlEnabled,
     isAdmin,
+    workspaceWideScope: isAdmin && (grantsQuery.data?.scope.kind === 'all' || awaitingInitialScope),
     canAccessWorkspaceAdmin,
     onManagedSystemChange: changeManagedSystem,
     ...(counts !== undefined ? { counts } : {}),

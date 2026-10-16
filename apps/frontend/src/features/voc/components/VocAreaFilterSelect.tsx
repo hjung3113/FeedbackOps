@@ -1,4 +1,5 @@
-import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
+import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
 import { AREA_REPORT_COPY as AREA_COPY } from '@/lib/copy/area-report';
 import {
   Select,
@@ -27,9 +28,18 @@ export function VocAreaFilterSelect({
   /** `undefined` clears the filter. */
   onChange: (next: string | undefined) => void;
 }) {
+  const me = useMe();
+  const actorId = typeof me.data?.actor?.id === 'string' ? me.data.actor.id : undefined;
   // `all` and an absent Managed System both query without a System scope.
   const scope =
     managedSystemId !== undefined && managedSystemId !== ALL ? managedSystemId : undefined;
+  const capabilityScope = useQuery({
+    queryKey: ['managed-system-scope', actorId, 'voc.read'] as const,
+    enabled: actorId !== undefined,
+    queryFn: ({ signal }) => fetchCapabilityScope('voc.read', { signal }),
+    staleTime: 60_000,
+    retry: false,
+  });
   // Reuse the global Managed System switcher's visible registry query.
   const systems = useQuery({
     queryKey: ['managed-systems', 'scope-selector'] as const,
@@ -60,9 +70,14 @@ export function VocAreaFilterSelect({
   });
 
   const systemNames = new Map((systems.data?.items ?? []).map((item) => [item.id, item.name]));
+  // A background refetch keeps the last known scope; only no data yet (pending/failed) hides areas.
+  const scopeData = capabilityScope.data;
   const offeredAreas = (areas.data ?? []).filter(
     (item) =>
+      scopeData !== undefined &&
       systemNames.has(item.managed_system_id) &&
+      (scopeData.scope.kind === 'all' ||
+        scopeData.scope.managed_system_ids.includes(item.managed_system_id)) &&
       (scope === undefined || item.managed_system_id === scope),
   );
   const showSystemName = new Set(offeredAreas.map((item) => item.managed_system_id)).size > 1;
