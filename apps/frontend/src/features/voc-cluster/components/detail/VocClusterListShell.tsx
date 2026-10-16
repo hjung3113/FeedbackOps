@@ -120,7 +120,7 @@ export function VocClusterListShell({
       return;
     }
 
-    if (!selectedDetailQuery.isSuccess) return;
+    if (!selectedDetailQuery.isSuccess || selectedDetailQuery.isFetching) return;
     const outsideManagedSystem =
       managedSystemId !== undefined &&
       selectedDetailQuery.data.primary_managed_system_id !== managedSystemId;
@@ -134,6 +134,7 @@ export function VocClusterListShell({
     listQuery.isSuccess,
     selectedDetailQuery.data,
     selectedDetailQuery.isSuccess,
+    selectedDetailQuery.isFetching,
     selectedId,
     selectedInList,
     selectedVisibleInList,
@@ -142,6 +143,7 @@ export function VocClusterListShell({
   const resolvedAbsentDetailIsVisible =
     selectedAbsentFromList &&
     (selectedDetailQuery.isPending ||
+      selectedDetailQuery.isFetching ||
       selectedDetailQuery.isError ||
       (selectedDetailQuery.isSuccess &&
         (managedSystemId === undefined ||

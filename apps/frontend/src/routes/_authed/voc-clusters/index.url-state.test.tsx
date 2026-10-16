@@ -20,9 +20,9 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, it, test, vi } from 'vitest';
 
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
@@ -297,6 +297,88 @@ describe('/voc-clusters URL state', () => {
     );
     expect(router.state.location.search).toEqual({ selected: READABLE_ABSENT_ID });
   });
+
+  it.each(['confirmed', 'not-found'] as const)(
+    'retains an absent selection through stale-detail revalidation and a %s response',
+    async (outcome) => {
+      installFetch({ requested: [] });
+      const fallbackFetch = globalThis.fetch;
+      let resolveDetail!: (response: Response) => void;
+      const detailResponse = new Promise<Response>((resolve) => {
+        resolveDetail = resolve;
+      });
+      let detailRequested = false;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input.toString() === `/voc-clusters/${READABLE_ABSENT_ID}`) {
+          detailRequested = true;
+          return (await detailResponse).clone();
+        }
+        return fallbackFetch(input, init);
+      });
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      queryClient.setQueryData(['voc-cluster', READABLE_ABSENT_ID], READABLE_ABSENT, {
+        updatedAt: Date.now() - 60_000,
+      });
+      const rootRoute = createRootRoute({ component: () => <Outlet /> });
+      const route = createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/voc-clusters',
+        validateSearch: (raw) => vocClustersSearchSchema.parse(raw),
+        component: VocClusterListPage,
+      });
+      const router = createRouter({
+        routeTree: rootRoute.addChildren([route]),
+        history: createMemoryHistory({
+          initialEntries: [`/voc-clusters?selected=${READABLE_ABSENT_ID}`],
+        }),
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await waitFor(() => {
+        expect(detailRequested).toBe(true);
+        expect(screen.getByRole('button', { name: /CLU-32/ })).toBeInTheDocument();
+        expect(screen.getByTestId('cluster-detail-title')).toHaveTextContent(READABLE_ABSENT.title);
+      });
+
+      const confirmedTab = screen.getByRole('tab', { name: /확정/ });
+      await act(async () => {
+        fireEvent.mouseDown(confirmedTab);
+      });
+      expect(confirmedTab).toHaveAttribute('aria-selected', 'true');
+      expect(router.state.location.search).toEqual({ selected: READABLE_ABSENT_ID });
+      expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
+
+      await act(async () => {
+        resolveDetail(
+          outcome === 'confirmed'
+            ? jsonResponse({
+                ...READABLE_ABSENT,
+                status: 'confirmed',
+                title: '현재 확정된 Cluster',
+              })
+            : jsonResponse({ code: 'not_found.record' }, 404),
+        );
+      });
+      if (outcome === 'confirmed') {
+        await waitFor(() =>
+          expect(screen.getByTestId('cluster-detail-title')).toHaveTextContent(
+            '현재 확정된 Cluster',
+          ),
+        );
+      } else {
+        await waitFor(
+          () => expect(screen.getByText('Cluster를 찾을 수 없습니다.')).toBeInTheDocument(),
+          { timeout: 4000 },
+        );
+        expect(screen.queryByTestId('cluster-detail-title')).not.toBeInTheDocument();
+      }
+      expect(router.state.location.search).toEqual({ selected: READABLE_ABSENT_ID });
+      expect(router.history.length).toBe(1);
+    },
+  );
 
   test('a failed list fetch does not clear a deep-linked selected', async () => {
     const router = renderUrlState(
