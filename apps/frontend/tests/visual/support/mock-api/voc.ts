@@ -14,6 +14,7 @@ import {
   vocCreatePreviewAvailability,
   vocCreateSimilarityPreview,
 } from '../../fixtures/voc-create';
+import { decidedNoFollowUpVoc, eligibleNoFollowUpVoc } from '../../fixtures/voc-no-follow-up';
 import {
   VOC_REVIEW_IDS,
   populatedReviewCandidates,
@@ -33,6 +34,17 @@ export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;
   const handlers: MockApiHandler[] = [];
   const triageScenario = options.triageAreaScenario;
+  if (options.vocNoFollowUp) {
+    const voc = options.vocNoFollowUp === 'eligible' ? eligibleNoFollowUpVoc : decidedNoFollowUpVoc;
+    handlers.push(
+      { method: 'GET', path: '/vocs', handle: (route) => json(route, 200, { items: [voc] }) },
+      {
+        method: 'GET',
+        path: `/vocs/${VOC_REVIEW_IDS.voc}`,
+        handle: (route) => json(route, 200, voc),
+      },
+    );
+  }
 
   if (triageScenario) {
     handlers.push({

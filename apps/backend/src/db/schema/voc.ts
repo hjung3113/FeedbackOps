@@ -740,3 +740,30 @@ export const vocSimilarityPreviewBudgets = vocSchema.table(
     attempts: check('voc_similarity_preview_budgets_attempts_ck', sql`${t.usedAttempts} >= 0`),
   }),
 );
+
+// #1226: single current-state row; prior decisions remain in the append-only audit log.
+export const vocNoFollowUpDecisions = vocSchema.table(
+  'no_follow_up_decisions',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    decision: text('decision').notNull(),
+    reason: text('reason').notNull(),
+    decidedByActorId: uuid('decided_by_actor_id')
+      .notNull()
+      .references(() => actors.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.vocId] }),
+    check('voc_no_follow_up_decision_check', sql`${t.decision} = 'no_follow_up'`),
+    check('voc_no_follow_up_reason_check', sql`length(btrim(${t.reason})) BETWEEN 1 AND 2000`),
+  ],
+);

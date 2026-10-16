@@ -643,3 +643,14 @@ Generation is completed; application and real-role verification are conductor-ow
 Apply after 0065, verify owner/membership/function/column ACLs, and execute the new
 route rollback/replay/revoke/threshold race tests together with existing provenance
 and canonical-read suites on a throwaway database before deployment acceptance.
+
+
+## Issue #1226: VOC no-follow-up decisions
+
+Migration `0072_normal_captain_marvel.sql` adds VOC-owned
+`voc.no_follow_up_decisions` with composite workspace/VOC primary key, required
+bounded reason, deciding Actor/time, creation/update timestamps and nullable
+`withdrawn_at`. The row is re-used for subsequent decisions; source audit is
+append-only history. `fops_app` has SELECT/INSERT and UPDATE only on decision,
+reason, actor and transition timestamps, with no DELETE or key updates. Existing
+table grants are unchanged. Drizzle-generated journal/snapshot accompany the SQL.

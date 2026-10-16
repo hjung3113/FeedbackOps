@@ -134,6 +134,8 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // UPDATE is deliberately column-scoped and asserted below. role_table_grants
   // must remain without table-wide UPDATE.
   'voc.public_update_review_candidates': ['SELECT', 'INSERT'],
+  // 0072: UPDATE is column-scoped (asserted below); no table-wide UPDATE or DELETE.
+  'voc.no_follow_up_decisions': ['SELECT', 'INSERT'],
   'voc.reporter_facing_status_transitions': ['SELECT'],
   // No DELETE by design (migration 0044): a dismissal the application can
   // erase is not a dismissal that survives recomputation. UPDATE is granted
@@ -294,6 +296,41 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'UPDATE') as has_table_update,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'DELETE') as has_delete,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'TRUNCATE') as has_truncate`,
+    );
+    expect(tablePrivileges[0]).toEqual({
+      has_table_update: false,
+      has_delete: false,
+      has_truncate: false,
+    });
+  });
+
+  it('fops_app UPDATE on VOC no-follow-up decisions is limited to decision columns', async () => {
+    const { rows } = await migrateHandle.pool.query<{ column_name: string }>(
+      `select column_name
+           from information_schema.column_privileges
+          where grantee = 'fops_app'
+            and table_schema = 'voc'
+            and table_name = 'no_follow_up_decisions'
+            and privilege_type = 'UPDATE'
+          order by column_name`,
+    );
+    expect(rows.map((row) => row.column_name)).toEqual([
+      'decided_at',
+      'decided_by_actor_id',
+      'decision',
+      'reason',
+      'updated_at',
+      'withdrawn_at',
+    ]);
+    const { rows: tablePrivileges } = await migrateHandle.pool.query<{
+      has_table_update: boolean;
+      has_delete: boolean;
+      has_truncate: boolean;
+    }>(
+      `select
+           has_table_privilege('fops_app', 'voc.no_follow_up_decisions', 'UPDATE') as has_table_update,
+           has_table_privilege('fops_app', 'voc.no_follow_up_decisions', 'DELETE') as has_delete,
+           has_table_privilege('fops_app', 'voc.no_follow_up_decisions', 'TRUNCATE') as has_truncate`,
     );
     expect(tablePrivileges[0]).toEqual({
       has_table_update: false,

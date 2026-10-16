@@ -17,6 +17,12 @@ import type { VocGroupedCountRow } from '../read-contract.js';
 import { vocFollowUpRootsSql } from '../read-projections.js';
 import { type VocReadRow, mapVocRow } from './repository-shared.js';
 
+export function vocHasCurrentNoFollowUpDecision(workspaceId: string) {
+  return sql`EXISTS (SELECT 1 FROM voc.no_follow_up_decisions nfd
+    WHERE nfd.workspace_id = ${workspaceId}::uuid AND nfd.voc_id = ${vocs.id}
+      AND nfd.withdrawn_at IS NULL)`;
+}
+
 // ── listVocsForRead ──────────────────────────────────────────────────────────
 
 export interface ListVocsRepoArgs {
@@ -121,7 +127,9 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
   } else if (tab === 'no-link' || tab === 'high-no-link') {
     if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
     // Preserve one clause here: grouped counts append clauses by base-array length.
-    wheres.push(sql`NOT EXISTS (${vocFollowUpRootsSql(workspaceId, sql`${vocs.id}`)})`);
+    // #1226: a current (not withdrawn) no-follow-up decision also takes the VOC out.
+    wheres.push(sql`NOT EXISTS (${vocFollowUpRootsSql(workspaceId, sql`${vocs.id}`)})
+      AND NOT (${vocHasCurrentNoFollowUpDecision(workspaceId)})`);
   }
   if (filterSeverity && filterSeverity.length > 0)
     wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);

@@ -65,6 +65,7 @@ const ROUTES_FILES = [
   'conversion.ts',
   'crud.ts',
   'index.ts',
+  'no-follow-up.ts',
   'public-updates.ts',
 ];
 

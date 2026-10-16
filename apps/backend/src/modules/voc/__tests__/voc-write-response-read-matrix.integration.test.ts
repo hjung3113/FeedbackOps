@@ -364,4 +364,30 @@ describe.skipIf(!runIntegration)('VOC write responses follow the read matrix (#1
       expect(voc).not.toHaveProperty('conversation_timeline');
     });
   });
+  it.each(['admin-read-denied', 'developer-triage-only', 'developer-full-reader'])(
+    '%s: no-follow-up POST, DELETE and replay follow the existing read matrix',
+    async (actor) => {
+      const seeded = await seedVoc();
+      await dbHandle.pool.query("update voc.vocs set severity='high' where id=$1", [seeded.vocId]);
+      for (const method of ['POST', 'DELETE'] as const) {
+        const key = randomUUID();
+        const request = {
+          method,
+          url: `/vocs/${seeded.vocId}/no-follow-up`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${cookies[actor]}`, 'idempotency-key': key },
+          ...(method === 'POST' ? { payload: { reason: '1226 private decision reason' } } : {}),
+        };
+        const response = await app.inject(request);
+        expect(response.statusCode, response.body).toBe(200);
+        expect((await app.inject(request)).json()).toEqual(response.json());
+        if (actor === 'developer-full-reader') {
+          expect(response.json().follow_up).toMatchObject({ can_withdraw: method === 'POST' });
+        } else {
+          expect(Object.keys(response.json()).sort()).toEqual(SUMMARY_KEYS);
+          expect(response.body).not.toContain('1226 private decision reason');
+          expect(response.json()).not.toHaveProperty('follow_up');
+        }
+      }
+    },
+  );
 });

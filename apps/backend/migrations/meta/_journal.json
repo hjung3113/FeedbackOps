@@ -505,6 +505,13 @@
       "when": 1791969982986,
       "tag": "0071_voc_cluster_suggestion_generation",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792155846827,
+      "tag": "0072_normal_captain_marvel",
+      "breakpoints": true
     }
   ]
 }

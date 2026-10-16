@@ -13,6 +13,7 @@ import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { createVocCreateCommands } from './commands/create.js';
 import { createVocEditDescriptionCommands } from './commands/edit-description.js';
+import { createVocNoFollowUpCommands } from './commands/no-follow-up.js';
 import { createVocUpdateTriageCommands } from './commands/update-triage.js';
 import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
 import type { VocReadService } from './read-service.js';
@@ -69,7 +70,7 @@ export interface VocServiceDeps {
   idempotencyService: IdempotencyService;
   notify: NotificationNotifier;
   /** #1187 — decides whether the PATCH response is the full or the summary VOC projection. */
-  vocReadService: Pick<VocReadService, 'resolveWriteResponseAccess'>;
+  vocReadService: Pick<VocReadService, 'resolveWriteResponseAccess' | 'composeDetailEnvelope'>;
   /**
    * #168 (ADR-0034 D6) — enqueue-on-write for VOC embeddings. Optional so
    * callers booted without pg-boss stay wired; absent means no enqueue, and
@@ -85,6 +86,7 @@ export function createVocService(deps: VocServiceDeps) {
   const editDescriptionCommands = createVocEditDescriptionCommands(deps);
 
   return {
+    ...createVocNoFollowUpCommands(deps),
     createVoc: createCommands.createVoc,
     assertCreateOwnerOverride: createCommands.assertCreateOwnerOverride,
     updateVoc: updateCommands.updateVoc,

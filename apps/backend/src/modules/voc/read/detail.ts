@@ -4,6 +4,7 @@ import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import { isRequestableDenial } from '../../permissions/index.js';
 import { actorEffectiveScope, actorReadScope, actorTriageScope } from '../authorization.js';
+import { readVocFollowUpState } from '../no-follow-up-repository.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
 import * as repoRead from '../repo-read.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
@@ -231,6 +232,9 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
         : {};
 
     // ── 8. Compose full envelope ─────────────────────────────────────────────
+    const followUp = !isReporterArm
+      ? await readVocFollowUpState(deps.db, actor.workspace_id, vocId, canTriage)
+      : undefined;
     const envelope: VocDetailEnvelope = {
       id: row.id,
       display_id: row.displayId,
@@ -238,6 +242,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       primary_managed_system_id: primaryMs,
       reporter_id: row.reporterId,
       ...(!isReporterArm ? { severity: row.severity } : {}),
+      ...(followUp ? { follow_up: followUp } : {}),
       reporter_facing_status:
         row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
@@ -396,6 +401,9 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
         ? (permissionDecisionsSeed as Record<string, unknown>)
         : {};
 
+    const followUp = !isReporterArm
+      ? await readVocFollowUpState(tx, actor.workspace_id, vocId, canTriage)
+      : undefined;
     return {
       id: row.id,
       display_id: row.displayId,
@@ -403,6 +411,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       primary_managed_system_id: primaryMs,
       reporter_id: row.reporterId,
       ...(!isReporterArm ? { severity: row.severity } : {}),
+      ...(followUp ? { follow_up: followUp } : {}),
       reporter_facing_status:
         row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],

@@ -61,3 +61,14 @@ export const VOC_FOLLOW_UP_COPY = {
   relatedEntities: '관련 엔티티',
   linkedRequest: '연결된 Task Request',
 } as const;
+
+export const VOC_NO_FOLLOW_UP = {
+  record: '후속 조치 불필요로 결정',
+  current: '후속 조치 불필요',
+  withdraw: '결정 철회',
+  reason: '결정 사유',
+  description: '후속 조치가 필요하지 않은 이유를 입력해 주세요.',
+  cancel: '취소',
+  submit: '결정 기록',
+  error: '결정을 저장하지 못했습니다. 다시 시도해 주세요.',
+} as const;

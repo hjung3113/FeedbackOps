@@ -23,6 +23,7 @@ import {
 } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
+import { NoFollowUpSection } from './NoFollowUpSection';
 import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { SimilarVocSection } from './SimilarVocSection';
 import { TriageBlock } from './TriageBlock';
@@ -73,6 +74,7 @@ export function FullDetailView({
     actorNamesById,
     analyticsAreasById,
     canTriage,
+    noFollowUpScope,
     linkedTask,
     requestTaskIsPending,
     pendingReviewCount,
@@ -164,6 +166,15 @@ export function FullDetailView({
               }
             />
           </div>
+          {!isReporterArm && (
+            <NoFollowUpSection
+              key={noFollowUpScope}
+              vocId={vocId}
+              state={voc.follow_up}
+              canTriage={canTriage}
+              actorNames={actorNamesById}
+            />
+          )}
           <div data-anchor="trail">
             <LinkedExecutionSection
               voc={voc}
