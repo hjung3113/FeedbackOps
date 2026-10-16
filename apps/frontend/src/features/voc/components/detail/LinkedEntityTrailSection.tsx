@@ -1,4 +1,5 @@
 import { TASK_REQUEST_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { VOC_FOLLOW_UP_COPY } from '@/lib/copy/voc';
 import { formatDateOnly, formatRelativeTime } from '@/lib/format/datetime';
 import type {
@@ -43,17 +44,6 @@ function isTaskLink(link: EntityLinkDto): boolean {
 
 function isFindingLink(link: EntityLinkDto): boolean {
   return link.source_type === 'finding' || link.target_type === 'finding';
-}
-
-/**
- * True when this trail renders the Finding link for the current actor (#1174b).
- * `allowed` counts outside Reporter context, `denied` counts everywhere it is
- * emitted; `hidden` and the unreachable Finding `summary_visible` payload do not.
- */
-export function isVisibleFindingLink(link: EntityLinkDto, isReporterContext: boolean): boolean {
-  if (!isFindingLink(link)) return false;
-  if (link.visibility_state === 'denied') return true;
-  return link.visibility_state === 'allowed' && !isReporterContext;
 }
 
 function ReporterTaskSummary({
@@ -334,8 +324,8 @@ function FollowUpTrail({
                 link.target_type === 'task_request'
                   ? VOC_FOLLOW_UP_COPY.linkedRequest
                   : link.target_type === 'finding'
-                    ? '연결된 Finding'
-                    : '연결된 Task'
+                    ? GLOSSARY.linkedFinding
+                    : GLOSSARY.linkedTask
               }
             />
           );

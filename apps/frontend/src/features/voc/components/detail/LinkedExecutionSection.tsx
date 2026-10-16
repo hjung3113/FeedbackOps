@@ -1,4 +1,4 @@
-// LinkedExecutionSection — linked finding/task block (Slice 3 always empty).
+// LinkedExecutionSection — linked-execution heading and summary/empty-state wrapper.
 
 import type { TaskStatus, VocDetailEnvelope } from '@fops/shared';
 import { EmptyState, OutlineBadge, PanelSectionTitle, PermissionBlockedPanel } from '@fops/ui';
@@ -11,18 +11,12 @@ import { hasVisibleFollowUp } from './LinkedEntityTrailSection';
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
   linkedTask?: { title: string; status: TaskStatus } | null;
-  /** A reporter-safe Task summary renders in the following related-entity section. */
-  hasReporterTaskSummary?: boolean;
-  /** A Finding link the actor may see (#1174b) also counts as linked execution. */
-  hasVisibleFindingLink?: boolean;
   isReporterContext?: boolean;
 }
 
 export function LinkedExecutionSection({
   voc,
   linkedTask = null,
-  hasReporterTaskSummary = false,
-  hasVisibleFindingLink = false,
   isReporterContext = false,
 }: LinkedExecutionSectionProps): React.ReactElement {
   const linkedFindingDecision = getPermissionDecision(voc, 'linkedFinding');
@@ -59,9 +53,7 @@ export function LinkedExecutionSection({
           <span className="text-sm font-medium text-text-primary">{linkedTask.title}</span>
           <OutlineBadge>{TASK_STATUS_LABELS[linkedTask.status]}</OutlineBadge>
         </div>
-      ) : !hasReporterTaskSummary &&
-        !hasVisibleFindingLink &&
-        !hasVisibleFollowUp(voc, isReporterContext) ? (
+      ) : !hasVisibleFollowUp(voc, isReporterContext) ? (
         <EmptyState size="sm" title="연결된 실행 없음" />
       ) : null}
     </div>
