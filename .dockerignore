@@ -1,0 +1,10 @@
+**/node_modules
+.git
+.review
+.env*
+**/test-results
+apps/frontend/tests/visual/baselines
+**/coverage
+**/dist
+**/build
+.turbo

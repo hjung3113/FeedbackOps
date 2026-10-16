@@ -23,6 +23,7 @@ Root `AGENTS.md` → "Required Reading" and "Source Of Truth" decide what to rea
 - [Original design prototype](design-prototype/), retained as a reference for surfaces not yet built; shipped UI remains authoritative (ADR-0060 and root `AGENTS.md` → UI Authority).
 - [Agent and issue-tracker guidance](agents/).
 - [Operator manual](USER-MANUAL.md) and [interactive Korean user guide](user-guide/), with the [guide index](user-guide/README.md).
+- [Production images and local OIDC check](implementation/release/oidc-and-images.md): image smoke, OIDC walkthrough, company IdP and Kubernetes settings.
 - [Code index](code-index.md) maps backend modules, frontend features, and shared packages.
 - [Domain vocabulary and stable invariants](../CONTEXT.md).
 
