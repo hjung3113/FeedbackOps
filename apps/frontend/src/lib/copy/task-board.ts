@@ -1,4 +1,7 @@
 export const TASK_BOARD_COPY = {
+  openOnlyNote: '완료·배포된 Task는 제외됩니다. 상태별 보기에서 확인하세요.',
+  columnLoading: '불러오는 중...',
+  columnError: '이 열을 불러오지 못했습니다.',
   roleDescription: '끌 수 있는 Task',
   screenReaderInstructions: {
     draggable:

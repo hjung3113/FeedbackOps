@@ -110,7 +110,7 @@ const repairs = [
   {
     name: 'Task status transition',
     useRepair: () => {
-      const mutation = useTaskStatusTransition(['tasks']);
+      const mutation = useTaskStatusTransition({ mode: 'open', openKey: ['tasks'] });
       return () => mutation.mutate({ task, status: 'released' });
     },
     body: { status: 'released' },
@@ -231,7 +231,10 @@ it('a superseded successful Task status transition still invalidates recovery', 
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  const { result } = renderHook(() => useTaskStatusTransition(['tasks']), { wrapper });
+  const { result } = renderHook(
+    () => useTaskStatusTransition({ mode: 'open', openKey: ['tasks'] }),
+    { wrapper },
+  );
   act(() => result.current.mutate({ task, status: 'doing' }));
   await waitFor(() => expect(pending).toHaveLength(1));
   act(() => result.current.mutate({ task, status: 'released' }));

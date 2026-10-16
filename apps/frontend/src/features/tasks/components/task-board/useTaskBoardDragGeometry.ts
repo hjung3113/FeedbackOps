@@ -1,4 +1,5 @@
 import {
+  type Active,
   type CollisionDetection,
   type DragStartEvent,
   type KeyboardCoordinateGetter,
@@ -43,37 +44,53 @@ export function useTaskBoardDragGeometry() {
         ),
       ),
     });
-  const coordinateGetter: KeyboardCoordinateGetter = (event, { context, currentCoordinates }) => {
+  // One column per press (#1114): the current column is a tracked index, never re-derived from
+  // the collision rect or `context.over`, which both lag the auto-scroll a press can trigger.
+  // Refs are written only from the sensor getter and the drag handlers, never during render.
+  const originStatus = React.useRef<string | null>(null);
+  const columnIndex = React.useRef<number | null>(null);
+  const coordinateGetter: KeyboardCoordinateGetter = (
+    event,
+    { active, context, currentCoordinates },
+  ) => {
     if (event.code !== 'ArrowRight' && event.code !== 'ArrowLeft') return undefined;
     const activeRect = context.collisionRect;
     if (!activeRect) return undefined;
     const columns = context.droppableContainers
       .getEnabled()
-      .flatMap(({ node }) => (node.current ? [outerColumnRect(node.current)] : []))
-      .filter((rect) => rect.width > 0)
-      .sort((a, b) => a.left - b.left);
+      .flatMap(({ id, node }) =>
+        node.current ? [{ id: String(id), rect: outerColumnRect(node.current) }] : [],
+      )
+      .filter(({ rect }) => rect.width > 0)
+      .sort((a, b) => a.rect.left - b.rect.left);
     if (!columns.length) return undefined;
-    const centre = activeRect.left + activeRect.width / 2;
-    let current = columns.findIndex((rect) => centre >= rect.left && centre <= rect.right);
-    const outsideColumns = current === -1;
-    if (outsideColumns) {
-      const distance = (rect: (typeof columns)[number]) =>
-        Math.min(Math.abs(centre - rect.left), Math.abs(centre - rect.right));
-      let nearestDistance = Number.POSITIVE_INFINITY;
-      columns.forEach((rect, index) => {
-        if (distance(rect) < nearestDistance) {
-          current = index;
-          nearestDistance = distance(rect);
-        }
-      });
+    if (columnIndex.current === null) {
+      const origin =
+        originStatus.current ??
+        (context.draggableNodes.get(active)?.data.current?.task as { status?: string } | undefined)
+          ?.status;
+      const start = columns.findIndex(({ id }) => id === origin);
+      if (start < 0) return undefined;
+      columnIndex.current = start;
     }
-    const target =
-      columns[outsideColumns ? current : current + (event.code === 'ArrowRight' ? 1 : -1)];
+    const next = Math.min(
+      columns.length - 1,
+      Math.max(0, columnIndex.current + (event.code === 'ArrowRight' ? 1 : -1)),
+    );
+    columnIndex.current = next;
+    const target = columns[next]?.rect;
     if (!target) return undefined;
     // KeyboardSensor coordinates are the active rect's top-left, not its centre.
     return { x: target.left + target.width / 2 - activeRect.width / 2, y: currentCoordinates.y };
   };
-  function onDragStart(event: Pick<DragStartEvent, 'activatorEvent'>) {
+  function resetColumnTracking() {
+    originStatus.current = null;
+    columnIndex.current = null;
+  }
+  function onDragStart(event: Pick<DragStartEvent, 'activatorEvent'> & { active?: Active }) {
+    resetColumnTracking();
+    originStatus.current =
+      (event.active?.data.current?.task as { status?: string } | undefined)?.status ?? null;
     const activator = event.activatorEvent;
     pointer.current =
       'clientX' in activator && 'clientY' in activator
@@ -81,9 +98,11 @@ export function useTaskBoardDragGeometry() {
         : null;
     setDragging(true);
   }
-  function onDragEnd() {
+  const onDragEnd = React.useCallback(() => {
+    originStatus.current = null;
+    columnIndex.current = null;
     setDragging(false);
-  }
+  }, []);
   return {
     boardScroller,
     autoScroll: { canScroll, threshold: BOARD_SCROLL_THRESHOLD },
@@ -97,5 +116,6 @@ export function useTaskBoardDragGeometry() {
     coordinateGetter,
     onDragStart,
     onDragEnd,
+    reset: onDragEnd,
   };
 }

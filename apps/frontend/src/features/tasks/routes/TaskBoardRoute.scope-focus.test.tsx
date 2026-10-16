@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
+import { boardList } from './taskBoardTestServer';
 
 const task = {
   id: '10000000-0000-0000-0000-000000000001',
@@ -84,7 +85,7 @@ function boardRect(left: number, width: number, height: number): DOMRect {
 
 describe('TaskBoardRoute keyboard recovery scope', () => {
   beforeEach(() => {
-    vi.mocked(listTasks).mockResolvedValue({ items: [task] });
+    vi.mocked(listTasks).mockImplementation(boardList([task]));
     vi.mocked(updateTaskStatus).mockImplementation(() => new Promise(() => {}));
     navigate.mockReset();
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
@@ -115,7 +116,7 @@ describe('TaskBoardRoute keyboard recovery scope', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['groupBy', 'managedSystem', 'publicUpdate', 'q'] as const)(
+  it.each(['groupBy', 'managedSystem', 'publicUpdate', 'q', 'filters'] as const)(
     'abandons a pending destination and its later rejection after %s changes',
     async (scope) => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -159,6 +160,13 @@ describe('TaskBoardRoute keyboard recovery scope', () => {
         fireEvent.click(await screen.findByRole('radio', { name: '우선순위' }));
         fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
         fireEvent.click(await screen.findByRole('radio', { name: '상태 (기본)' }));
+      } else if (scope === 'filters') {
+        // #1178: a personal filter change retires the pending recovery like any scope change.
+        fireEvent.click(screen.getByRole('button', { name: '필터' }));
+        fireEvent.click(await screen.findByRole('checkbox', { name: '높음' }));
+        await screen.findByRole('button', { name: /TASK-1000:/ });
+        fireEvent.click(screen.getByRole('checkbox', { name: '높음' }));
+        await screen.findByRole('button', { name: /TASK-1000:/ });
       } else {
         view.rerender(
           board(

@@ -54,7 +54,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/voc-clusters/:clusterId` | — | No search state; the cluster id is the path param and the cluster list stays as the list context |
-| `/tasks` | `q`, `view`, `param`, `managedSystem`, `public_update`, `filter.analytics_area`, `status`, `status_group`, `overdue`, `reporter_update`, `returnTo` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` (`missing`) unless filtering the board, backlog or My list to Released Tasks missing a public update; `filter.analytics_area`, `status`, `status_group` (`in-flight`), `overdue` (`true`) and `reporter_update` (`needed`) when unfiltered — these apply to backlog and My only, not the board |
+| `/tasks` | `q`, `view`, `param`, `managedSystem`, `public_update`, `filter.analytics_area`, `status`, `status_group`, `overdue`, `reporter_update`, `returnTo` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` (`missing`) unless filtering the board, backlog or My list to Released Tasks missing a public update (the board shows it as a removable `ActiveFilterBar` chip); `filter.analytics_area`, `status`, `status_group` (`in-flight`), `overdue` (`true`) and `reporter_update` (`needed`) when unfiltered — these apply to backlog and My only, not the board |
 | `/home` | `managedSystem`, `tab`, `category`, `selected`, `presentation`, `history`, `returnTo`, `cursor` | Dashboard tab, visible presentation, history=false and absent filters/selection/return/cursor; Home scope is a UUID when explicit |
 | `/integration` | `managedSystem`, `category`, `selected`, `presentation`, `history`, `returnTo`, `cursor` | `managedSystem` for the caller's effective scope union (`all` is also accepted); visible presentation, history=false and absent filters/selection/return/cursor |
 | `/integration/evidence` | `managedSystem`, `source`, `q`, `selected`, `cursor` | omit unfiltered defaults; selection uses a local highlight UUID; cursor is opaque |
@@ -221,7 +221,21 @@ as the other surfaces.
   using the shipped load-more control. Finding and Task counts use the first
   page's exact total. Task Request badges and global-empty state use a separate
   unfiltered `limit=1` summary; active-tab pages send the server status filter.
-  Badges stay unknown until that summary succeeds. The Task board stays full-set.
+  Badges stay unknown until that summary succeeds. The Task board is bounded (#1178):
+  grouped by status, each of the seven status columns runs its own paged read
+  (`status`, `limit=50`, cursor) with the board's scope, `q`, `public_update` and
+  personal filters, shows that read's exact first-page total in its header, and ends
+  with the shipped load-more control (`더 불러오기`, that column's cursor only). Grouped
+  by priority, Managed System or assignee, the board reads the open set once
+  (`status_group=open`, same filters, no `limit`) and shows `완료·배포된 Task는 제외됩니다.
+  상태별 보기에서 확인하세요.`; Done and Released Tasks appear only under the status
+  grouping. The personal priority, Milestone and assignee filters are server filters on
+  every one of those reads; their options come from the priority enum, the scope's
+  Milestones and the workspace actors (teams are not filter options). The stat strip
+  (`전체 Task`, `미배정`, `진행 중`) is three `limit=1` totals using scope, `q` and
+  `public_update` only, never the personal filters, and shows `—` until each succeeds;
+  the title badge is the sum of the column totals (the open-set size outside status
+  grouping).
   VOC Inbox and 내 VOC append pages under the rows with the same control and never put the
   cursor in the URL; VOC Triage keeps its single 50-row working page, and each command's
   refetch brings the next rows.
@@ -252,7 +266,11 @@ as the other surfaces.
   or a new defined `param`. Closing either Task screen's panel returns keyboard
   focus to the row that was selected when the close started; when that row is
   not shown, focus does not move. A detail 404/out-of-scope link shows the not-found notice
-  in the detail-panel area and opens no row, including after URL cleanup or refetch.
+  in the detail-panel area and opens no row, including after URL cleanup or refetch. On the
+  board, a selected Task that no loaded column page contains resolves through
+  `GET /tasks/:id` under the same 404 and explicit-Managed-System rules; the board never
+  auto-selects a first card, and the detail panel's `다음 상태로 이동` works on that fallback
+  Task (its unloaded source column only has its total adjusted).
   The notice clears on row selection, a tab/view or scope change, or a new defined
   `param`; removing `param` during cleanup does not clear it. First-row auto-selection
   stays local and runs only without an explicit `param`, a closed panel, or the notice.
@@ -559,7 +577,8 @@ implemented by #1077 (parts a/b). Coverage extensions below are implemented by #
 - Implemented Finding links carry `status=active` or `execution=none`. Implemented Task links carry `view=backlog`
   plus single `status`, `status_group=in-flight`, `overdue=true`, `public_update=missing`, or
   `reporter_update=needed`; Survey links carry `status=open` or `follow_up=needed`.
-  Task backlog/my lists apply all six filters; the board keeps only its existing `public_update` behavior.
+  Task backlog/my lists apply all six filters; the board keeps only its existing `public_update` behavior, shown as a removable `ActiveFilterBar`
+  chip (`공개 업데이트 없음`; `필터 초기화` drops it).
   These are source membership filters, not `action=` intents. All combinations intersect.
 - VOC/Finding/Task/Survey render `ActiveFilterBar` below the list toolbar. Area UUID labels resolve through
   the paged authorized catalog including archived Areas; unresolved labels disclose no existence.
@@ -664,7 +683,8 @@ placeholder `제목 또는 ID`. The route-lifetime shared
 draft, and commits on Enter/blur or debounce (300 ms; Hangul-final text 700 ms).
 Blank search omits `q`; the strict route schemas use the same trimmed, max-100
 query contract as the API. Each search changes the list query key and starts
-from page one without a cursor; no-limit board requests include `q` too.
+from page one without a cursor; the board's column pages, open-set read and summary
+totals include `q` too.
 Pending/error/empty Task list bodies preserve the shell and focused search draft.
 While a search is pending, Task list/board and Findings retain previous rows and
 counts only when that query differs by `q` alone and the previous query
@@ -680,6 +700,7 @@ No matches show `검색 결과가 없습니다.` with a reset action.
 `status_group=in-flight` (Todo/Doing/Review), preserving the `assignee=me` request.
 Findings exposes `execution=none` and `status=active` checkboxes alongside owner
 assignment. Their URL filters have removable ActiveFilterBar chips and reset.
-The board's query key, request parameters and keyboard-recovery scope include
-`q`; changing search abandons pending keyboard focus recovery while preserving
-grouping, local filters and the existing selection policy.
+The board's per-column query keys, request parameters and keyboard-recovery scope include
+`q` (and the personal filters, except in the summary totals); changing search or a filter
+abandons pending keyboard focus recovery while preserving grouping, local filters and the
+existing selection policy.

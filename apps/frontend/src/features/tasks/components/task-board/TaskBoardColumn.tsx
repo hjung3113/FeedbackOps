@@ -1,6 +1,8 @@
+import { ListLoadMore } from '@/components/ListLoadMore';
+import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
 import { useDroppable } from '@dnd-kit/core';
 import type { TaskDto, TaskStatus } from '@fops/shared';
-import { InternalTaskBadge } from '@fops/ui';
+import { Button, InternalTaskBadge } from '@fops/ui';
 
 import { resolveTaskAssignee, taskTeamLabel } from '../../adapters/taskDisplayAdapters';
 import { TaskBoardCard } from './TaskBoardCard';
@@ -10,6 +12,10 @@ export function TaskBoardColumn({
   id,
   label,
   tasks,
+  total,
+  state = 'ready',
+  paging,
+  onRetry,
   groupBy,
   selectedId,
   selectTask,
@@ -19,6 +25,12 @@ export function TaskBoardColumn({
   id: string;
   label: string;
   tasks: TaskDto[];
+  /** Server total for the column; `null` while unknown. Defaults to the loaded count. */
+  total?: number | null | undefined;
+  /** `loading`/`error` describe a column whose first page is not available. */
+  state?: 'ready' | 'loading' | 'error';
+  paging?: { hasMore: boolean; loadingMore: boolean; failed: boolean; onLoadMore: () => void };
+  onRetry?: () => void;
   groupBy: TaskBoardGroupBy;
   selectedId: string | null;
   selectTask: (id: string) => void;
@@ -44,7 +56,9 @@ export function TaskBoardColumn({
             {label}
           </span>
         )}
-        <span className="text-xs tabular-nums text-text-muted">{tasks.length}</span>
+        <span className="text-xs tabular-nums text-text-muted">
+          {total === null ? '—' : (total ?? tasks.length)}
+        </span>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
         <div ref={droppable.setNodeRef} className="flex min-h-full shrink-0 flex-col gap-2">
@@ -70,10 +84,33 @@ export function TaskBoardColumn({
               />
             );
           })}
-          {tasks.length === 0 && (
+          {tasks.length === 0 && state === 'ready' && (
             <div className="p-3 text-center text-xs text-text-muted">비어있음</div>
           )}
+          {state === 'loading' && (
+            <div className="p-3 text-center text-xs text-text-muted">
+              {TASK_BOARD_COPY.columnLoading}
+            </div>
+          )}
+          {state === 'error' && (
+            <div className="flex flex-col items-center gap-1 p-3 text-center text-xs text-text-muted">
+              {TASK_BOARD_COPY.columnError}
+              {onRetry ? (
+                <Button variant="ghost" size="sm" onClick={onRetry}>
+                  다시 시도
+                </Button>
+              ) : null}
+            </div>
+          )}
         </div>
+        {paging ? (
+          <ListLoadMore
+            hasMore={paging.hasMore}
+            loadingMore={paging.loadingMore}
+            failed={paging.failed}
+            onLoadMore={paging.onLoadMore}
+          />
+        ) : null}
       </div>
     </section>
   );

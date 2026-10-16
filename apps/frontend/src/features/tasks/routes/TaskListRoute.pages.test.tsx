@@ -154,20 +154,34 @@ describe('Task list paging and independent selection', () => {
       expect(screen.queryByText(second.id)).not.toBeInTheDocument();
     },
   );
-  it('AC-981 keeps the Task board on a request without limit', async () => {
+  it('AC-981 bounds the Task board to a page per status column instead of one unbounded request', async () => {
     const queries: Array<ReturnType<typeof listTasksQuerySchema.parse>> = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), 'http://localhost');
-        queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
-        return response({ items: [task] });
+        if (url.pathname !== '/tasks') return response({ items: [] });
+        const query = listTasksQuerySchema.parse(Object.fromEntries(url.searchParams));
+        queries.push(query);
+        return response({
+          items: query.status === 'backlog' ? [task] : [],
+          page: { has_more: false, total: query.status === 'backlog' ? 1 : 0 },
+        });
       }),
     );
     mount(<TaskBoardRoute />);
     await screen.findByText('TASK-1');
-    expect(queries[0]?.limit).toBeUndefined();
-    expect(queries[0]?.cursor).toBeUndefined();
+    expect(queries.length).toBeGreaterThan(0);
+    for (const query of queries) {
+      expect(query.limit).toBeDefined();
+      expect(query.cursor).toBeUndefined();
+    }
+    expect(
+      queries
+        .filter((query) => query.limit === 50)
+        .map((query) => query.status)
+        .sort(),
+    ).toEqual(['backlog', 'doing', 'done', 'released', 'reopened', 'review', 'todo'].sort());
   });
 });
 
@@ -225,8 +239,13 @@ it('keeps board requests limited to the existing public_update filter', async ()
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost');
-      queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
-      return response({ items: [task] });
+      if (url.pathname !== '/tasks') return response({ items: [] });
+      const query = listTasksQuerySchema.parse(Object.fromEntries(url.searchParams));
+      queries.push(query);
+      return response({
+        items: query.status === 'backlog' ? [task] : [],
+        page: { has_more: false, total: query.status === 'backlog' ? 1 : 0 },
+      });
     }),
   );
   mount(
@@ -244,5 +263,17 @@ it('keeps board requests limited to the existing public_update filter', async ()
     />,
   );
   await screen.findByText('TASK-1');
-  expect(queries[0]).toEqual({ managed_system_id: ms, public_update: 'missing' });
+  // Backlog column page: only the scope and the public-update filter, plus its own paging.
+  expect(queries.find((query) => query.status === 'backlog')).toEqual({
+    managed_system_id: ms,
+    public_update: 'missing',
+    status: 'backlog',
+    limit: 50,
+  });
+  for (const query of queries) {
+    expect(query).not.toHaveProperty('overdue');
+    expect(query).not.toHaveProperty('status_group');
+    expect(query).not.toHaveProperty('reporter_update');
+    expect(query).not.toHaveProperty('analytics_area_id');
+  }
 });

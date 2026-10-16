@@ -36,8 +36,11 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 - `apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx` — Task board columns and grouping state.
 - `apps/frontend/src/features/tasks/components/task-board/` — Task board cards, columns, and grouping
   control; the route retains URL state and DnD sensors.
-- `apps/frontend/src/features/tasks/hooks/useTaskStatusTransition.ts` — scoped optimistic Task status
-  writes, rollback, and stale-write handling.
+- `apps/frontend/src/features/tasks/hooks/useTaskBoardData.ts` — board reads: one paged query per
+  status column (`['tasks','board',{…,status}]`), the open-set read for other groupings, and the
+  three summary totals.
+- `apps/frontend/src/features/tasks/hooks/useTaskStatusTransition.ts` — per-column optimistic Task
+  status writes (source/target pages and totals), per-invocation rollback, and stale-write handling.
 - `apps/frontend/src/features/tasks/hooks/useTaskPanelSelection.ts` — shared Task list and Task Request
   selection reconciliation, panel close, auto-selection, and missing-link state; callers own detail queries,
   scope/filter checks, and focus return.

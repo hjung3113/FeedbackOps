@@ -14,6 +14,7 @@ import {
   type TaskDetailDto,
   type TaskDto,
   registeredEntityLinkPairSchema,
+  splitTaskListTokens,
 } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
@@ -1077,8 +1078,18 @@ export function createTasksService(deps: TasksServiceDeps) {
     if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
-    const assigneeActorId =
-      args.query.assignee === 'me' ? args.actor.actor_id : args.query.assignee;
+    const assigneeTokens =
+      args.query.assignee === undefined ? [] : splitTaskListTokens(args.query.assignee);
+    const assigneeActorIds = [
+      ...new Set(
+        assigneeTokens
+          .filter((token) => token !== 'unassigned')
+          .map((token) => (token === 'me' ? args.actor.actor_id : token)),
+      ),
+    ];
+    const milestoneTokens =
+      args.query.milestone_id === undefined ? [] : splitTaskListTokens(args.query.milestone_id);
+    const milestoneIds = milestoneTokens.filter((token) => token !== 'any' && token !== 'none');
     const managedSystemId =
       args.query.managed_system_id && args.query.managed_system_id !== 'all'
         ? args.query.managed_system_id
@@ -1091,7 +1102,11 @@ export function createTasksService(deps: TasksServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.query.q === undefined ? {} : { q: args.query.q }),
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
-      ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
+      ...(assigneeActorIds.length > 0 ? { assigneeActorIds } : {}),
+      ...(assigneeTokens.includes('unassigned') ? { assigneeUnassigned: true } : {}),
+      ...(args.query.priority === undefined
+        ? {}
+        : { priorities: splitTaskListTokens(args.query.priority) }),
       ...(args.query.assignee_team_id === undefined
         ? {}
         : { assigneeTeamId: args.query.assignee_team_id }),
@@ -1105,7 +1120,9 @@ export function createTasksService(deps: TasksServiceDeps) {
         ? {}
         : { reporterUpdate: args.query.reporter_update }),
       ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
-      ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
+      ...(milestoneIds.length > 0 ? { milestoneIds } : {}),
+      ...(milestoneTokens.includes('any') ? { milestoneAny: true } : {}),
+      ...(milestoneTokens.includes('none') ? { milestoneNone: true } : {}),
       ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),
     };
     const empty = allowedSystemIds?.length === 0;
