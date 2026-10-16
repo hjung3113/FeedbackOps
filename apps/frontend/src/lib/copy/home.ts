@@ -60,7 +60,7 @@ export const HOME_QUEUE_COPY: Record<
     sidebarLabel: '미배정 VOC',
     detail: '담당자가 지정되지 않은 VOC가 누적되어 있습니다. 우선 분류와 담당 배정이 필요합니다.',
     primaryAction: 'VOC 검토',
-    secondaryAction: '일괄 배정',
+    secondaryAction: '미배정 VOC 보기',
   },
   'high-severity-unlinked': {
     title: GLOSSARY.highNoLink,

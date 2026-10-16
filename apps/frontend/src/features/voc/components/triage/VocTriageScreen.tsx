@@ -24,6 +24,7 @@ import {
 import { Flag } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type * as React from 'react';
+import { VocAreaFilterSelect } from '../VocAreaFilterSelect';
 import { TriagePanel } from './TriagePanel';
 import { TriageQueue } from './TriageQueue';
 import { useVocTriageScreenController } from './useVocTriageScreenController';
@@ -45,6 +46,11 @@ export interface VocTriageScreenProps {
   /** True only after a successful, non-placeholder queue read, with no fetch in flight. */
   queueSettled?: boolean;
   queueTotal?: number;
+  /** Selected Managed System, scoping the Area options. */
+  managedSystemId?: string;
+  /** URL `filter.analytics_area`: absent = all areas, `unset`, or an area id. */
+  areaFilter?: string;
+  onAreaChange?: (next: string | undefined) => void;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
   tabCounts?: Partial<Record<TriageTab, number>>;
   outOfScopeSummary?: {
@@ -77,6 +83,9 @@ export function VocTriageScreen({
   queueSettled,
   queueTotal,
   queueTotalUnavailableState,
+  managedSystemId,
+  areaFilter,
+  onAreaChange,
   tabCounts,
   outOfScopeSummary,
   processedCount = 0,
@@ -212,6 +221,17 @@ export function VocTriageScreen({
           >
             · {processedCount}건 처리됨
           </span>
+        )}
+
+        {onAreaChange !== undefined && (
+          <VocAreaFilterSelect
+            value={areaFilter}
+            managedSystemId={managedSystemId}
+            onChange={(next) => {
+              setPendingFocus(null);
+              onAreaChange(next);
+            }}
+          />
         )}
 
         {/* ADR-0022 keeps Triage tabs in the toolbar's right cluster. */}

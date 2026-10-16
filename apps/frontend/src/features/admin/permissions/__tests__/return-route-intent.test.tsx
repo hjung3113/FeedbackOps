@@ -28,6 +28,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 vi.mock('@/features/voc/hooks/useVocList', () => ({ useVocList: useVocListMock }));
+vi.mock('@/features/voc/hooks/useVocListPages', () => ({ useVocListPages: useVocListMock }));
 vi.mock('@/features/voc/components/detail/VocDetailPanel', () => ({
   VocDetailPanel: () => null,
 }));

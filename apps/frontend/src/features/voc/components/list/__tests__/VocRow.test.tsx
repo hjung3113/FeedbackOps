@@ -164,23 +164,6 @@ describe('<VocRow>', () => {
     expect(screen.queryByText('Analytics Area 없음')).not.toBeInTheDocument();
   });
 
-  it('shows a checkbox and toggling it calls onToggleCheck without onSelect', () => {
-    const onToggleCheck = vi.fn();
-    render(
-      <VocRow
-        voc={BASE_VOC}
-        selected={false}
-        onSelect={onSelect}
-        managedSystem={null}
-        onToggleCheck={onToggleCheck}
-      />,
-    );
-    const checkbox = screen.getByLabelText('VOC-001 선택');
-    fireEvent.click(checkbox);
-    expect(onToggleCheck).toHaveBeenCalledTimes(1);
-    expect(onSelect).not.toHaveBeenCalled();
-  });
-
   it('calls onSelect on click', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
     fireEvent.click(screen.getByRole('row'));

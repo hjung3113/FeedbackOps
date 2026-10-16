@@ -15,8 +15,17 @@ import { validateVocSearch } from '../voc-search';
 const AREA = '11111111-1111-4111-8111-111111111111';
 const MS = '22222222-2222-4222-8222-222222222222';
 const VOC = '33333333-3333-4333-8333-333333333333';
-vi.mock('../../hooks/useVocList', () => ({
-  useVocList: () => ({ data: { items: [] }, isLoading: false, error: null, refetch: vi.fn() }),
+vi.mock('../../hooks/useVocListPages', () => ({
+  useVocListPages: () => ({
+    data: { pages: [{ items: [], page: { has_more: false } }], pageParams: [undefined] },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: vi.fn(),
+  }),
 }));
 vi.mock('../../components/list/VocList', () => ({
   VocList: ({ onSelect }: { onSelect: (id: string) => void }) => (

@@ -45,6 +45,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | Deep-link route | Search keys | Omitted defaults |
 |---|---|---|
 | `/findings` | `q`, `managedSystem`, `selected`, `execution`, `assignment`, `filter.analytics_area`, `status`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution`, `assignment`, `filter.analytics_area` and `status` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
+| `/vocs` | `view`, `tab`, `q`, `managedSystem`, `selected`, `filter.severity`, `filter.reporterStatus`, `filter.owner`, `filter.analytics_area`, `sort`, `action`, `returnTo` | `view` for the Inbox default; `action` unless the create form is open; `returnTo` unless opened from a recovery queue; `tab`, `q`, `selected`, filters and `sort` when unset (`sort` defaults to `created_at:desc`; Triage has no `sort` or `q`); `managedSystem` for the caller's effective scope union (`all` is also accepted). There is no `cursor` key: paging state never enters the URL. |
 | `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected`, `filter.analytics_area`, `status`, `follow_up` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `filter.analytics_area`, `status` (`open`) and `follow_up` (`needed`) when unfiltered |
 | `/surveys/:surveyId` | `managedSystem`, `filter.analytics_area`, `status`, `follow_up`, `builder`, `returnTo` | Same list-filter omissions as `/surveys`. Selection is the path `surveyId`, not a search key. `builder` unless the builder is open; `returnTo` unless opened from a recovery queue. The detail toolbar matches the index list (title, create, chips). Row selection and chip removal stay on `/surveys/:surveyId` and keep unrelated search. Close returns to `/surveys` with the remaining list context and drops `builder` and `returnTo`. |
@@ -216,11 +217,14 @@ as the other surfaces.
 - In `view=milestones`, desktop selection opens Milestone Detail in RightDetailPanel; the list remains the primary context.
 - Mobile selection uses a drill-in route (target contract, not built); back returns to the previous list filters.
 - Browser refresh on a selected URL restores AppShell, list context, and selected detail when data is accessible.
-- Finding, Task list and Task Request queue screens load cursor pages of 50 rows
+- Finding, Task list, Task Request queue, VOC Inbox and 내 VOC screens load cursor pages of 50 rows
   using the shipped load-more control. Finding and Task counts use the first
   page's exact total. Task Request badges and global-empty state use a separate
   unfiltered `limit=1` summary; active-tab pages send the server status filter.
   Badges stay unknown until that summary succeeds. The Task board stays full-set.
+  VOC Inbox and 내 VOC append pages under the rows with the same control and never put the
+  cursor in the URL; VOC Triage keeps its single 50-row working page, and each command's
+  refetch brings the next rows.
 - A selected ID absent from loaded pages resolves through its detail endpoint;
   page membership does not prove deletion. Detail 404 or the screen's active
   scope/filter rule reconciles selection. VOC Cluster selections (`/voc-clusters?selected=` and

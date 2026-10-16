@@ -186,10 +186,9 @@ describe('TriagePanel Overview and grouped navigation', () => {
   it('wires reporter status and the actual baseline into the live Summary', () => {
     renderPanel();
 
-    const transition = screen.getByTestId('reporter-status-transition');
-    expect(transition).toBeInTheDocument();
-    expect(transition).toHaveTextContent('접수됨');
-    expect(transition).toHaveTextContent('검토 중');
+    const status = screen.getByTestId('summary-reporter-status');
+    expect(status).toHaveTextContent('접수됨');
+    expect(status).toHaveTextContent('확정해도 공개 상태는 바뀌지 않습니다.');
     expect(screen.getByTestId('summary-no-changes')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '낮음' }));

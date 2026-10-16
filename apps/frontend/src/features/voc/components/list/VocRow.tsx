@@ -1,7 +1,7 @@
 /**
  * VocRow — single-select row for the VOC inbox list.
  *
- * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a checkbox + severity
+ * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a severity
  * indicator lead, a title line (id · title), a meta line
  * (reporter-status badge · severity badge · managed system · area/"No area" ·
  * time · linked finding), and a trailing identity column (owner avatar /
@@ -24,7 +24,6 @@
 import type { VocListItem } from '@fops/shared';
 import {
   type AvatarUser,
-  Checkbox,
   ManagedSystemPill,
   ReporterStatusBadge,
   SeverityBadge,
@@ -78,9 +77,6 @@ export interface VocRowProps {
   reporter?: AvatarUser | null;
   /** Resolved analytics-area display name. Null = no area linked (amber "No area"). */
   areaName?: string | null;
-  /** Bulk-selection checkbox state. When `onToggleCheck` is omitted the checkbox is hidden. */
-  checked?: boolean;
-  onToggleCheck?: () => void;
   className?: string;
 }
 
@@ -98,13 +94,10 @@ export function VocRow({
   owner,
   reporter,
   areaName,
-  checked,
-  onToggleCheck,
   className,
 }: VocRowProps) {
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
   const relTime = formatRelativeTime(voc.created_at);
-  const showCheckbox = onToggleCheck !== undefined;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === ' ' || e.key === 'Enter') {
@@ -150,25 +143,8 @@ export function VocRow({
         className={cn('absolute left-0 top-0 bottom-0 w-row-accent rounded-r-sm', severityBarClass)}
       />
 
-      {/* LEAD: checkbox (bulk select) + severity indicator. Click here must not
-          open the detail panel. */}
-      <div
-        className="flex items-center gap-3 shrink-0"
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-        }}
-        role="presentation"
-      >
-        {showCheckbox && permissionLimited !== true && (
-          <Checkbox
-            checked={checked === true}
-            onCheckedChange={() => onToggleCheck?.()}
-            aria-label={`${voc.display_id} 선택`}
-          />
-        )}
+      {/* LEAD: severity indicator. */}
+      <div className="flex items-center gap-3 shrink-0">
         {voc.severity !== undefined && (
           <SeverityIndicator severity={voc.severity} decorative={voc.severity !== null} />
         )}

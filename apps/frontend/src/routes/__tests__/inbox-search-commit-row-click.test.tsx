@@ -70,7 +70,7 @@ describe('#864 a row click while a search draft is pending still selects the row
 
   it('writes selected when pointerdown, mousedown, blur, mouseup and click land before the debounce', async () => {
     const { router } = mountInbox();
-    const box = await screen.findByRole('searchbox', { name: '필터, 키워드…' });
+    const box = await screen.findByRole('searchbox', { name: '제목 또는 ID' });
     const row = (await screen.findByText('VOC-SEED-08')).closest('[role="row"]');
     expect(row).not.toBeNull();
     if (row === null) return;

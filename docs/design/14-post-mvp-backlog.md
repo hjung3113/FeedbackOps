@@ -20,6 +20,12 @@ Add an entry whenever a close-out slice defers or drops something. Remove an ent
 | --- | --- | --- |
 | Single-object permission enforcement and approval narrowing (Slice 55, ADR-0066; owner #1041, 2026-10-13) | Current checks enforce workspace/Managed System only. End-to-end object gates across consuming routes would expand this close-out slice and its privacy tests; an object-scope warning cannot enforce a restriction. MVP rejects object-scoped writes/approval rather than silently broadening access, preserving historical rows. | A demonstrated job needs one-object access and an ADR defines object identity, every consuming-route/check/list gate, privacy tests, and explicit legacy-data disposition. Legacy unsuperseded object grants must be inventoried and resolved explicitly before MVP release. |
 
+### Slice 62 — #1175 (2026-10-16)
+
+| Deferred item | Reason | Reopen condition |
+| --- | --- | --- |
+| VOC bulk actions (assign owner, set severity, add to Cluster, create Finding) | No bulk endpoint; disabled stubs removed from the Inbox | When a bulk VOC command API is approved |
+
 ### Slice 56 — ADR-0067 (2026-10-13)
 
 These exclusions do not defer the five Coverage bands, real Actor/team responsibility,

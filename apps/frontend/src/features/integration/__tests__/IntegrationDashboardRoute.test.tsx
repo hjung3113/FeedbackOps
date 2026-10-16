@@ -246,7 +246,11 @@ describe('integration action dashboard route', () => {
       );
     }
     expect(screen.getByTestId('integration-queue-secondary-unassigned-voc')).toHaveTextContent(
-      '일괄 담당자 지정',
+      '미배정 VOC 보기',
+    );
+    expect(screen.getByTestId('integration-queue-secondary-unassigned-voc')).toHaveAttribute(
+      'href',
+      expect.stringContaining('/vocs?view=inbox&tab=unassigned'),
     );
 
     expect(screen.getByTestId('integration-dashboard-gap-count').textContent).toBe('34');

@@ -76,7 +76,7 @@ describe('/vocs inbox numeric search (#850)', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole('searchbox', { name: '필터, 키워드…' })).toHaveValue('1000');
+    expect(await screen.findByRole('searchbox', { name: '제목 또는 ID' })).toHaveValue('1000');
 
     await waitFor(() => expect(vocsRequests.length).toBeGreaterThan(0));
     const requestUrl = vocsRequests[0];

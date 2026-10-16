@@ -36,6 +36,7 @@ interface TriageSearch {
   tab?: TriageTab;
   managedSystem?: string;
   selected?: string;
+  'filter.analytics_area'?: string;
 }
 
 const TRIAGE_TAB_COUNT_KEYS = {
@@ -70,6 +71,7 @@ export function TriageRoute(): React.ReactElement {
 
   // Active tab defaults to 'unassigned' when not set in URL
   const activeTab: TriageTab = (search.tab as TriageTab | undefined) ?? 'unassigned';
+  const area = search['filter.analytics_area'];
 
   // A selected Managed System keeps its point-check gate.
   const capCheck = usePermissionCheck({
@@ -115,6 +117,7 @@ export function TriageRoute(): React.ReactElement {
       view: 'triage',
       ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
       tab: activeTab,
+      ...(area !== undefined ? { filters: { 'filter.analytics_area': [area] } } : {}),
       ...(search.selected !== undefined ? { pinVocId: search.selected } : {}),
       enabled: isApproved,
     });
@@ -126,12 +129,27 @@ export function TriageRoute(): React.ReactElement {
   // showing them (same rule as VocList).
   const queueError = isError && items.length === 0;
   const outOfScopeSummary = data?.out_of_scope_summary;
-  const navCounts = navCountsQuery.data?.counts;
+  // The nav-count endpoint ignores Analytics Area, so its numbers would not match a
+  // filtered queue: omit them (unknown-total presentation) until the filter is cleared.
+  const areaFiltered = area !== undefined;
+  const navCounts = areaFiltered ? undefined : navCountsQuery.data?.counts;
   const queueTotal = navCounts?.['voc.triage'];
   const tabCounts = triageTabCounts(navCounts);
-  const queueTotalUnavailableState = navCountsQuery.isPending ? 'loading' : 'unavailable';
+  const queueTotalUnavailableState =
+    navCountsQuery.isPending && !areaFiltered ? 'loading' : 'unavailable';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
+
+  function handleAreaChange(next: string | undefined): void {
+    // Selection and the #383 pin stay: only the queue's Area scope changes.
+    void navigate({
+      to: '/vocs',
+      search: (prev) => {
+        const { 'filter.analytics_area': _area, ...rest } = prev as Record<string, unknown>;
+        return next === undefined ? rest : { ...rest, 'filter.analytics_area': next };
+      },
+    });
+  }
 
   function handleTabChange(tab: TriageTab): void {
     // #922: changing tabs drops the #383 deep-link pin (selected) — a pinned
@@ -226,7 +244,10 @@ export function TriageRoute(): React.ReactElement {
       queuePending={isLoading}
       {...(queueError ? { queueError } : {})}
       onRetryQueue={handleRetryQueue}
-      queueContext={JSON.stringify([activeTab, search.managedSystem ?? null])}
+      queueContext={JSON.stringify([activeTab, search.managedSystem ?? null, area ?? null])}
+      {...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {})}
+      {...(area !== undefined ? { areaFilter: area } : {})}
+      onAreaChange={handleAreaChange}
       queueSettled={isSuccess && !isFetching && !isPlaceholderData}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}
