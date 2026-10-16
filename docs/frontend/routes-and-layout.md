@@ -223,8 +223,11 @@ as the other surfaces.
   Badges stay unknown until that summary succeeds. The Task board stays full-set.
 - A selected ID absent from loaded pages resolves through its detail endpoint;
   page membership does not prove deletion. Detail 404 or the screen's active
-  scope/filter rule reconciles selection. Task Request explicit selections never
-  fall back to another row while unresolved. Review decisions refresh page and
+  scope/filter rule reconciles selection. VOC Cluster selections (`/voc-clusters?selected=` and
+  `/voc-clusters/:clusterId`) follow this rule: a detail 404 keeps the URL and shows the not-found
+  notice in the detail panel, and no other Cluster opens; a resolved Cluster outside the active
+  Managed System scope or tab is reconciled away. Task Request explicit selections never fall back
+  to another row while unresolved. Review decisions refresh page and
   summary caches while keeping the current tab. If the decided request leaves
   the tab, select the next loaded row in visible order, otherwise the preceding
   row. If no loaded rows remain, fetch remaining cursor pages before claiming

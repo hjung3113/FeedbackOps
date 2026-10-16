@@ -4,6 +4,7 @@
 // route's concern. Screens live in features/voc-cluster per AGENTS ownership.
 
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
 import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
 import { isPermissionDenied } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
@@ -89,11 +90,22 @@ export function VocClusterListShell({
     setActiveTab(tab);
   }
 
-  const visibleClusters = clusters.filter((cluster) => {
-    if (activeTab === 'confirmed') return cluster.status === 'confirmed';
-    if (activeTab === 'no-finding') return (cluster.linked_findings ?? []).length === 0;
-    return true;
-  });
+  const matchesActiveTab = React.useCallback(
+    (cluster: { status: string; linked_findings?: unknown[] | undefined }) => {
+      if (activeTab === 'confirmed') return cluster.status === 'confirmed';
+      if (activeTab === 'no-finding') return (cluster.linked_findings ?? []).length === 0;
+      return true;
+    },
+    [activeTab],
+  );
+  const visibleClusters = clusters.filter(matchesActiveTab);
+  const selectedInList =
+    selectedId !== null && clusters.some((cluster) => cluster.id === selectedId);
+  const selectedAbsentFromList =
+    !pauseClusterSelection && listQuery.isSuccess && selectedId !== null && !selectedInList;
+  const selectedDetailQuery = useVocClusterDetail(selectedAbsentFromList ? selectedId : null);
+  const selectedVisibleInList =
+    selectedId !== null && visibleClusters.some((cluster) => cluster.id === selectedId);
 
   React.useEffect(() => {
     if (!pauseClusterSelection && defaultToFirst && selectedId === null && visibleClusters[0])
@@ -101,15 +113,42 @@ export function VocClusterListShell({
   }, [pauseClusterSelection, defaultToFirst, onSelect, selectedId, visibleClusters]);
 
   React.useEffect(() => {
-    if (
-      !pauseClusterSelection &&
-      listQuery.isSuccess &&
-      selectedId !== null &&
-      !visibleClusters.some((cluster) => cluster.id === selectedId)
-    ) {
-      onCloseDetail({ reconcile: true });
+    if (pauseClusterSelection || !listQuery.isSuccess || selectedId === null) return;
+
+    if (selectedInList) {
+      if (!selectedVisibleInList) onCloseDetail({ reconcile: true });
+      return;
     }
-  }, [pauseClusterSelection, listQuery.isSuccess, onCloseDetail, selectedId, visibleClusters]);
+
+    if (!selectedDetailQuery.isSuccess || selectedDetailQuery.isFetching) return;
+    const outsideManagedSystem =
+      managedSystemId !== undefined &&
+      selectedDetailQuery.data.primary_managed_system_id !== managedSystemId;
+    if (outsideManagedSystem || !matchesActiveTab(selectedDetailQuery.data))
+      onCloseDetail({ reconcile: true });
+  }, [
+    managedSystemId,
+    matchesActiveTab,
+    onCloseDetail,
+    pauseClusterSelection,
+    listQuery.isSuccess,
+    selectedDetailQuery.data,
+    selectedDetailQuery.isSuccess,
+    selectedDetailQuery.isFetching,
+    selectedId,
+    selectedInList,
+    selectedVisibleInList,
+  ]);
+
+  const resolvedAbsentDetailIsVisible =
+    selectedAbsentFromList &&
+    (selectedDetailQuery.isPending ||
+      selectedDetailQuery.isFetching ||
+      selectedDetailQuery.isError ||
+      (selectedDetailQuery.isSuccess &&
+        (managedSystemId === undefined ||
+          selectedDetailQuery.data.primary_managed_system_id === managedSystemId) &&
+        matchesActiveTab(selectedDetailQuery.data)));
 
   return (
     <ListShell
@@ -161,7 +200,7 @@ export function VocClusterListShell({
           suggestionSlots.context === sessionContext ? (
             suggestionSlots.panel
           ) : null
-        ) : selectedId !== null && visibleClusters.some((cluster) => cluster.id === selectedId) ? (
+        ) : selectedVisibleInList || resolvedAbsentDetailIsVisible ? (
           <VocClusterDetailPanel
             key={selectedId}
             clusterId={selectedId}

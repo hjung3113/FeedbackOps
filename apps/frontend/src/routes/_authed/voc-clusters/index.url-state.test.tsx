@@ -20,9 +20,9 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, it, test, vi } from 'vitest';
 
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
@@ -63,6 +63,7 @@ const MS_2 = '99999999-9999-9999-9999-999999999902';
 const C1_ID = '11111111-1111-4111-8111-111111111111';
 const C2_ID = '55555555-5555-4555-8555-555555555555';
 const STALE_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const READABLE_ABSENT_ID = '77777777-7777-4777-8777-777777777777';
 
 const C1 = {
   id: C1_ID,
@@ -92,6 +93,13 @@ const CLUSTERS = [
   },
 ];
 
+const READABLE_ABSENT = {
+  ...C1,
+  id: READABLE_ABSENT_ID,
+  display_id: 'CLU-33',
+  title: '목록 응답 이후 생성된 Cluster',
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -103,6 +111,7 @@ interface FetchCase {
   /** Every requested URL, in order — used for the managed_system_id assertions. */
   requested: string[];
   failList?: boolean;
+  detailOnly?: typeof C1;
 }
 
 function installFetch(c: FetchCase): void {
@@ -119,7 +128,9 @@ function installFetch(c: FetchCase): void {
       return jsonResponse({ items });
     }
     if (path.pathname.startsWith('/voc-clusters/')) {
-      const cluster = CLUSTERS.find((entry) => entry.id === path.pathname.split('/')[2]);
+      const cluster = [...CLUSTERS, ...(c.detailOnly ? [c.detailOnly] : [])].find(
+        (entry) => entry.id === path.pathname.split('/')[2],
+      );
       return cluster ? jsonResponse(cluster) : jsonResponse({ code: 'not_found.record' }, 404);
     }
     if (path.pathname === '/managed-systems') return jsonResponse({ items: [], total: 0 });
@@ -260,17 +271,114 @@ describe('/voc-clusters URL state', () => {
     expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
   });
 
-  test('stale selected uuid not in the list is replaced away after load', async () => {
+  test('a stale selected uuid shows the not-found notice and opens no other Cluster', async () => {
     const router = renderUrlState({ requested: [] }, `/voc-clusters?selected=${STALE_ID}`);
+    await waitFor(
+      () => expect(screen.getByText('Cluster를 찾을 수 없습니다.')).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
+    expect(router.state.location.search).toEqual({ selected: STALE_ID });
+    expect(screen.queryByTestId('cluster-detail-title')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finding 생성' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Task 요청' })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: /CLU-31/ })).toBeInTheDocument());
-    await waitFor(() => {
-      expect(router.state.location.search).toEqual({});
-    });
-    // Replaced, not pushed: history did not grow.
     expect(router.history.length).toBe(1);
-    expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /CLU-31/ })).toBeInTheDocument();
   });
+
+  test('a readable Cluster absent from the list resolves through its detail endpoint', async () => {
+    const router = renderUrlState(
+      { requested: [], detailOnly: READABLE_ABSENT },
+      `/voc-clusters?selected=${READABLE_ABSENT_ID}`,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('cluster-detail-title')).toHaveTextContent(
+        '목록 응답 이후 생성된 Cluster',
+      ),
+    );
+    expect(router.state.location.search).toEqual({ selected: READABLE_ABSENT_ID });
+  });
+
+  it.each(['confirmed', 'not-found'] as const)(
+    'retains an absent selection through stale-detail revalidation and a %s response',
+    async (outcome) => {
+      installFetch({ requested: [] });
+      const fallbackFetch = globalThis.fetch;
+      let resolveDetail!: (response: Response) => void;
+      const detailResponse = new Promise<Response>((resolve) => {
+        resolveDetail = resolve;
+      });
+      let detailRequested = false;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input.toString() === `/voc-clusters/${READABLE_ABSENT_ID}`) {
+          detailRequested = true;
+          return (await detailResponse).clone();
+        }
+        return fallbackFetch(input, init);
+      });
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      queryClient.setQueryData(['voc-cluster', READABLE_ABSENT_ID], READABLE_ABSENT, {
+        updatedAt: Date.now() - 60_000,
+      });
+      const rootRoute = createRootRoute({ component: () => <Outlet /> });
+      const route = createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/voc-clusters',
+        validateSearch: (raw) => vocClustersSearchSchema.parse(raw),
+        component: VocClusterListPage,
+      });
+      const router = createRouter({
+        routeTree: rootRoute.addChildren([route]),
+        history: createMemoryHistory({
+          initialEntries: [`/voc-clusters?selected=${READABLE_ABSENT_ID}`],
+        }),
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await waitFor(() => {
+        expect(detailRequested).toBe(true);
+        expect(screen.getByRole('button', { name: /CLU-32/ })).toBeInTheDocument();
+        expect(screen.getByTestId('cluster-detail-title')).toHaveTextContent(READABLE_ABSENT.title);
+      });
+
+      const confirmedTab = screen.getByRole('tab', { name: /확정/ });
+      await act(async () => {
+        fireEvent.mouseDown(confirmedTab);
+      });
+      expect(confirmedTab).toHaveAttribute('aria-selected', 'true');
+      expect(router.state.location.search).toEqual({ selected: READABLE_ABSENT_ID });
+      expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
+
+      await act(async () => {
+        resolveDetail(
+          outcome === 'confirmed'
+            ? jsonResponse({
+                ...READABLE_ABSENT,
+                status: 'confirmed',
+                title: '현재 확정된 Cluster',
+              })
+            : jsonResponse({ code: 'not_found.record' }, 404),
+        );
+      });
+      if (outcome === 'confirmed') {
+        await waitFor(() =>
+          expect(screen.getByTestId('cluster-detail-title')).toHaveTextContent(
+            '현재 확정된 Cluster',
+          ),
+        );
+      } else {
+        await waitFor(
+          () => expect(screen.getByText('Cluster를 찾을 수 없습니다.')).toBeInTheDocument(),
+          { timeout: 4000 },
+        );
+        expect(screen.queryByTestId('cluster-detail-title')).not.toBeInTheDocument();
+      }
+      expect(router.state.location.search).toEqual({ selected: READABLE_ABSENT_ID });
+      expect(router.history.length).toBe(1);
+    },
+  );
 
   test('a failed list fetch does not clear a deep-linked selected', async () => {
     const router = renderUrlState(

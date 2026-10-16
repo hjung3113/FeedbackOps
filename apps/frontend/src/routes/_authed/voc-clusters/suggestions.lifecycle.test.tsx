@@ -8,6 +8,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  useNavigate,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -19,6 +20,7 @@ import { VocClusterListPage, vocClustersSearchSchema } from './index';
 let available = true;
 let listRead: () => Promise<Response>;
 let suggestionRead: () => Promise<Response>;
+let unreadableClusterId: string | null = null;
 let role = 'admin';
 const pair = clusterSuggestionsFixture.items[0];
 if (!pair) throw new Error('Suggestion fixture missing');
@@ -87,6 +89,42 @@ function mount(initialPath = `/voc-clusters?selected=${IDS.draft}`) {
   );
   return { router, client, history, ...view };
 }
+function mountWithProductionCallbacks(initialPath: string) {
+  const root = createRootRoute({ component: Root });
+  const list = createRoute({
+    getParentRoute: () => root,
+    path: '/voc-clusters',
+    validateSearch: (raw) => vocClustersSearchSchema.parse(raw),
+    component: VocClusterListPage,
+  });
+  const detail = createRoute({
+    getParentRoute: () => root,
+    path: '/voc-clusters/$clusterId',
+    component: () => {
+      const { clusterId } = detail.useParams();
+      const navigate = useNavigate();
+      return (
+        <VocClusterListShell
+          selectedId={clusterId}
+          onSelect={(id) =>
+            void navigate({ to: '/voc-clusters/$clusterId', params: { clusterId: id } })
+          }
+          onCloseDetail={() => void navigate({ to: '/voc-clusters' })}
+        />
+      );
+    },
+  });
+  const history = createMemoryHistory({ initialEntries: [initialPath] });
+  const router = createRouter({ routeTree: root.addChildren([list, detail]), history });
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } })}
+    >
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return { router, history };
+}
 async function enter() {
   const tab = await screen.findByRole('tab', { name: /^Cluster 제안/ });
   fireEvent.mouseDown(tab, { button: 0 });
@@ -98,6 +136,7 @@ async function enter() {
 beforeEach(() => {
   role = 'admin';
   available = true;
+  unreadableClusterId = null;
   listRead = async () => json(populatedList);
   suggestionRead = async () =>
     json(
@@ -119,6 +158,8 @@ beforeEach(() => {
           discarded_at: new Date().toISOString(),
           undo_until: new Date(Date.now() + 300000).toISOString(),
         });
+      if (url.pathname === `/voc-clusters/${unreadableClusterId}`)
+        return json({ code: 'not_found.record', message: 'not found' }, 404);
       if (url.pathname.startsWith('/voc-clusters/'))
         return json(populatedList.items.find((item) => item.id === url.pathname.split('/')[2]));
       if (url.pathname === '/managed-systems') return json({ items: [], total: 0 });
@@ -180,6 +221,18 @@ it('preserves the detail-path host through suggestions and return', async () => 
   fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }), { button: 0 });
   await screen.findByTestId('cluster-detail-title');
   expect(history.location.href).toBe(`/voc-clusters/${IDS.draft}`);
+});
+it('keeps an unreadable detail path and shows no other Cluster', async () => {
+  const unreadableId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const initialPath = `/voc-clusters/${unreadableId}`;
+  unreadableClusterId = unreadableId;
+  listRead = async () => json({ items: populatedList.items.slice(0, 2) });
+  const { history } = mountWithProductionCallbacks(initialPath);
+  expect(await screen.findByText('Cluster를 찾을 수 없습니다.')).toBeInTheDocument();
+  expect(history.location.href).toBe(initialPath);
+  expect(screen.queryByTestId('cluster-detail-title')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Finding 생성' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Task 요청' })).not.toBeInTheDocument();
 });
 it('drops pair selection when Managed System context changes', async () => {
   const { router } = mount();
