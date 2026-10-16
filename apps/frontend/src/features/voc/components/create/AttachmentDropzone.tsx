@@ -75,12 +75,10 @@ export function AttachmentDropzone({
     <section data-testid={testId} className="flex flex-col gap-2">
       <FieldLabel tip={COPY.fieldTip}>{COPY.fieldLabel}</FieldLabel>
 
-      {/* Dropzone */}
-      {/* biome-ignore lint/a11y/noLabelWithoutControl: htmlFor wires to the hidden input via id */}
-      <label
-        htmlFor="attachment-dropzone-input"
+      {/* Dropzone — the button is the keyboard/mouse control; the file input stays out of the tab order */}
+      <div
         className={cn(
-          'flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-border-subtle px-3.5 py-3 transition-colors',
+          'flex items-center rounded-md border border-dashed border-border-subtle transition-colors',
           'hover:border-border-selected hover:bg-accent-primary/5',
           dragOver && 'border-accent-primary bg-accent-primary/5',
         )}
@@ -89,25 +87,32 @@ export function AttachmentDropzone({
         onDrop={handleDrop}
         data-testid={testId ? `${testId}-drop` : undefined}
       >
-        <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-row-selected text-accent-primary"
-          aria-hidden
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-1 cursor-pointer items-center gap-3 rounded-md px-3.5 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         >
-          <Paperclip className="h-3.5 w-3.5" />
-        </span>
-        <span className="min-w-0 text-sm text-text-primary">{COPY.dropHint}</span>
-        <span className="flex-1" />
-        <span className="hidden text-xs text-text-muted sm:inline">{COPY.footer}</span>
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-row-selected text-accent-primary"
+            aria-hidden
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 break-keep text-sm text-text-primary">{COPY.dropHint}</span>
+          <span className="flex-1" />
+          <span className="hidden break-keep text-xs text-text-muted sm:inline">{COPY.footer}</span>
+        </button>
         <input
           ref={inputRef}
           id="attachment-dropzone-input"
           type="file"
           multiple
+          tabIndex={-1}
           className="hidden"
           onChange={handleInputChange}
           data-testid={testId ? `${testId}-input` : undefined}
         />
-      </label>
+      </div>
 
       {/* Row list */}
       {rows.length > 0 && (

@@ -61,6 +61,7 @@
 //   reporter_facing_status.gate_blocked       → amber Callout inline
 //   conflict.idempotency_key_reuse            → lock Submit + Preview until VOC switch
 
+import { useComposerEditorFocus } from '@/features/cross-system/composer-editor/useComposerEditorFocus';
 import {
   isForbiddenTransition,
   useReporterStatusTransitions,
@@ -101,6 +102,8 @@ export interface PublicUpdateComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
+  /** Select the public conversation timeline after a successful post. */
+  onPosted?: (tab: 'public') => void;
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
@@ -122,8 +125,10 @@ export function PublicUpdateComposer({
   me,
   draftDoc: controlledDraftDoc,
   onDraftChange,
+  onPosted,
 }: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
+  const { editorHandle, focusEditor } = useComposerEditorFocus();
 
   // REV-1 #7: if parent provides controlled draft, use it; otherwise keep local state
   // for backward-compat when the composer is used standalone.
@@ -198,6 +203,8 @@ export function PublicUpdateComposer({
       // travels — clearing it here as well would be a second, silent writer.
       setAttachmentResetToken((n) => n + 1);
       toast.success('공개 업데이트가 게시되었습니다.');
+      onPosted?.('public');
+      focusEditor();
     },
     onError: (error) => {
       submitInFlightRef.current = false;
@@ -287,11 +294,14 @@ export function PublicUpdateComposer({
         minHeight={84}
         onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
-          <PublicUpdateToolbar
-            editor={editor}
-            onAttach={(file) => api.attach(file)}
-            onAttachError={(e) => toast.error(mapUnknownError(e).message)}
-          />
+          <>
+            {editorHandle(editor)}
+            <PublicUpdateToolbar
+              editor={editor}
+              onAttach={(file) => api.attach(file)}
+              onAttachError={(e) => toast.error(mapUnknownError(e).message)}
+            />
+          </>
         )}
       />
 

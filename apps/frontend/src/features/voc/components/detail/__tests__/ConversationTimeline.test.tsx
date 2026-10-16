@@ -132,6 +132,81 @@ beforeEach(() => {
 });
 
 describe('<ConversationTimeline>', () => {
+  it('shows the 내부 tab when the internal-comment signal changes, without remounting', () => {
+    const { rerender } = render(
+      <ConversationTimeline
+        voc={DETAIL_ENVELOPE}
+        canTriage={true}
+        postSignal={{ tab: 'internal', seq: 0 }}
+      />,
+    );
+    const publicTab = screen.getByRole('tab', { name: '공개' });
+    expect(publicTab).toHaveAttribute('aria-selected', 'true');
+
+    rerender(
+      <ConversationTimeline
+        voc={DETAIL_ENVELOPE}
+        canTriage={true}
+        postSignal={{ tab: 'internal', seq: 1 }}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: '내부' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '공개' })).toBe(publicTab);
+
+    // The reader can go back to 공개; an unchanged signal does not pull them away again.
+    fireEvent.mouseDown(publicTab);
+    rerender(
+      <ConversationTimeline
+        voc={DETAIL_ENVELOPE}
+        canTriage={true}
+        postSignal={{ tab: 'internal', seq: 1 }}
+      />,
+    );
+    expect(publicTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it.each(['signal', 'reader'] as const)(
+    'shows 공개 after a public post when 내부 was selected by %s',
+    (selection) => {
+      const { rerender } = render(<ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} />);
+      if (selection === 'signal') {
+        rerender(
+          <ConversationTimeline
+            voc={DETAIL_ENVELOPE}
+            canTriage={true}
+            postSignal={{ tab: 'internal', seq: 1 }}
+          />,
+        );
+      } else {
+        fireEvent.mouseDown(screen.getByRole('tab', { name: '내부' }));
+      }
+      expect(screen.getByRole('tab', { name: '내부' })).toHaveAttribute('aria-selected', 'true');
+
+      rerender(
+        <ConversationTimeline
+          voc={DETAIL_ENVELOPE}
+          canTriage={true}
+          postSignal={{ tab: 'public', seq: 2 }}
+        />,
+      );
+      expect(screen.getByRole('tab', { name: '공개' })).toHaveAttribute('aria-selected', 'true');
+    },
+  );
+
+  it('keeps 공개 for an internal post signal without triage permission', () => {
+    const { rerender } = render(<ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={false} />);
+    rerender(
+      <ConversationTimeline
+        voc={DETAIL_ENVELOPE}
+        canTriage={false}
+        postSignal={{ tab: 'internal', seq: 1 }}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: '공개' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
+  });
+
   it('renders both tabs for a viewer with operator capability', () => {
     render(<ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} />);
     expect(screen.getByRole('tab', { name: '공개' })).toBeInTheDocument();

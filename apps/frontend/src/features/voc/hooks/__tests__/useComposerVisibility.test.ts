@@ -65,29 +65,67 @@ describe('useComposerVisibility', () => {
     });
   });
 
-  it('admin with triage → all three tabs visible', () => {
-    const voc = makeVoc();
-    const me = makeMe('admin', ADMIN_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me, true));
-    expect(result.current).toEqual({
-      showPublic: true,
-      showReply: true,
-      showInternal: true,
-    });
-  });
-
-  it('developer with triage → all three tabs visible', () => {
-    // The detail controller supplies this approved VOC triage capability.
-    const voc = makeVoc();
-    const me = makeMe('developer', DEVELOPER_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me, true));
-    // Developer in MS gets all 3
-    expect(result.current).toEqual({
-      showPublic: true,
-      showReply: true,
-      showInternal: true,
-    });
-  });
+  it.each([
+    [
+      'Admin on another VOC with triage',
+      'admin',
+      ADMIN_ID,
+      'someone-else',
+      true,
+      true,
+      false,
+      true,
+    ],
+    [
+      'Admin on another VOC without triage',
+      'admin',
+      ADMIN_ID,
+      'someone-else',
+      false,
+      true,
+      false,
+      false,
+    ],
+    [
+      'Developer on another VOC with triage',
+      'developer',
+      DEVELOPER_ID,
+      'someone-else',
+      true,
+      true,
+      false,
+      true,
+    ],
+    [
+      'Developer on another VOC without triage',
+      'developer',
+      DEVELOPER_ID,
+      'someone-else',
+      false,
+      true,
+      false,
+      false,
+    ],
+    ['Admin who is the reporter', 'admin', ADMIN_ID, ADMIN_ID, true, true, true, true],
+    [
+      'Developer who is the reporter',
+      'developer',
+      DEVELOPER_ID,
+      DEVELOPER_ID,
+      false,
+      true,
+      true,
+      false,
+    ],
+  ] as const)(
+    '%s',
+    (_label, role, actorId, reporterId, canTriage, showPublic, showReply, showInternal) => {
+      const voc = makeVoc({ reporter_id: reporterId });
+      const me = makeMe(role, actorId);
+      const { result } = renderHook(() => useComposerVisibility(voc, me, canTriage));
+      expect(result.current).toEqual({ showPublic, showReply, showInternal });
+    },
+  );
 
   it('returns null when no tabs would be visible (e.g. reporter on someone else VOC)', () => {
     // Reporter on someone else's VOC → no visible tabs → null
@@ -118,18 +156,6 @@ describe('useComposerVisibility', () => {
       showPublic: false,
       showReply: true,
       showInternal: canTriage,
-    });
-  });
-
-  it('hides the internal composer for an operator without triage capability', () => {
-    const voc = makeVoc();
-    const me = makeMe('developer', DEVELOPER_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me, false));
-
-    expect(result.current).toEqual({
-      showPublic: true,
-      showReply: true,
-      showInternal: false,
     });
   });
 });

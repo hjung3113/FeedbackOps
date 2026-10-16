@@ -1,14 +1,14 @@
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Button, DetailPanelSectionNav, DirtyConfirmation } from '@fops/ui';
 import type { PanelSection } from '@fops/ui';
-import type * as React from 'react';
+import * as React from 'react';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { SAME_MANAGED_SYSTEM_VOC_LABEL, VOC_DETAIL_BODY_LABEL } from '@/lib/copy/voc';
 import { ComposerSection } from './ComposerSection';
-import { ConversationTimeline } from './ConversationTimeline';
+import { type ConversationPostSignal, ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
 import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
@@ -88,6 +88,12 @@ export function FullDetailView({
     canRenderAllowedTask,
     me,
     ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+  });
+
+  // One sequence across all successful posts: the latest post selects its timeline tab.
+  const [postSignal, setPostSignal] = React.useState<ConversationPostSignal>({
+    tab: 'public',
+    seq: 0,
   });
 
   const detailSections = isReporterArm
@@ -191,7 +197,12 @@ export function FullDetailView({
             </div>
           )}
           <div data-anchor="conversation">
-            <ConversationTimeline voc={voc} canTriage={canTriage} actorNamesById={actorNamesById} />
+            <ConversationTimeline
+              voc={voc}
+              canTriage={canTriage}
+              actorNamesById={actorNamesById}
+              postSignal={postSignal}
+            />
           </div>
           <div data-anchor="compose">
             <ComposerSection
@@ -199,6 +210,9 @@ export function FullDetailView({
               me={me}
               canTriage={canTriage}
               onDirtyChange={setComposerDirty}
+              onConversationPosted={(tab) =>
+                setPostSignal((previous) => ({ tab, seq: previous.seq + 1 }))
+              }
             />
             {canCreateFinding && pendingReviewCount > 0 && (
               <div className="mt-2 flex justify-end">

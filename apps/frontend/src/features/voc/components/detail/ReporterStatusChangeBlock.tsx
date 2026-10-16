@@ -188,7 +188,7 @@ export function ReporterStatusChangeBlock({
               const isCurrent = key === currentStatus;
               const isAllowed = isCurrent || allowed.includes(key);
               const label = REPORTER_STATUS_LABELS[key];
-              const suffix = isCurrent ? ' (현재)' : !isAllowed ? ' · 차단됨' : '';
+              const suffix = isCurrent ? ' (현재)' : !isAllowed ? ` · ${forbidden[key] ?? '차단됨'}` : '';
               return (
                 <SelectItem key={key} value={key} disabled={!isAllowed}>
                   {label}

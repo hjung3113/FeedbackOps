@@ -5,9 +5,10 @@
 // Prototype ref: docs/design-prototype/screen-voc.jsx:404-413 (tab visibility gating)
 //
 // Visibility rules:
-//   - Reporter on own VOC → reply; internal only with voc.triage
-//   - Admin or Developer → public and reply; Internal only with voc.triage
-//   - Reporter on someone else's VOC → Internal only with triage; otherwise no composer
+//   - Reply → only the VOC's Reporter (any role); the backend rejects every other actor
+//   - Public → every role except User
+//   - Internal → only with voc.triage
+//   - Nothing visible → no composer
 //
 // The outer panel guards full-envelope access. Internal remains gated separately by
 // the backend triage capability supplied by the detail controller.
@@ -33,19 +34,9 @@ export function useComposerVisibility(
   if (!me) return null;
 
   const { role_level, id: actorId } = me.actor;
-  const isReporter = role_level === 'user';
-  const isOwnVoc = actorId === voc.reporter_id;
+  const showPublic = role_level !== 'user';
+  const showReply = actorId === voc.reporter_id;
 
-  // Reporter on their own VOC → reply tab, plus Internal when triage is approved.
-  if (isReporter && isOwnVoc) {
-    return { showPublic: false, showReply: true, showInternal: canTriage };
-  }
-
-  // A User with triage may add Internal, but cannot use Public/Reply on someone else's VOC.
-  if (isReporter && !isOwnVoc) {
-    return canTriage ? { showPublic: false, showReply: false, showInternal: true } : null;
-  }
-
-  // Public and reply stay role-based; Internal follows the backend capability.
-  return { showPublic: true, showReply: true, showInternal: canTriage };
+  if (!showPublic && !showReply && !canTriage) return null;
+  return { showPublic, showReply, showInternal: canTriage };
 }

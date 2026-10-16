@@ -122,6 +122,18 @@ describe('<ReporterReplyComposer>', () => {
     vi.clearAllMocks();
   });
 
+  it('signals public after a successful Reporter Reply', () => {
+    const onPosted = vi.fn();
+    render(<ReporterReplyComposer voc={BASE_VOC} me={ME_REPORTER} onPosted={onPosted} />, {
+      wrapper: makeWrapper(),
+    });
+    expect(onPosted).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
+
+    expect(onPosted).toHaveBeenCalledWith('public');
+  });
+
   it('uses 제출자 as the fallback identity in the reply preview', async () => {
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_REPORTER} />, { wrapper: makeWrapper() });
 
@@ -174,25 +186,21 @@ describe('<ReporterReplyComposer>', () => {
     });
   });
 
-  it('only the reporter sees this composer — admin does not (useComposerVisibility gate)', () => {
-    // The reporter (their own VOC) should see showReply = true.
-    // This test verifies the component renders for the reporter.
+  it('renders for any actor it is given — the Reporter-only gate is owned by <ComposerSection>', () => {
+    // This presentational composer is unguarded. Only the VOC's Reporter is offered the Reply
+    // tab (useComposerVisibility: actor.id === voc.reporter_id, any role), so an Admin on
+    // someone else's VOC never reaches it in the app.
     render(
       <ReporterReplyComposer voc={BASE_VOC} me={ME_REPORTER} />,
       { wrapper: makeWrapper() },
     );
     expect(screen.getByTestId('reporter-reply-composer')).toBeInTheDocument();
 
-    // An admin composing a reply renders too (admin has showReply=true in MS context),
-    // but visibility gating is the responsibility of <ComposerSection> (C5.1), not this component.
-    // This composer is unguarded — the parent section is the gate. So we just verify it renders.
     render(
       <ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />,
       { wrapper: makeWrapper() },
     );
-    // Two instances rendered — both show the composer (gating is in ComposerSection)
-    const composers = screen.getAllByTestId('reporter-reply-composer');
-    expect(composers.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByTestId('reporter-reply-composer')).toHaveLength(2);
   });
 
   it('disables Send reply for a whitespace-only draft without calling the mutation', () => {

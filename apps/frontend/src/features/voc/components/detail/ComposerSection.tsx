@@ -63,6 +63,8 @@ export interface ComposerSectionProps {
    * close button and show DirtyConfirmation before closing the panel.
    */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Successful posts select 공개, or 내부 for an internal comment with canTriage. */
+  onConversationPosted?: (tab: 'public' | 'internal') => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -73,6 +75,7 @@ export function ComposerSection({
   canTriage = false,
   onCloseRequest,
   onDirtyChange,
+  onConversationPosted,
 }: ComposerSectionProps): React.ReactElement | null {
   const visibility = useComposerVisibility(voc, me, canTriage);
   // REV-1 #7: draft state is now wired into all three composers as controlled props.
@@ -217,6 +220,7 @@ export function ComposerSection({
               me={me}
               draftDoc={draft.state.public}
               onDraftChange={(doc) => draft.setDraft('public', doc)}
+              {...(onConversationPosted ? { onPosted: onConversationPosted } : {})}
             />
           </div>
         )}
@@ -227,6 +231,7 @@ export function ComposerSection({
               me={me}
               draftDoc={draft.state.reply}
               onDraftChange={(doc) => draft.setDraft('reply', doc)}
+              {...(onConversationPosted ? { onPosted: onConversationPosted } : {})}
             />
           </div>
         )}
@@ -237,6 +242,9 @@ export function ComposerSection({
               me={me}
               draftDoc={draft.state.internal}
               onDraftChange={(doc) => draft.setDraft('internal', doc)}
+              {...(onConversationPosted
+                ? { onCommentAdded: () => onConversationPosted('internal') }
+                : {})}
             />
           </div>
         )}

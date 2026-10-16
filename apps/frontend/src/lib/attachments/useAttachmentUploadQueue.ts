@@ -192,7 +192,7 @@ export function useAttachmentUploadQueue({
     }
   }, []);
 
-  function handleDragOver(event: React.DragEvent<HTMLLabelElement>): void {
+  function handleDragOver(event: React.DragEvent<HTMLElement>): void {
     event.preventDefault();
     setDragOver(true);
   }
@@ -201,7 +201,7 @@ export function useAttachmentUploadQueue({
     setDragOver(false);
   }
 
-  function handleDrop(event: React.DragEvent<HTMLLabelElement>): void {
+  function handleDrop(event: React.DragEvent<HTMLElement>): void {
     event.preventDefault();
     setDragOver(false);
     addFiles(event.dataTransfer?.files ?? null);

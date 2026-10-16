@@ -71,19 +71,17 @@ export function ComposerAttachmentDropzone({
     handleDragLeave,
     handleDrop,
     handleInputChange,
+    inputRef,
     removeRow,
   } = queue;
 
-  const inputId = `${testId}-input-control`;
-
   return (
     <div data-testid={testId} className="flex flex-col gap-1.5 px-3 pb-2">
-      {/* Compact dropzone — no FieldLabel; composer context implies "첨부" */}
-      {/* biome-ignore lint/a11y/noLabelWithoutControl: htmlFor wires to hidden input */}
-      <label
-        htmlFor={inputId}
+      {/* Compact dropzone — no FieldLabel; composer context implies "첨부".
+          The button is the keyboard/mouse control; the file input stays out of the tab order. */}
+      <div
         className={cn(
-          'flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border-subtle px-2.5 py-1.5 transition-colors',
+          'flex items-center rounded-md border border-dashed border-border-subtle transition-colors',
           dragOver && 'border-accent-primary bg-accent-primary/5',
         )}
         onDragOver={handleDragOver}
@@ -91,19 +89,26 @@ export function ComposerAttachmentDropzone({
         onDrop={handleDrop}
         data-testid={`${testId}-drop`}
       >
-        <Paperclip className="h-3 w-3 shrink-0 text-text-muted" aria-hidden />
-        <span className="text-xs text-text-primary">{COPY.dropHint}</span>
-        <span className="flex-1" />
-        <span className="text-tiny text-text-muted">{COPY.footer}</span>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-1 cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+        >
+          <Paperclip className="h-3 w-3 shrink-0 text-text-muted" aria-hidden />
+          <span className="break-keep text-xs text-text-primary">{COPY.dropHint}</span>
+          <span className="flex-1" />
+          <span className="break-keep text-tiny text-text-muted">{COPY.footer}</span>
+        </button>
         <input
-          id={inputId}
+          ref={inputRef}
           type="file"
           multiple
+          tabIndex={-1}
           className="hidden"
           onChange={handleInputChange}
           data-testid={`${testId}-input`}
         />
-      </label>
+      </div>
 
       {rows.length > 0 && (
         <ul className="mt-1 flex flex-col gap-1" data-testid={`${testId}-rows`}>
