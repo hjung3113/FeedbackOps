@@ -600,3 +600,29 @@ Absent wire severity renders no indicator or badge and a
 neutral row bar. Visible null severity announces `심각도 미지정`; standalone
 indicators use `심각도 낮음/중간/높음/심각`. Badge indicators are decorative,
 so a triaged row announces severity once through its badge.
+
+### Detail follow-up trail and primary action (#1225)
+
+The existing detail panel's 이력 section renders the backend-projected
+`linked_execution.trails` with `LinkedEntityTrail`: readable Cluster
+memberships and the canonical Finding → Task Request → Task branches, including
+Finding → Task branches and Request-only follow-up. Cluster membership is
+provenance, not an entity-link tuple. Bare membership keeps `연결된 실행 없음`
+and `Finding 생성`; several Clusters and branches are retained rather than
+collapsed into compatibility refs. Existing direct `links` still render;
+rows already in the projection are not duplicated in that legacy list.
+
+Only backend-approved summaries supply node labels and statuses. Allowed
+operator nodes open their existing Cluster, Finding, Task Requests or Task
+route, with a plain-text fallback when no navigation callback exists. The
+full Task DTO guard remains operator-only; inherited Task labels come from
+backend summaries. Hidden edges render nothing and do not affect empty state
+or CTA. Denied edges acknowledge only the safe blocked category; Task reporter
+summaries have no internal navigation. Per-edge groups are labelled with the
+readable endpoint display IDs so repeated nodes can be distinguished.
+
+For Admin/Developer, disclosed follow-up changes the primary action to
+`연결된 실행 확인`, which scrolls to the existing trail section without navigating
+to a denied or summary-only target. With none disclosed, `Finding 생성` remains.
+`Task 요청` and the inline request draft flow remain available. This projection
+does not change the mounted panel or composer/draft lifetime.

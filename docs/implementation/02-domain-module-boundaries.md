@@ -155,6 +155,17 @@ Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs
 
 When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas`, and imports of the owner tables' Drizzle symbols (`managedSystems`, `analyticsAreas` from `db/schema/core`), outside their owner modules; tests and migrations are excluded, and `src/test-support` is also barred from importing those symbols.
 
+### VOC detail follow-up read (#1225)
+
+VOC owns `read-projections.ts:vocFollowUpRootsSql`, the canonical presence-root
+SQL shared by list/count/grouped-count and Entity Links' detail reader.
+VOC Clusters owns `read-projections.ts:readVocClusterMemberships` for provenance.
+Entity Links' `readVocFollowUp` composes those approved projections with its own
+canonical links and registered providers, using the supplied transaction for
+post-write hydration. It serializes each disclosed edge using the existing
+visibility evaluator; its command-only Cluster evidence edge does not expand
+the generic Entity Links list/create registry. No cross-module write is added.
+
 ### Transactional recovery projection seams (56-H)
 
 Dashboard's `recorder.ts` exports a type-only injected transaction interface; source factories

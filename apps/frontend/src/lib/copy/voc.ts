@@ -53,3 +53,11 @@ export const SEMANTIC_VOC_PREVIEW_COPY = {
   providerFailed: '유사 VOC를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요',
   expired: '결과가 만료되었습니다. 다시 확인해 주세요',
 } as const;
+
+export const VOC_FOLLOW_UP_COPY = {
+  createFinding: 'Finding 생성',
+  showExecution: '연결된 실행 확인',
+  requestTask: 'Task 요청',
+  relatedEntities: '관련 엔티티',
+  linkedRequest: '연결된 Task Request',
+} as const;

@@ -5,7 +5,12 @@ import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import type { CreateTaskRequestRequest, EntityLinkDto, VocDetailEnvelope } from '@fops/shared';
+import type {
+  CreateTaskRequestRequest,
+  EntityLinkDto,
+  TaskStatus,
+  VocDetailEnvelope,
+} from '@fops/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
@@ -86,10 +91,22 @@ export function useVocDetailPanelController({
     enabled: linkedTaskId !== null && canRenderAllowedTask,
     staleTime: 30 * 1000,
   });
+  const inheritedTask = canRenderAllowedTask
+    ? voc.linked_execution.trails
+        ?.flatMap((trail) => trail.links)
+        .filter((link) => link.visibility_state === 'allowed')
+        .map((link) => link.target_summary)
+        .find((summary) => summary?.type === 'task')
+    : undefined;
   const linkedTask =
     canRenderAllowedTask && linkedTaskQuery.data !== undefined
       ? { title: linkedTaskQuery.data.title, status: linkedTaskQuery.data.status }
-      : null;
+      : inheritedTask?.type === 'task'
+        ? {
+            title: inheritedTask.title,
+            status: inheritedTask.status as TaskStatus,
+          }
+        : null;
 
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
   const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
@@ -166,6 +183,14 @@ export function useVocDetailPanelController({
     void navigate({ to: '/findings', search: { selected: findingId } });
   }
 
+  function handleOpenCluster(clusterId: string): void {
+    void navigate({ to: '/voc-clusters/$clusterId', params: { clusterId } });
+  }
+
+  function handleOpenRequest(requestId: string): void {
+    void navigate({ to: '/tasks', search: { view: 'requests', param: requestId } });
+  }
+
   return {
     setComposerDirty,
     dirtyConfirmOpen,
@@ -195,5 +220,7 @@ export function useVocDetailPanelController({
     handleOpenTriage,
     handleOpenTask,
     handleOpenFinding,
+    handleOpenCluster,
+    handleOpenRequest,
   };
 }
