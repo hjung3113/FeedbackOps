@@ -1,7 +1,16 @@
-import { TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { TASK_REQUEST_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { VOC_FOLLOW_UP_COPY } from '@/lib/copy/voc';
 import { formatDateOnly, formatRelativeTime } from '@/lib/format/datetime';
-import type { EntityLinkDto, TaskReporterSummary, TaskStatus } from '@fops/shared';
+import type {
+  EntityLinkDto,
+  EntityLinkTargetSummary,
+  TaskReporterSummary,
+  TaskRequestStatus,
+  TaskStatus,
+  VocDetailEnvelope,
+} from '@fops/shared';
 import {
+  type EntityNodeRef,
   LinkedEntityTrail,
   OutlineBadge,
   PanelSectionTitle,
@@ -12,6 +21,9 @@ import type * as React from 'react';
 export interface LinkedEntityTrailSectionProps {
   /** Backend-decided link DTOs included with the VOC detail read model. */
   links?: EntityLinkDto[];
+  trails?: NonNullable<VocDetailEnvelope['linked_execution']['trails']> | undefined;
+  onOpenCluster?: ((id: string) => void) | undefined;
+  onOpenRequest?: ((id: string) => void) | undefined;
   /** A Reporter may consume only summary_visible.summary, never an allowed Task DTO. */
   isReporterContext: boolean;
   /**
@@ -250,13 +262,125 @@ function FindingLink({
   }
 }
 
+/** Same disclosure rule for empty state, trail and CTA. Hidden data has no UI signal. */
+export function hasVisibleFollowUp(voc: VocDetailEnvelope, isReporterContext: boolean): boolean {
+  return [
+    ...(voc.links ?? []),
+    ...(voc.linked_execution.trails ?? []).flatMap((trail) => trail.links),
+  ].some(
+    (link) =>
+      (isTaskLink(link) || isFindingLink(link) || link.target_type === 'task_request') &&
+      (link.visibility_state === 'denied' ||
+        (link.visibility_state === 'allowed' && !isReporterContext) ||
+        (link.visibility_state === 'summary_visible' && isTaskLink(link) && !isFindingLink(link))),
+  );
+}
+
+function FollowUpTrail({
+  trail,
+  onOpenTask,
+  onOpenFinding,
+  onOpenCluster,
+  onOpenRequest,
+}: {
+  trail: NonNullable<VocDetailEnvelope['linked_execution']['trails']>[number];
+} & Pick<
+  LinkedEntityTrailSectionProps,
+  'onOpenTask' | 'onOpenFinding' | 'onOpenCluster' | 'onOpenRequest'
+>): React.ReactElement {
+  function node(summary: EntityLinkTargetSummary): EntityNodeRef {
+    const open =
+      summary.type === 'finding'
+        ? onOpenFinding
+        : summary.type === 'task'
+          ? onOpenTask
+          : summary.type === 'voc_cluster'
+            ? onOpenCluster
+            : onOpenRequest;
+    const title = summary.type === 'task_request' ? summary.requested_outcome : summary.title;
+    return {
+      type: summary.type === 'voc_cluster' ? 'cluster' : summary.type,
+      id: summary.id,
+      display_id: summary.display_id,
+      title,
+      meta:
+        summary.type === 'finding'
+          ? summary.display_id
+          : summary.type === 'task'
+            ? (TASK_STATUS_LABELS[summary.status as TaskStatus] ?? summary.status)
+            : summary.type === 'task_request'
+              ? (TASK_REQUEST_STATUS_LABELS[summary.status as TaskRequestStatus] ?? summary.status)
+              : summary.status,
+      ...(open ? { onNavigate: () => open(summary.id) } : {}),
+    };
+  }
+  return (
+    <div className="flex flex-col gap-2" data-testid="voc-follow-up-trail">
+      {trail.links.length === 0 && trail.cluster && (
+        <LinkedEntityTrail nodes={[node(trail.cluster)]} />
+      )}
+      {trail.links.map((link) => {
+        if (link.visibility_state === 'hidden') return null;
+        if (link.visibility_state === 'summary_visible')
+          return isTaskLink(link) && !isFindingLink(link) ? (
+            <TaskLink key={link.id} link={link} isReporterContext={false} />
+          ) : null;
+        if (link.visibility_state === 'denied')
+          return (
+            <PermissionBlockedPanel
+              key={link.id}
+              state="denied"
+              category={
+                link.target_type === 'task_request'
+                  ? VOC_FOLLOW_UP_COPY.linkedRequest
+                  : link.target_type === 'finding'
+                    ? '연결된 Finding'
+                    : '연결된 Task'
+              }
+            />
+          );
+        const summaries = [link.source_summary, link.target_summary].filter(
+          (summary) => summary !== undefined,
+        );
+        return (
+          <section
+            key={link.id}
+            aria-label={`${link.source_summary?.display_id ?? ''} → ${link.target_summary?.display_id ?? ''}`}
+          >
+            <LinkedEntityTrail nodes={summaries.map(node)} />
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 export function LinkedEntityTrailSection({
   links = [],
+  trails = [],
+  onOpenCluster,
+  onOpenRequest,
   isReporterContext,
   onOpenTask,
   onOpenFinding,
 }: LinkedEntityTrailSectionProps): React.ReactElement {
+  const visibleTrails = trails
+    .map((trail) => ({
+      ...trail,
+      links: trail.links.filter(
+        (link) =>
+          link.visibility_state !== 'hidden' &&
+          !(isReporterContext && link.visibility_state === 'allowed'),
+      ),
+    }))
+    .filter(
+      (trail) => trail.links.length > 0 || (!isReporterContext && trail.cluster !== undefined),
+    );
+  const projectedIds = new Set(
+    visibleTrails.flatMap((trail) => trail.links.map((link) => link.id)),
+  );
   const trailLinks = links.filter((link) => {
+    if (projectedIds.has(link.id)) return false;
     // #1174b: a Finding `summary_visible` payload is inconsistent (ADR-0024 §E);
     // treat it exactly like `hidden`.
     if (isFindingLink(link) && link.visibility_state === 'summary_visible') return false;
@@ -267,11 +391,21 @@ export function LinkedEntityTrailSection({
     );
   });
 
-  if (trailLinks.length === 0) return <></>;
+  if (trailLinks.length === 0 && visibleTrails.length === 0) return <></>;
 
   return (
     <div>
-      <PanelSectionTitle>관련 엔티티</PanelSectionTitle>
+      <PanelSectionTitle>{VOC_FOLLOW_UP_COPY.relatedEntities}</PanelSectionTitle>
+      {visibleTrails.map((trail) => (
+        <FollowUpTrail
+          key={trail.links[0]?.id}
+          trail={trail}
+          onOpenTask={onOpenTask}
+          onOpenFinding={onOpenFinding}
+          onOpenCluster={onOpenCluster}
+          onOpenRequest={onOpenRequest}
+        />
+      ))}
       {trailLinks.map((link) =>
         isFindingLink(link) ? (
           <FindingLink

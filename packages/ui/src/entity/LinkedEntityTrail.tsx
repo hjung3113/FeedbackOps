@@ -21,7 +21,7 @@ export type EntityNodeRef =
       onNavigate?: () => void;
     }
   | {
-      type: 'task';
+      type: 'task' | 'task_request';
       id: string;
       display_id?: string;
       title?: string;
@@ -68,7 +68,11 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
       {nodes.map((node, idx) => {
         // 'cluster' has no EntityIconBadge type — fall back to a generic badge
         const iconType: EntityIconType =
-          node.type === 'cluster' ? 'finding' : node.type;
+          node.type === 'cluster'
+            ? 'finding'
+            : node.type === 'task_request'
+              ? 'request'
+              : node.type;
         const label = node.title ?? node.display_id ?? node.id;
         const body = (
           <>

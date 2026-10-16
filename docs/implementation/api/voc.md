@@ -19,6 +19,48 @@ with HTTP 422 `validation.failed` at that field (`invalid_for_view`). My VOC
 counts never split by severity. Inbox and Triage keep their existing filters,
 sorts, tabs, and operator projections.
 
+## Detail follow-up and provenance (#1225)
+
+Both FULL detail paths (`GET /vocs/:id` and the transaction-aware post-write
+reader) project `linked_execution` as follows. SUMMARY envelopes are unchanged.
+
+- `findingRef: { type: 'finding', id: uuid } | null` and
+  `taskRef: { type: 'task', id: uuid } | null` name only allowed endpoints.
+  Compatibility refs select the first allowed target in root `created_at, id`
+  order, then breadth-first downstream order (`created_at DESC, id DESC`). They never
+  replace the complete trails array and carry no unreadable IDs.
+- Optional `trails[]` preserves all direct roots, all Cluster roots, and every
+  active Finding → Task Request / Task and Task Request → Task branch. Each
+  trail has `origin: 'direct' | 'cluster'`, an optional provider-approved
+  `cluster` summary, and `links: EntityLinkDto[]`. Link source identities remain
+  canonical; inherited edges are never rewritten as VOC-source edges.
+- A readable Cluster membership with no disclosed follow-up has a Cluster
+  trail with `links: []`. Membership disclosure requires the same elevated-role,
+  deny-aware `finding.read` scope as `GET /voc-clusters/:id`; a User grant alone
+  does not disclose membership. Membership is not a persisted entity-link tuple and
+  is not execution. Multiple Clusters, Findings, Requests and Tasks are kept.
+  A Request without a Task already constitutes follow-up.
+- Every edge uses Entity Links' provider authorization, visibility evaluator
+  and DTO serialization. Hidden edges are omitted from this projection with
+  no refs, summaries or presence flag; denied edges carry only the existing
+  safe category/metadata shape; `summary_visible` carries only the approved
+  Task reporter summary. Traversal stops at an undisclosed intermediate edge.
+  Readable membership alone cannot reveal whether a hidden follow-up exists.
+- `links` keeps its direct, bidirectional, non-transitive Entity Links semantics.
+  The command-only Cluster → Finding `evidence_of` edge is available only via
+  this owner-backed detail read, never by widening generic Entity Links APIs.
+  With neither disclosed follow-up nor readable memberships, the compatibility
+  shape remains `{ findingRef: null, taskRef: null }` (no `trails` key).
+
+Canonical queue presence comes from `vocFollowUpRootsSql` in VOC's
+`read-projections.ts`, shared with detail root selection: an active outgoing
+VOC → Finding / Task / Task Request, or membership in a Cluster with an active
+outgoing Cluster → Finding / Task Request. No Cluster-status or target-read
+filter applies to presence. Bare membership, incoming links, VOC `related_to`,
+and non-active rows do not qualify. Detail is permission-projected, so an
+actor may legitimately see no follow-up while the operator queue counts one.
+Independent direct-Task coverage and released-Task recovery remain direct-only.
+
 ## Post-write VOC envelope follows the read matrix (#1187)
 
 A write that returns a VOC payload builds it through the same verdict as

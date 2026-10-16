@@ -137,7 +137,21 @@ describe('vocDetailEnvelopeSchema', () => {
     expect(result.permission_decisions).toHaveProperty('_self');
   });
 
-  it('rejects linked_execution with non-null findingRef', () => {
+  it('accepts typed readable compatibility refs and preserves multiple provenance trails', () => {
+    const linked_execution = {
+      findingRef: { type: 'finding', id: U },
+      taskRef: { type: 'task', id: U2 },
+      trails: [
+        { origin: 'direct', links: [] },
+        { origin: 'cluster', links: [] },
+      ],
+    };
+    expect(
+      vocDetailEnvelopeSchema.parse({ ...validDetail, linked_execution }).linked_execution,
+    ).toEqual(linked_execution);
+  });
+
+  it('rejects malformed linked_execution findingRef', () => {
     expect(() =>
       vocDetailEnvelopeSchema.parse({
         ...validDetail,

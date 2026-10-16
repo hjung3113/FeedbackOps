@@ -6,13 +6,21 @@ import * as React from 'react';
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import type { MeResponse } from '@/lib/auth/useMe';
-import { SAME_MANAGED_SYSTEM_VOC_LABEL, VOC_DETAIL_BODY_LABEL } from '@/lib/copy/voc';
+import {
+  SAME_MANAGED_SYSTEM_VOC_LABEL,
+  VOC_DETAIL_BODY_LABEL,
+  VOC_FOLLOW_UP_COPY,
+} from '@/lib/copy/voc';
 import { ComposerSection } from './ComposerSection';
 import { type ConversationPostSignal, ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
 import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
-import { LinkedEntityTrailSection, isVisibleFindingLink } from './LinkedEntityTrailSection';
+import {
+  LinkedEntityTrailSection,
+  hasVisibleFollowUp,
+  isVisibleFindingLink,
+} from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
 import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
@@ -81,6 +89,8 @@ export function FullDetailView({
     handleOpenTriage,
     handleOpenTask,
     handleOpenFinding,
+    handleOpenCluster,
+    handleOpenRequest,
   } = useVocDetailPanelController({
     voc,
     vocId,
@@ -157,6 +167,7 @@ export function FullDetailView({
           <div data-anchor="trail">
             <LinkedExecutionSection
               voc={voc}
+              isReporterContext={!canRenderAllowedTask}
               linkedTask={linkedTask}
               hasReporterTaskSummary={
                 voc.links?.some(
@@ -171,6 +182,9 @@ export function FullDetailView({
             />
             <LinkedEntityTrailSection
               links={voc.links ?? []}
+              trails={voc.linked_execution.trails}
+              onOpenCluster={handleOpenCluster}
+              onOpenRequest={handleOpenRequest}
               isReporterContext={!canRenderAllowedTask}
               onOpenTask={handleOpenTask}
               onOpenFinding={handleOpenFinding}
@@ -237,15 +251,21 @@ export function FullDetailView({
           {...(canCreateFinding
             ? {
                 primaryAction: {
-                  label: 'Finding 생성',
-                  onClick: () => setCreateFindingOpen(true),
+                  label: hasVisibleFollowUp(voc, !canRenderAllowedTask)
+                    ? VOC_FOLLOW_UP_COPY.showExecution
+                    : VOC_FOLLOW_UP_COPY.createFinding,
+                  onClick: () => {
+                    if (hasVisibleFollowUp(voc, !canRenderAllowedTask)) {
+                      scrollRef.current?.querySelector('[data-anchor="trail"]')?.scrollIntoView();
+                    } else setCreateFindingOpen(true);
+                  },
                 },
               }
             : {})}
           {...(canRequestTask
             ? {
                 secondaryAction: {
-                  label: 'Task 요청',
+                  label: VOC_FOLLOW_UP_COPY.requestTask,
                   onClick: () => setRequestTaskOpen(true),
                   testId: 'voc-request-task-button',
                 },

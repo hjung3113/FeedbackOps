@@ -10,6 +10,7 @@ import type { Db } from '../../db/client.js';
 import { vocs } from '../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
+import { vocFollowUpRootsSql } from '../voc/read-projections.js';
 
 export interface LinkEndpointRow {
   workspace_id: string;
@@ -417,4 +418,16 @@ export async function detachEntityLink(
   `);
   const row = updated.rows[0];
   return row ? mapEntityLinkRow(row) : null;
+}
+
+/** Owner-backed roots for VOC detail; includes command-only Cluster evidence_of. */
+export async function selectVocFollowUpRoots(
+  db: Tx,
+  workspaceId: string,
+  vocId: string,
+): Promise<EntityLinkRow[]> {
+  const result = await db.execute<Record<string, unknown>>(sql`
+    ${vocFollowUpRootsSql(workspaceId, vocId)} ORDER BY el.created_at, el.id
+  `);
+  return result.rows.map(mapEntityLinkRow);
 }

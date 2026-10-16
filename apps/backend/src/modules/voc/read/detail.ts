@@ -265,7 +265,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
           string
         >,
       },
-      linked_execution: { findingRef: null, taskRef: null },
+      linked_execution: await deps.entityLinksService.readVocFollowUp({ actor, vocId }),
       links,
       conversation_timeline: conversationTimeline,
       // conversation_page.cursor uses exactOptionalPropertyTypes: build without key when absent.
@@ -367,6 +367,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       actor,
       endpoint: { type: 'voc', id: vocId },
       onUnreadableFocus: 'empty',
+      tx,
     });
 
     const conversationTimeline = mapConversationRowsWithAttachments(
@@ -427,7 +428,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
           string
         >,
       },
-      linked_execution: { findingRef: null, taskRef: null },
+      linked_execution: await deps.entityLinksService.readVocFollowUp({ actor, vocId, tx }),
       links,
       conversation_timeline: conversationTimeline,
       conversation_page:

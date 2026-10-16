@@ -6,6 +6,7 @@ import type * as React from 'react';
 
 import { TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
+import { hasVisibleFollowUp } from './LinkedEntityTrailSection';
 
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
@@ -14,6 +15,7 @@ export interface LinkedExecutionSectionProps {
   hasReporterTaskSummary?: boolean;
   /** A Finding link the actor may see (#1174b) also counts as linked execution. */
   hasVisibleFindingLink?: boolean;
+  isReporterContext?: boolean;
 }
 
 export function LinkedExecutionSection({
@@ -21,6 +23,7 @@ export function LinkedExecutionSection({
   linkedTask = null,
   hasReporterTaskSummary = false,
   hasVisibleFindingLink = false,
+  isReporterContext = false,
 }: LinkedExecutionSectionProps): React.ReactElement {
   const linkedFindingDecision = getPermissionDecision(voc, 'linkedFinding');
 
@@ -56,7 +59,9 @@ export function LinkedExecutionSection({
           <span className="text-sm font-medium text-text-primary">{linkedTask.title}</span>
           <OutlineBadge>{TASK_STATUS_LABELS[linkedTask.status]}</OutlineBadge>
         </div>
-      ) : !hasReporterTaskSummary && !hasVisibleFindingLink ? (
+      ) : !hasReporterTaskSummary &&
+        !hasVisibleFindingLink &&
+        !hasVisibleFollowUp(voc, isReporterContext) ? (
         <EmptyState size="sm" title="연결된 실행 없음" />
       ) : null}
     </div>
