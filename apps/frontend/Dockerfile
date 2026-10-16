@@ -15,9 +15,10 @@ COPY packages/shared ./packages/shared
 COPY packages/ui ./packages/ui
 RUN pnpm --filter @fops/frontend build
 
-FROM nginx:1.27.5-alpine AS runtime
+# Unprivileged variant: nginx runs as a non-root user and listens on 8080.
+FROM nginxinc/nginx-unprivileged:1.27.5-alpine AS runtime
 ENV BACKEND_URL=http://backend:3001 NGINX_ENVSUBST_FILTER=^BACKEND_URL$
 COPY --from=build /workspace/apps/frontend/dist/ /usr/share/nginx/html/
 COPY apps/frontend/nginx.conf /etc/nginx/templates/default.conf.template
-EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["wget", "-q", "-O", "/dev/null", "--header", "Accept: text/html", "http://127.0.0.1:8080/index.html"]

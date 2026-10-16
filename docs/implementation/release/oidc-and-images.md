@@ -39,6 +39,8 @@ Register a VOC from the app using one of the seeded Managed Systems. If the acti
 
 The provider README for tag 6.0.4 documents interactive login, tokenCallbacks/requestMappings, username claim substitution, and authorization code with PKCE S256. It does not document client-secret validation at the token endpoint or the ID Token nonce behavior required by the backend. The Compose config uses only the documented settings; the conductor must verify those interoperability details during the runtime check.
 
+The release stack publishes host ports 4173 (frontend), 8080 (OIDC provider) and 3001 (backend, through the provider's network namespace). Stop a local development backend on port 3001 before `image-smoke.sh`, or `docker compose up` cannot bind the port.
+
 ## Routes and image behavior
 
 The nginx proxy preserves the original URI and query string for backend requests, and preserves redirect and cookie response headers:
