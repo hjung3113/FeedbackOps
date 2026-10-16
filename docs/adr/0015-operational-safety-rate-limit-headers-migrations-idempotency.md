@@ -198,3 +198,16 @@ compatible vector retained at most ten minutes; tombstones last 24h. Unknown
 outcome/expiry never redispatches automatically. Changed text/MS conflicts;
 there is no exactly-once external-billing claim. This narrow exception leaves
 existing mutation idempotency contracts intact.
+
+## Amended 2026-10-16 — VOC replay after access loss (accepted MVP limit, #1196)
+
+Verbatim replay can return a cached VOC write envelope that carries fields the
+actor may no longer read: an operator writes, then loses `voc.read` and
+`voc.triage`, then resends the same request with the same key within the 24h
+TTL. The cache hit returns before the command re-authorizes. ADR-0004 (severity
+is not Reporter-visible) and the read-access matrix therefore hold only for
+fresh executions. The owner accepted this window for the MVP (2026-10-16). The
+post-MVP fix: on a cache hit, recheck current entitlement and redact or reject
+the cached VOC envelope without re-running writes or audits
+(`docs/design/14-post-mvp-backlog.md`).
+

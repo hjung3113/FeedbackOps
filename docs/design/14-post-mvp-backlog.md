@@ -20,6 +20,18 @@ Add an entry whenever a close-out slice defers or drops something. Remove an ent
 | --- | --- | --- |
 | Single-object permission enforcement and approval narrowing (Slice 55, ADR-0066; owner #1041, 2026-10-13) | Current checks enforce workspace/Managed System only. End-to-end object gates across consuming routes would expand this close-out slice and its privacy tests; an object-scope warning cannot enforce a restriction. MVP rejects object-scoped writes/approval rather than silently broadening access, preserving historical rows. | A demonstrated job needs one-object access and an ADR defines object identity, every consuming-route/check/list gate, privacy tests, and explicit legacy-data disposition. Legacy unsuperseded object grants must be inventoried and resolved explicitly before MVP release. |
 
+### Slice 62 — owner decisions (session 83, 2026-10-16)
+
+Questions left in merged PR bodies, decided by the owner. Smaller noted items from Slices 56–62 are tracked in #1214.
+
+| Deferred item | Reason | Reopen condition |
+| --- | --- | --- |
+| Keep staged Triage choices when a confirm is rejected (#1191); today every staged choice resets, not only the owner | The owner picker offers only eligible Actors, so a rejection needs a permission change between opening and confirming; re-seeding the panel adds draft state for a rare race | Users report losing Triage input after a rejected confirm |
+| Name the would-be automatic recipient before Task conversion (#1190) | Needs a defaults read, a new contract; the success toast already names the actual recipient | Reviewers convert to the wrong recipient because they cannot see the default in advance; decide the defaults-read contract first |
+| Scroll the Task board to search matches outside the visible columns (#1203) | The count (`보드 N건`) is truthful and the list view is the search surface; auto-scroll adds board state | Users search from the board and miss Done/Released matches |
+| Digits-only search (`2240` → `TASK-2240`) on VOC, Task and Finding lists (#1203) | All three lists share one rule: display-id prefix or title contains; changing one list alone breaks consistency | Users ask for number-only search; change the three lists together |
+| Recheck entitlement on an idempotent replay of a VOC write (#1196) | ADR-0015 replays the stored response verbatim; a replay after the actor lost `voc.read`/`voc.triage` can return a cached envelope with internal fields (severity, full detail). Needs a revocation, the same key and the 24 h TTL. Accepted for MVP (ADR-0015 amendment 2026-10-16) | Post-MVP hardening: on a cache hit, recheck current entitlement and redact or reject without re-running writes or audits |
+
 ### Slice 62 — #1175 (2026-10-16)
 
 | Deferred item | Reason | Reopen condition |
