@@ -61,6 +61,7 @@
 //   reporter_facing_status.gate_blocked       → amber Callout inline
 //   conflict.idempotency_key_reuse            → lock Submit + Preview until VOC switch
 
+import { useComposerEditorFocus } from '@/features/cross-system/composer-editor/useComposerEditorFocus';
 import {
   isForbiddenTransition,
   useReporterStatusTransitions,
@@ -124,6 +125,7 @@ export function PublicUpdateComposer({
   onDraftChange,
 }: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
+  const { editorHandle, focusEditor } = useComposerEditorFocus();
 
   // REV-1 #7: if parent provides controlled draft, use it; otherwise keep local state
   // for backward-compat when the composer is used standalone.
@@ -198,6 +200,7 @@ export function PublicUpdateComposer({
       // travels — clearing it here as well would be a second, silent writer.
       setAttachmentResetToken((n) => n + 1);
       toast.success('공개 업데이트가 게시되었습니다.');
+      focusEditor();
     },
     onError: (error) => {
       submitInFlightRef.current = false;
@@ -287,11 +290,14 @@ export function PublicUpdateComposer({
         minHeight={84}
         onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
-          <PublicUpdateToolbar
-            editor={editor}
-            onAttach={(file) => api.attach(file)}
-            onAttachError={(e) => toast.error(mapUnknownError(e).message)}
-          />
+          <>
+            {editorHandle(editor)}
+            <PublicUpdateToolbar
+              editor={editor}
+              onAttach={(file) => api.attach(file)}
+              onAttachError={(e) => toast.error(mapUnknownError(e).message)}
+            />
+          </>
         )}
       />
 

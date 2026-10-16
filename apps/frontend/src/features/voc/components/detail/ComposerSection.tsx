@@ -63,6 +63,8 @@ export interface ComposerSectionProps {
    * close button and show DirtyConfirmation before closing the panel.
    */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Called after an internal comment is added (the conversation timeline shows 내부). */
+  onInternalCommentAdded?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -73,6 +75,7 @@ export function ComposerSection({
   canTriage = false,
   onCloseRequest,
   onDirtyChange,
+  onInternalCommentAdded,
 }: ComposerSectionProps): React.ReactElement | null {
   const visibility = useComposerVisibility(voc, me, canTriage);
   // REV-1 #7: draft state is now wired into all three composers as controlled props.
@@ -237,6 +240,7 @@ export function ComposerSection({
               me={me}
               draftDoc={draft.state.internal}
               onDraftChange={(doc) => draft.setDraft('internal', doc)}
+              {...(onInternalCommentAdded ? { onCommentAdded: onInternalCommentAdded } : {})}
             />
           </div>
         )}

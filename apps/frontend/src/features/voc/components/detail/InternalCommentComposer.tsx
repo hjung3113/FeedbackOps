@@ -26,6 +26,7 @@
 //   - @Mention via MentionPickerButton (Combobox click only — NOT inline @-autocomplete, spec §3.5).
 //   - On 200: invalidate ['voc', voc.id], clear draft, toast 내부 코멘트가 추가되었습니다.
 
+import { useComposerEditorFocus } from '@/features/cross-system/composer-editor/useComposerEditorFocus';
 import { MentionPickerButton } from '@/features/cross-system/mentions/MentionPickerButton';
 import { extractMentions } from '@/features/cross-system/mentions/extractMentions';
 import { insertMention } from '@/features/cross-system/mentions/insertMention';
@@ -52,6 +53,8 @@ export interface InternalCommentComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
+  /** Called after a comment is added (the conversation timeline switches to 내부). */
+  onCommentAdded?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -64,8 +67,10 @@ export function InternalCommentComposer({
   me: _me,
   draftDoc: controlledDraftDoc,
   onDraftChange,
+  onCommentAdded,
 }: InternalCommentComposerProps): React.ReactElement {
   const queryClient = useQueryClient();
+  const { editorHandle, focusEditor } = useComposerEditorFocus();
 
   // Hold a ref to the editor instance to allow MentionPickerButton insertions.
   const editorRef = React.useRef<TipTapEditor | null>(null);
@@ -109,6 +114,8 @@ export function InternalCommentComposer({
       // attachmentIds clears through the dropzone's onChange, not from here.
       setAttachmentResetToken((n) => n + 1);
       toast.success('내부 코멘트가 추가되었습니다.');
+      onCommentAdded?.();
+      focusEditor();
     },
     onError: (error) => {
       toast.error(mapUnknownError(error).message);
@@ -153,17 +160,20 @@ export function InternalCommentComposer({
           // Keep editor ref in sync for mention insertion.
           editorRef.current = editor;
           return (
-            <InternalCommentToolbar
-              editor={editor}
-              onInsertMention={() => {
-                // MentionPickerButton is rendered outside the toolbar in the composer
-                // body; this callback is not used by the toolbar directly here.
-                // The toolbar's @Mention button will be handled via a shared state flag
-                // below.
-              }}
-              onAttach={(file) => api.attach(file)}
-              onAttachError={(e) => toast.error(mapUnknownError(e).message)}
-            />
+            <>
+              {editorHandle(editor)}
+              <InternalCommentToolbar
+                editor={editor}
+                onInsertMention={() => {
+                  // MentionPickerButton is rendered outside the toolbar in the composer
+                  // body; this callback is not used by the toolbar directly here.
+                  // The toolbar's @Mention button will be handled via a shared state flag
+                  // below.
+                }}
+                onAttach={(file) => api.attach(file)}
+                onAttachError={(e) => toast.error(mapUnknownError(e).message)}
+              />
+            </>
           );
         }}
       />

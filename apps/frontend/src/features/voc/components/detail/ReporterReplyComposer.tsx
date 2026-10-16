@@ -31,12 +31,13 @@
 // No ReporterStatusChangeBlock on this surface (reply is body-only, no status change).
 //
 // Submit endpoint: POST /vocs/:id/reporter-replies
-// On success: invalidate ['voc', voc.id], clear draft, toast 제출자에게 답장이 전송되었습니다.
+// On success: invalidate ['voc', voc.id], clear draft, toast 답장이 등록되었습니다.
 //
 // Error matrix (D-5.6: Callout copy sourced from backend detail.reason, not errorMapper):
 //   reporter_facing_status.gate_blocked → amber Callout inline
 //   conflict.idempotency_key_reuse      → lock Submit + Preview until VOC switch
 
+import { useComposerEditorFocus } from '@/features/cross-system/composer-editor/useComposerEditorFocus';
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
 import type { ApiError } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
@@ -85,6 +86,7 @@ export function ReporterReplyComposer({
   onDraftChange,
 }: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
+  const { editorHandle, focusEditor } = useComposerEditorFocus();
 
   // REV-1 #7: controlled draft support.
   const isControlled = controlledDraftDoc !== undefined;
@@ -127,7 +129,8 @@ export function ReporterReplyComposer({
       // #354: linked to the sent reply now — re-sending would be already_linked.
       // attachmentIds clears through the dropzone's onChange, not from here.
       setAttachmentResetToken((n) => n + 1);
-      toast.success('제출자에게 답장이 전송되었습니다.');
+      toast.success('답장이 등록되었습니다.');
+      focusEditor();
     },
     onError: (error) => {
       if (getComposerErrorTone(error.code) == null) {
@@ -186,11 +189,14 @@ export function ReporterReplyComposer({
         minHeight={84}
         onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
-          <ReporterReplyToolbar
-            editor={editor}
-            onAttach={(file) => api.attach(file)}
-            onAttachError={(e) => toast.error(mapUnknownError(e).message)}
-          />
+          <>
+            {editorHandle(editor)}
+            <ReporterReplyToolbar
+              editor={editor}
+              onAttach={(file) => api.attach(file)}
+              onAttachError={(e) => toast.error(mapUnknownError(e).message)}
+            />
+          </>
         )}
       />
 

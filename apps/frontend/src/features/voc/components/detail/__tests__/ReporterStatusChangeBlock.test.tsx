@@ -51,7 +51,7 @@ const OWNER = {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe('ReporterStatusChangeBlock', () => {
-  it('renders picker with current status first, then allowed, then forbidden (차단됨 suffix)', async () => {
+  it('renders picker with current status first, then allowed, then forbidden (API reason suffix)', async () => {
     render(
       <ReporterStatusChangeBlock
         voc={BASE_VOC}
@@ -80,13 +80,14 @@ describe('ReporterStatusChangeBlock', () => {
       expect(opt).not.toHaveAttribute('aria-disabled', 'true');
     }
 
-    // Forbidden statuses have DOM disabled=true and '차단됨' suffix
+    // A forbidden status with an API reason shows that reason instead of the generic suffix
     const resolvedOpt = options.find((option) => option.textContent?.includes('해결됨'));
     expect(resolvedOpt).toBeTruthy();
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(resolvedOpt).toHaveAttribute('aria-disabled', 'true');
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    expect(resolvedOpt!.textContent).toContain('차단됨');
+    expect(resolvedOpt!.textContent).toContain('결과 확인 전에 해결됨으로 바꿀 수 없습니다.');
+    expect(resolvedOpt!.textContent).not.toContain('차단됨');
   });
 
   it('forbidden statuses remain disabled options', async () => {
@@ -104,11 +105,10 @@ describe('ReporterStatusChangeBlock', () => {
     const options = await screen.findAllByRole('option');
 
     // All statuses not in allowed and not current are disabled
-    const forbidden = options.filter((option) => option.textContent?.includes('차단됨'));
-    expect(forbidden).toHaveLength(5);
-    for (const option of forbidden) {
-      expect(option).toHaveAttribute('aria-disabled', 'true');
-    }
+    const disabled = options.filter((option) => option.getAttribute('aria-disabled') === 'true');
+    expect(disabled).toHaveLength(5);
+    // Without an API reason the generic suffix remains; with one it is replaced.
+    expect(disabled.filter((option) => option.textContent?.includes('차단됨'))).toHaveLength(4);
   });
 
   it('emits the selected allowed status through the shared picker', async () => {

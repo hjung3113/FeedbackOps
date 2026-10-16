@@ -132,6 +132,28 @@ beforeEach(() => {
 });
 
 describe('<ConversationTimeline>', () => {
+  it('shows the 내부 tab when the internal-comment signal changes, without remounting', () => {
+    const { rerender } = render(
+      <ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} internalCommentSignal={0} />,
+    );
+    const publicTab = screen.getByRole('tab', { name: '공개' });
+    expect(publicTab).toHaveAttribute('aria-selected', 'true');
+
+    rerender(
+      <ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} internalCommentSignal={1} />,
+    );
+
+    expect(screen.getByRole('tab', { name: '내부' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '공개' })).toBe(publicTab);
+
+    // The reader can go back to 공개; an unchanged signal does not pull them away again.
+    fireEvent.mouseDown(publicTab);
+    rerender(
+      <ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} internalCommentSignal={1} />,
+    );
+    expect(publicTab).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('renders both tabs for a viewer with operator capability', () => {
     render(<ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} />);
     expect(screen.getByRole('tab', { name: '공개' })).toBeInTheDocument();

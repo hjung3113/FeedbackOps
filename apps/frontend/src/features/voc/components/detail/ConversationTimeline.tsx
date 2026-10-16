@@ -16,14 +16,23 @@ export interface ConversationTimelineProps {
   voc: VocDetailEnvelope;
   canTriage: boolean;
   actorNamesById?: ReadonlyMap<string, string> | undefined;
+  /** Changes after an internal comment is added; the timeline then shows the 내부 tab. */
+  internalCommentSignal?: number;
 }
 
 export function ConversationTimeline({
   voc,
   canTriage,
   actorNamesById,
+  internalCommentSignal = 0,
 }: ConversationTimelineProps): React.ReactElement {
   const [selectedTab, setSelectedTab] = React.useState<'public' | 'internal'>('public');
+  const [seenInternalCommentSignal, setSeenInternalCommentSignal] =
+    React.useState(internalCommentSignal);
+  if (seenInternalCommentSignal !== internalCommentSignal) {
+    setSeenInternalCommentSignal(internalCommentSignal);
+    if (canTriage) setSelectedTab('internal');
+  }
   const publicTabRef = React.useRef<HTMLButtonElement>(null);
   const internalTabRef = React.useRef<HTMLButtonElement>(null);
   const internalContentRef = React.useRef<HTMLDivElement>(null);

@@ -41,10 +41,11 @@ function ToolbarButton({
     <button
       type="button"
       onMouseDown={(e) => {
-        // Prevent the editor from losing focus on toolbar click.
+        // Mouse only: stop the button from taking focus (and the selection) from the editor.
         e.preventDefault();
-        onClick();
       }}
+      // Native click covers mouse and Enter/Space; the command refocuses the editor itself.
+      onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}

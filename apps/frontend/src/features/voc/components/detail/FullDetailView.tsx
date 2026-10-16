@@ -1,7 +1,7 @@
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Button, DetailPanelSectionNav, DirtyConfirmation } from '@fops/ui';
 import type { PanelSection } from '@fops/ui';
-import type * as React from 'react';
+import * as React from 'react';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
@@ -89,6 +89,9 @@ export function FullDetailView({
     me,
     ...(managedSystemId !== undefined ? { managedSystemId } : {}),
   });
+
+  // Bumped after an internal comment is added so the conversation timeline shows 내부.
+  const [internalCommentSignal, setInternalCommentSignal] = React.useState(0);
 
   const detailSections = isReporterArm
     ? VOC_DETAIL_SECTIONS.filter((section) => section.id !== 'triage')
@@ -191,7 +194,12 @@ export function FullDetailView({
             </div>
           )}
           <div data-anchor="conversation">
-            <ConversationTimeline voc={voc} canTriage={canTriage} actorNamesById={actorNamesById} />
+            <ConversationTimeline
+              voc={voc}
+              canTriage={canTriage}
+              actorNamesById={actorNamesById}
+              internalCommentSignal={internalCommentSignal}
+            />
           </div>
           <div data-anchor="compose">
             <ComposerSection
@@ -199,6 +207,7 @@ export function FullDetailView({
               me={me}
               canTriage={canTriage}
               onDirtyChange={setComposerDirty}
+              onInternalCommentAdded={() => setInternalCommentSignal((n) => n + 1)}
             />
             {canCreateFinding && pendingReviewCount > 0 && (
               <div className="mt-2 flex justify-end">
