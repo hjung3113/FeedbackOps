@@ -19,7 +19,7 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 import { executeCompensatingPatch, getVocUpdatedAt } from './triage-transport';
-import type { TriageOutput, TriageSnapshot } from './triage-types';
+import { type TriageOutput, type TriageSnapshot, isTriageFullOutput } from './triage-types';
 
 export async function runTriageCompensation(args: {
   queryClient: QueryClient;
@@ -31,10 +31,12 @@ export async function runTriageCompensation(args: {
 }): Promise<void> {
   const { queryClient, snapshot, output, restore } = args;
 
+  // A summary forward response (writer lost voc.read, #1187) has no updated_at:
+  // it takes the refetch path, whose summary detail has none either, so the
+  // compensating PATCH keeps the snapshot If-Match and surfaces the existing
+  // conflict toast.
   let freshUpdatedAt: string | undefined =
-    output != null && typeof (output as { updated_at?: unknown }).updated_at === 'string'
-      ? (output as { updated_at: string }).updated_at
-      : undefined;
+    output != null && isTriageFullOutput(output) ? output.updated_at : undefined;
 
   if (freshUpdatedAt === undefined) {
     try {

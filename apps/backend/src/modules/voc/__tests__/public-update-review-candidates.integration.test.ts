@@ -10,14 +10,16 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { vocSummaryEnvelopeSchema } from '@fops/shared';
+
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertActorRow, insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
@@ -260,6 +262,78 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     );
   });
 
+  it.each(['admin-read-denied', 'developer-triage-only'] as const)(
+    '#1187 apply as %s returns the nested VocSummaryEnvelope and still persists',
+    async (kind) => {
+      const seeded = await seedReleasedCandidate({ reporterFacingStatus: 'progress' });
+      const externalId = `mock-dev-read-${uid('review-1187')}`;
+      const actor =
+        kind === 'developer-triage-only'
+          ? await insertDevActor(dbHandle, WORKSPACE_ID, externalId.replace('mock-dev-read-', ''))
+          : await insertActorRow(dbHandle, {
+              workspaceId: WORKSPACE_ID,
+              externalId,
+              roleLevel: 'admin',
+            });
+      let denyId: string | undefined;
+      try {
+        if (kind === 'developer-triage-only') {
+          await grantCapability(
+            dbHandle,
+            WORKSPACE_ID,
+            actor.id,
+            'voc.triage',
+            seeded.msId,
+            adminActorId,
+          );
+        } else {
+          denyId = await denyCapability(
+            dbHandle,
+            WORKSPACE_ID,
+            actor.id,
+            'voc.read',
+            seeded.msId,
+            adminActorId,
+          );
+        }
+        const cookie = await loginAs(app, externalId);
+        const applied = await resolve(cookie, seeded.vocId, {
+          action: 'apply',
+          candidate_id: seeded.candidateId,
+          public_update: {
+            skip_public_update: false,
+            body_rich_content: paragraphDoc('MK-1187-candidate-body'),
+            next_reporter_facing_status: 'resolved',
+          },
+        });
+        expect(applied.statusCode, applied.body).toBe(201);
+        const nestedVoc = applied.json<{ public_update: { voc: Record<string, unknown> } }>()
+          .public_update.voc;
+        expect(Object.keys(nestedVoc).sort()).toEqual([
+          'created_at',
+          'display_id',
+          'id',
+          'permission_decisions',
+          'primary_managed_system_id',
+          'reporter_facing_status',
+        ]);
+        expect(vocSummaryEnvelopeSchema.parse(nestedVoc).id).toBe(seeded.vocId);
+        expect(applied.body).not.toContain('Released task candidate VOC');
+        const actioned = await dbHandle.pool.query<{ status: string }>(
+          'select status from voc.public_update_review_candidates where id = $1',
+          [seeded.candidateId],
+        );
+        expect(actioned.rows[0]?.status).toBe('actioned');
+      } finally {
+        if (denyId) {
+          await dbHandle.pool.query('delete from permission.permission_denies where id = $1', [
+            denyId,
+          ]);
+        }
+      }
+    },
+  );
+
   it('in-scope Developer with voc.triage may list, dismiss, and apply; Reporter is denied list and apply', async () => {
     const seeded = await seedReleasedCandidate();
     const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid('review-dev'));
@@ -292,6 +366,18 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     });
     expect(applied.statusCode).toBe(201);
     expect(applied.json<{ action: string }>().action).toBe('apply');
+    // #1187: triage-only (no voc.read) → the nested VOC is the read-matrix summary.
+    const nestedVoc = applied.json<{ public_update: { voc: Record<string, unknown> } }>()
+      .public_update.voc;
+    expect(Object.keys(nestedVoc).sort()).toEqual([
+      'created_at',
+      'display_id',
+      'id',
+      'permission_decisions',
+      'primary_managed_system_id',
+      'reporter_facing_status',
+    ]);
+    expect(nestedVoc.id).toBe(applySeed.vocId);
     const developerActioned = await dbHandle.pool.query<{
       status: string;
       resolved_by_actor_id: string;

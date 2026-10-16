@@ -58,7 +58,7 @@ vi.mock('@fops/ui', async (importActual) => {
 });
 
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, vocSummaryEnvelopeSchema } from '@fops/shared';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
 async function chooseReporterStatus(label: string): Promise<void> {
@@ -105,6 +105,24 @@ const UPDATED_VOC: VocDetailEnvelope = {
   updated_at: '2026-05-01T00:01:00Z',
   next_reporter_states: { allowed: ['assigned'], forbidden: {} },
 };
+
+const SUMMARY_VOC = vocSummaryEnvelopeSchema.parse({
+  id: BASE_VOC.id,
+  display_id: BASE_VOC.display_id,
+  primary_managed_system_id: BASE_VOC.primary_managed_system_id,
+  reporter_facing_status: 'reviewing',
+  created_at: BASE_VOC.created_at,
+  permission_decisions: {
+    _self: {
+      state: 'request_access',
+      requestable_permission: {
+        permission: 'voc.read',
+        managed_system_id: BASE_VOC.primary_managed_system_id,
+        reason_required: true,
+      },
+    },
+  },
+});
 
 const PUBLIC_UPDATE_ENVELOPE: PublicUpdateSuccess = {
   public_update: {
@@ -294,6 +312,33 @@ describe('<PublicUpdateComposer>', () => {
     await React.act(async () => {
       resolveDetailRefetch(UPDATED_VOC);
     });
+  });
+
+  it('stores a summary success response without crashing', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    fireEvent.click(screen.getByRole('textbox'));
+    await chooseReporterStatus('검토 중');
+    fireEvent.click(screen.getByRole('button', { name: /^공개 업데이트 게시$/ }));
+
+    expect(mutationMock.mutate).toHaveBeenCalledTimes(1);
+    await React.act(async () => {
+      mutationMock.onSuccess?.({ ...PUBLIC_UPDATE_ENVELOPE, voc: SUMMARY_VOC });
+    });
+
+    const cached = queryClient.getQueryData(['voc', BASE_VOC.id]);
+    expect(vocSummaryEnvelopeSchema.parse(cached)).toEqual(SUMMARY_VOC);
+    expect(cached).toEqual(SUMMARY_VOC);
+    expect(cached).not.toHaveProperty('title');
+    expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
   });
 
   // ── #356: staged status goes stale when another actor moves the VOC ──────────

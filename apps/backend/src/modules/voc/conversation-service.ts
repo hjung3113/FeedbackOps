@@ -20,6 +20,7 @@ import type {
   PublicUpdateRequest,
   ReporterReplyRequest,
   VocDetailEnvelope,
+  VocSummaryEnvelope,
 } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -75,7 +76,7 @@ export interface PublicUpdateEnvelope {
     skip_reason: string | null;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface ReporterReplyEnvelope {
@@ -86,7 +87,7 @@ export interface ReporterReplyEnvelope {
     body_rich_content: unknown;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface InternalCommentEnvelope {
@@ -97,7 +98,7 @@ export interface InternalCommentEnvelope {
     body_rich_content: unknown;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 // ── Service factory ───────────────────────────────────────────────────────────

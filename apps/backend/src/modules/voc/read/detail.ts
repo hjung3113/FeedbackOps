@@ -60,6 +60,62 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
     return { kind, row, readScope, canTriage, isReporter, isReporterArm, primaryMs, etag };
   }
 
+  // ── buildSummaryEnvelope ──────────────────────────────────────────────────
+  //
+  // The ONE summary projection (id, display id, Managed System, reporter-facing
+  // status, created_at, `_self` decision). Shared by getVocDetail and the
+  // post-write path so a write response can never carry more than the read.
+
+  async function buildSummaryEnvelope(args: {
+    actor: ReadActorContext;
+    row: { id: string; displayId: string; reporterFacingStatus: string; createdAt: Date };
+    primaryMs: string;
+    tx?: Tx;
+  }): Promise<VocSummaryEnvelope> {
+    const { actor, row, primaryMs } = args;
+    const decision = await deps.checkService.checkCapability(
+      {
+        actor_id: actor.actor_id,
+        workspace_id: actor.workspace_id,
+        role_level: actor.role_level,
+      },
+      'voc.read',
+      { workspace_id: actor.workspace_id, managed_system_id: primaryMs },
+      args.tx ? { tx: args.tx } : {},
+    );
+
+    let selfDecision: Record<string, unknown>;
+    if (!decision.allow && isRequestableDenial(decision.reason)) {
+      selfDecision = {
+        state: 'request_access',
+        requestable_permission: {
+          permission: 'voc.read',
+          managed_system_id: primaryMs,
+          reason_required: false,
+        },
+      };
+    } else if (!decision.allow) {
+      selfDecision = {
+        state: 'blocked_not_requestable',
+        reason: decision.reason,
+      };
+    } else {
+      // Should not reach here (actor has read access → msInReadScope would be true).
+      // Guard: treat as blocked to avoid data leak.
+      selfDecision = { state: 'blocked_not_requestable', reason: 'unknown' };
+    }
+
+    return {
+      id: row.id,
+      display_id: row.displayId,
+      primary_managed_system_id: primaryMs,
+      reporter_facing_status:
+        row.reporterFacingStatus as VocSummaryEnvelope['reporter_facing_status'],
+      created_at: row.createdAt.toISOString(),
+      permission_decisions: { _self: selfDecision },
+    };
+  }
+
   // ── resolveVocDisplayId (#731) ────────────────────────────────────────────
   //
   // Display id → id for /nav/resolve. Resolves the id first, then maps THE
@@ -101,49 +157,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       await resolveVocAccess({ actor, vocId });
 
     if (kind === 'summary') {
-      // ── SUMMARY path ────────────────────────────────────────────────────
-      const decision = await deps.checkService.checkCapability(
-        {
-          actor_id: actor.actor_id,
-          workspace_id: actor.workspace_id,
-          role_level: actor.role_level,
-        },
-        'voc.read',
-        { workspace_id: actor.workspace_id, managed_system_id: primaryMs },
-      );
-
-      let selfDecision: Record<string, unknown>;
-      if (!decision.allow && isRequestableDenial(decision.reason)) {
-        selfDecision = {
-          state: 'request_access',
-          requestable_permission: {
-            permission: 'voc.read',
-            managed_system_id: primaryMs,
-            reason_required: false,
-          },
-        };
-      } else if (!decision.allow) {
-        selfDecision = {
-          state: 'blocked_not_requestable',
-          reason: decision.reason,
-        };
-      } else {
-        // Should not reach here (actor has read access → msInReadScope would be true).
-        // Guard: treat as blocked to avoid data leak.
-        selfDecision = { state: 'blocked_not_requestable', reason: 'unknown' };
-      }
-
-      const envelope: VocSummaryEnvelope = {
-        id: row.id,
-        display_id: row.displayId,
-        primary_managed_system_id: primaryMs,
-        reporter_facing_status:
-          row.reporterFacingStatus as VocSummaryEnvelope['reporter_facing_status'],
-        created_at: row.createdAt.toISOString(),
-        permission_decisions: { _self: selfDecision },
+      return {
+        kind: 'summary',
+        envelope: await buildSummaryEnvelope({ actor, row, primaryMs }),
+        etag,
       };
-
-      return { kind: 'summary', envelope, etag };
     }
 
     // ── FULL path (msInReadScope || isReporter) ────────────────────────────
@@ -262,40 +280,50 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
 
     return { kind: 'full', envelope, etag };
   }
-  // ── composeDetailEnvelope ─────────────────────────────────────────────────
-  // Post-write envelope refresh used by conversation-service (C3/#16).
-  // Caller owns the transaction and is already authorised to act on the VOC —
-  // access-matrix checks are intentionally skipped here; this path is NOT a
-  // read entry-point for unauthenticated actors.
+  // ── resolveWriteResponseAccess / composeDetailEnvelope ────────────────────
+  // Post-write response projection (#1187). The write already succeeded for an
+  // actor authorised to WRITE (e.g. voc.triage only), which does not imply
+  // voc.read, so the response follows the same read matrix as GET /vocs/:id,
+  // decided by resolveVocAccess inside the write transaction (no second
+  // predicate): `full` → the caller's full projection; `summary` → the
+  // VocSummaryEnvelope. A not_found.record here cannot happen for a triage
+  // writer (triage ⊂ effective scope); if it does it propagates and the tx
+  // rolls back — there is no third shape.
   //
   // Uses the supplied `tx` so the returned envelope reflects writes made in
   // the same transaction (e.g. status change, new conversation row).
-  //
-  // canTriage is derived from the actor's triage scope inside the tx so the
-  // conversation visibility filter stays accurate post-write.
+
+  async function resolveWriteResponseAccess(args: {
+    tx: Tx;
+    actor: ReadActorContext;
+    vocId: string;
+  }): Promise<{ kind: 'full' } | { kind: 'summary'; envelope: VocSummaryEnvelope }> {
+    const { tx, actor, vocId } = args;
+    const access = await resolveVocAccess({ actor, vocId, tx });
+    if (access.kind === 'full') return { kind: 'full' };
+    return {
+      kind: 'summary',
+      envelope: await buildSummaryEnvelope({
+        actor,
+        row: access.row,
+        primaryMs: access.primaryMs,
+        tx,
+      }),
+    };
+  }
 
   async function composeDetailEnvelope(args: {
     tx: Tx;
     actor: ReadActorContext;
     vocId: string;
-  }): Promise<VocDetailEnvelope> {
+  }): Promise<VocDetailEnvelope | VocSummaryEnvelope> {
     const { tx, actor, vocId } = args;
 
-    // Fetch the (possibly just-updated) VOC row inside the tx.
-    const row = await repoRead.selectVocByIdForRead(tx, actor.workspace_id, vocId);
-    if (!row) throw new HttpError('not_found.record', 'VOC not found after write');
-
-    const primaryMs = row.primaryManagedSystemId;
-    const isReporter = row.reporterId === actor.actor_id;
-
-    // Resolve triage scope inside the tx (permissions may have changed if this
-    // is ever used post-grant; belt-and-suspenders).
-    const [triageScope, readScope] = await Promise.all([
-      actorTriageScope(tx, actor),
-      actorReadScope(tx, actor),
-    ]);
-    const canTriage = msInScope(triageScope, primaryMs);
-    const isReporterArm = isReporter && !msInScope(readScope, primaryMs) && !canTriage;
+    const access = await resolveVocAccess({ actor, vocId, tx });
+    if (access.kind === 'summary') {
+      return buildSummaryEnvelope({ actor, row: access.row, primaryMs: access.primaryMs, tx });
+    }
+    const { row, primaryMs, readScope, canTriage, isReporter, isReporterArm } = access;
 
     // Inline conversation (first 50 entries).
     const convResult = await repoRead.selectConversationPage(tx, {
@@ -410,5 +438,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       attachments: vocAttRows.map(mapAttachmentRow),
     };
   }
-  return { resolveVocAccess, resolveVocDisplayId, getVocDetail, composeDetailEnvelope };
+  return {
+    resolveVocAccess,
+    resolveVocDisplayId,
+    getVocDetail,
+    composeDetailEnvelope,
+    resolveWriteResponseAccess,
+  };
 }

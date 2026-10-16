@@ -19,6 +19,37 @@ with HTTP 422 `validation.failed` at that field (`invalid_for_view`). My VOC
 counts never split by severity. Inbox and Triage keep their existing filters,
 sorts, tabs, and operator projections.
 
+## Post-write VOC envelope follows the read matrix (#1187)
+
+A write that returns a VOC payload builds it through the same verdict as
+`GET /vocs/:id` (`resolveVocAccess`), decided inside the write transaction.
+`full` (VOC in the caller's `voc.read` scope, or the caller is the Reporter)
+returns today's envelope unchanged. `summary` (no full read, not the Reporter,
+but in effective scope, e.g. a Developer holding only `voc.triage` or an Admin
+with an explicit `voc.read` deny) returns the `VocSummaryEnvelope` exactly as
+`GET /vocs/:id` returns it for that actor: `id`, `display_id`,
+`primary_managed_system_id`, `reporter_facing_status`, `created_at`,
+`permission_decisions._self`. No title, description, severity, owner, Analytics
+Area, attachments or conversation (public or internal) is returned. The write
+itself still succeeds with its normal status; triage never implies read.
+
+| Route | VOC payload | Summary arm |
+| --- | --- | --- |
+| `POST /vocs/:id/public-updates` | `voc` (detail) | `voc` is the summary |
+| `POST /vocs/:id/internal-comments` | `voc` (detail) | `voc` is the summary |
+| `POST /vocs/:id/apply-public-update-candidate` (apply) | `public_update.voc` (detail) | summary |
+| `PATCH /vocs/:id` (including the no-op diff) | flat `VocEnvelope` | `VocSummaryEnvelope` |
+| `POST /vocs/:id/reporter-replies` | `voc` (reporter-only write) | unchanged |
+| `PATCH /vocs/:id/description`, `POST /vocs` | flat reporter envelope (#1173) | unchanged |
+
+Dismiss, Recommendation confirm/dismiss, Cluster-suggestion confirm/discard/restore,
+`POST /attachments`, Cluster bulk apply (`outcomes` only), `create-finding` and
+`request-task` return no VOC payload (candidate/action, Cluster metadata, new
+attachment metadata, or their target DTO) and keep their own read requirements.
+Similarity preview returns read-filtered candidates. The shared response schema
+`public_update.voc` accepts the detail-or-summary union. Replaying a cached
+envelope after access loss is the accepted limit of #1196.
+
 ## VOC
 
 ```text

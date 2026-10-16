@@ -31,7 +31,12 @@ import {
 } from '../lib/triage-error-policy';
 import { buildTriageSnapshot } from '../lib/triage-payload';
 import { patchVocTriage } from '../lib/triage-transport';
-import type { TriageInput, TriageOutput, TriageSnapshot } from '../lib/triage-types';
+import {
+  type TriageInput,
+  type TriageOutput,
+  type TriageSnapshot,
+  isTriageFullOutput,
+} from '../lib/triage-types';
 import type { TriageQueueOutcome } from './useTriageQueue';
 import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 
@@ -106,6 +111,12 @@ export function useTriageCommand({
         if (!undoneRef.current.has(input)) {
           countedRef.current.add(input);
           onProcessedRef.current?.(1);
+        }
+        if (output && !isTriageFullOutput(output)) {
+          void queryClient.invalidateQueries({
+            queryKey: ['voc', input.vocId],
+            refetchType: 'active',
+          });
         }
         void invalidateRecovery(queryClient);
         invalidateNavCounts(queryClient);

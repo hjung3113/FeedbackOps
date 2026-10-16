@@ -11,7 +11,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
+import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
@@ -43,7 +43,8 @@ export interface InternalCommentSuccess {
     body_rich_content: unknown;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  /** #1187: the read-matrix summary when the writer has no full read. */
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface UseVocInternalCommentMutationArgs {

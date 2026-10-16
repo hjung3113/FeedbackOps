@@ -1820,7 +1820,15 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
         { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
       );
       expect(res1.statusCode).toBe(200);
-      const afterPatch1 = (res1.json() as { updated_at: string }).updated_at;
+      // #1187: this triage-only dev has no voc.read, so the PATCH response is the
+      // summary (no updated_at); read the new If-Match from the row.
+      const afterPatch1 =
+        (
+          await dbHandle.pool.query<{ updated_at: Date }>(
+            'select updated_at from voc.vocs where id = $1',
+            [voc.id],
+          )
+        ).rows[0]?.updated_at.toISOString() ?? '';
 
       // Change the grant state — the next tx must classify it as requestable.
       if (grantState === 'revoked') {
