@@ -101,8 +101,8 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
   (`required`/`optional`/false), `perf`, `flags` (`backend`, `migration`, `permission`, `instructions`). Checked
   against merged PRs: #820, #817, #835 → code+ux; #842, #846 → code+ux+perf; #839 → code only.
 - Rules: `review-final` → `templates/review-rules.md` (copied as `.review/00-REVIEW-RULES.md`); `review-ux` →
-  `.claude/agents/review-ux.md`; `review-perf` → `templates/review-rules-perf.md` (`.review/00-REVIEW-RULES-PERF.md`);
-  `review-quality` → `.claude/agents/review-quality.md`; brief check → `templates/brief-check.md`.
+  global `~/.agents/agents/review-ux.md` with § Review lens: UX; `review-perf` → `templates/review-rules-perf.md` (`.review/00-REVIEW-RULES-PERF.md`);
+  `review-quality` → global `~/.agents/agents/review-quality.md` with § Review lens: quality; brief check → `templates/brief-check.md`.
 - **Perf measurement** (before UX, never while another lane's UX review or a vitest/integration run is on the
   host): `verify-db.sh reset-rate-limits <n>`, then `scripts/nav-perf.sh --base develop=<url> --base branch=<url>
   --targets <hrefs> --out <worktree>/.review/<n>-perf/nav-perf.json`, with `run_in_background`. Targets are rail
@@ -114,6 +114,49 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
   paste the table into the code reviewer's task or VERIFY.
 - Conflict order starts with the product invariants in root `AGENTS.md` and permission or no-leak rules.
 - A fixed UX/perf blocker or major is re-checked on fresh previews (or `nav-perf.sh`).
+
+## Review lens: UX
+
+Read first by the global `review-ux` persona. Report in English.
+
+- **Previews:** `branch` and `develop`, each on its own host (`http://<label>.localhost:<port>`), both on the issue's
+  throwaway database seeded with the mock personas. Writes through the UI are allowed on these two origins only.
+  **Never touch `localhost:3010` or `:3011`** (the owner's dev data).
+- **Login:** on each preview host run
+  `fetch('/auth/mock-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ external_id }) })`
+  from a page on that host, then confirm `GET /me`. The cookie is per host, so log in once per host. Personas are
+  `external_id`s (e.g. `mock-admin-1`, plus a restricted one when the plan flags permissions).
+- **Data gaps:** create missing records on the branch preview through the API the UI uses, several in one
+  `page.evaluate` loop.
+- **Authority:**
+  - root `AGENTS.md` → UI Authority (ADR-0060): the shipped UI is the authority, so extend the current pattern;
+    Korean UI chrome, domain nouns (`VOC`, `Finding`, `Task`, …) stay English; three shells only (ADR-0020);
+  - `apps/frontend/AGENTS.md` and `PRODUCT.md` (Operate register: dense, list-first, restrained, one primary action
+    per toolbar or panel);
+  - `docs/frontend/ui-design-system.md`, `docs/frontend/component-inventory.md`, and the spec under
+    `docs/frontend/specs/` for the touched surface;
+  - generic lenses only where the project is silent: `.claude/skills/impeccable/reference/critique.md` (heuristics)
+    and `.claude/skills/impeccable/reference/audit.md` (accessibility).
+- **Project checks:**
+  - keyboard baseline: `docs/frontend/ui-design-system.md` → Accessibility Rules (Windows users with both keyboard
+    and mouse);
+  - copy: existing `lib/copy` strings reused, Korean chrome, glossary nouns, no em dash in UI strings;
+  - consistency: density and the 50px header rhythm.
+
+## Review lens: quality
+
+Read first by the global `review-quality` persona. Report in English.
+
+- **Range:** normally `origin/main...origin/develop`, in a disposable worktree detached at `origin/develop`.
+- **Authority:** root `AGENTS.md` (Monorepo Boundaries, Implementation Boundaries, Product Invariants, and Test
+  Discipline: test behaviour not implementation, one concept per test, no duplicate coverage at a lower level, no
+  trivial passthrough tests); `docs/implementation/02-domain-module-boundaries.md`; `apps/backend/AGENTS.md`,
+  `apps/frontend/AGENTS.md` and the nested `AGENTS.md` files on touched paths.
+- **Boundary leaks:** a repository writing another module's table; a controller doing service work; `packages/ui`
+  calling APIs or owning domain logic; `packages/shared` importing an app; frontend code enforcing permissions as
+  truth.
+- **release-blocker:** only a product-invariant or ownership-boundary violation that would ship wrong behaviour or
+  data.
 
 ## Fold scope
 
