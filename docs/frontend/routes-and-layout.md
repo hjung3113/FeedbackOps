@@ -306,7 +306,7 @@ As built, the scope control is the `AppSidebar` scope selector (`data-testid="sc
 ```text
 - It is rendered whenever the sidebar is expanded, for every Actor; it is disabled on Admin routes and on Survey respondent routes.
 - `All` ("전체 Managed System") is always offered; choosing it removes `managedSystem` from the URL.
-- Every workspace Managed System is listed. Systems outside the Actor's grants are dimmed and marked `범위 밖`, with a note that names are workspace-visible and access is requested separately (#282).
+- Every workspace Managed System is listed. Systems outside the actor's `voc.read` scope (`GET /me/permissions/scope`), including Admin denies, are dimmed and marked `범위 밖`, with a note that names are workspace-visible and access is requested separately (#282).
 ```
 
 Changing Managed System scope updates URL state and list queries. It must not

@@ -118,6 +118,9 @@ export function mountAuthedVocs({
       if (pathname.startsWith('/analytics-areas')) return jsonResponse(200, { items: [] });
       if (pathname.startsWith('/actors')) return jsonResponse(200, { items: [] });
       if (pathname.startsWith('/nav/counts')) return jsonResponse(200, { counts: {} });
+      if (pathname === '/me/permissions/scope') {
+        return jsonResponse(200, { scope: { kind: 'all' } });
+      }
       if (pathname.startsWith('/me/permissions/check')) {
         return jsonResponse(200, { state: 'approved', decision: { allow: true, via: 'role' } });
       }

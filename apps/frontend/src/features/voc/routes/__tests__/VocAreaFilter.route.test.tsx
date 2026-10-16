@@ -304,6 +304,82 @@ it.each([
   },
 );
 
+describe('Area options follow the actor voc.read scope (#1211)', () => {
+  const SPECIAL = ['전체 Analytics Area', '미지정'];
+  const SCOPE_AREAS = [
+    { id: AREA, name: 'Usage', managed_system_id: MS, archived_at: null },
+    { id: ARCHIVED_AREA, name: 'Billing', managed_system_id: OTHER_MS, archived_at: null },
+  ];
+
+  function mountWithScope(scopeResponse: () => Promise<Response> | Response) {
+    mounted = mountAuthedVocs({
+      initialPath: '/vocs?view=inbox',
+      vocsShell: true,
+      handle: (request) => {
+        if (request.url.startsWith('/me/permissions/scope')) return scopeResponse();
+        if (request.url.startsWith('/managed-systems'))
+          return jsonResponse(200, {
+            items: [
+              { id: MS, name: 'Tableau' },
+              { id: OTHER_MS, name: 'Power BI' },
+            ],
+            total: 2,
+          });
+        if (request.url.startsWith('/analytics-areas'))
+          return jsonResponse(200, { items: SCOPE_AREAS, total: 2 });
+        if (request.url.startsWith('/vocs?'))
+          return jsonResponse(200, { items: [], page: { has_more: false } });
+        if (request.url.startsWith('/saved-views')) return jsonResponse(200, { items: [] });
+        return undefined;
+      },
+    });
+  }
+
+  async function openOptions() {
+    const trigger = await screen.findByRole('combobox', { name: 'Analytics Area' });
+    await waitFor(() =>
+      expect(mounted?.requests.some((r) => r.url.startsWith('/analytics-areas'))).toBe(true),
+    );
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const listbox = await screen.findByRole('listbox');
+    return () =>
+      within(listbox)
+        .getAllByRole('option')
+        .map((o) => o.textContent);
+  }
+
+  it.each([
+    ['scoped to one System', { kind: 'scoped', managed_system_ids: [MS] }, [...SPECIAL, 'Usage']],
+    ['all', { kind: 'all' }, [...SPECIAL, 'Usage · Tableau', 'Billing · Power BI']],
+  ])('offers the permitted Systems areas only: %s', async (_name, scope, expected) => {
+    mountWithScope(() => jsonResponse(200, { scope }));
+    const texts = await openOptions();
+    await waitFor(() => expect(texts()).toEqual(expected));
+  });
+
+  it.each([
+    ['pending', () => new Promise<Response>(() => {})],
+    ['failed', () => jsonResponse(500, { error: { code: 'test.scope_failed' } })],
+  ])('offers only the two special options while the scope is %s', async (_name, scopeResponse) => {
+    mountWithScope(scopeResponse);
+    const texts = await openOptions();
+    // Give the failed request time to settle; the list must stay restricted either way.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(texts()).toEqual(SPECIAL);
+  });
+
+  it('shares one scope request with the global switcher', async () => {
+    mountWithScope(() => jsonResponse(200, { scope: { kind: 'all' } }));
+    const texts = await openOptions();
+    await waitFor(() => expect(texts()).toHaveLength(4));
+    expect(mounted?.requests.filter((r) => r.url.startsWith('/me/permissions/scope'))).toHaveLength(
+      1,
+    );
+  });
+});
+
 it('undo across Area restores only the original VOC and preserves the remaining selected pin', async () => {
   render(<Toaster />);
   const next = { ...ROW, id: NEXT_ID, display_id: 'VOC-A02', title: '남은 선택 행' };
