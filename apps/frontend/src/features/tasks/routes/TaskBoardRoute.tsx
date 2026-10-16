@@ -58,6 +58,7 @@ import {
   type TaskBoardServerFilters,
   taskBoardColumnKey,
   taskBoardColumnOptions,
+  taskMatchesBoardPopulation,
   useTaskBoardData,
   useTaskBoardSummary,
 } from '../hooks/useTaskBoardData';
@@ -209,6 +210,8 @@ export function TaskBoardRoute({
       statusGrouping
         ? ({
             mode: 'status',
+            includesFallback: (task: TaskDto) =>
+              taskMatchesBoardPopulation(task, scope, serverFilters),
             columnKey: (status: TaskStatus) => taskBoardColumnKey(scope, serverFilters, status),
             ensureColumn: (status: TaskStatus) =>
               queryClient.ensureInfiniteQueryData(

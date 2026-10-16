@@ -435,6 +435,118 @@ describe('bounded Task board (#1178)', () => {
     ).toBeInTheDocument();
   });
 
+  it.each(['success first', 'rejection first'] as const)(
+    'preserves overlapping move membership and totals across settlement reads: %s',
+    async (order) => {
+      const { client } = mount();
+      await waitFor(() => expect(headerCount('todo')).toHaveTextContent('2'));
+      const a = backlog[0] as TaskDto;
+      const b = backlog[1] as TaskDto;
+      server.hold(a.id);
+      server.hold(b.id);
+      await drag(a, 'todo');
+      await drag(b, 'todo');
+      await waitFor(() => expect(headerCount('todo')).toHaveTextContent('4'));
+      await act(async () => {
+        server.holds.release.get(order === 'success first' ? b.id : a.id)?.(
+          order === 'rejection first',
+        );
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      await waitFor(() => expect(client.isMutating()).toBe(1));
+      // Allow the first settlement's reads to finish before the other write settles.
+      await waitFor(() => expect(client.isFetching()).toBe(0));
+      if (order === 'rejection first') {
+        expect(headerCount('backlog')).toHaveTextContent('59');
+        expect(headerCount('todo')).toHaveTextContent('3');
+        expect(
+          within(column('todo')).getByRole('button', { name: new RegExp(`${b.display_id}:`) }),
+        ).toBeInTheDocument();
+      }
+      // The last refresh stays pending: rollback itself must leave server-truth counts.
+      const beforeRefresh = server.boardLists().length;
+      server.holds.lists = true;
+      await act(async () => {
+        server.holds.release.get(order === 'success first' ? a.id : b.id)?.(
+          order === 'success first',
+        );
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      await waitFor(() => expect(server.boardLists().length).toBeGreaterThan(beforeRefresh));
+      expect(headerCount('backlog')).toHaveTextContent('59');
+      expect(headerCount('todo')).toHaveTextContent('3');
+      for (const [task, status, absent] of [
+        [a, 'backlog', 'todo'],
+        [b, 'todo', 'backlog'],
+      ] as const) {
+        expect(
+          within(column(status)).getByRole('button', { name: new RegExp(`${task.display_id}:`) }),
+        ).toBeInTheDocument();
+        expect(
+          within(column(absent)).queryByRole('button', { name: new RegExp(`${task.display_id}:`) }),
+        ).toBeNull();
+      }
+    },
+  );
+
+  it.each([
+    ['excluded', 0, '50', '2'],
+    ['matching but unloaded', 59, '50', '3'],
+  ] as const)(
+    'moves the %s detail fallback without inventing filtered membership',
+    async (_label, index, sourceTotal, targetTotal) => {
+      const task = index === 0 ? (backlog[0] as TaskDto) : makeTask('backlog');
+      if (index !== 0) server.tasks.push(task);
+      mount({ selectedParam: task.id });
+      await screen.findByRole('button', { name: '다음 상태로 이동' });
+      fireEvent.click(screen.getByRole('button', { name: '필터' }));
+      fireEvent.click(await screen.findByRole('checkbox', { name: '높음' }));
+      await waitFor(() =>
+        expect(headerCount('backlog')).toHaveTextContent(index === 0 ? '50' : '51'),
+      );
+      expect(
+        within(column('backlog')).queryByRole('button', {
+          name: new RegExp(`${task.display_id}:`),
+        }),
+      ).toBeNull();
+      const before = STATUSES.map((status) => ({
+        status,
+        cards: cardsIn(status).map((card) => card.textContent),
+        total: headerCount(status)?.textContent,
+      }));
+      server.hold(task.id);
+      fireEvent.click(screen.getByRole('button', { name: '다음 상태로 이동' }));
+      await waitFor(() =>
+        expect(server.patches).toEqual([{ id: task.id, body: { status: 'todo' } }]),
+      );
+      expect(headerCount('backlog')).toHaveTextContent(sourceTotal);
+      expect(headerCount('todo')).toHaveTextContent(targetTotal);
+      if (index === 0) {
+        for (const { status, cards, total } of before) {
+          expect(cardsIn(status).map((card) => card.textContent)).toEqual(cards);
+          expect(headerCount(status)?.textContent).toBe(total);
+        }
+      } else {
+        expect(
+          within(column('todo')).getByRole('button', { name: new RegExp(`${task.display_id}:`) }),
+        ).toBeInTheDocument();
+      }
+      server.holds.lists = true;
+      await act(async () => {
+        server.holds.release.get(task.id)?.(false);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      await waitFor(() =>
+        expect(server.detailReads.filter((id) => id === task.id)).toHaveLength(2),
+      );
+      expect(headerCount('backlog')).toHaveTextContent(sourceTotal);
+      expect(headerCount('todo')).toHaveTextContent(targetTotal);
+      const detail = document.querySelector('aside') as HTMLElement;
+      await waitFor(() => expect(within(detail).getAllByText('Todo').length).toBeGreaterThan(0));
+    },
+  );
+
   it('opens a deep-linked Task that no loaded page contains and moves it with the footer action', async () => {
     const unloaded = backlog[59] as TaskDto;
     mount({ selectedParam: unloaded.id });

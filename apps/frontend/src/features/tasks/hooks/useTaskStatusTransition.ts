@@ -27,6 +27,7 @@ type Position = { page: number; index: number };
 export type TaskBoardCaches =
   | {
       mode: 'status';
+      includesFallback: (task: TaskDto) => boolean;
       columnKey: (status: TaskStatus) => QueryKey;
       /** Loads a column's first page when no cache exists so the moved card can render there. */
       ensureColumn: (status: TaskStatus) => Promise<unknown>;
@@ -120,6 +121,18 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
   const client = useQueryClient();
   const mutationTokens = React.useRef(new Map<string, number>());
 
+  const deferredRefetch = React.useRef(false);
+
+  function invalidateLists() {
+    // onSettled still counts this invocation. Reads must not erase another pending delta.
+    const overlapping = client.isMutating({ mutationKey: ['task-status-transition'] }) > 1;
+    deferredRefetch.current = overlapping;
+    void client.invalidateQueries({
+      queryKey: ['tasks'],
+      refetchType: overlapping ? 'none' : 'active',
+    });
+  }
+
   function rollback(delta: Delta) {
     if (delta.targetKey && delta.targetInserted) {
       client.setQueryData<ColumnPages>(delta.targetKey, (old) => {
@@ -195,10 +208,12 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
       }
       const sourceStatus = locate(client, caches, task);
       if (sourceStatus === status) return delta;
+      const sourceKey = caches.columnKey(sourceStatus);
+      const sourceBeforeLoad = client.getQueryData<ColumnPages>(sourceKey);
+      if (!findPosition(sourceBeforeLoad, task.id) && !caches.includesFallback(task)) return delta;
       // A destination without data cannot render the moved card: load it before writing.
       const targetKey = caches.columnKey(status);
       if (!client.getQueryData(targetKey)) await caches.ensureColumn(status);
-      const sourceKey = caches.columnKey(sourceStatus);
       const source = client.getQueryData<ColumnPages>(sourceKey);
       const position = findPosition(source, task.id);
       const current = position ? source?.pages[position.page]?.items[position.index] : undefined;
@@ -225,7 +240,7 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
       const latest = context && mutationTokens.current.get(context.taskId) === context.token;
       if (context && latest) rollback(context);
       if (error instanceof ApiError && error.code === 'conflict.stale_write' && latest) {
-        void client.invalidateQueries({ queryKey: ['tasks'] });
+        invalidateLists();
       }
       toast.error(mapUnknownError(error).message);
     },
@@ -233,8 +248,17 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
       void invalidateRecovery(client);
     },
     onSettled: (_data, _error, _variables, context) => {
-      if (!context || mutationTokens.current.get(context.taskId) === context.token) {
-        void client.invalidateQueries({ queryKey: ['tasks'] });
+      // A superseded last invocation may flush a refetch queued by a valid earlier settlement.
+      const latest = !context || mutationTokens.current.get(context.taskId) === context.token;
+      if (
+        !latest &&
+        deferredRefetch.current &&
+        client.isMutating({ mutationKey: ['task-status-transition'] }) === 1
+      ) {
+        invalidateLists();
+      }
+      if (latest) {
+        invalidateLists();
         if (context) void client.invalidateQueries({ queryKey: ['task', context.taskId] });
       }
     },

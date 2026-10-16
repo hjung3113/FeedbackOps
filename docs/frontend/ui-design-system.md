@@ -947,7 +947,14 @@ an older move's failure cannot clear a newer drag's request.
 `useTaskStatusTransition` continues to own cache writes and rollback: a move removes the
 Task from its source column pages, inserts it at the destination's first-page top and
 adjusts both first-page totals by one; a failure undoes only that invocation's membership and
-count delta, so a later move of another Task is never overwritten.
+count delta, so a later move of another Task is never overwritten. Settlement invalidates lists
+immediately but defers active list refetches until the last overlapping status move settles,
+so reads cannot erase another pending move's delta before rollback. Per-Task tokens still
+guard rollback and detail invalidation; the last settlement also flushes any queued list refresh.
+A detail fallback changes column membership and totals only when it matches the current board
+population. Excluded fallbacks still send the status write and refresh detail/lists. Unloaded
+matching Tasks keep the same total adjustments and mounted destination card; a server-only
+predicate that the detail cannot establish (`public_update`) waits for the server refresh.
 
 Layout regions open and close without width transitions (#996): the detail panel, its
 fullscreen toggle, and the sidebar collapse switch width in one frame. A width transition

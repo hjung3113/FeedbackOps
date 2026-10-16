@@ -28,6 +28,46 @@ export type TaskBoardServerFilters = {
   milestone_id?: string;
   assignee?: string;
 };
+/** Detail fallback membership, independent of status. Unknown server-only predicates stay unproven. */
+export function taskMatchesBoardPopulation(
+  task: TaskDto,
+  scope: TaskBoardScope,
+  filters: TaskBoardServerFilters,
+): boolean {
+  if (
+    scope.managedSystem &&
+    scope.managedSystem !== 'all' &&
+    task.primary_managed_system_id !== scope.managedSystem
+  )
+    return false;
+  // A detail DTO cannot establish linked VOC/public-update membership.
+  if (scope.publicUpdate) return false;
+  const q = scope.q?.toLowerCase();
+  if (q && !task.title.toLowerCase().includes(q) && !task.display_id.toLowerCase().startsWith(q)) {
+    return false;
+  }
+  if (filters.priority && !filters.priority.split(',').includes(task.priority)) return false;
+  if (filters.assignee) {
+    const tokens = filters.assignee.split(',');
+    const unassigned = task.assignee_actor_id === null && task.assignee_team_id === null;
+    if (
+      !(tokens.includes('unassigned') && unassigned) &&
+      !(task.assignee_actor_id && tokens.includes(task.assignee_actor_id))
+    )
+      return false;
+  }
+  if (filters.milestone_id) {
+    const tokens = filters.milestone_id.split(',');
+    if (
+      !(tokens.includes('any') && task.milestone_id !== null) &&
+      !(tokens.includes('none') && task.milestone_id === null) &&
+      !(task.milestone_id && tokens.includes(task.milestone_id))
+    )
+      return false;
+  }
+  return true;
+}
+
 export type TaskBoardColumnId = TaskStatus | 'open';
 
 function scopeParams(scope: TaskBoardScope) {
