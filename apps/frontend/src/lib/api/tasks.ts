@@ -23,7 +23,8 @@ export async function listTasks(
     assignee_team_id?: string;
     managed_system_id?: string;
     analytics_area_id?: string;
-    status_group?: 'in-flight';
+    status_group?: 'in-flight' | 'open';
+    priority?: string;
     overdue?: 'true';
     reporter_update?: 'needed';
     public_update?: 'missing';
@@ -46,6 +47,7 @@ export async function listTasks(
   if (options.analytics_area_id !== undefined)
     qs.set('analytics_area_id', options.analytics_area_id);
   if (options.status_group !== undefined) qs.set('status_group', options.status_group);
+  if (options.priority !== undefined) qs.set('priority', options.priority);
   if (options.overdue !== undefined) qs.set('overdue', options.overdue);
   if (options.reporter_update !== undefined) qs.set('reporter_update', options.reporter_update);
   if (options.public_update === 'missing') qs.set('public_update', 'missing');

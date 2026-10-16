@@ -287,15 +287,21 @@ interface ListInput {
   q?: string;
   workspaceId: string;
   status?: TaskStatus;
-  assigneeActorId?: string;
+  /** Actor ids OR'd with `assigneeUnassigned` (no actor and no team). */
+  assigneeActorIds?: string[];
+  assigneeUnassigned?: boolean;
   assigneeTeamId?: string;
   managedSystemId?: string;
   analyticsAreaId?: string;
-  statusGroup?: 'in-flight';
+  statusGroup?: 'in-flight' | 'open';
+  priorities?: string[];
   overdue?: 'true';
   reporterUpdate?: 'needed';
   publicUpdate?: 'missing';
-  milestoneId?: string;
+  /** Exact Milestone ids OR'd with presence (`milestoneAny`) / absence (`milestoneNone`). */
+  milestoneIds?: string[];
+  milestoneAny?: boolean;
+  milestoneNone?: boolean;
   allowedSystemIds?: string[];
   limit?: number;
   cursor?: ListCursor;
@@ -342,9 +348,22 @@ function listPredicates(input: ListInput) {
   if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
   if (input.assigneeTeamId !== undefined)
     predicates.push(sql`assignee_team_id = ${input.assigneeTeamId}`);
-  if (input.assigneeActorId !== undefined) {
-    predicates.push(sql`assignee_actor_id = ${input.assigneeActorId}`);
-  }
+  const assigneeAlternatives = [];
+  if (input.assigneeActorIds !== undefined && input.assigneeActorIds.length > 0)
+    assigneeAlternatives.push(
+      sql`assignee_actor_id = ANY(${sql.param(input.assigneeActorIds)}::uuid[])`,
+    );
+  if (input.assigneeUnassigned === true)
+    assigneeAlternatives.push(sql`(assignee_actor_id IS NULL AND assignee_team_id IS NULL)`);
+  if (assigneeAlternatives.length > 0)
+    predicates.push(sql`(${sql.join(assigneeAlternatives, sql` OR `)})`);
+  if (input.priorities !== undefined && input.priorities.length > 0)
+    predicates.push(
+      sql`priority IN (${sql.join(
+        input.priorities.map((priority) => sql`${priority}`),
+        sql`, `,
+      )})`,
+    );
   if (input.managedSystemId !== undefined) {
     predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
   }
@@ -357,6 +376,8 @@ function listPredicates(input: ListInput) {
   }
   if (input.statusGroup === 'in-flight')
     predicates.push(sql`status IN ('todo', 'doing', 'review')`);
+  if (input.statusGroup === 'open')
+    predicates.push(sql`status IN ('backlog', 'todo', 'doing', 'review', 'reopened')`);
   if (input.overdue === 'true')
     predicates.push(sql`status IN ('backlog', 'todo', 'doing', 'review', 'reopened')
       AND due_date IS NOT NULL AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date`);
@@ -369,9 +390,13 @@ function listPredicates(input: ListInput) {
       sql`${releasedWithVocPredicate()} AND NOT (${releasedWithPublicUpdatePredicate()})`,
     );
   }
-  if (input.milestoneId !== undefined) {
-    predicates.push(sql`milestone_id = ${input.milestoneId}`);
-  }
+  const milestoneAlternatives = [];
+  if (input.milestoneIds !== undefined && input.milestoneIds.length > 0)
+    milestoneAlternatives.push(sql`milestone_id = ANY(${sql.param(input.milestoneIds)}::uuid[])`);
+  if (input.milestoneAny === true) milestoneAlternatives.push(sql`milestone_id IS NOT NULL`);
+  if (input.milestoneNone === true) milestoneAlternatives.push(sql`milestone_id IS NULL`);
+  if (milestoneAlternatives.length > 0)
+    predicates.push(sql`(${sql.join(milestoneAlternatives, sql` OR `)})`);
   if (input.allowedSystemIds !== undefined)
     predicates.push(
       sql`primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,

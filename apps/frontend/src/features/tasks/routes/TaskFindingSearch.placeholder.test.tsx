@@ -103,8 +103,12 @@ function findingPage(title: string | null) {
   };
 }
 
-function page(surface: Surface, title: string | null) {
-  return surface === 'findings' ? findingPage(title) : taskPage(title);
+// The board reads one request per status column: only its Backlog read carries the row.
+function page(surface: Surface, title: string | null, url?: URL) {
+  if (surface === 'findings') return findingPage(title);
+  const status = url?.searchParams.get('status');
+  if (surface === 'board' && status != null && status !== 'backlog') return taskPage(null);
+  return taskPage(title);
 }
 
 function expectLoading(surface: Surface) {
@@ -184,7 +188,7 @@ it.each(SURFACES)(
             resolveNext = resolve;
           });
         }
-        return reply(page(surface, ROW));
+        return reply(page(surface, ROW, url));
       }),
     );
     const { setSearch } = mount(surface, { managedSystem: SYSTEM_A });
@@ -249,7 +253,7 @@ it.each(SURFACES)(
         if (system === SYSTEM_B) {
           return reply({ code: 'permission.denied', message: 'permission denied' }, 403);
         }
-        return reply(page(surface, ROW));
+        return reply(page(surface, ROW, url));
       }),
     );
     const { setSearch } = mount(surface, { managedSystem: SYSTEM_A });
@@ -279,7 +283,8 @@ it.each(SURFACES)(
 );
 
 it.each(SURFACES)('%s keeps the previous rows while only q is loading', async (_label, surface) => {
-  let resolveNext: ((value: Response) => void) | undefined;
+  // The board sends one q request per column and summary: every one of them stays pending.
+  const pending: Array<(value: Response) => void> = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -287,10 +292,10 @@ it.each(SURFACES)('%s keeps the previous rows while only q is loading', async (_
       if (url.pathname !== '/tasks' && url.pathname !== '/findings') return reply({ items: [] });
       if (url.searchParams.has('q')) {
         return new Promise<Response>((resolve) => {
-          resolveNext = resolve;
+          pending.push(resolve);
         });
       }
-      return reply(page(surface, ROW));
+      return reply(page(surface, ROW, url));
     }),
   );
   mount(surface, { managedSystem: SYSTEM_A });
@@ -298,11 +303,11 @@ it.each(SURFACES)('%s keeps the previous rows while only q is loading', async (_
   const box = screen.getByPlaceholderText('제목 또는 ID');
   fireEvent.change(box, { target: { value: 'next' } });
   fireEvent.keyDown(box, { key: 'Enter' });
-  await waitFor(() => expect(resolveNext).toBeDefined());
+  await waitFor(() => expect(pending.length).toBeGreaterThan(0));
   expect(screen.getByText(ROW)).toBeInTheDocument();
   expectSettled(surface);
   await act(async () => {
-    resolveNext?.(reply(page(surface, null)));
+    for (const resolve of pending) resolve(reply(page(surface, null)));
   });
   await waitFor(() => expect(screen.queryByText(ROW)).not.toBeInTheDocument());
 });

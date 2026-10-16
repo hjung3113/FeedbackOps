@@ -8,6 +8,7 @@ import * as React from 'react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
+import { boardList } from './taskBoardTestServer';
 
 const task = {
   id: '10000000-0000-0000-0000-000000000001', workspace_id: '90000000-0000-0000-0000-000000000009', display_id: 'TASK-1000',
@@ -178,13 +179,14 @@ describe('TaskBoardRoute', () => {
         'matchMedia',
         vi.fn(() => ({ matches: reduced })),
       );
-      api.listTasks.mockResolvedValue({ items: [task] });
+      api.listTasks.mockImplementation(boardList([task]));
       api.updateTaskStatus.mockImplementation(() => new Promise(() => {}));
       renderBoard();
       await screen.findByText('TASK-1000');
       if (nonStatus) {
         fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
         fireEvent.click(await screen.findByRole('radio', { name: '우선순위' }));
+        await screen.findByLabelText('높음 열');
       }
       fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
       const overlay = screen.getByTestId('drag-overlay');
@@ -212,7 +214,7 @@ describe('TaskBoardRoute', () => {
   );
 
   it('clears the presentation copy on drag cancel without a PATCH', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     renderBoard();
     await screen.findByText('TASK-1000');
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
@@ -235,7 +237,7 @@ describe('TaskBoardRoute', () => {
         'matchMedia',
         vi.fn(() => ({ matches: reduced })),
       );
-      api.listTasks.mockResolvedValue({ items: [task] });
+      api.listTasks.mockImplementation(boardList([task]));
       api.updateTaskStatus.mockImplementation(() => new Promise(() => {}));
       renderBoard();
       await screen.findByText('TASK-1000');
@@ -261,7 +263,7 @@ describe('TaskBoardRoute', () => {
   );
 
   it('renders all seven status columns and an empty placeholder', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     renderBoard();
     await screen.findByText('TASK-1000');
     for (const status of ['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']) {
@@ -279,7 +281,7 @@ describe('TaskBoardRoute', () => {
 
   it('shows the conversion guidance in the empty board and preserves Managed System in its link', async () => {
     const managedSystem = 'all';
-    api.listTasks.mockResolvedValue({ items: [] });
+    api.listTasks.mockImplementation(boardList([]));
     renderBoard(undefined, managedSystem);
 
     const emptyBoard = await screen.findByRole('status');
@@ -296,7 +298,7 @@ describe('TaskBoardRoute', () => {
   });
 
   it('renders localized task count labels in board stats', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     renderBoard();
 
     await screen.findByText('TASK-1000');
@@ -315,7 +317,7 @@ describe('TaskBoardRoute', () => {
   it.each(taskPrioritySchema.options)(
     'shows a display label for priority %s in filters',
     async (priority) => {
-      api.listTasks.mockResolvedValue({ items: [task] });
+      api.listTasks.mockImplementation(boardList([task]));
       renderBoard();
       await screen.findByText('TASK-1000');
       fireEvent.click(screen.getByRole('button', { name: '필터' }));
@@ -329,7 +331,7 @@ describe('TaskBoardRoute', () => {
   it.each(taskPrioritySchema.options)(
     'renders priority %s with its Task label on the board card',
     async (priority) => {
-      api.listTasks.mockResolvedValue({ items: [{ ...task, priority }] });
+      api.listTasks.mockImplementation(boardList([{ ...task, priority }]));
       renderBoard();
 
       const card = await screen.findByRole('button', {
@@ -368,8 +370,13 @@ describe('TaskBoardRoute', () => {
   });
 
   it('announces a failed task read, hides its unknown count, and retries into the known count', async () => {
-    const firstRead = deferred<{ items: typeof task[] }>();
-    api.listTasks.mockReturnValueOnce(firstRead.promise).mockResolvedValueOnce({ items: [task] });
+    const firstRead = deferred<void>();
+    let failing = true;
+    api.listTasks.mockImplementation(async (options: Record<string, unknown>) => {
+      await firstRead.promise;
+      if (failing) throw new ApiError(500, { code: 'internal.unexpected', message: 'server failed' });
+      return boardList([task])(options);
+    });
     renderBoard();
 
     const loading = await screen.findByText('Task 불러오는 중...');
@@ -378,10 +385,8 @@ describe('TaskBoardRoute', () => {
     expect(screen.queryByText('0건')).not.toBeInTheDocument();
 
     await act(async () => {
-      firstRead.reject(
-        new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
-      );
-      await firstRead.promise.catch(() => undefined);
+      firstRead.resolve();
+      await firstRead.promise;
     });
 
     expect(
@@ -396,6 +401,7 @@ describe('TaskBoardRoute', () => {
 
     const retry = screen.getByRole('button', { name: '다시 시도' });
     expect(liveRegion).toContainElement(retry);
+    failing = false;
     fireEvent.click(retry);
 
     expect(
@@ -403,11 +409,10 @@ describe('TaskBoardRoute', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('1건')).toBeInTheDocument();
     expect(screen.queryByText('0건')).not.toBeInTheDocument();
-    expect(api.listTasks).toHaveBeenCalledTimes(2);
   });
 
   it('closes group options with Escape and returns focus to the trigger', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     renderBoard();
 
     const trigger = await screen.findByRole('button', { name: '그룹화' });
@@ -424,7 +429,7 @@ describe('TaskBoardRoute', () => {
   });
 
   it('keeps a pointer click on a status-board card available for selection', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.getTask.mockResolvedValue({ ...task, source: null });
     renderBoard();
     const card = await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` });
@@ -443,7 +448,7 @@ describe('TaskBoardRoute', () => {
 
   it('moves a card optimistically and sends concurrency and idempotency arguments', async () => {
     const update = deferred<never>();
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.updateTaskStatus.mockReturnValue(update.promise);
     renderBoard();
     await screen.findByText('TASK-1000');
@@ -454,7 +459,7 @@ describe('TaskBoardRoute', () => {
 
   it('rolls back a failed mutation', async () => {
     const update = deferred<never>();
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.updateTaskStatus.mockReturnValue(update.promise);
     renderBoard();
     await screen.findByText('TASK-1000');
@@ -467,7 +472,7 @@ describe('TaskBoardRoute', () => {
   it('does not allow an older failed mutation to clobber a newer optimistic move', async () => {
     const first = deferred<never>();
     const second = deferred<never>();
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.updateTaskStatus.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     renderBoard();
     await screen.findByText('TASK-1000');
@@ -480,7 +485,7 @@ describe('TaskBoardRoute', () => {
 
   it('rolls back and refetches after a stale-write conflict', async () => {
     const update = deferred<never>();
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.updateTaskStatus.mockReturnValue(update.promise);
     renderBoard();
     await screen.findByText('TASK-1000');
@@ -500,7 +505,7 @@ describe('TaskBoardRoute', () => {
     expect(tasksSearchSchema.parse({ view: 'board', public_update: 'missing', managedSystem: 'all', param: task.id })).toEqual({
       view: 'board', public_update: 'missing', managedSystem: 'all', param: task.id,
     });
-    api.listTasks.mockImplementation(async (options?: { public_update?: string }) => options?.public_update === 'missing' ? { items: [gap] } : { items: [task, gap, updated] });
+    api.listTasks.mockImplementation(boardList([task, gap, updated], (candidate, query) => query.public_update !== 'missing' || candidate.id === gap.id));
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={client}><TasksRouteView search={{ view: 'board', public_update: 'missing' }} /></QueryClientProvider>);
@@ -512,7 +517,15 @@ describe('TaskBoardRoute', () => {
     draggableOptions.length = 0;
     fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
     fireEvent.click(screen.getByRole('radio', { name: '우선순위' }));
-    await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: gap.id, disabled: true })));
+    // #1178: other groupings load the open set only, and released Tasks are not open, so the
+    // public-update gap (released Tasks) is empty there; drag-disabled outside status grouping is
+    // pinned by the next test.
+    await waitFor(() =>
+      expect(api.listTasks).toHaveBeenCalledWith(
+        expect.objectContaining({ status_group: 'open', public_update: 'missing' }),
+      ),
+    );
+    expect(await screen.findByText('완료·배포된 Task는 제외됩니다. 상태별 보기에서 확인하세요.')).toBeInTheDocument();
 
     cleanup();
     draggableOptions.length = 0;
@@ -526,7 +539,7 @@ describe('TaskBoardRoute', () => {
   });
 
   it('disables status drag outside status grouping without a PATCH or toast', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     renderBoard();
     await screen.findByText('TASK-1000');
     expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: false }));
@@ -545,14 +558,16 @@ describe('TaskBoardRoute', () => {
   });
 
   it('restores the board selected detail from the URL parameter', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.getTask.mockResolvedValue({ ...task, source: null });
     renderBoard(task.id);
-    await waitFor(() => expect(screen.getByText(task.title)).toBeInTheDocument());
+    // The card is also on the board, so wait for the detail panel's own content.
+    await screen.findByText('단독 Task');
+    expect(screen.getAllByText(task.title).length).toBeGreaterThan(1);
   });
 
   it('shows task detail skeleton chrome while the detail query is pending', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.getTask.mockReturnValue(new Promise(() => {}));
     renderBoard(task.id);
 
@@ -568,7 +583,7 @@ describe('TaskBoardRoute', () => {
 
   it('does not reserve an action footer for a released task skeleton', async () => {
     const releasedTask = { ...task, status: 'released' as const };
-    api.listTasks.mockResolvedValue({ items: [releasedTask] });
+    api.listTasks.mockImplementation(boardList([releasedTask]));
     api.getTask.mockReturnValue(new Promise(() => {}));
     renderBoard(task.id);
 
@@ -581,7 +596,7 @@ describe('TaskBoardRoute', () => {
   });
 
   it('shows task detail read errors with a retry that refetches the task', async () => {
-    api.listTasks.mockResolvedValue({ items: [task] });
+    api.listTasks.mockImplementation(boardList([task]));
     api.getTask.mockRejectedValue(new Error('detail failed'));
     renderBoard();
 
@@ -599,7 +614,7 @@ describe('TaskBoardRoute', () => {
   it('refreshes the selected detail after moving a task from done to released', async () => {
     const doneTask = { ...task, status: 'done' as const };
     const releasedTask = { ...doneTask, status: 'released' as const };
-    api.listTasks.mockResolvedValue({ items: [doneTask] });
+    api.listTasks.mockImplementation(boardList([doneTask]));
     api.getTask.mockResolvedValueOnce({ ...doneTask, source: null }).mockResolvedValueOnce({ ...releasedTask, source: null });
     api.updateTaskStatus.mockResolvedValue(releasedTask);
 
@@ -622,7 +637,7 @@ describe('TaskBoardRoute', () => {
   it('#290 moves a backlog task to todo through the next-status button', async () => {
     const backlogTask = { ...task, status: 'backlog' as const };
     const todoTask = { ...backlogTask, status: 'todo' as const };
-    api.listTasks.mockResolvedValue({ items: [backlogTask] });
+    api.listTasks.mockImplementation(boardList([backlogTask]));
     api.getTask.mockResolvedValueOnce({ ...backlogTask, source: null }).mockResolvedValueOnce({ ...todoTask, source: null });
     api.updateTaskStatus.mockResolvedValue(todoTask);
 

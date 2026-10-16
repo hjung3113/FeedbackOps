@@ -914,8 +914,12 @@ slow/enter timing. Escape cancellation uses return timing freshly read at drag s
 the current reduced-motion preference. Zero-duration timing disables that animation. Source
 opacity restores immediately at return completion; colour and shadow transitions remain.
 Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
-auto-scroll remains eligible. Keyboard Left/Right moves one column per press in live visual
-left-to-right order, centring the card horizontally and clamping at the first/last column.
+auto-scroll remains eligible. Keyboard Left/Right moves exactly one column per press: the board tracks a column index
+(seeded from the dragged Task's status, reset on drag start, end, cancel and any
+scope, grouping or filter change), advances or clamps it per press against the live
+left-to-right column rects, and centres the card horizontally on that column. It never
+re-derives the current column from `over` or the collision rect, which lag the auto-scroll
+a press can trigger, so no column is skipped and none is snapped back to.
 Up/Down does nothing because card order is not persisted. Keyboard sensor ancestor scrolling
 is instant (`auto`); during an active keyboard drag only, all four arrow keys prevent their
 native default so browser scrolling cannot compete. The listener is removed on end, cancel,
@@ -926,19 +930,35 @@ announcements use Korean chrome, the Task display ID, and `TASK_STATUS_LABELS` c
 role description `끌 수 있는 Task`; disabled cards have no role description. Initial over
 announcements for the pickup column do not overwrite pickup; after reaching a different
 column, returning to the origin is announced normally. After a keyboard move, the route waits
+(a destination column whose first page is still loading is loaded before the move writes)
 for the optimistic destination card to render, then focuses it only if focus
 is on the body or still inside the board. Focus moved outside the board is respected;
 same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
 The route disables dnd-kit's scheduled focus restoration and owns the active copy and per-drop
 animation choice. Its route-lifetime `useTaskBoardKeyboardFocus` hook owns pending keyboard
-focus recovery, with scope and tasks query key memoized on their primitive inputs separately
-from filtered-card availability. A rejected keyboard move follows that Task's
+focus recovery, with its scope (grouping, Managed System, `public_update`, `q` and the
+personal filters) memoized on primitive inputs separately from loaded-card availability
+across all columns. A rejected keyboard move follows that Task's
 rendered card through rollback and the following refetch, in any status column, only if focus
-is on the body or inside the board and no newer drag has started. Recovery retires when the post-rejection tasks refetch settles, after the
+is on the body or inside the board and no newer drag has started. Recovery retires when every post-rejection board column refetch settles, after the
 focus attempt or outside-focus guard declines. Newer drags, scope changes, unmount, and another
 route status mutation of the same Task clear keyboard focus ownership and pending recovery;
 an older move's failure cannot clear a newer drag's request.
-`useTaskStatusTransition` continues to own cache writes and rollback.
+`useTaskStatusTransition` continues to own cache writes and rollback: a move removes the
+Task from its source column pages, inserts it at the destination's first-page top and
+adjusts both first-page totals by one; a failure undoes only that invocation's membership and
+count delta, so a later move of another Task is never overwritten. Settlement invalidates lists
+immediately but defers active list refetches until no status move remains pending or the oldest
+deferred settlement has waited 1,500 ms, whichever comes first. One timer per board is cleared
+on flush and unmount; unmount and scope, grouping or filter changes flush immediately.
+Deadline reads rebase outstanding per-invocation deltas on fresh pages so later rollback
+still undoes only that move. Per-Task tokens guard rollback and detail invalidation;
+the last settlement also flushes any queued list refresh. Rejected keyboard recovery stays
+alive while reconciliation is queued and until that flush's reads settle.
+A detail fallback changes column membership and totals only when it matches the current board
+population. Excluded fallbacks still send the status write and refresh detail/lists. Unloaded
+matching Tasks keep the same total adjustments and mounted destination card; a server-only
+predicate that the detail cannot establish (`public_update`) waits for the server refresh.
 
 Layout regions open and close without width transitions (#996): the detail panel, its
 fullscreen toggle, and the sidebar collapse switch width in one frame. A width transition
@@ -1063,7 +1083,7 @@ Rule:
 
 ```text
 Task Board is execution work only. VOC owner assignment is not Task assignee/kanban assignment.
-Task Board cards show title, status, assignee, priority, due date, Managed System, and linked-context indicators only. Source VOC, Finding, Survey, Evidence, Reporter Summary, and Public Update candidates belong in Task Detail or the source object's route.
+The board is bounded: status columns are separate paged reads with exact totals and a load-more control; other groupings show the open set only, with a one-line note that Done and Released are excluded. Task Board cards show title, status, assignee, priority, due date, Managed System, and linked-context indicators only. Source VOC, Finding, Survey, Evidence, Reporter Summary, and Public Update candidates belong in Task Detail or the source object's route.
 ```
 
 Task Detail:

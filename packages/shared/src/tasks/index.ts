@@ -136,6 +136,29 @@ export const linkExistingTaskRequestSchema = z
   .strict();
 export type LinkExistingTaskRequest = z.infer<typeof linkExistingTaskRequestSchema>;
 
+/** Comma list used by the Task list filters: trimmed, empty and repeated tokens dropped. */
+export function splitTaskListTokens(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((token) => token.trim())
+        .filter((token) => token !== ''),
+    ),
+  ];
+}
+
+// Validated as wire input (a plain string) so single values keep their legacy shape and saved
+// views store what the client sent; the service splits the tokens again.
+function taskTokenList(token: z.ZodTypeAny, max: number) {
+  return z.string().refine((value) => {
+    const tokens = splitTaskListTokens(value);
+    return (
+      tokens.length >= 1 && tokens.length <= max && tokens.every((t) => token.safeParse(t).success)
+    );
+  });
+}
+
 export const listTasksQuerySchema = z
   .object({
     q: z
@@ -145,15 +168,25 @@ export const listTasksQuerySchema = z
       .optional()
       .transform((value) => (value === undefined || value === '' ? undefined : value)),
     status: taskStatusSchema.optional(),
-    assignee: z.union([z.string().uuid(), z.literal('me')]).optional(),
+    // `me`, `unassigned` (no actor and no team) and actor UUIDs; comma list, OR within the list.
+    assignee: taskTokenList(
+      z.union([z.string().uuid(), z.literal('me'), z.literal('unassigned')]),
+      20,
+    ).optional(),
     assignee_team_id: z.string().uuid().optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
     analytics_area_id: z.union([z.string().uuid(), z.literal('unset')]).optional(),
-    status_group: z.literal('in-flight').optional(),
+    // `in-flight` = todo/doing/review; `open` = backlog/todo/doing/review/reopened.
+    status_group: z.enum(['in-flight', 'open']).optional(),
+    priority: taskTokenList(taskPrioritySchema, 4).optional(),
     overdue: z.literal('true').optional(),
     reporter_update: z.literal('needed').optional(),
     public_update: z.literal('missing').optional(),
-    milestone_id: z.string().uuid().optional(),
+    // Exact Milestone ids plus `any` / `none`; comma list, OR within the list.
+    milestone_id: taskTokenList(
+      z.union([z.string().uuid(), z.literal('any'), z.literal('none')]),
+      20,
+    ).optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })

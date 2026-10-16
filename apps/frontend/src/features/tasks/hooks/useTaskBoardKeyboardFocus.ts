@@ -1,37 +1,43 @@
 import type { TaskDto, TaskStatus } from '@fops/shared';
-import { type QueryKey, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import type { TaskBoardGroupBy } from '../components/task-board/TaskBoardGroupByButton';
+import { TASK_BOARD_KEY } from './useTaskBoardData';
 
 type FocusScope = {
   q?: string | undefined;
   groupBy: TaskBoardGroupBy;
   managedSystem: string | undefined;
   publicUpdate: 'missing' | undefined;
+  /** Serialized personal filters: a filter change retires pending recovery. */
+  filters: string;
+};
+
+type Pending = {
+  taskId: string;
+  destinationStatus: TaskStatus | null;
+  generation: number;
 };
 
 // Mount at route lifetime: loading/error/empty branches may remove the DnD subtree.
 export function useTaskBoardKeyboardFocus({
   scope,
-  filtered,
+  tasks,
   boardScroller,
   isFetching,
-  tasksKey,
+  isReconciling = false,
 }: {
   scope: FocusScope;
-  filtered: readonly TaskDto[];
+  /** Every Task the board currently has loaded, across all columns. */
+  tasks: readonly TaskDto[];
   boardScroller: React.RefObject<HTMLDivElement | null>;
   isFetching: boolean;
-  tasksKey: QueryKey;
+  isReconciling?: boolean;
 }) {
   const queryClient = useQueryClient();
   const dragGeneration = React.useRef(0);
   const keyboardFocusTask = React.useRef<string | null>(null);
-  const [pendingKeyboardFocus, setPendingKeyboardFocus] = React.useState<{
-    taskId: string;
-    destinationStatus: TaskStatus | null;
-    generation: number;
-  } | null>(null);
+  const [pendingKeyboardFocus, setPendingKeyboardFocus] = React.useState<Pending | null>(null);
   const focusScope = React.useRef(scope);
   React.useLayoutEffect(
     () => () => {
@@ -46,7 +52,8 @@ export function useTaskBoardKeyboardFocus({
       previousScope.groupBy !== scope.groupBy ||
       previousScope.managedSystem !== scope.managedSystem ||
       previousScope.publicUpdate !== scope.publicUpdate ||
-      previousScope.q !== scope.q
+      previousScope.q !== scope.q ||
+      previousScope.filters !== scope.filters
     ) {
       dragGeneration.current += 1;
       keyboardFocusTask.current = null;
@@ -55,10 +62,11 @@ export function useTaskBoardKeyboardFocus({
     focusScope.current = scope;
     const pending = pendingKeyboardFocus;
     if (!pending || pending.generation !== dragGeneration.current) return;
+    // Every board column and the open set share one key prefix: wait for all of their refetches.
     const refetchSettled =
-      !isFetching && queryClient.getQueryState(tasksKey)?.fetchStatus !== 'fetching';
+      !isReconciling && !isFetching && queryClient.isFetching({ queryKey: TASK_BOARD_KEY }) === 0;
     if (
-      !filtered.some(
+      !tasks.some(
         (task) =>
           task.id === pending.taskId &&
           (pending.destinationStatus === null || task.status === pending.destinationStatus),
@@ -85,7 +93,7 @@ export function useTaskBoardKeyboardFocus({
     if (document.activeElement === document.body || board.contains(document.activeElement)) {
       card.focus();
     }
-  }, [filtered, scope, pendingKeyboardFocus, boardScroller, isFetching, queryClient, tasksKey]);
+  }, [tasks, scope, pendingKeyboardFocus, boardScroller, isFetching, isReconciling, queryClient]);
   function startDrag() {
     dragGeneration.current += 1;
     setPendingKeyboardFocus(null);

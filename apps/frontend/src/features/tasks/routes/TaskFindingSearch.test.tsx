@@ -78,11 +78,10 @@ it.each(['my', 'board', 'findings'] as const)(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), 'http://localhost');
+        if (url.pathname !== '/tasks' && url.pathname !== '/findings') return reply({ items: [] });
         const schema = surface === 'findings' ? listFindingsQuerySchema : listTasksQuerySchema;
         queries.push(schema.parse(Object.fromEntries(url.searchParams)));
-        return reply(
-          surface === 'board' ? { items: [] } : { items: [], page: { has_more: false, total: 0 } },
-        );
+        return reply({ items: [], page: { has_more: false, total: 0 } });
       }),
     );
     mount(surface, { q: 'restored' });
@@ -95,7 +94,8 @@ it.each(['my', 'board', 'findings'] as const)(
     expect(router.search.q).toBe('new title');
     expect(queries.at(-1)?.cursor).toBeUndefined();
     expect(await screen.findByText('검색 결과가 없습니다.')).toBeInTheDocument();
-    if (surface === 'board') expect(queries.at(-1)?.limit).toBeUndefined();
+    // #1178: the board reads bounded pages and limit=1 summaries, never an unbounded list.
+    if (surface === 'board') expect(queries.every((query) => query.limit !== undefined)).toBe(true);
   },
 );
 

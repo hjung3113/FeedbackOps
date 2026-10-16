@@ -204,9 +204,11 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 query:
   q optional trimmed string, max 100 characters; blank means absent
   status optional backlog|todo|doing|review|done|released|reopened
-  assignee optional uuid or me
+  assignee optional comma list (max 20) of uuid, me or unassigned
   assignee_team_id optional team UUID
-  milestone_id optional uuid
+  milestone_id optional comma list (max 20) of uuid, any or none
+  priority optional comma list (max 4) of low|medium|high|urgent
+  status_group optional in-flight|open
   managed_system_id optional uuid or all
   public_update optional: missing
   cursor optional opaque string (used with limit)
@@ -228,6 +230,18 @@ sort: updated_at DESC, id DESC; cursor continues both columns with raw
   PostgreSQL timestamp precision (including microseconds)
 ```
 
+List filters (#1178). `assignee`, `milestone_id` and `priority` are comma lists with OR
+inside the list and AND across filters; empty and repeated tokens are dropped, and an
+empty list, an unknown token, or too many tokens is `422 validation.failed` with
+`detail.fields: [{ path: ['<name>'], ... }]`. `me` resolves per token to the caller;
+`unassigned` matches Tasks with neither an Actor nor a team assignee (a team-assigned
+Task is not unassigned); the legacy single `assignee=<uuid|me>` and `assignee_team_id`
+keep their intersecting meaning. `milestone_id` tokens are exact Milestone ids plus
+`any` (has a Milestone) and `none` (has none). `status_group=in-flight` is Todo, Doing
+and Review; `status_group=open` is Backlog, Todo, Doing, Review and Reopened. All
+values are bound parameters and `page.total` counts under the same predicates and the
+same read scope.
+
 Optional `q` is trimmed, at most 100 characters; blank/whitespace becomes absent.
 Matching is case-insensitive `display_id` prefix OR `title` contains; `\`, `%`
 and `_` in the input match literally. Bound SQL parameters apply this predicate
@@ -239,8 +253,11 @@ under the same filters, including zero; later pages omit it. Without `limit`,
 all authorized matching rows are returned. Navigation/report/badge counts omit
 `q` and remain unchanged.
 
-Task Board, Home and other full-set Task consumers omit `limit` and keep their
-complete population. Saved Task views reject `cursor` and `limit` at the
+Home and other full-set Task consumers omit `limit` and keep their complete
+population. The Task board pages each status column (`status`, `limit=50`, cursor,
+the column total is the first page's `page.total`), reads the open set once with
+`status_group=open` and no `limit` for its other groupings, and gets its summary
+totals from `limit=1` reads whose `page.total` is the count. Saved Task views reject `cursor` and `limit` at the
 persistence boundary, including historical-filter reads.
 
 `GET /tasks/:id`
