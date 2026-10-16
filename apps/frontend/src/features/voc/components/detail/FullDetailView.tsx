@@ -16,11 +16,7 @@ import { type ConversationPostSignal, ConversationTimeline } from './Conversatio
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
 import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
-import {
-  LinkedEntityTrailSection,
-  hasVisibleFollowUp,
-  isVisibleFindingLink,
-} from './LinkedEntityTrailSection';
+import { LinkedEntityTrailSection, hasVisibleFollowUp } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
 import { NoFollowUpSection } from './NoFollowUpSection';
@@ -180,16 +176,6 @@ export function FullDetailView({
               voc={voc}
               isReporterContext={!canRenderAllowedTask}
               linkedTask={linkedTask}
-              hasReporterTaskSummary={
-                voc.links?.some(
-                  (link) =>
-                    link.visibility_state === 'summary_visible' &&
-                    (link.source_type === 'task' || link.target_type === 'task'),
-                ) ?? false
-              }
-              hasVisibleFindingLink={(voc.links ?? []).some((link) =>
-                isVisibleFindingLink(link, !canRenderAllowedTask),
-              )}
             />
             <LinkedEntityTrailSection
               links={voc.links ?? []}

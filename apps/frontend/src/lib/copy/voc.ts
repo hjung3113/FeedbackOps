@@ -1,3 +1,5 @@
+import { CREATE_OR_LINK_FINDING_LABEL, GLOSSARY } from './glossary';
+
 // #582 / ADR-0031 replaces the prototype's old "similar" wording for this heuristic.
 export const SAME_MANAGED_SYSTEM_VOC_LABEL = '같은 Managed System의 VOC';
 export const SAME_MANAGED_SYSTEM_RECENT_VOC_LABEL = '같은 Managed System의 최근 VOC';
@@ -55,7 +57,7 @@ export const SEMANTIC_VOC_PREVIEW_COPY = {
 } as const;
 
 export const VOC_FOLLOW_UP_COPY = {
-  createFinding: 'Finding 생성',
+  createFinding: CREATE_OR_LINK_FINDING_LABEL,
   showExecution: '연결된 실행 확인',
   requestTask: 'Task 요청',
   relatedEntities: '관련 엔티티',
@@ -68,7 +70,7 @@ export const VOC_NO_FOLLOW_UP = {
   withdraw: '결정 철회',
   reason: '결정 사유',
   description: '후속 조치가 필요하지 않은 이유를 입력해 주세요.',
-  cancel: '취소',
+  cancel: GLOSSARY.cancel,
   submit: '결정 기록',
   error: '결정을 저장하지 못했습니다. 다시 시도해 주세요.',
 } as const;

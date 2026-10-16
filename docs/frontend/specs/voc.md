@@ -626,3 +626,16 @@ For Admin/Developer, disclosed follow-up changes the primary action to
 to a denied or summary-only target. With none disclosed, `Finding 생성` remains.
 `Task 요청` and the inline request draft flow remain available. This projection
 does not change the mounted panel or composer/draft lifetime.
+
+### Detail no-follow-up decision (#1226)
+
+The `후속 조치 불필요로 결정` action appears when the actor has Triage permission
+and `follow_up.can_record` is true. Its dialog requires a nonblank reason, rejects
+whitespace-only input, and limits the reason to 2,000 characters. A recorded
+decision shows its reason and a metadata line with the actor name (falling back
+to the actor ID) and short date.
+
+With Triage permission, `follow_up.can_withdraw` exposes `결정 철회`; withdrawal
+sends a bodyless request. A failed record submit keeps the draft and reuses its
+idempotency key on retry. The draft is discarded when the VOC, Managed System
+scope, permission, or follow-up eligibility changes.
