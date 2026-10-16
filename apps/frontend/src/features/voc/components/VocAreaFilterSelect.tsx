@@ -1,4 +1,4 @@
-import { fetchAnalyticsAreas } from '@/lib/api';
+import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import { AREA_REPORT_COPY as AREA_COPY } from '@/lib/copy/area-report';
 import {
   Select,
@@ -30,6 +30,13 @@ export function VocAreaFilterSelect({
   // `all` and an absent Managed System both query without a System scope.
   const scope =
     managedSystemId !== undefined && managedSystemId !== ALL ? managedSystemId : undefined;
+  // Reuse the global Managed System switcher's visible registry query.
+  const systems = useQuery({
+    queryKey: ['managed-systems', 'scope-selector'] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ signal }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   const areas = useQuery({
     queryKey: ['voc-area-filter-options', scope],
     retry: false,
@@ -52,6 +59,14 @@ export function VocAreaFilterSelect({
     },
   });
 
+  const systemNames = new Map((systems.data?.items ?? []).map((item) => [item.id, item.name]));
+  const offeredAreas = (areas.data ?? []).filter(
+    (item) =>
+      systemNames.has(item.managed_system_id) &&
+      (scope === undefined || item.managed_system_id === scope),
+  );
+  const showSystemName = new Set(offeredAreas.map((item) => item.managed_system_id)).size > 1;
+
   return (
     <Select
       value={value ?? ALL}
@@ -66,9 +81,10 @@ export function VocAreaFilterSelect({
         <SelectGroup>
           <SelectItem value={ALL}>{AREA_COPY.allAreas}</SelectItem>
           <SelectItem value="unset">{AREA_COPY.unset}</SelectItem>
-          {(areas.data ?? []).map((item) => (
+          {offeredAreas.map((item) => (
             <SelectItem key={item.id} value={item.id}>
               {item.name}
+              {showSystemName ? ` · ${systemNames.get(item.managed_system_id)}` : ''}
               {item.archived_at ? ` · ${AREA_COPY.archived}` : ''}
             </SelectItem>
           ))}

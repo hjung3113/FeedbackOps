@@ -1,5 +1,6 @@
 import { placeholderDataForSearchOnly } from '@/lib/query/placeholder-data-for-search';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { hashKey, useInfiniteQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { type UseVocListParams, type VocListPage, fetchVocListPage } from './useVocList';
 
 export const VOC_PAGE_SIZE = 50;
@@ -21,24 +22,30 @@ function withoutTab(queryKey: readonly unknown[]): unknown[] {
  */
 function placeholderPages<TData>(
   queryKey: readonly unknown[],
-  hasQ: boolean,
+  allowTabChange: boolean,
   previousData: TData | undefined,
   previousQuery: KeyedQuery | undefined,
 ): TData | undefined {
   const sameScope = placeholderDataForSearchOnly(queryKey, previousData, previousQuery);
   if (sameScope !== undefined || previousQuery === undefined) return sameScope;
-  const previousSegment = previousQuery.queryKey[3] as { q?: string } | undefined;
-  if (Boolean(previousSegment?.q) === hasQ) return undefined;
+  if (!allowTabChange) return undefined;
   return placeholderDataForSearchOnly(withoutTab(queryKey), previousData, {
     queryKey: withoutTab(previousQuery.queryKey),
     state: previousQuery.state,
   });
 }
 
+export type SearchTabTransition = {
+  fromQ: string;
+  fromTab: string | undefined;
+  toQ: string;
+  toTab: string | undefined;
+};
+
 export type UseVocListPagesParams = Pick<
   UseVocListParams,
   'managedSystemId' | 'tab' | 'q' | 'filters' | 'sort'
-> & { view: 'inbox' | 'my' };
+> & { view: 'inbox' | 'my'; searchTabTransition?: SearchTabTransition | undefined };
 
 /**
  * Inbox and 내 VOC: cursor pages of 50 (same pattern as `useFindingsPages`).
@@ -50,10 +57,45 @@ export function useVocListPages(params: UseVocListPagesParams) {
   const { view, managedSystemId, tab, q, filters, sort } = params;
   // q sits in a plain-object segment so placeholderDataForSearchOnly can drop it.
   const queryKey = ['vocs', view, 'pages', { managedSystemId, tab, q, filters, sort }] as const;
+  // TanStack supplies the last data-bearing query, which may predate a pending
+  // search. Track the immediately requested key too, so a later tab click cannot
+  // inherit that search's exception. State adjustment avoids render-time ref writes.
+  const keyHash = hashKey(queryKey);
+  const scopeHash = hashKey([view, { managedSystemId, tab, filters, sort }]);
+  const [requested, setRequested] = useState({
+    keyHash,
+    scopeHash,
+    q,
+    tab,
+    allowTabChange: false,
+    block: false,
+  });
+  let transition = requested;
+  if (requested.keyHash !== keyHash) {
+    const intent = params.searchTabTransition;
+    const allowTabChange =
+      (intent !== undefined &&
+        intent.fromQ === (requested.q ?? '') &&
+        intent.fromTab === requested.tab &&
+        intent.toQ === (q ?? '') &&
+        intent.toTab === tab) ||
+      (requested.scopeHash === scopeHash && requested.allowTabChange);
+    transition = {
+      keyHash,
+      scopeHash,
+      q,
+      tab,
+      allowTabChange,
+      block: requested.tab !== tab && !allowTabChange,
+    };
+    setRequested(transition);
+  }
   return useInfiniteQuery({
     queryKey,
     placeholderData: (previousData, previousQuery) =>
-      placeholderPages(queryKey, Boolean(q), previousData, previousQuery),
+      transition.block
+        ? undefined
+        : placeholderPages(queryKey, transition.allowTabChange, previousData, previousQuery),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
       fetchVocListPage(

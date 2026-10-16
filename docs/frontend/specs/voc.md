@@ -92,6 +92,8 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 ### 3.2 List + toolbar
 
+The Inbox and Triage Analytics Area selects offer only areas belonging to the visible Managed Systems returned by the global Managed System switcher query, further restricted to the selected System when scoped. When offered areas span multiple Systems, options read `Area name · Managed System name`, with ` · 보관됨` last for archived areas. A URL Area outside those options remains an active filter and chip without an option row.
+
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
 | `<VocList>` + `<VocRow>` | `<VocList>` + `<VocRow>` with paperclip + attachment count chip in `features/voc/components/list/` | none (Tailwind grid) | `vocs: VocListItem[]`, `selectedId: string \| null`, `onSelect: (id) => void` | default · hover · selected · permission-limited (row body replaced by `<PermissionBlockedPanel state="summary_visible">`) · skeleton · error. Inbox and My VOCs read cursor pages of 50 (`useInfiniteQuery`, every filter, sort, scope, tab and `q` in the key) and append pages under the rows with `<ListLoadMore>`; a failed next page keeps the loaded rows and turns the control into `다시 시도`. Only a `q`-only change (and the search start/clear that also drops or restores the tab) keeps the loaded pages visible while page one of the new key loads (`placeholderDataForSearchOnly`); any other tab, filter, sort, scope or Managed System change restarts at page one with the pending state. Triage keeps previous rows only when the key changes solely in `pinVocId`; a tab or Managed System change still shows the pending state without previous rows. |

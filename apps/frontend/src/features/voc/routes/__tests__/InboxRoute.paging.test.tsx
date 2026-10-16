@@ -182,6 +182,65 @@ describe('Inbox and 내 VOC cursor paging (#1175)', () => {
     expect(screen.queryByText('첫 페이지 A')).not.toBeInTheDocument();
   });
 
+  it('keeps rows for actual search start, pending q edits and clear with tab restoration', async () => {
+    mount('/vocs?view=inbox&tab=high');
+    await screen.findByText('첫 페이지 A');
+    firstPage = () => new Promise<Response>(() => {});
+    const box = screen.getByRole('searchbox', { name: '제목 또는 ID' });
+    for (const q of ['abc', 'abd']) {
+      fireEvent.change(box, { target: { value: q } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      await waitFor(() => expect(mounted?.router.state.location.search.q).toBe(q));
+      expect(screen.getByText('첫 페이지 A')).toBeInTheDocument();
+    }
+    fireEvent.keyDown(box, { key: 'Escape' });
+    await waitFor(() => expect(mounted?.router.state.location.search.tab).toBe('high'));
+    expect(mounted?.router.state.location.search.q).toBeUndefined();
+    expect(screen.getByText('첫 페이지 A')).toBeInTheDocument();
+  });
+
+  it('keeps the search rows while clearing to an uncached default tab loads', async () => {
+    mount('/vocs?view=inbox&q=abc');
+    await screen.findByText('첫 페이지 A');
+    firstPage = () => new Promise<Response>(() => {});
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: '제목 또는 ID' }), { key: 'Escape' });
+    await waitFor(() => expect(mounted?.router.state.location.search.q).toBeUndefined());
+    await waitFor(() => {
+      const request = listRequests().at(-1);
+      if (request === undefined) throw new Error('missing request');
+      expect(vocsQuery(request).raw.tab).toBe('untriaged');
+    });
+    expect(screen.getByText('첫 페이지 A')).toBeInTheDocument();
+  });
+
+  it.each(['pending-search tab click', 'saved-view tab and q'])(
+    '%s clears old-tab rows while the request is pending',
+    async (transition) => {
+      mount('/vocs?view=inbox&tab=high');
+      await screen.findByText('첫 페이지 A');
+      firstPage = () => new Promise<Response>(() => {});
+      if (transition === 'pending-search tab click') {
+        const box = screen.getByRole('searchbox', { name: '제목 또는 ID' });
+        fireEvent.change(box, { target: { value: 'abc' } });
+        fireEvent.keyDown(box, { key: 'Enter' });
+        await waitFor(() =>
+          expect(listRequests().some((r) => vocsQuery(r).raw.q === 'abc')).toBe(true),
+        );
+        expect(screen.getByText('첫 페이지 A')).toBeInTheDocument();
+        fireEvent.mouseDown(screen.getByRole('tab', { name: /미배정/ }));
+      } else {
+        await navigateSearch({ tab: 'unassigned', q: 'abc' });
+      }
+      await waitFor(() => {
+        const request = listRequests().at(-1);
+        if (request === undefined) throw new Error('missing request');
+        expect(vocsQuery(request).raw.tab).toBe('unassigned');
+      });
+      expect(screen.queryByText('첫 페이지 A')).not.toBeInTheDocument();
+      expect(screen.getByRole('rowgroup', { name: 'VOC 목록 로딩 중' })).toBeInTheDocument();
+    },
+  );
+
   it.each(VIEWS)(
     '%s: a failed next page keeps the loaded rows and offers 다시 시도',
     async (_view, path) => {

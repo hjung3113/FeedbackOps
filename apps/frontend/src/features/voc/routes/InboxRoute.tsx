@@ -31,7 +31,7 @@ import * as React from 'react';
 import { VocAreaFilterSelect } from '../components/VocAreaFilterSelect';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
-import { useVocListPages } from '../hooks/useVocListPages';
+import { type SearchTabTransition, useVocListPages } from '../hooks/useVocListPages';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -234,6 +234,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     });
   }, [mySeveritySort, mySeverityTab, mySeverityFilter, navigate]);
   // The tab the current search started from, restored when the search is cleared.
+  const [searchTabTransition, setSearchTabTransition] = React.useState<SearchTabTransition>();
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
   // #864: the hook calls this to write the URL q, from its debounced effect and
   // its immediate Enter/blur commit. Carries the #821 tab rules: starting a
@@ -248,6 +249,16 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       if (starting) tabBeforeSearchRef.current = urlTab;
       const restoreTab = clearing ? tabBeforeSearchRef.current : undefined;
       if (clearing) tabBeforeSearchRef.current = undefined;
+      if (starting || clearing) {
+        setSearchTabTransition({
+          fromQ: base,
+          fromTab: apiTab,
+          toQ: draft,
+          toTab: starting
+            ? undefined
+            : (urlTab ?? restoreTab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged')),
+        });
+      }
       void navigate({
         to: '/vocs',
         search: (prev) => {
@@ -272,8 +283,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       // draft waits for `committed` instead of settling as a no-op.
       return undefined;
     },
-    [navigate, search.tab, view],
+    [navigate, search.tab, view, apiTab, hasAnalyticsAreaFilter],
   );
+  React.useEffect(() => {
+    if (searchTabTransition?.toQ === urlQ && searchTabTransition.toTab === apiTab) {
+      setSearchTabTransition(undefined);
+    }
+  }, [searchTabTransition, urlQ, apiTab]);
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: urlQ,
     write: writeSearchDraft,
@@ -302,6 +318,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   const vocList = useVocListPages({
     view,
+    searchTabTransition,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
     ...(urlQ !== '' ? { q: urlQ } : {}),

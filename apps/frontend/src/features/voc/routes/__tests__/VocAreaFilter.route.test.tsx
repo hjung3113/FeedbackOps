@@ -2,7 +2,8 @@
 // `filter.analytics_area` to the URL and to GET /vocs. Real route, router and query client.
 
 import { listVocsQuerySchema } from '@fops/shared';
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Toaster, toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type AuthedVocsMount,
@@ -17,8 +18,13 @@ const ARCHIVED_AREA = '22222222-2222-4222-8222-222222222222';
 const ROW_ID = '00000000-0000-4000-8000-000000000101';
 
 const AREAS = [
-  { id: AREA, name: '결제 분석', archived_at: null },
-  { id: ARCHIVED_AREA, name: '옛 분석', archived_at: '2026-01-01T00:00:00.000Z' },
+  { id: AREA, name: '결제 분석', managed_system_id: MS, archived_at: null },
+  {
+    id: ARCHIVED_AREA,
+    name: '옛 분석',
+    managed_system_id: MS,
+    archived_at: '2026-01-01T00:00:00.000Z',
+  },
 ];
 
 const ROW = {
@@ -64,6 +70,8 @@ function mount(path: string) {
         return jsonResponse(200, { items: rows, page: { has_more: false } });
       }
       if (request.url.startsWith('/vocs/')) return new Promise<Response>(() => {});
+      if (request.url.startsWith('/managed-systems'))
+        return jsonResponse(200, { items: [{ id: MS, name: 'Tableau' }], total: 1 });
       if (request.url.startsWith('/analytics-areas')) {
         return jsonResponse(200, { items: AREAS, total: AREAS.length });
       }
@@ -106,6 +114,7 @@ function urlArea(): unknown {
 
 afterEach(() => {
   expect(mounted?.unhandled ?? []).toEqual([]);
+  toast.dismiss();
   vi.unstubAllGlobals();
   rows = [ROW];
   patchResponse = undefined;
@@ -208,4 +217,168 @@ describe('Triage Area switch with an optimistic removal in flight', () => {
       expect(screen.getByTestId('triage-processed-count')).toHaveTextContent('1건 처리됨'),
     );
   });
+});
+
+const OTHER_MS = '00000000-0000-4000-8000-0000000000cc';
+const NEXT_ID = '00000000-0000-4000-8000-000000000102';
+
+it.each([
+  ['inbox', false, false],
+  ['triage', false, false],
+  ['inbox', true, false],
+  ['triage', true, false],
+  ['inbox', true, true],
+] as const)(
+  '%s Area options follow the Developer switcher list (two visible: %s, scoped: %s)',
+  async (view, twoVisible, scoped) => {
+    const systems = [
+      { id: MS, name: 'Tableau' },
+      { id: OTHER_MS, name: 'Power BI' },
+    ];
+    mounted = mountAuthedVocs({
+      initialPath: `/vocs?view=${view}&filter.analytics_area=${ARCHIVED_AREA}${scoped ? `&managedSystem=${MS}` : ''}`,
+      vocsShell: true,
+      handle: (request) => {
+        if (request.url === '/me')
+          return jsonResponse(200, {
+            actor: {
+              id: 'developer-1',
+              external_id: 'developer-1',
+              email: 'developer@example.test',
+              role_level: 'developer',
+              display_name: 'Developer One',
+            },
+            workspace_id: 'workspace-1',
+          });
+        if (request.url.startsWith('/me/permissions/scope'))
+          return jsonResponse(200, {
+            scope: { kind: 'scoped', managed_system_ids: twoVisible ? [MS, OTHER_MS] : [MS] },
+          });
+        if (request.url.startsWith('/managed-systems'))
+          return jsonResponse(200, {
+            items: twoVisible ? systems : systems.slice(0, 1),
+            total: twoVisible ? 2 : 1,
+          });
+        if (request.url.startsWith('/analytics-areas'))
+          return jsonResponse(200, {
+            items: [
+              { id: AREA, name: 'Usage', managed_system_id: MS, archived_at: null },
+              {
+                id: ARCHIVED_AREA,
+                name: 'Usage',
+                managed_system_id: OTHER_MS,
+                archived_at: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+            total: 2,
+          });
+        if (request.url.startsWith('/vocs?'))
+          return jsonResponse(200, { items: [], page: { has_more: false } });
+        if (request.url.startsWith('/saved-views')) return jsonResponse(200, { items: [] });
+        return undefined;
+      },
+    });
+    // The shared harness seeds Admin; refresh /me through the real query to exercise Developer.
+    await act(async () => {
+      await mounted?.router.options.context.queryClient.invalidateQueries({ queryKey: ['me'] });
+    });
+    const trigger = await screen.findByRole('combobox', { name: 'Analytics Area' });
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const listbox = await screen.findByRole('listbox');
+    await waitFor(() =>
+      expect(
+        within(listbox)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(
+        twoVisible && !scoped
+          ? ['전체 Analytics Area', '미지정', 'Usage · Tableau', 'Usage · Power BI · 보관됨']
+          : ['전체 Analytics Area', '미지정', 'Usage'],
+      ),
+    );
+    expect(urlArea()).toBe(ARCHIVED_AREA);
+    expect(listQuery()?.['filter.analytics_area']).toBe(ARCHIVED_AREA);
+    if (view === 'inbox') {
+      expect(screen.getByText('Analytics Area: Usage (보관됨)')).toBeInTheDocument();
+    }
+  },
+);
+
+it('undo across Area restores only the original VOC and preserves the remaining selected pin', async () => {
+  render(<Toaster />);
+  const next = { ...ROW, id: NEXT_ID, display_id: 'VOC-A02', title: '남은 선택 행' };
+  let forwardDone = false;
+  let undoDone = false;
+  let settleForward: (response: Response) => void = () => {};
+  let settleUndo: (response: Response) => void = () => {};
+  const forward = new Promise<Response>((resolve) => {
+    settleForward = resolve;
+  });
+  const undo = new Promise<Response>((resolve) => {
+    settleUndo = resolve;
+  });
+  mounted = mountAuthedVocs({
+    initialPath: `/vocs?view=triage&tab=untriaged&selected=${ROW_ID}&filter.analytics_area=${AREA}`,
+    vocsShell: true,
+    handle: (request) => {
+      if (request.method === 'PATCH')
+        return (request.body as { triage_state: string }).triage_state === 'triaged'
+          ? forward
+          : undo;
+      if (request.url.startsWith('/vocs?'))
+        return jsonResponse(200, {
+          items: forwardDone && !undoDone ? [next] : [ROW, next],
+          page: { has_more: false },
+        });
+      if (request.url.startsWith('/vocs/')) return new Promise<Response>(() => {});
+      if (request.url.startsWith('/analytics-areas'))
+        return jsonResponse(200, { items: [{ ...AREAS[0], managed_system_id: MS }], total: 1 });
+      if (request.url.startsWith('/managed-systems'))
+        return jsonResponse(200, { items: [{ id: MS, name: 'Tableau' }], total: 1 });
+      if (request.url.startsWith('/saved-views')) return jsonResponse(200, { items: [] });
+      return undefined;
+    },
+  });
+  await screen.findByRole('heading', { name: ROW.title });
+  fireEvent.click(screen.getByRole('button', { name: /Triage 확정 & 다음 VOC/ }));
+  await waitFor(() => expect(mounted?.router.state.location.search.selected).toBe(NEXT_ID));
+  await choose('전체 Analytics Area');
+  await screen.findByRole('button', { name: /VOC-A01/ });
+  expect(mounted?.router.state.location.search.selected).toBe(NEXT_ID);
+  fireEvent.click(await screen.findByRole('button', { name: '실행 취소' }));
+  expect(screen.queryByTestId('triage-processed-count')).toBeNull();
+  await act(async () => {
+    forwardDone = true;
+    settleForward(jsonResponse(200, { updated_at: '2026-10-09T00:00:00.000Z' }));
+  });
+  await waitFor(() =>
+    expect(mounted?.requests.filter((r) => r.method === 'PATCH')).toHaveLength(2),
+  );
+  const patches = mounted?.requests.filter((r) => r.method === 'PATCH') ?? [];
+  expect(patches.map((r) => r.url)).toEqual([`/vocs/${ROW_ID}`, `/vocs/${ROW_ID}`]);
+  expect(patches[1]?.body).toMatchObject({
+    triage_state: 'untriaged',
+    analytics_area_id: AREA,
+    severity: 'high',
+    owner_user_id: null,
+    owner_team_id: null,
+  });
+  expect(screen.queryByTestId('triage-processed-count')).toBeNull();
+  const readsBeforeCompensation =
+    mounted?.requests.filter((r) => r.url.startsWith('/vocs?')).length ?? 0;
+  await act(async () => {
+    undoDone = true;
+    settleUndo(jsonResponse(200, { updated_at: '2026-10-10T00:00:00.000Z' }));
+  });
+  await waitFor(() =>
+    expect(mounted?.requests.filter((r) => r.url.startsWith('/vocs?')).length).toBeGreaterThan(
+      readsBeforeCompensation,
+    ),
+  );
+  await screen.findByRole('button', { name: /VOC-A01/ });
+  await waitFor(() => expect(listQuery()?.pin_voc_id).toBe(NEXT_ID));
+  expect(screen.getByRole('button', { name: /VOC-A02/ })).toHaveAttribute('aria-selected', 'true');
+  expect(mounted?.router.state.location.search.selected).toBe(NEXT_ID);
+  expect(urlArea()).toBeUndefined();
+  expect(screen.queryByTestId('triage-processed-count')).toBeNull();
 });
