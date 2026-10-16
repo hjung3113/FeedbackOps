@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
+const { navigate, emptyCandidates } = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  emptyCandidates: { pages: [{ candidates: [], page: { has_more: false } }] },
+}));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -28,10 +31,18 @@ vi.mock('@/features/voc-cluster/hooks/useCreateFindingFromCluster', () => ({
   useCreateFindingFromCluster: () => ({ mutate: vi.fn(), isPending: false, reset: vi.fn() }),
 }));
 vi.mock('@/features/voc-cluster/hooks/useAddClusterMember', () => ({
-  useAddClusterMember: () => ({ mutate: vi.fn(), isPending: false, reset: vi.fn() }),
+  useAddClusterMember: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/features/voc-cluster/hooks/useCandidatePeers', () => ({
-  useCandidatePeers: () => ({ data: { candidates: [] }, isLoading: false, isError: false }),
+  useCandidatePeers: () => ({
+    data: emptyCandidates,
+    isLoading: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: vi.fn(),
+  }),
 }));
 
 import { AddVocModal } from './AddVocModal';
@@ -42,13 +53,11 @@ const dialogs = [
   {
     name: 'AddVocModal',
     render: () => (
-      <AddVocModal
-        open
-        clusterId="10000000-0000-0000-0000-000000000001"
-        members={[]}
-        onClose={vi.fn()}
-      />
+      <AddVocModal open clusterId="10000000-0000-0000-0000-000000000001" onClose={vi.fn()} />
     ),
+    // The picker's footer action is a single 닫기; DialogContent already owns an icon button of
+    // that name, so it is located by its test id.
+    cancel: () => screen.getByTestId('add-voc-cancel'),
   },
   {
     name: 'CreateFindingFromClusterModal',
@@ -59,6 +68,7 @@ const dialogs = [
         onClose={vi.fn()}
       />
     ),
+    cancel: () => screen.getByRole('button', { name: '취소' }),
   },
   {
     name: 'LinkExistingFindingModal',
@@ -69,18 +79,19 @@ const dialogs = [
         onClose={vi.fn()}
       />
     ),
+    cancel: () => screen.getByRole('button', { name: '취소' }),
   },
 ] as const;
 
 describe('VOC Cluster dialog cancel variants', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(dialogs)('$name cancel action uses secondary styling', ({ render: renderDialog }) => {
-    render(renderDialog());
+  it.each(dialogs)(
+    '$name cancel action uses secondary styling',
+    ({ render: renderDialog, cancel }) => {
+      render(renderDialog());
 
-    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
-      'bg-surface-raised',
-      'border-border-subtle',
-    );
-  });
+      expect(cancel()).toHaveClass('bg-surface-raised', 'border-border-subtle');
+    },
+  );
 });

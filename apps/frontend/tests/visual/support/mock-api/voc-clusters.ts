@@ -31,7 +31,17 @@ export function createVocClusterDetailHandlers(): MockApiHandler[] {
       path: /^\/voc-clusters\/([^/]+)\/candidate-peers$/,
       handle: (route, context, _url, pathMatch: MockApiPathMatch) => {
         if (pathMatch === true) throw new Error('Candidate peers path must include captures');
-        return json(route, 200, context.scenario.candidates);
+        // The real endpoint excludes current members; mirror that so a refetch after an add
+        // no longer returns the added VOC.
+        const members = new Set(
+          context.scenario.details[pathMatch[1] ?? '']?.cluster?.members?.map((m) => m.voc_id),
+        );
+        return json(route, 200, {
+          ...context.scenario.candidates,
+          candidates: context.scenario.candidates.candidates.filter(
+            (candidate) => !members.has(candidate.voc_id),
+          ),
+        });
       },
     },
     {

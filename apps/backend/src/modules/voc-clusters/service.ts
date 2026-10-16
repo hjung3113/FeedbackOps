@@ -15,6 +15,7 @@ import type { RecoveryRecorder } from '../dashboard/recorder.js';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
+import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -30,7 +31,6 @@ import { type Scope, isVocVisibleToActor, selectVocForUpdate } from '../voc/inde
 import { createVocClusterConversion } from './conversion.js';
 import {
   type CreatedFindingForClusterRow,
-  type SameManagedSystemCandidatePeerRow,
   type VocClusterMemberRow,
   type VocClusterRow,
   deleteVocClusterMember,
@@ -158,15 +158,6 @@ function isAuthorizedMember(
       reporter_id: member.reporter_id,
     })
   );
-}
-
-function isAuthorizedCandidatePeer(
-  readScope: Scope,
-  actorId: string,
-  candidate: SameManagedSystemCandidatePeerRow,
-  clusterManagedSystemId: string,
-): boolean {
-  return isAuthorizedMember(readScope, actorId, candidate, clusterManagedSystemId);
 }
 
 function authorizedMembers(
@@ -354,7 +345,11 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
   async function listCandidatePeers(args: {
     actor: VocClustersActor;
     clusterId: string;
+    q?: string;
+    limit: number;
+    cursor?: string;
   }): Promise<ListSameManagedSystemCandidatePeersResponse> {
+    const cursor = args.cursor === undefined ? undefined : decodeListCursor(args.cursor);
     const cluster = await findVocClusterById(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterId: args.clusterId,
@@ -365,30 +360,35 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     }
 
     const readScope = await actorReadScope(deps.db, args.actor);
-    const candidates = (
-      await listSameManagedSystemCandidatePeers(deps.db, {
-        workspaceId: args.actor.workspace_id,
-        clusterId: cluster.id,
-        primaryManagedSystemId: cluster.primary_managed_system_id,
-      })
-    ).filter((candidate) =>
-      isAuthorizedCandidatePeer(
-        readScope,
-        args.actor.actor_id,
-        candidate,
-        cluster.primary_managed_system_id,
-      ),
-    );
+    const rows = await listSameManagedSystemCandidatePeers(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      clusterId: cluster.id,
+      primaryManagedSystemId: cluster.primary_managed_system_id,
+      readScope,
+      actorId: args.actor.actor_id,
+      limit: args.limit,
+      ...(args.q === undefined ? {} : { q: args.q }),
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    const hasMore = rows.length > args.limit;
+    const pageRows = rows.slice(0, args.limit);
+    const last = pageRows.at(-1);
 
     return {
       candidate_basis: 'same_managed_system_active_voc',
-      candidates: candidates.map((candidate) => ({
+      candidates: pageRows.map((candidate) => ({
         voc_id: candidate.voc_id,
         display_id: candidate.display_id,
         title: candidate.title,
         severity: candidate.severity,
         reporter_facing_status: candidate.reporter_facing_status,
       })),
+      page: {
+        has_more: hasMore,
+        ...(hasMore && last
+          ? { cursor: encodeListCursor({ timestamp: last.cursor_timestamp, id: last.voc_id }) }
+          : {}),
+      },
     };
   }
 

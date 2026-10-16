@@ -52,22 +52,23 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
 
     const dialog = page.getByTestId('add-voc-modal');
     await expect(dialog).toBeVisible();
-    // #295 replaced the <select> picker with a list of candidate buttons so
-    // existing members can stay visible but unselectable.
+    // The picker lists searchable candidates, each with its own 추가 action; members are not listed.
     await expect(dialog.getByTestId('add-voc-candidates')).toBeVisible();
     await expectVisual(page, dialog, 'voc-cluster-add-voc-dialog.png');
 
-    await dialog.getByTestId(`add-voc-candidate-${IDS.candidateVoc}`).click();
     const post = page.waitForRequest(
       (request) =>
         request.method() === 'POST' && request.url().endsWith(`/voc-clusters/${IDS.draft}/vocs`),
     );
-    await dialog.getByTestId('add-voc-submit').click();
+    await dialog.getByTestId(`add-voc-add-${IDS.candidateVoc}`).click();
     expect(JSON.parse((await post).postData() ?? '{}')).toEqual(addCandidateRequest);
     await expect.poll(() => mock.postedBodies).toEqual([addCandidateRequest]);
     await expect(page.getByTestId(`cluster-member-row-${IDS.candidateVoc}`)).toContainText(
       'VOC-102',
     );
+    // The dialog stays open and the added row keeps its place, marked 추가됨.
+    await expect(dialog.getByTestId(`add-voc-add-${IDS.candidateVoc}`)).toHaveText('추가됨');
+    await expect(dialog.getByTestId(`add-voc-add-${IDS.candidateVoc}`)).toBeDisabled();
   });
 
   test('links an existing Finding through the picker and refetches the execution section', async ({

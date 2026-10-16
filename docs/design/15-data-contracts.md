@@ -292,9 +292,15 @@ Read DTO extensions:
 Candidate-peer picker DTO (separate read endpoint):
 
 ```text
+ListSameManagedSystemCandidatePeersQuery
+- q: text, optional; trimmed, max 100 after trimming, blank = no filter; case-insensitive display_id prefix OR title contains, %/_ literal
+- limit: integer(1..50), default 20
+- cursor: opaque keyset cursor shared with Finding/Task lists, optional; malformed = 422 at cursor (invalid_cursor)
+
 ListSameManagedSystemCandidatePeersResponse
 - candidate_basis: literal(same_managed_system_active_voc), required
 - candidates: array of SameManagedSystemCandidatePeerDto, required
+- page: { has_more: boolean, required; cursor: opaque string, present only when has_more }, required
 
 SameManagedSystemCandidatePeerDto
 - voc_id: uuid, required
