@@ -1,3 +1,4 @@
+import { workspaceActorsFixture } from '../../fixtures/permissions';
 import {
   TRIAGE_AREA_IDS,
   triageAreaActors,
@@ -14,7 +15,6 @@ import {
   vocCreatePreviewAvailability,
   vocCreateSimilarityPreview,
 } from '../../fixtures/voc-create';
-import { workspaceActorsFixture } from '../../fixtures/permissions';
 import { decidedNoFollowUpVoc, eligibleNoFollowUpVoc } from '../../fixtures/voc-no-follow-up';
 import {
   VOC_REVIEW_IDS,
