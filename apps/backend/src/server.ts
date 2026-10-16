@@ -638,6 +638,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     idempotencyService,
     notify,
+    vocReadService,
     // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
     // key-less environment creates no embedding jobs at all.
     embeddingEnqueuer: createVocEmbeddingEnqueuer({

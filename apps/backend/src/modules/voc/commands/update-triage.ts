@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { and, eq, sql } from 'drizzle-orm';
 
-import type { PatchVocRequest } from '@fops/shared';
+import type { PatchVocRequest, VocSummaryEnvelope } from '@fops/shared';
 import { vocs } from '../../../db/schema/voc.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
@@ -20,13 +20,23 @@ import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js
 import { composeEnvelope } from './compose-envelope.js';
 
 export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
+  // #1187: a triage-only writer has no full read; its response follows the read matrix.
+  async function writeResponseSummary(
+    tx: Tx,
+    actor: { actor_id: string; workspace_id: string; role_level: RoleLevel },
+    vocId: string,
+  ): Promise<VocSummaryEnvelope | null> {
+    const access = await deps.vocReadService.resolveWriteResponseAccess({ tx, actor, vocId });
+    return access.kind === 'summary' ? access.envelope : null;
+  }
+
   async function updateVoc(args: {
     tx: Tx;
     actor: { actor_id: string; workspace_id: string; role_level: RoleLevel };
     vocId: string;
     ifMatch: string;
     input: PatchVocRequest;
-  }): Promise<VocEnvelope> {
+  }): Promise<VocEnvelope | VocSummaryEnvelope> {
     const { tx, actor, vocId, ifMatch, input } = args;
     const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
       { type: 'voc', id: vocId },
@@ -246,7 +256,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
         row.reporterFacingStatus as ReporterFacingStatus,
         tx,
       );
-      return composeEnvelope(row, nextStates);
+      return (await writeResponseSummary(tx, actor, vocId)) ?? composeEnvelope(row, nextStates);
     }
 
     // 9. UPDATE the voc row.
@@ -413,7 +423,10 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       tx,
     );
     if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'updateVoc');
-    return composeEnvelope(updatedLockedVoc, nextStates);
+    return (
+      (await writeResponseSummary(tx, actor, vocId)) ??
+      composeEnvelope(updatedLockedVoc, nextStates)
+    );
   }
   async function updateVocCommand(args: {
     actor: { actor_id: string; workspace_id: string; role_level: RoleLevel };
@@ -422,7 +435,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     input: PatchVocRequest;
     idempotencyKey: string;
     requestHash: string;
-  }): Promise<{ status: number; body: VocEnvelope }> {
+  }): Promise<{ status: number; body: VocEnvelope | VocSummaryEnvelope }> {
     const { actor, vocId, ifMatch, input, idempotencyKey, requestHash } = args;
     return runIdempotentCommand({
       db: deps.db,

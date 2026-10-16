@@ -36,6 +36,15 @@ const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
 
 const SLUG_PREFIX = 'it-pubupd';
 
+const SUMMARY_KEYS = [
+  'created_at',
+  'display_id',
+  'id',
+  'permission_decisions',
+  'primary_managed_system_id',
+  'reporter_facing_status',
+];
+
 // ── Audit helpers ─────────────────────────────────────────────────────────────
 
 async function getAuditRows(
@@ -945,8 +954,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
           next_reporter_facing_status: 'received',
         });
         expect(res.statusCode).toBe(201);
-        const body = res.json<{ voc: { links?: Array<unknown> } }>();
-        expect(body.voc.links).toEqual([]);
+        // #1187: no full read → the read-matrix summary, so no links key at all.
+        const body = res.json<{ voc: Record<string, unknown> }>();
+        expect(Object.keys(body.voc).sort()).toEqual(SUMMARY_KEYS);
+        expect(body.voc).not.toHaveProperty('links');
 
         // Positive control: a full reader's post-write envelope still carries the link.
         const adminRes = await postPublicUpdate(adminCookie, voc.id, {
@@ -1026,7 +1037,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
           next_reporter_facing_status: 'received',
         });
         expect(res.statusCode).toBe(201);
-        expect(res.json<{ voc: { links?: Array<unknown> } }>().voc.links).toEqual([]);
+        // #1187: the explicit read deny puts this Admin in summary territory.
+        const deniedBody = res.json<{ voc: Record<string, unknown> }>();
+        expect(Object.keys(deniedBody.voc).sort()).toEqual(SUMMARY_KEYS);
+        expect(deniedBody.voc).not.toHaveProperty('links');
       } finally {
         if (denyId) {
           await ops.pool.query(`delete from permission.permission_denies where id = $1`, [denyId]);

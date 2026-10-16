@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { tipTapDocSchema } from './create-request.js';
-import { vocDetailEnvelopeSchema } from './detail.js';
+import { vocDetailEnvelopeSchema, vocSummaryEnvelopeSchema } from './detail.js';
 import { reporterFacingStatusEnumSchema } from './list-item.js';
 import { publicUpdateRequestSchema } from './public-update-request.js';
 
@@ -60,7 +60,9 @@ export const resolvePublicUpdateReviewCandidateResponseSchema = z.discriminatedU
     action: z.literal('apply'),
     public_update: z.object({
       public_update: appliedPublicUpdateSchema,
-      voc: vocDetailEnvelopeSchema,
+      // #1187: a triage-only writer gets the read-matrix summary. Detail first so a
+      // full payload keeps all its fields (the summary schema would strip them).
+      voc: z.union([vocDetailEnvelopeSchema, vocSummaryEnvelopeSchema]),
     }),
   }),
   z.object({

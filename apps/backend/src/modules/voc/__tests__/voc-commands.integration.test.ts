@@ -151,6 +151,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       idempotencyService,
       recoveryRecorder: createOwnerRecoveryRecorder(),
       notify: async () => {},
+      vocReadService,
     });
     conversationService = createConversationService({
       db: dbHandle.db,
@@ -416,7 +417,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       requestHash: hash,
     });
     expect(first.status).toBe(200);
-    expect(first.body.severity).toBe('high');
+    expect(first.body).toMatchObject({ severity: 'high' });
     expect(await auditEventTypes(voc.id)).toContain('voc_severity_set');
 
     // Replay: identical inputs (including the now-stale ifMatch — the replay

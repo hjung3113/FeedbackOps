@@ -64,6 +64,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     getConversation: conversationReader.getConversation,
     canReadConversationEntry: conversationReader.canReadConversationEntry,
     composeDetailEnvelope: detailReaders.composeDetailEnvelope,
+    resolveWriteResponseAccess: detailReaders.resolveWriteResponseAccess,
   };
 }
 
