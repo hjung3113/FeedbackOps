@@ -46,8 +46,8 @@ Scope:
 
 ### Release obligations (Slice 63)
 
-- Measure PS-5 recovery reconcile lock hold on a high-response Survey.
-- Run the Reporter persona and the full MVP Success Flow in the Release Value Gate.
+- Measure PS-5 recovery reconcile lock hold on a high-response Survey. Done 2026-10-17: under one second per page even at 20k responses; batching deferred (`14-post-mvp-backlog.md` → Slice 63).
+- Run the Reporter persona and the full MVP Success Flow in the Release Value Gate. Done: passed on the second run with no blocker (#1062); non-blockers in #1227.
 
 Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected). Every item deferred or dropped before release is recorded in `14-post-mvp-backlog.md`.
 
