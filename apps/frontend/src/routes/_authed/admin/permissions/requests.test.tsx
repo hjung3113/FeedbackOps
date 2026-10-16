@@ -17,6 +17,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type React from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -970,6 +971,48 @@ describe("/admin/permissions/requests", () => {
         /^[0-9a-f-]{36}$/i,
       );
       expect(JSON.parse(init.body as string)).toEqual({ ...expectedBody, expected_revision: 7 });
+    },
+  );
+
+  test.each([
+    ["mouse", ""],
+    ["mouse", "   "],
+    ["keyboard", ""],
+    ["keyboard", "   "],
+  ])(
+    "#1184 U3-4 %s reject with reason %j shows the inline error, focuses the reason and sends nothing",
+    async (input, reason) => {
+      installFetch();
+      renderRoute();
+      await waitFor(() =>
+        expect(screen.getByTestId("permission-decision-section")).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "거절" }));
+      const field = screen.getByLabelText(/사유/);
+      if (reason) fireEvent.change(field, { target: { value: reason } });
+      const submit = screen.getByTestId("permission-decision-submit");
+      if (input === "mouse") {
+        fireEvent.click(submit);
+      } else {
+        submit.focus();
+        await userEvent.keyboard("{Enter}");
+      }
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("거절 사유를 입력해 주세요.");
+      expect(field).toHaveFocus();
+      expect(field).toHaveAttribute("aria-invalid", "true");
+      expect(field).toHaveAttribute("aria-describedby", alert.id);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      const posts = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([, init]) => init?.method === "POST",
+      );
+      expect(posts).toHaveLength(0);
+
+      fireEvent.change(field, { target: { value: "사유" } });
+      expect(screen.queryByText("거절 사유를 입력해 주세요.")).not.toBeInTheDocument();
     },
   );
 

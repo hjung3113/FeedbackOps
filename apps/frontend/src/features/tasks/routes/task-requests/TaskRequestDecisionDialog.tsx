@@ -163,6 +163,7 @@ export function TaskRequestDecisionDialog({
             required: true,
           };
   const inputId = `task-request-${content?.action}-reason`;
+  const reasonRef = React.useRef<HTMLTextAreaElement>(null);
 
   return (
     <Dialog open={liveDialog !== null} onOpenChange={(open) => !open && dismiss()}>
@@ -212,7 +213,11 @@ export function TaskRequestDecisionDialog({
           <form
             onSubmit={(event) => {
               if (isSubmitting || successfulClose) event.preventDefault();
-              else onSubmit(event);
+              else {
+                onSubmit(event);
+                // Invalid empty submit keeps the dialog open; send focus to the field.
+                if (details.required && content.value.trim() === '') reasonRef.current?.focus();
+              }
             }}
             className="flex flex-col gap-4"
           >
@@ -220,6 +225,7 @@ export function TaskRequestDecisionDialog({
               <Label htmlFor={inputId}>{details.label}</Label>
               <Textarea
                 id={inputId}
+                ref={reasonRef}
                 rows={3}
                 value={content.value}
                 onChange={(event) => onChange(event.target.value)}

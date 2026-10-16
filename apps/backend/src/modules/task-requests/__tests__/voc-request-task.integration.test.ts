@@ -116,6 +116,14 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
+      `delete from permission.permission_denies
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from permission.permission_grants
         where workspace_id = $1
           and actor_id in (
@@ -729,6 +737,71 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     expect(denied.statusCode).toBe(403);
     expect(denied.json<{ code: string }>().code).toBe('permission.denied');
   });
+
+  async function requestTaskRows(vocId: string) {
+    const counts = await migrateHandle.pool.query<{
+      requests: number;
+      links: number;
+      audits: number;
+    }>(
+      `select
+         (select count(*)::int from task_request.task_requests
+           where workspace_id = $1 and source_type = 'voc' and source_id = $2::uuid) as requests,
+         (select count(*)::int from core.entity_links
+           where workspace_id = $1 and source_type = 'voc' and source_id = $2::uuid
+             and relation_type = 'requested_task') as links,
+         (select count(*)::int from core.audit_log
+           where workspace_id = $1 and event_type = 'task_request_created_from_voc'
+             and detail->>'source_voc_id' = $2::text) as audits`,
+      [WORKSPACE_ID, vocId],
+    );
+    return counts.rows[0];
+  }
+
+  it('hides a VOC from a non-reporter Admin with an explicit voc.read deny and writes nothing (#1216)', async () => {
+    const seeded = await seedVocSource();
+    await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      adminActorId,
+      'voc.read',
+      seeded.msId,
+      adminActorId,
+    );
+
+    const res = await requestTask(adminCookie, 'voc', seeded.id);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ code: 'not_found.record', message: 'voc not found' });
+    expect(await requestTaskRows(seeded.id)).toEqual({ requests: 0, links: 0, audits: 0 });
+  });
+
+  it('lets a non-reporter Admin without a deny request a Task (#1216 control)', async () => {
+    const seeded = await seedVocSource();
+    const res = await requestTask(adminCookie, 'voc', seeded.id);
+    expect(res.statusCode).toBe(201);
+    expect(await requestTaskRows(seeded.id)).toEqual({ requests: 1, links: 1, audits: 1 });
+  });
+
+  it.each(['admin', 'developer'] as const)(
+    'keeps the %s Reporter first even with a voc.read deny (#1216 control)',
+    async (kind) => {
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Reporter MS');
+      let cookie = adminCookie;
+      let reporterId = adminActorId;
+      if (kind === 'developer') {
+        const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+        await grantCapability(dbHandle, WORKSPACE_ID, dev.id, 'finding.manage', msId, adminActorId);
+        cookie = await loginAs(app, dev.externalId);
+        reporterId = dev.id;
+      }
+      const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Own VOC');
+      await denyCapability(dbHandle, WORKSPACE_ID, reporterId, 'voc.read', msId, adminActorId);
+
+      const res = await requestTask(cookie, 'voc', voc.id);
+      expect(res.statusCode).toBe(201);
+      expect(await requestTaskRows(voc.id)).toEqual({ requests: 1, links: 1, audits: 1 });
+    },
+  );
 
   it('POST /voc-clusters/:id/request-task is idempotent and requires cluster authority', async () => {
     const seeded = await seedClusterSource();

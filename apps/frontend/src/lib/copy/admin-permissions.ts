@@ -3,6 +3,8 @@ export const ADMIN_PERMISSIONS_COPY = {
   reviewAgain: '요청이 변경되었습니다. 최신 요청을 확인하고 다시 결정하세요.',
   decisionDraftReset: '다른 곳에서 요청이 변경되어 작성 중이던 결정을 초기화했습니다.',
   discardedDecisionReason: '초기화 전 사유',
+  rejectReasonRequired: '거절 사유를 입력해 주세요.',
+  reasonRequired: '사유를 입력해 주세요.',
   detailLoading: '요청 상세를 불러오는 중입니다.',
   detailError: '요청 상세를 불러오지 못했습니다. 다시 확인해 주세요.',
   retry: '다시 확인',

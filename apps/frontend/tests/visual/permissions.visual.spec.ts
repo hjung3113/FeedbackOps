@@ -72,6 +72,20 @@ test.describe('/admin/permissions/requests visual harness', () => {
     expect(mock.postedRequests).toHaveLength(1);
   });
 
+  test('empty reject reason shows the inline error and focuses the reason field', async ({
+    page,
+  }) => {
+    const mock = await installMockApi(page, { permissionScenario: 'stale-review' });
+    await page.goto('/admin/permissions/requests');
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await detail.getByRole('button', { name: '거절', exact: true }).click();
+    await detail.getByTestId('permission-decision-submit').click();
+    await expect(detail.getByRole('alert')).toContainText('거절 사유를 입력해 주세요.');
+    await expect(detail.getByLabel('사유 · 필수')).toBeFocused();
+    await expectVisual(page, detail, 'permission-request-reject-reason-required.png');
+    expect(mock.postedRequests).toHaveLength(0);
+  });
+
   test('cancelled history retains selection with no decision controls', async ({ page }) => {
     await installMockApi(page, { permissionScenario: 'cancelled-history' });
     await page.goto(`/admin/permissions/requests?tab=all&selected=${PERMISSION_IDS.rejected}`);

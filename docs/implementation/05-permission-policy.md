@@ -42,8 +42,9 @@ Admin or Developer with `finding.manage` on the relevant Primary Managed
 System; User is denied.
 Slice 6 issue #136 extends Task Request creation to VOC and VOC Cluster sources
 without adding a new capability. `POST /vocs/:id/request-task` mirrors
-`POST /vocs/:id/create-finding`: source VOC readability plus `finding.manage`
-on the source Primary Managed System, with Admin bypass. `POST
+`POST /vocs/:id/create-finding`: source VOC read is permitted to its Reporter,
+otherwise requires a deny-first `voc.read` check for every role including Admin,
+plus the unchanged `finding.manage` gate on the source Primary Managed System. `POST
 /voc-clusters/:id/request-task` mirrors cluster create-finding authority:
 Admin or Developer with `finding.manage` on the cluster Primary Managed System.
 

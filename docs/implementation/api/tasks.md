@@ -300,10 +300,10 @@ request body:
   assigned_reviewer_team_id optional nullable uuid (XOR-or-both-null)
 response body: TaskRequestDto
 auth and permission:
-  - VOC: authenticated Actor in workspace; source VOC readable under the same
-    rule used by `POST /vocs/:id/create-finding`, plus `finding.manage` on the
-    VOC Primary Managed System. Admin bypass follows the Finding actions
-    convention.
+  - VOC: authenticated Actor in workspace; source VOC read is permitted to its
+    Reporter, otherwise requires a deny-first `voc.read` check for every role
+    including Admin (an explicit Admin deny returns 404 `not_found.record`),
+    plus the unchanged `finding.manage` gate on the VOC Primary Managed System.
   - VOC Cluster: Admin or Developer with `finding.manage` on the cluster Primary
     Managed System, mirroring `POST /voc-clusters/:id/create-finding`.
 validation errors:

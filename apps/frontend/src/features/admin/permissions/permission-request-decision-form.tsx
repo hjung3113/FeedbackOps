@@ -113,6 +113,8 @@ export function PermissionRequestDecisionForm({
   const [reviewBlocked, setReviewBlocked] = React.useState(false);
   const [action, setAction] = React.useState<PermissionRequestDecisionAction | null>(null);
   const [reason, setReason] = React.useState('');
+  const [reasonAttempted, setReasonAttempted] = React.useState(false);
+  const reasonRef = React.useRef<HTMLTextAreaElement>(null);
   const [policyCitation, setPolicyCitation] = React.useState('');
   const [peerReviewerAbsence, setPeerReviewerAbsence] = React.useState('');
   const [expirationMode, setExpirationMode] = React.useState<ApprovalExpirationMode>('keep');
@@ -163,6 +165,7 @@ export function PermissionRequestDecisionForm({
       setReviewBlocked(true);
       setAction(null);
       setReason('');
+      setReasonAttempted(false);
       setPolicyCitation('');
       setPeerReviewerAbsence('');
       setExpirationMode('keep');
@@ -230,6 +233,7 @@ export function PermissionRequestDecisionForm({
     setScope(request.requested_managed_system_id ?? 'workspace');
     setAction(null);
     setReason('');
+    setReasonAttempted(false);
     setPolicyCitation('');
     setPeerReviewerAbsence('');
     setExpirationMode('keep');
@@ -239,9 +243,20 @@ export function PermissionRequestDecisionForm({
     setExpirationDate(request.requested_expiration?.slice(0, 10) ?? '');
   }, [request.requested_expiration, request.requested_managed_system_id]);
 
+  const reasonError =
+    reasonAttempted && needsReason && !reason.trim()
+      ? action === 'reject'
+        ? ADMIN_PERMISSIONS_COPY.rejectReasonRequired
+        : ADMIN_PERMISSIONS_COPY.reasonRequired
+      : null;
+
   function submit() {
-    if (action === null || submitDisabled || submitting.current || (needsReason && !reason.trim()))
+    if (action === null || submitDisabled || submitting.current) return;
+    if (needsReason && !reason.trim()) {
+      setReasonAttempted(true);
+      reasonRef.current?.focus();
       return;
+    }
     if (
       action === 'approve' &&
       expirationMode === 'change' &&
@@ -326,6 +341,7 @@ export function PermissionRequestDecisionForm({
             }
             onClick={() => {
               setAction(candidate.value);
+              setReasonAttempted(false);
               setExpirationValidationAttempted(false);
               mutation.reset();
               onActionPicked?.();
@@ -347,16 +363,29 @@ export function PermissionRequestDecisionForm({
         사유{needsReason ? ' · 필수' : ' · 선택'}
         <Textarea
           id="permission-decision-reason"
+          ref={reasonRef}
+          aria-invalid={reasonError !== null}
+          {...(reasonError ? { 'aria-describedby': 'permission-decision-reason-error' } : {})}
           disabled={mutation.isPending || reviewBlocked}
           maxLength={2000}
           value={reason}
           onChange={(event) => {
             setReason(event.target.value);
+            setReasonAttempted(false);
             onActionPicked?.();
           }}
           placeholder="검토 사유 또는 요청할 정보를 입력하세요."
         />
       </label>
+      {reasonError ? (
+        <p
+          id="permission-decision-reason-error"
+          role="alert"
+          className="text-xs text-accent-danger"
+        >
+          {reasonError}
+        </p>
+      ) : null}
       {!staleNoticeShown && (reviewBlocked || mutation.error?.code === 'conflict.stale_write') ? (
         <p role="alert" className="text-sm text-accent-danger">
           {ADMIN_PERMISSIONS_COPY.reviewAgain}
