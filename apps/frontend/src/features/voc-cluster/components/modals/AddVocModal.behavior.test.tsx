@@ -325,6 +325,21 @@ describe('Cluster VOC 추가 picker', () => {
   it.each([
     ['footer 닫기', () => fireEvent.click(screen.getByTestId('add-voc-cancel'))],
     ['Escape', () => fireEvent.keyDown(document.body, { key: 'Escape' })],
+  ])('returns focus to VOC 추가 after %s', async (_label, exit) => {
+    renderPanel();
+    const trigger = screen.getByTestId('cluster-add-voc-button');
+    await userEvent.click(trigger);
+    await screen.findByTestId('add-voc-candidates');
+
+    exit();
+
+    await waitFor(() => expect(screen.queryByTestId('add-voc-modal')).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it.each([
+    ['footer 닫기', () => fireEvent.click(screen.getByTestId('add-voc-cancel'))],
+    ['Escape', () => fireEvent.keyDown(document.body, { key: 'Escape' })],
   ])(
     'starts a clean session after %s while a POST is pending, ignoring its late settlement',
     async (_label, exit) => {

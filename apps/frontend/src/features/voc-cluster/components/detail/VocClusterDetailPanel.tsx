@@ -94,6 +94,7 @@ export function VocClusterDetailPanel({
   const canMutate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   const [addVocOpen, setAddVocOpen] = useState(false);
+  const addVocButtonRef = React.useRef<HTMLButtonElement>(null);
   const [createFindingOpen, setCreateFindingOpen] = useState(false);
   const [linkFindingOpen, setLinkFindingOpen] = useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = useState(false);
@@ -344,6 +345,7 @@ export function VocClusterDetailPanel({
               <PanelSectionTitle>멤버 VOC ({members.length})</PanelSectionTitle>
               {canMutate && data.status === 'draft' && (
                 <Button
+                  ref={addVocButtonRef}
                   variant="outline"
                   size="sm"
                   onClick={() => setAddVocOpen(true)}
@@ -494,7 +496,12 @@ export function VocClusterDetailPanel({
 
       {/* Add VOC modal */}
       {canMutate && (
-        <AddVocModal open={addVocOpen} clusterId={clusterId} onClose={() => setAddVocOpen(false)} />
+        <AddVocModal
+          open={addVocOpen}
+          clusterId={clusterId}
+          onClose={() => setAddVocOpen(false)}
+          returnFocusRef={addVocButtonRef}
+        />
       )}
 
       {/* Create Finding modal */}
