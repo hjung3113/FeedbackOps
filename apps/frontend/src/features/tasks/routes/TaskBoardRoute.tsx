@@ -221,7 +221,10 @@ export function TaskBoardRoute({
         : ({ mode: 'open', openKey: data.openKey } as const),
     [statusGrouping, scope, serverFilters, queryClient, data.openKey],
   );
-  const mutation = useTaskStatusTransition(caches);
+  const mutation = useTaskStatusTransition(
+    caches,
+    JSON.stringify({ groupBy, ...scope, filters: serverFilters }),
+  );
   const { actors } = useWorkspaceActors();
   const systemNames = useTaskManagedSystemNames();
   const sensors = useSensors(
@@ -303,6 +306,7 @@ export function TaskBoardRoute({
     tasks: items,
     boardScroller,
     isFetching: anyFetching,
+    isReconciling: mutation.isReconciling,
   });
   // Retained route state and its resets. Scope, grouping or filter changes drop everything that
   // belongs to a gesture: the dragged copy, its drop animation, the tracked column and the

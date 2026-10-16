@@ -490,6 +490,77 @@ describe('bounded Task board (#1178)', () => {
     },
   );
 
+  it('refetches lists and summaries within 1500 ms during continuous overlapping moves', async () => {
+    const { client } = mount();
+    await waitFor(() => expect(headerCount('todo')).toHaveTextContent('2'));
+    vi.useFakeTimers();
+    try {
+      const moving = backlog.slice(0, 5);
+      for (const task of moving) server.hold(task.id);
+      await drag(moving[0] as TaskDto, 'doing');
+      await drag(moving[1] as TaskDto, 'doing');
+      const before = server.lists.length;
+      for (let index = 0; index < 3; index += 1) {
+        await act(async () => {
+          server.holds.release.get((moving[index] as TaskDto).id)?.(false);
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(client.isMutating()).toBe(1);
+        await drag(moving[index + 2] as TaskDto, 'doing');
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500);
+        });
+      }
+      const refreshed = server.lists.slice(before);
+      expect(refreshed.filter((query) => query.limit !== 1)).not.toHaveLength(0);
+      expect(refreshed.filter((query) => query.limit === 1)).toHaveLength(3);
+      expect(client.isMutating()).toBe(2);
+      expect(stat('진행 중')).toHaveTextContent('4');
+      expect(headerCount('doing')).toHaveTextContent('6');
+      await act(async () => {
+        server.holds.release.get((moving[3] as TaskDto).id)?.(true);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(headerCount('doing')).toHaveTextContent('5');
+      expect(
+        within(column('doing')).getByRole('button', {
+          name: new RegExp(`${moving[4]?.display_id}:`),
+        }),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes a deferred settlement immediately on unmount', async () => {
+    const { client, unmount } = mount();
+    await waitFor(() => expect(headerCount('todo')).toHaveTextContent('2'));
+    const { QueryObserver } = await import('@tanstack/react-query');
+    const observer = new QueryObserver(client, {
+      queryKey: ['tasks', 'elsewhere'],
+      queryFn: async () => (await fetch('/tasks?limit=1')).json(),
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    const [a, b] = backlog as [TaskDto, TaskDto, ...TaskDto[]];
+    server.hold(a.id);
+    server.hold(b.id);
+    await drag(a, 'todo');
+    await drag(b, 'todo');
+    await act(async () => {
+      server.holds.release.get(a.id)?.(false);
+    });
+    await waitFor(() => expect(client.isMutating()).toBe(1));
+    const before = server.lists.length;
+    try {
+      unmount();
+      await waitFor(() => expect(server.lists.length).toBeGreaterThan(before));
+      expect(client.isMutating()).toBe(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it.each([
     ['excluded', 0, '50', '2'],
     ['matching but unloaded', 59, '50', '3'],

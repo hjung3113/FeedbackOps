@@ -830,6 +830,81 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(client.isFetching({ queryKey: ['tasks'] })).toBe(0);
   });
 
+  it('retains rejected keyboard recovery until a deferred reconciliation settles', async () => {
+    const other = {
+      ...task,
+      id: '10000000-0000-0000-0000-000000000002',
+      display_id: 'TASK-1001',
+      title: 'Other Task',
+    };
+    vi.mocked(listTasks).mockImplementation(boardList([task, other]));
+    let releaseOther!: (value: never) => void;
+    let rejectTask!: (error: Error) => void;
+    vi.mocked(updateTaskStatus)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseOther = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectTask = reject;
+        }),
+      );
+    vi.mocked(getTask).mockResolvedValue({ ...other, source: null });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute selectedParam={other.id} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '다음 상태로 이동' }));
+    await waitFor(() => expect(updateTaskStatus).toHaveBeenCalledTimes(1));
+    const card = screen.getByRole('button', { name: /TASK-1000:/ });
+    card.focus();
+    fireEvent.keyDown(card, { code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    fireEvent.keyDown(document, { code: 'ArrowRight' });
+    fireEvent.keyDown(document, { code: 'Space' });
+    await waitFor(() => expect(updateTaskStatus).toHaveBeenCalledTimes(2));
+    const refetch = holdLists();
+    await act(async () => {
+      rejectTask(new ApiError(409, { code: 'conflict.stale_write', message: 'Stale move' }));
+    });
+    await waitFor(() => expect(client.isMutating()).toBe(1));
+    const rollback = within(screen.getByLabelText('Backlog 열')).getByRole('button', {
+      name: /TASK-1000:/,
+    });
+    await waitFor(() => expect(rollback).toHaveFocus());
+    expect(client.isFetching({ queryKey: ['tasks'] })).toBe(0);
+    await act(async () => {
+      releaseOther({ ...other, status: 'todo' } as never);
+    });
+    await waitFor(() => expect(client.isFetching({ queryKey: ['tasks'] })).toBeGreaterThan(0));
+    await act(async () => {
+      refetch.release([
+        { ...task, status: 'review' },
+        { ...other, status: 'todo' },
+      ]);
+    });
+    const serverCard = await within(screen.getByLabelText('Review 열')).findByRole('button', {
+      name: /TASK-1000:/,
+    });
+    await waitFor(() => expect(serverCard).toHaveFocus());
+    await waitFor(() => expect(client.isFetching({ queryKey: ['tasks'] })).toBe(0));
+    serverCard.blur();
+    act(() =>
+      setBoardData(client, [
+        { ...task, status: 'doing' },
+        { ...other, status: 'todo' },
+      ]),
+    );
+    await within(screen.getByLabelText('Doing 열')).findByRole('button', { name: /TASK-1000:/ });
+    expect(document.body).toHaveFocus();
+  });
+
   it('does not redirect focus when a same-Task next-status action supersedes a pending keyboard move', async () => {
     let rejectUpdate!: (error: Error) => void;
     const otherTask = {

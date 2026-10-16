@@ -25,12 +25,14 @@ export function useTaskBoardKeyboardFocus({
   tasks,
   boardScroller,
   isFetching,
+  isReconciling = false,
 }: {
   scope: FocusScope;
   /** Every Task the board currently has loaded, across all columns. */
   tasks: readonly TaskDto[];
   boardScroller: React.RefObject<HTMLDivElement | null>;
   isFetching: boolean;
+  isReconciling?: boolean;
 }) {
   const queryClient = useQueryClient();
   const dragGeneration = React.useRef(0);
@@ -62,7 +64,7 @@ export function useTaskBoardKeyboardFocus({
     if (!pending || pending.generation !== dragGeneration.current) return;
     // Every board column and the open set share one key prefix: wait for all of their refetches.
     const refetchSettled =
-      !isFetching && queryClient.isFetching({ queryKey: TASK_BOARD_KEY }) === 0;
+      !isReconciling && !isFetching && queryClient.isFetching({ queryKey: TASK_BOARD_KEY }) === 0;
     if (
       !tasks.some(
         (task) =>
@@ -91,7 +93,7 @@ export function useTaskBoardKeyboardFocus({
     if (document.activeElement === document.body || board.contains(document.activeElement)) {
       card.focus();
     }
-  }, [tasks, scope, pendingKeyboardFocus, boardScroller, isFetching, queryClient]);
+  }, [tasks, scope, pendingKeyboardFocus, boardScroller, isFetching, isReconciling, queryClient]);
   function startDrag() {
     dragGeneration.current += 1;
     setPendingKeyboardFocus(null);

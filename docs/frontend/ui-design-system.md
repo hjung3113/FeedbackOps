@@ -948,9 +948,13 @@ an older move's failure cannot clear a newer drag's request.
 Task from its source column pages, inserts it at the destination's first-page top and
 adjusts both first-page totals by one; a failure undoes only that invocation's membership and
 count delta, so a later move of another Task is never overwritten. Settlement invalidates lists
-immediately but defers active list refetches until the last overlapping status move settles,
-so reads cannot erase another pending move's delta before rollback. Per-Task tokens still
-guard rollback and detail invalidation; the last settlement also flushes any queued list refresh.
+immediately but defers active list refetches until no status move remains pending or the oldest
+deferred settlement has waited 1,500 ms, whichever comes first. One timer per board is cleared
+on flush and unmount; unmount and scope, grouping or filter changes flush immediately.
+Deadline reads rebase outstanding per-invocation deltas on fresh pages so later rollback
+still undoes only that move. Per-Task tokens guard rollback and detail invalidation;
+the last settlement also flushes any queued list refresh. Rejected keyboard recovery stays
+alive while reconciliation is queued and until that flush's reads settle.
 A detail fallback changes column membership and totals only when it matches the current board
 population. Excluded fallbacks still send the status write and refresh detail/lists. Unloaded
 matching Tasks keep the same total adjustments and mounted destination card; a server-only

@@ -7,6 +7,7 @@ import {
   type InfiniteData,
   type QueryClient,
   type QueryKey,
+  hashKey,
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
@@ -117,20 +118,107 @@ function locate(
   return task.status;
 }
 
-export function useTaskStatusTransition(caches: TaskBoardCaches) {
+export function useTaskStatusTransition(caches: TaskBoardCaches, scopeKey = '') {
   const client = useQueryClient();
   const mutationTokens = React.useRef(new Map<string, number>());
-
+  const pendingDeltas = React.useRef(new Set<Delta>());
   const deferredRefetch = React.useRef(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = React.useRef(false);
+  const reads = React.useRef(0);
+  const [isReconciling, setIsReconciling] = React.useState(false);
+
+  const flush = React.useCallback(() => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    deferredRefetch.current = false;
+    reads.current += 1;
+    if (mounted.current) setIsReconciling(true);
+    void client.invalidateQueries({ queryKey: ['tasks'] }).finally(() => {
+      reads.current -= 1;
+      if (mounted.current && reads.current === 0 && !deferredRefetch.current) {
+        setIsReconciling(false);
+      }
+    });
+  }, [client]);
+
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (deferredRefetch.current) flush();
+    };
+  }, [flush]);
+
+  const previousScope = React.useRef(scopeKey);
+  React.useEffect(() => {
+    if (previousScope.current !== scopeKey && deferredRefetch.current) flush();
+    previousScope.current = scopeKey;
+  }, [scopeKey, flush]);
+
+  React.useEffect(
+    () =>
+      client.getQueryCache().subscribe((event) => {
+        if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual)
+          return;
+        // A deadline read may finish with moves still outstanding. Rebase each invocation's
+        // delta on fresh server pages, so its later rollback undoes only the reapplied change.
+        const key = event.query.queryHash;
+        for (const delta of pendingDeltas.current) {
+          if (mutationTokens.current.get(delta.taskId) !== delta.token) continue;
+          if (delta.sourceKey && hashKey(delta.sourceKey) === key) {
+            client.setQueryData<ColumnPages>(delta.sourceKey, (old) => {
+              if (!old) return old;
+              const position = findPosition(old, delta.taskId);
+              const item = position ? old.pages[position.page]?.items[position.index] : undefined;
+              if (item) delta.previous = item;
+              delta.sourceRemovedAt = position;
+              delta.sourceTotalAdjusted = hasTotal(old);
+              return withTotal(withoutTask(old, delta.taskId), -1);
+            });
+          }
+          if (delta.targetKey && hashKey(delta.targetKey) === key) {
+            client.setQueryData<ColumnPages>(delta.targetKey, (old) => {
+              if (!old) return old;
+              const alreadyHere = findPosition(old, delta.taskId) !== null;
+              delta.targetInserted = !alreadyHere;
+              delta.targetTotalAdjusted = !alreadyHere && hasTotal(old);
+              const next = withTaskAt(old, { ...delta.previous, status: delta.target }, null);
+              return delta.targetTotalAdjusted ? withTotal(next, 1) : next;
+            });
+          }
+          if (delta.openKey && hashKey(delta.openKey) === key) {
+            client.setQueryData<ListTasksResponse>(delta.openKey, (old) => {
+              if (!old) return old;
+              const index = old.items.findIndex((item) => item.id === delta.taskId);
+              const item = old.items[index];
+              delta.openPrevious = item ? { item, index } : null;
+              return {
+                ...old,
+                items: CLOSED.includes(delta.target)
+                  ? old.items.filter((item) => item.id !== delta.taskId)
+                  : old.items.map((item) =>
+                      item.id === delta.taskId ? { ...item, status: delta.target } : item,
+                    ),
+              };
+            });
+          }
+        }
+      }),
+    [client],
+  );
 
   function invalidateLists() {
-    // onSettled still counts this invocation. Reads must not erase another pending delta.
+    // onSettled still counts this invocation. Never extend the oldest settlement's deadline.
     const overlapping = client.isMutating({ mutationKey: ['task-status-transition'] }) > 1;
-    deferredRefetch.current = overlapping;
-    void client.invalidateQueries({
-      queryKey: ['tasks'],
-      refetchType: overlapping ? 'none' : 'active',
-    });
+    if (!overlapping || !mounted.current) {
+      flush();
+      return;
+    }
+    deferredRefetch.current = true;
+    setIsReconciling(true);
+    void client.invalidateQueries({ queryKey: ['tasks'], refetchType: 'none' });
+    if (timer.current === null) timer.current = setTimeout(flush, 1_500);
   }
 
   function rollback(delta: Delta) {
@@ -166,7 +254,7 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
     }
   }
 
-  return useMutation({
+  const mutation = useMutation({
     mutationKey: ['task-status-transition'],
     mutationFn: ({ task, status }: { task: TaskDto; status: TaskStatus }) =>
       updateTaskStatus(task.id, status, { ifMatch: task.updated_at, idempotencyKey: uuid() }),
@@ -204,6 +292,7 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
                 ),
           });
         }
+        pendingDeltas.current.add(delta);
         return delta;
       }
       const sourceStatus = locate(client, caches, task);
@@ -234,9 +323,11 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
           withTotal(withTaskAt(target, { ...delta.previous, status }, null), 1),
         );
       }
+      pendingDeltas.current.add(delta);
       return delta;
     },
     onError: (error, _variables, context) => {
+      if (context) pendingDeltas.current.delete(context);
       const latest = context && mutationTokens.current.get(context.taskId) === context.token;
       if (context && latest) rollback(context);
       if (error instanceof ApiError && error.code === 'conflict.stale_write' && latest) {
@@ -244,7 +335,8 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
       }
       toast.error(mapUnknownError(error).message);
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, context) => {
+      if (context) pendingDeltas.current.delete(context);
       void invalidateRecovery(client);
     },
     onSettled: (_data, _error, _variables, context) => {
@@ -263,4 +355,5 @@ export function useTaskStatusTransition(caches: TaskBoardCaches) {
       }
     },
   });
+  return { ...mutation, isReconciling };
 }
