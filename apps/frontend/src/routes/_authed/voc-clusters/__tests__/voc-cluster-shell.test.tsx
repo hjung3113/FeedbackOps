@@ -7,6 +7,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.fn();
 const addClusterMemberMutate = vi.hoisted(() => vi.fn());
+const candidateData = vi.hoisted(() => ({
+  pages: [
+    {
+      candidate_basis: 'same_managed_system_active_voc',
+      candidates: [
+        {
+          voc_id: '44444444-4444-4444-4444-444444444444',
+          display_id: 'VOC-444',
+          title: '결제 재시도 안내 요청',
+          severity: 'high',
+          reporter_facing_status: 'received',
+        },
+      ],
+      page: { has_more: false },
+    },
+  ],
+}));
 const linkFindingMutate = vi.hoisted(() => vi.fn());
 const requestTaskMutate = vi.hoisted(() => vi.fn());
 const currentRole = vi.hoisted(() => ({ role_level: 'admin' as string }));
@@ -284,28 +301,20 @@ vi.mock('@/features/voc-cluster/hooks/useCreateVocCluster', () => ({
 
 vi.mock('@/features/voc-cluster/hooks/useAddClusterMember', () => ({
   useAddClusterMember: () => ({
-    mutate: addClusterMemberMutate,
-    reset: vi.fn(),
+    mutateAsync: addClusterMemberMutate,
     isPending: false,
   }),
 }));
 
 vi.mock('@/features/voc-cluster/hooks/useCandidatePeers', () => ({
   useCandidatePeers: () => ({
-    data: {
-      candidate_basis: 'same_managed_system_active_voc',
-      candidates: [
-        {
-          voc_id: '44444444-4444-4444-4444-444444444444',
-          display_id: 'VOC-444',
-          title: '결제 재시도 안내 요청',
-          severity: 'high',
-          reporter_facing_status: 'received',
-        },
-      ],
-    },
+    data: candidateData,
     isLoading: false,
     isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: vi.fn(),
   }),
 }));
 
@@ -921,7 +930,7 @@ describe('VOC cluster route shells', () => {
     },
   );
 
-  it('AC-E10a keeps current members visible, disabled, and badged', async () => {
+  it('AC-E10a keeps current members out of the picker and in the Cluster detail', async () => {
     const { VocClusterDetailPanel } = await import(
       '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
@@ -930,16 +939,16 @@ describe('VOC cluster route shells', () => {
       <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
+    expect(screen.getByText('VOC-333')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('cluster-add-voc-button'));
     expect(
-      screen.getByTestId('add-voc-candidate-33333333-3333-3333-3333-333333333333'),
-    ).toBeDisabled();
-    expect(
-      screen.getByTestId('add-voc-included-33333333-3333-3333-3333-333333333333'),
-    ).toHaveTextContent('이미 포함됨');
+      screen.queryByTestId('add-voc-candidate-33333333-3333-3333-3333-333333333333'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('add-voc-modal')).not.toHaveTextContent('VOC-333');
+    expect(screen.getAllByText(/VOC-333/).length).toBeGreaterThan(0);
   });
 
-  it('AC-E10b keeps nonmembers selectable without an included badge', async () => {
+  it('AC-E10b adds a nonmember with its own 추가 action and keeps the dialog open', async () => {
     const { VocClusterDetailPanel } = await import(
       '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
@@ -950,22 +959,16 @@ describe('VOC cluster route shells', () => {
 
     fireEvent.click(screen.getByTestId('cluster-add-voc-button'));
 
-    const nonmember = screen.getByTestId('add-voc-candidate-44444444-4444-4444-4444-444444444444');
-    expect(nonmember).toBeEnabled();
-    expect(
-      screen.queryByTestId('add-voc-included-44444444-4444-4444-4444-444444444444'),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(nonmember);
-    fireEvent.submit(screen.getByTestId('add-voc-form'));
+    const add = screen.getByRole('button', { name: 'VOC-444 추가' });
+    expect(add).toBeEnabled();
+    fireEvent.click(add);
 
     expect(addClusterMemberMutate).toHaveBeenCalledTimes(1);
-    expect(addClusterMemberMutate).toHaveBeenCalledWith(
-      {
-        clusterId: '11111111-1111-1111-1111-111111111111',
-        vocId: '44444444-4444-4444-4444-444444444444',
-      },
-      expect.any(Object),
-    );
+    expect(addClusterMemberMutate).toHaveBeenCalledWith({
+      clusterId: '11111111-1111-1111-1111-111111111111',
+      vocId: '44444444-4444-4444-4444-444444444444',
+    });
+    expect(await screen.findByRole('button', { name: 'VOC-444 추가됨' })).toBeDisabled();
+    expect(screen.getByTestId('add-voc-modal')).toBeInTheDocument();
   });
 });

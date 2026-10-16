@@ -71,11 +71,10 @@ test.describe('/voc-clusters visual harness', () => {
     await page.getByTestId('cluster-add-voc-button').click();
 
     const dialog = page.getByTestId('add-voc-modal');
-    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.existingVoc}`)).toBeDisabled();
-    await expect(dialog.getByTestId(`add-voc-included-${IDS.existingVoc}`)).toHaveText(
-      '이미 포함됨',
-    );
-    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.candidateVoc}`)).toBeEnabled();
+    // Current members are listed in the Cluster detail, not in the picker.
+    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.existingVoc}`)).toHaveCount(0);
+    await expect(page.getByTestId(`cluster-member-row-${IDS.existingVoc}`)).toBeVisible();
+    await expect(dialog.getByTestId(`add-voc-add-${IDS.candidateVoc}`)).toBeEnabled();
     await expectVisual(page, dialog, 'cluster-add-member-already-included.png');
   });
 });

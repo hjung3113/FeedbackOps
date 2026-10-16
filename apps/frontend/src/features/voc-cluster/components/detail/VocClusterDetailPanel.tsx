@@ -494,12 +494,7 @@ export function VocClusterDetailPanel({
 
       {/* Add VOC modal */}
       {canMutate && (
-        <AddVocModal
-          open={addVocOpen}
-          clusterId={clusterId}
-          members={members}
-          onClose={() => setAddVocOpen(false)}
-        />
+        <AddVocModal open={addVocOpen} clusterId={clusterId} onClose={() => setAddVocOpen(false)} />
       )}
 
       {/* Create Finding modal */}

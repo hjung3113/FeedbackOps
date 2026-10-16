@@ -8,6 +8,7 @@ import {
   unlinkExistingFindingFromVocClusterRequestSchema,
   createTaskRequestFromVocClusterRequestSchema,
   createVocClusterRequestSchema,
+  listSameManagedSystemCandidatePeersQuerySchema,
   updateVocClusterRequestSchema,
   vocClusterPublicUpdateCandidateRequestSchema,
 } from '@fops/shared';
@@ -137,6 +138,12 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
           fields: [{ path: ['id'], code: 'invalid' }],
         });
       }
+      const query = listSameManagedSystemCandidatePeersQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(query.error.issues),
+        });
+      }
       const result = await vocClustersService.listCandidatePeers({
         actor: actorFromSession({
           actor_id: sess.actor_id,
@@ -144,6 +151,9 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
           role_level: sess.role_level,
         }),
         clusterId: id,
+        limit: query.data.limit,
+        ...(query.data.q === undefined ? {} : { q: query.data.q }),
+        ...(query.data.cursor === undefined ? {} : { cursor: query.data.cursor }),
       });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
     },

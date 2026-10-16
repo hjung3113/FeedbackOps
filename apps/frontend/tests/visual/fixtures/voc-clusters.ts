@@ -141,6 +141,7 @@ export const candidatePeers: ListSameManagedSystemCandidatePeersResponse =
   listSameManagedSystemCandidatePeersResponseSchema.parse({
     candidate_basis: 'same_managed_system_active_voc',
     candidates: [candidatePeer],
+    page: { has_more: false },
   });
 
 export const addCandidateRequest: AddVocClusterMemberRequest =

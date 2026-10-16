@@ -6,6 +6,7 @@ import {
   findingSeveritySchema,
   findingStatusSchema,
 } from '../findings/index.js';
+import { listVocsQuerySchema } from '../vocs/list-query.js';
 import { publicUpdateRequestSchema } from '../vocs/public-update-request.js';
 
 export const vocClusterStatusSchema = z.enum(['draft', 'confirmed']);
@@ -73,10 +74,21 @@ export type SameManagedSystemCandidatePeerDto = z.infer<
   typeof sameManagedSystemCandidatePeerDtoSchema
 >;
 
+// Flat HTTP query. `q` reuses the VOC list rule (trimmed, <=100, blank -> undefined).
+export const listSameManagedSystemCandidatePeersQuerySchema = z.object({
+  q: listVocsQuerySchema.shape.q,
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().min(1).optional(),
+});
+export type ListSameManagedSystemCandidatePeersQuery = z.infer<
+  typeof listSameManagedSystemCandidatePeersQuerySchema
+>;
+
 export const listSameManagedSystemCandidatePeersResponseSchema = z
   .object({
     candidate_basis: z.literal('same_managed_system_active_voc'),
     candidates: z.array(sameManagedSystemCandidatePeerDtoSchema),
+    page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
   })
   .strict();
 export type ListSameManagedSystemCandidatePeersResponse = z.infer<
