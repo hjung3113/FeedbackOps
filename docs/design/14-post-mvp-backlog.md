@@ -129,3 +129,21 @@ below that cut line and are on the GitHub Post-MVP milestone.
 | Admin and inventory presentation polish, remaining #1184 work (#1219) | below the cut line | Post-MVP planning |
 | Grouped polish backlog (#1214) | below the cut line | Post-MVP planning |
 | Slice 62 quality follow-ups: owner-candidates row locking, duplicated reporter-arm and source-read rules, test pruning candidates (#1222) | below the cut line; test deletion needs owner approval | Post-MVP planning, or owner-picker latency/lock waits observed at 5k scale |
+
+### Slice 63 — Release Value Gate and release obligations (2026-10-17)
+
+The gate (production images, 5k VOC / 5k Task seed) passed on its second run with no
+blocker (#1062). Its non-blockers are below the release cut line, listed item by item in
+#1227 (Post-MVP milestone). Not implemented.
+
+| Deferred item | Reason | Reopen when |
+| --- | --- | --- |
+| Reporter navigation and Home (R-1, R-2): operator-only nav targets that end in a permission notice, and a Home with only operator queues | The reporter can submit, follow and reply to their own VOC; hiding or rerouting operator surfaces is a navigation-model change | Reporter use shows they get lost in operator surfaces, or #1182 part b (in-app notification) is planned |
+| Reporter composer and form polish (R-3–R-6): operator-side reply placeholder, unnamed rich-text editors, silent disabled submit, no resolution reason without a public update | Wording and accessibility polish; every step completes | Accessibility review or reporter feedback names one of them |
+| Developer flow friction (D-2–D-10): no `Task로 전환` action after approval, Cluster→Finding dialog defaults, conversion defaults, uniform "same system" count, non-granted systems in Cluster create, narrow-width wrapping, disabled Task menu items, persistent toast, chip deselect | The daily job completes end to end; each item is local polish | Developers report the step as daily friction, or the polish slice for that screen runs |
+| Cluster-origin trail node shows a Finding badge and raw `confirmed` status instead of `CLU-…` (D2-1) | The trail and its Task are visible; presentation only | Polish of VOC detail trails |
+| Admin permission decision shows "다른 곳에서 요청이 변경되어…" after the Admin's own reject / need-more-info (ADM2-1) | The decision succeeds and is recorded; the notice misreads the actor's own change as an external one | First post-release polish of Admin permissions |
+| Home recovery detail header overlap at 1440 (ADM-2) | Visual overlap only | Polish of the Home recovery panel |
+| Recovery reconcile batching (PS-5): the outcome phase recounts the Survey's responses per response inside each 100-response page | Measured 2026-10-17 on the real code: page lock hold median/max 134/273 ms at 1k responses, 189/390 ms at 5k, 323/840 ms at 20k; full sweeps 1.5 s / 10.5 s / 65 s with the lock released between pages. Repair commands wait at most one page, under one second even at 20k | A Survey passes about 20k responses, or a page holds the lock longer than one second, or Admins report slow recovery repairs |
+| Links inventory search and entity lookup (B-2) | Already #1219; VOC detail now shows the execution trail directly (#1225) | See #1219 |
+| Seed has no permission requests, so the gate's first Admin pass could not exercise decisions | The conductor filed requests and the decisions passed in a follow-up run | The release gate is automated, or the scale seed is next revised |
