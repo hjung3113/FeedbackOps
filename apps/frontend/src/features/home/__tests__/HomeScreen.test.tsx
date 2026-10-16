@@ -608,7 +608,11 @@ describe('HomeScreen route content', () => {
       within(card)
         .getAllByRole('link')
         .map((link) => link.textContent?.trim()),
-    ).toEqual(['일괄 배정', 'VOC 검토']);
+    ).toEqual(['미배정 VOC 보기', 'VOC 검토']);
+    expect(within(card).getByRole('link', { name: '미배정 VOC 보기' })).toHaveAttribute(
+      'href',
+      '/vocs?view=inbox&tab=unassigned',
+    );
   });
 
   it('refetches the strict summary when the scope selector changes', async () => {

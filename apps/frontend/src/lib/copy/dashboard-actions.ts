@@ -18,7 +18,7 @@ export const DASHBOARD_QUEUE_ACTION_LABELS: Record<QueueId, string> = {
 
 export const DASHBOARD_ACTION_LABELS: Record<string, string> = {
   triage: 'VOC 검토',
-  bulk_assign: '일괄 담당자 지정',
+  bulk_assign: '미배정 VOC 보기',
   plan_execution: 'Finding 검토',
   request_reporter_update: 'Released Task 검토',
   create_followup: '성과 Survey 검토',

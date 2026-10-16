@@ -258,36 +258,14 @@ describe('<VocList>', () => {
     expect(onSelect).toHaveBeenCalledWith('id-1');
   });
 
-  it('checking a row checkbox reveals the bulk-action bar and does NOT open the row', () => {
-    const items = [
-      makeVoc({ id: 'id-1', display_id: 'VOC-001', title: 'First VOC' }),
-      makeVoc({ id: 'id-2', display_id: 'VOC-002', title: 'Second VOC' }),
-    ];
-    render(
-      <VocList items={items} loading={false} error={null} onSelect={onSelect} view="inbox" />,
-      { wrapper: makeWrapper() },
-    );
-    expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('VOC-001 선택'));
-
-    expect(screen.getByRole('toolbar', { name: '일괄 작업' })).toBeInTheDocument();
-    expect(screen.getByText('1개 선택됨')).toBeInTheDocument();
-    // Clicking the checkbox must not open the detail panel.
-    expect(onSelect).not.toHaveBeenCalled();
-  });
-
-  it('Clear button empties the selection and hides the bar', () => {
+  it('renders no row checkbox and no bulk toolbar', () => {
     const items = [makeVoc({ id: 'id-1', display_id: 'VOC-001', title: 'First VOC' })];
     render(
       <VocList items={items} loading={false} error={null} onSelect={onSelect} view="inbox" />,
       { wrapper: makeWrapper() },
     );
-    fireEvent.click(screen.getByLabelText('VOC-001 선택'));
-    expect(screen.getByText('1개 선택됨')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '선택 해제' }));
-    expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /선택$/ })).toBeNull();
+    expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).toBeNull();
   });
 });
 

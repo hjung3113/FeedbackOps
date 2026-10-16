@@ -1,11 +1,13 @@
 // InboxRoute — list-first layout for /vocs?view=inbox and /vocs?view=my.
-// Owns: URL state reading, useVocList params building, filter/sort/tab handlers,
+// Owns: URL state reading, useVocListPages params building, filter/sort/tab handlers,
 // out_of_scope_summary peek banner, and VocDetailPanel forwarding into ListShell.
 // C9 of Slice 3 #20.
 
+import { ListLoadMore } from '@/components/ListLoadMore';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
@@ -26,9 +28,10 @@ import {
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'lucide-react';
 import * as React from 'react';
+import { VocAreaFilterSelect } from '../components/VocAreaFilterSelect';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
-import { useVocList } from '../hooks/useVocList';
+import { type SearchTabTransition, useVocListPages } from '../hooks/useVocListPages';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -231,6 +234,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     });
   }, [mySeveritySort, mySeverityTab, mySeverityFilter, navigate]);
   // The tab the current search started from, restored when the search is cleared.
+  const [searchTabTransition, setSearchTabTransition] = React.useState<SearchTabTransition>();
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
   // #864: the hook calls this to write the URL q, from its debounced effect and
   // its immediate Enter/blur commit. Carries the #821 tab rules: starting a
@@ -245,6 +249,16 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       if (starting) tabBeforeSearchRef.current = urlTab;
       const restoreTab = clearing ? tabBeforeSearchRef.current : undefined;
       if (clearing) tabBeforeSearchRef.current = undefined;
+      if (starting || clearing) {
+        setSearchTabTransition({
+          fromQ: base,
+          fromTab: apiTab,
+          toQ: draft,
+          toTab: starting
+            ? undefined
+            : (urlTab ?? restoreTab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged')),
+        });
+      }
       void navigate({
         to: '/vocs',
         search: (prev) => {
@@ -269,8 +283,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       // draft waits for `committed` instead of settling as a no-op.
       return undefined;
     },
-    [navigate, search.tab, view],
+    [navigate, search.tab, view, apiTab, hasAnalyticsAreaFilter],
   );
+  React.useEffect(() => {
+    if (searchTabTransition?.toQ === urlQ && searchTabTransition.toTab === apiTab) {
+      setSearchTabTransition(undefined);
+    }
+  }, [searchTabTransition, urlQ, apiTab]);
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: urlQ,
     write: writeSearchDraft,
@@ -295,10 +314,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       : currentFilters;
   }, [currentFilters, search['filter.analytics_area']]);
 
-  // ── useVocList params ─────────────────────────────────────────────────────
+  // ── useVocListPages params ────────────────────────────────────────────────
 
-  const vocList = useVocList({
+  const vocList = useVocListPages({
     view,
+    searchTabTransition,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
     ...(urlQ !== '' ? { q: urlQ } : {}),
@@ -306,10 +326,18 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     sort: currentSort,
   });
   const isSearching = urlQ !== '';
+  const items = React.useMemo(
+    () => vocList.data?.pages.flatMap((page) => page.items) ?? [],
+    [vocList.data],
+  );
+  const outOfScopeSummary = vocList.data?.pages[0]?.out_of_scope_summary;
+  // A failed next page keeps the loaded rows; it must not reach the list's
+  // error or permission-denied states.
+  const listError = vocList.isFetchNextPageError ? null : vocList.error;
   // Captured outside JSX: property narrowing does not survive into the renderTrigger callback.
   const deniedMsScoped =
-    isPermissionDenied(vocList.error) &&
-    typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string';
+    isPermissionDenied(listError) &&
+    typeof listError.envelope.requestable_permission?.managed_system_id === 'string';
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -343,6 +371,14 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     });
   }
 
+  function handleAreaChange(next: string | undefined): void {
+    void navigate({
+      to: '/vocs',
+      search: ({ 'filter.analytics_area': _area, ...rest }) =>
+        next === undefined ? rest : { ...rest, 'filter.analytics_area': next },
+    });
+  }
+
   function handleSortChange(next: string): void {
     void navigate({
       to: '/vocs',
@@ -370,16 +406,16 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   // ShellHeader which has no Tabs slot; ListToolbar from @fops/ui already owns
   // both the title/tabs row and the actions row in one sticky component.
 
-  const outOfScopeBanner = vocList.data?.out_of_scope_summary ? (
+  const outOfScopeBanner = outOfScopeSummary ? (
     <PermissionBlockedPanel
       state="summary_visible"
       category="조회 권한 외 VOC"
       summary={
         <div>
-          <p>{vocList.data.out_of_scope_summary.count}건의 VOC를 조회할 수 없습니다.</p>
+          <p>{outOfScopeSummary.count}건의 VOC를 조회할 수 없습니다.</p>
           <p className="text-xs text-text-muted">
             심각도 분포:{' '}
-            {Object.entries(vocList.data.out_of_scope_summary.severity_distribution)
+            {Object.entries(outOfScopeSummary.severity_distribution)
               .map(([sev, n]) => `${sev}=${String(n)}`)
               .join(', ')}
           </p>
@@ -405,10 +441,15 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
                 draft; useCommittedSearchDraft writes the URL q on debounce or
                 Enter/blur (#864). */}
             <SearchInput
-              placeholder="필터, 키워드…"
+              placeholder={LIST_SEARCH_PLACEHOLDER}
               value={draft}
               onValueChange={setDraft}
               onCommit={commit}
+            />
+            <VocAreaFilterSelect
+              value={area}
+              managedSystemId={search.managedSystem}
+              onChange={handleAreaChange}
             />
             <ListFilterButton
               categories={
@@ -445,17 +486,15 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         className="mx-4 my-2"
       />
       {outOfScopeBanner}
-      {isPermissionDenied(vocList.error) ? (
+      {isPermissionDenied(listError) ? (
         <div className="m-4 space-y-3">
-          {vocList.error.envelope.requestable_permission ? (
+          {listError.envelope.requestable_permission ? (
             <RequestAccessButton
-              capability={vocList.error.envelope.requestable_permission.permission}
+              capability={listError.envelope.requestable_permission.permission}
               returnRouteIntent={`/vocs?view=${view}`}
-              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
-              'string'
+              {...(typeof listError.envelope.requestable_permission.managed_system_id === 'string'
                 ? {
-                    managedSystemId:
-                      vocList.error.envelope.requestable_permission.managed_system_id,
+                    managedSystemId: listError.envelope.requestable_permission.managed_system_id,
                   }
                 : {})}
               renderTrigger={(onRequestAccess) => (
@@ -483,7 +522,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
             />
           )}
           {view === 'inbox' &&
-          typeof vocList.error.envelope.requestable_permission?.managed_system_id !== 'string' ? (
+          typeof listError.envelope.requestable_permission?.managed_system_id !== 'string' ? (
             <Button
               asChild
               variant="subtle"
@@ -499,31 +538,41 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           ) : null}
         </div>
       ) : (
-        <VocList
-          items={vocList.data?.items ?? []}
-          // Placeholder data keeps the previous page while the next key loads.
-          // `isLoading` is then false. VocList still mounts rows when items
-          // exist; an empty previous page must stay on the skeleton branch
-          // instead of the old query's empty state. A real error replaces
-          // placeholder data, so that branch is unchanged.
-          loading={vocList.isLoading || vocList.isPlaceholderData}
-          error={vocList.error ?? null}
-          selectedId={search.selected ?? null}
-          onSelect={handleRowSelect}
-          view={view}
-          searching={isSearching}
-          areaFiltered={view === 'inbox' && area !== undefined}
-          areaLabel={areaLabel}
-          onRetry={() => {
-            void vocList.refetch();
-          }}
-          onCreate={() =>
-            void navigate({
-              to: '/vocs',
-              search: (previous) => ({ ...previous, action: 'create' }),
-            })
-          }
-        />
+        <>
+          <VocList
+            items={items}
+            // Placeholder data keeps the previous page while the next key loads.
+            // `isLoading` is then false. VocList still mounts rows when items
+            // exist; an empty previous page must stay on the skeleton branch
+            // instead of the old query's empty state. A real error replaces
+            // placeholder data, so that branch is unchanged.
+            loading={vocList.isLoading || vocList.isPlaceholderData}
+            error={listError ?? null}
+            selectedId={search.selected ?? null}
+            onSelect={handleRowSelect}
+            view={view}
+            searching={isSearching}
+            areaFiltered={view === 'inbox' && area !== undefined}
+            areaLabel={areaLabel}
+            onRetry={() => {
+              void vocList.refetch();
+            }}
+            onCreate={() =>
+              void navigate({
+                to: '/vocs',
+                search: (previous) => ({ ...previous, action: 'create' }),
+              })
+            }
+          />
+          <ListLoadMore
+            hasMore={vocList.hasNextPage}
+            loadingMore={vocList.isFetchingNextPage}
+            failed={vocList.isFetchNextPageError}
+            onLoadMore={() => {
+              void vocList.fetchNextPage();
+            }}
+          />
+        </>
       )}
     </>
   );

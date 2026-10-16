@@ -13,7 +13,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type * as UseVocListModule from '../../hooks/useVocList';
+import type * as UseVocListPagesModule from '../../hooks/useVocListPages';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiClient: apiClientMock };
 });
 
-// ── Stub useVocList ────────────────────────────────────────────────────────────
+// ── Stub useVocListPages ────────────────────────────────────────────────────────────
 
 const MOCK_VOC_ITEMS = [
   {
@@ -138,9 +138,31 @@ const MOCK_VOC_ITEMS = [
 
 const useVocListMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../hooks/useVocList', () => ({
-  useVocList: useVocListMock,
+vi.mock('../../hooks/useVocListPages', () => ({
+  useVocListPages: useVocListMock,
 }));
+
+/** An infinite-query-shaped result for the stubbed pages hook. */
+function pagesResult(
+  items: unknown[],
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    data: { pages: [{ items, page: { has_more: false } }], pageParams: [undefined] },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: vi.fn(),
+    ...extra,
+  };
+}
+
+// The Area control has its own route-level suite (InboxRoute.paging-area.test.tsx);
+// this file's react-query stub returns an items-shaped object for every useQuery.
+vi.mock('../../components/VocAreaFilterSelect', () => ({ VocAreaFilterSelect: () => null }));
 
 // ── Stub VocDetailPanel ───────────────────────────────────────────────────────
 
@@ -176,15 +198,30 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // VocList imports useQuery for managed-systems — stub @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
-  // The real useVocList imports this. The mock useQuery below ignores it.
-  keepPreviousData: (previous: unknown) => previous,
-  useQuery: (options: {
+  // The real useVocListPages imports these two. Its placeholder data is not exercised here.
+  hashKey: (key: unknown) => JSON.stringify(key),
+  useInfiniteQuery: (options: {
     queryKey?: readonly unknown[];
-    queryFn?: (context: { signal: AbortSignal }) => Promise<unknown>;
+    queryFn?: (context: {
+      signal: AbortSignal;
+      pageParam: string | undefined;
+    }) => Promise<unknown>;
   }) => {
     if (options.queryKey?.[0] === 'vocs' && options.queryFn) {
-      void options.queryFn({ signal: new AbortController().signal });
+      void options.queryFn({ signal: new AbortController().signal, pageParam: undefined });
     }
+    return {
+      data: { pages: [{ items: [], page: { has_more: false } }], pageParams: [undefined] },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage: vi.fn(),
+    };
+  },
+  useQuery: () => {
     return { data: { items: [] }, isLoading: false, error: null, refetch: vi.fn() };
   },
 }));
@@ -214,12 +251,7 @@ describe('useInboxRoute', () => {
     apiClientMock.mockReset();
     openRequestAccessMock.mockReset();
     apiClientMock.mockResolvedValue({ data: { items: [] } });
-    useVocListMock.mockReturnValue({
-      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult(MOCK_VOC_ITEMS));
   });
 
   it.each(['my', 'inbox'] as const)('%s only exposes permitted severity controls', (view) => {
@@ -252,9 +284,10 @@ describe('useInboxRoute', () => {
   it.each(['high', 'high-no-link'] as const)(
     'restores My VOC with a stale severity sort and %s tab using safe defaults',
     async (tab) => {
-      const { useVocList } =
-        await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
-      useVocListMock.mockImplementation(useVocList);
+      const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+        '../../hooks/useVocListPages',
+      );
+      useVocListMock.mockImplementation(useVocListPages);
       searchState = { view: 'my', sort: 'severity:desc', tab, 'filter.severity': 'high' };
       render(<InboxTestHarness view="my" />);
       await waitFor(() => expect(apiClientMock).toHaveBeenCalled());
@@ -281,9 +314,10 @@ describe('useInboxRoute', () => {
   });
 
   it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
-    const { useVocList } =
-      await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     const route = vocsRoute as unknown as {
       options: { validateSearch: (raw: unknown) => Record<string, unknown> };
     };
@@ -306,9 +340,10 @@ describe('useInboxRoute', () => {
   it.each(['11111111-1111-4111-8111-111111111111', 'unset'])(
     'forwards Area %s and removes only the Area key',
     async (area) => {
-      const { useVocList } =
-        await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
-      useVocListMock.mockImplementation(useVocList);
+      const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+        '../../hooks/useVocListPages',
+      );
+      useVocListMock.mockImplementation(useVocListPages);
       searchState = {
         view: 'inbox',
         managedSystem: 'all',
@@ -343,9 +378,10 @@ describe('useInboxRoute', () => {
   );
 
   it('UUID Area without a tab fetches the full non-archived Inbox', async () => {
-    const { useVocList } =
-      await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     const area = '11111111-1111-4111-8111-111111111111';
     searchState = { view: 'inbox', 'filter.analytics_area': area };
     render(<InboxTestHarness view="inbox" />);
@@ -366,12 +402,7 @@ describe('useInboxRoute', () => {
   ])(
     'shows filtered-empty Inbox copy for Area %s with a single reset control',
     async (area, label) => {
-      useVocListMock.mockReturnValue({
-        data: { items: [], next_cursor: undefined },
-        isLoading: false,
-        error: null,
-        refetch: vi.fn(),
-      });
+      useVocListMock.mockReturnValue(pagesResult([]));
       searchState = { view: 'inbox', 'filter.analytics_area': area };
       render(<InboxTestHarness view="inbox" />);
 
@@ -447,12 +478,7 @@ describe('useInboxRoute', () => {
 
   it('opens VOC creation when the 내 VOC empty-state button is clicked', () => {
     searchState = { view: 'my' };
-    useVocListMock.mockReturnValue({
-      data: { items: [], next_cursor: undefined },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult([]));
     render(<InboxTestHarness view="my" />);
 
     fireEvent.click(screen.getByRole('button', { name: '+ 새 VOC 작성' }));
@@ -767,7 +793,7 @@ describe('useInboxRoute', () => {
   // ── Server-side text search (#821) ──────────────────────────────────────────
 
   const SEARCH_BOX_ROLE = 'searchbox';
-  const SEARCH_BOX_NAME = '필터, 키워드…';
+  const SEARCH_BOX_NAME = '제목 또는 ID';
 
   function searchBox() {
     return screen.getByRole(SEARCH_BOX_ROLE, { name: SEARCH_BOX_NAME });
@@ -804,8 +830,10 @@ describe('useInboxRoute', () => {
   }
 
   it('writes the debounced q to the URL and sends it on GET /vocs', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     const route = vocsRoute as unknown as {
       options: { validateSearch: (raw: unknown) => Record<string, unknown> };
     };
@@ -839,8 +867,10 @@ describe('useInboxRoute', () => {
   });
 
   it('drops the active tab while searching and restores it when the search is cleared', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     searchState = { view: 'inbox', tab: 'high' };
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
@@ -865,8 +895,10 @@ describe('useInboxRoute', () => {
   });
 
   it('removes q from the URL and the request when the box is emptied', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     searchState = { view: 'inbox', q: '로그인' };
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
@@ -895,8 +927,10 @@ describe('useInboxRoute', () => {
   });
 
   it('searches inside a tab the user picks during the search', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     searchState = { view: 'inbox', tab: 'high', q: '로그인' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -910,12 +944,7 @@ describe('useInboxRoute', () => {
   });
 
   it('shows the search empty state when q is set and the list is empty', async () => {
-    useVocListMock.mockReturnValue({
-      data: { items: [], next_cursor: undefined },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult([]));
     searchState = { view: 'inbox', q: '없는 검색어' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -1069,13 +1098,7 @@ describe('useInboxRoute', () => {
   });
 
   it('shows skeletons instead of the previous empty page while placeholder data is in flight', () => {
-    useVocListMock.mockReturnValue({
-      data: { items: [], next_cursor: undefined },
-      isLoading: false,
-      isPlaceholderData: true,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult([], { isPlaceholderData: true }));
     searchState = { view: 'inbox', q: '다음' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -1084,13 +1107,7 @@ describe('useInboxRoute', () => {
   });
 
   it('keeps previous rows mounted while the next page is placeholder data', () => {
-    useVocListMock.mockReturnValue({
-      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
-      isLoading: false,
-      isPlaceholderData: true,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult(MOCK_VOC_ITEMS, { isPlaceholderData: true }));
     searchState = { view: 'inbox', q: '다음' };
     render(<InboxTestHarness view="inbox" />);
 
