@@ -123,8 +123,19 @@ Besides the issue's diff: the feature folder of a route that diff changes (`apps
 `staleTime`/`gcTime`, optimistic overlays and retained selection are state code: file such a finding unless the
 issue is about that behaviour.
 
+## Deferrals
+
+- Owner or conductor deferrals and accepted limits: a row in `docs/design/14-post-mvp-backlog.md` (item, reason,
+  reopen condition), in the same PR or the next docs PR; an accepted contract or ADR collision also gets an ADR
+  amendment. A deferred GitHub issue moves to the `Post-MVP` milestone with a comment giving the reason.
+- Small noted items (`minor`/`nit` outside the touched area): a checkbox in the open grouped polish issue (#1214);
+  open a new grouped issue if it is closed.
+
 ## Slice close
 
+- **Release slice:** Slice 62 — Hardening, then Slice 63 — Production and release. The cut line applies (skill
+  §Decisions): a new finding enters only for a data leak, data loss, a permission bypass or an actor who cannot
+  finish the task; everything else is deferred per §Deferrals.
 - Quality review range: previous release tag or slice start `...origin/develop`.
 - **Walkthrough:** previews of `origin/main` and `origin/develop` on a throwaway DB (as above), `review-ux` over at
   most three issue-sized flows per run, plus one `nav-perf.sh` comparison over the rail targets as a safety net.

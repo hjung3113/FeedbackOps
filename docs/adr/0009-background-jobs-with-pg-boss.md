@@ -83,3 +83,9 @@ A proposed VOC-owned preview cleanup job removes expired operational vectors,
 tombstones and ended budget buckets only; domain and audit grants stay unchanged.
 Existing default job retries remain safe through permanent pair identity/cursors;
 paid preview provider dispatch has zero automatic retries, including from jobs.
+
+## Amended 2026-10-16 — Survey send and close jobs
+
+Earlier references to Survey send/close jobs describe a need or proposed future
+work, not existing runtime behavior. The current product has no scheduled Survey
+send job and no deadline-based Survey close job.

@@ -2,14 +2,11 @@
 
 ## Status
 
-Accepted 2026-10-13 by the owner (MVP close-out decisions)
+Accepted 2026-10-13 by the owner (MVP close-out decisions); implemented.
 
-Records owner decision 54-1 on #1040 and decision 53-3 on #816/#1039, supplied
-in the worker brief. Local design input is
-`/Users/hyojung/Desktop/2026/FeedbackOps/.review/wave/D-54-MEMO.md` §3–§6.
-All inventory endpoints, DTO extensions and the Evidence route below are
-**proposed/new, accepted, implementation pending**. This docs-only issue does
-not register routes or establish runtime verification.
+The Evidence inventory and approved Survey excerpt reuse described below shipped
+through #739/#740, #816, #1040, #1107 and #1109. The original implementation
+breakdown is retained as history; it is not pending work.
 
 Builds on [ADR-0064](0064-survey-provenance-read-boundary.md), especially
 Implementation issues 3 (#816) and 4 (Integration Evidence). That ADR owns

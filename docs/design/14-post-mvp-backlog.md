@@ -95,4 +95,36 @@ rendered; the provider-free MVP does not wait for that evidence.
 | Picker excerpt-text search and additional cohort filters | Question/excerpt paging reuses the accepted result privacy boundary without new inference paths. | Real selection workload requires richer search; decide eligibility and inference tests before implementing. |
 | Marking approved excerpts already attached to the Finding in the picker (#1110 follow-up; owner, session 77) | Which excerpts a Finding holds lives only in Survey's private binding (ADR-0064); showing it needs a new Survey-owned definer, a candidates field and a migration. A repeat attachment adds one more evidence row, with no wrong or leaked data. | Repeat attachments are observed in real use; add a Survey-owned narrow read gated on Finding read plus `survey.read`, with privacy tests. |
 
-#739/#740 and #1040/#816 remain scheduled MVP implementation dependencies, not deferrals.
+#739/#740, #816, #1040, #1107, and #1109 shipped as MVP implementation dependencies.
+
+### Slice 61 — whole-system review follow-ups (2026-10-16)
+
+| Deferred item | Reason | Reopen when |
+| --- | --- | --- |
+| Milestone schedule visualization: list mini-timeline and child-Task Gantt | The current compact list, progress summary, and detail view cover the shipped Milestone job; schedule visualization is not needed to complete an MVP task. | Release use shows that teams cannot plan or follow a Milestone without schedule visualization; define the supported date and status semantics first. |
+| VOC and Task list query rewrites (PS-1/PS-3) | The 5k VOC / 5k Task seed measurements were within the reviewed bounds; no release bottleneck was established. | A repeatable target-scale measurement shows list latency blocks ordinary work. |
+| Batching for report and recovery reads (PS-4/PS-6) | Batching is deferred until evidence shows excess query fan-out or latency on representative data. | Representative high-volume measurements identify a query fan-out or latency problem that batching can address. |
+| Additional indexes and background-job changes (PS-7–PS-10) | No release-blocking bottleneck was established for these changes; indexes and jobs add maintenance and operational behavior. | A measured production-shaped workload shows a bottleneck with a specific query or job remedy. |
+| Frontend architecture review follow-ups (AF-4/AF-5) | The review follow-ups were not selected as release blockers; implementation is deferred with the remaining presentation and architecture polish. | A concrete caller or workflow shows that the current structure blocks a required change or causes a user-facing defect. |
+| Backend drift prevention for Released communication rules (#1166 BE half) | The backend maintenance-only consolidation is below the release cut line and has no user-facing behavior gap. | The duplicated rules diverge or cause a behavior defect, or a planned rule change cannot be made safely in the current structure. |
+| Backend test-deletion candidates (AB-6) | Removing tests would reduce assurance; no replacement coverage has been established for the candidates. | A review identifies redundant tests and verifies the remaining suite still covers the behavior they protect. |
+| Additional notification channels and per-actor delivery preferences | The in-app Reporter notification is itself post-MVP; its accepted scope is one notice per effective public change, with email, preferences, and unread markers excluded (#1182). | User evidence shows that in-app delivery prevents an actor from seeing a required notification, and the owner approves channel and preference rules. |
+| One-step Task Request self-approval (V2-2) | Approval and conversion remain separate commands by the owner decision in #1180; collapsing them would change the workflow and its review boundary. | Release use shows the separate approval and conversion steps prevent an actor from completing an authorized Task Request. |
+| Home feed expansion (V2-5) | The current Home action queues cover the MVP jobs; a broader feed has no demonstrated release need. | Release use shows a repeatable job that the existing queues cannot support. |
+| Remaining visual refinement follow-ups (IM-3/IM-8/IM-9/IM-10/IM-15) | The visual audit passed with nits; these refinements were grouped below the MVP release cut line. | A specific refinement is shown to impair accessibility, legibility, or completion of a release task. |
+
+### Session 83 — release cut line (2026-10-16)
+
+Only a finding that causes a data leak, data loss, permission bypass, or prevents
+an actor from finishing the task enters the release. The following items are
+below that cut line and are on the GitHub Post-MVP milestone.
+
+| Deferred item | Reason | Reopen when |
+| --- | --- | --- |
+| In-app Reporter notification when a public change occurs (U1-13, #1182 part b) | below the cut line | Post-MVP planning |
+| Catalog cache identity and cleanup (#1185) | below the cut line | Post-MVP planning |
+| Recovery recorder helper and a single Core team reader (#1147) | below the cut line | Post-MVP planning |
+| Known flaky tests and background UX-prep script (#1205) | below the cut line | Post-MVP planning |
+| Home recovery visual-label flake (#1192) | below the cut line | Post-MVP planning |
+| Admin and inventory presentation polish, remaining #1184 work (#1219) | below the cut line | Post-MVP planning |
+| Grouped polish backlog (#1214) | below the cut line | Post-MVP planning |

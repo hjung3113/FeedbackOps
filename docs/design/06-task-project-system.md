@@ -323,8 +323,6 @@ Acceptance Criteria:
 - Milestone is created from the Tasks surface; Finding -> Milestone creation is future (WF-TASK-002).
 - Milestone can group Tasks.
 - Milestone Detail shows Why this milestone exists, source, Analytics Area, evidence count, and linked objects.
-- Milestone lists show compact schedule risk with a mini timeline.
-- Milestone Detail includes a Timeline section with a child Task Gantt chart.
 ```
 
 ## UI / UX Requirements
@@ -393,28 +391,23 @@ Show when linked context exists:
 
 Milestone UI should preserve the dense, list-first Task experience. The
 Milestones view shows each Milestone as a compact row with source context,
-Managed System, Analytics Area, owner, status, due date, progress, and a mini
-timeline for schedule risk scanning.
+Managed System, Analytics Area, owner, status, due date, and progress.
 
 Selecting a Milestone opens RightDetailPanel as the Milestone Detail. The detail
-panel is the source of truth for milestone context; the Gantt chart is a
-Timeline section inside the detail panel, not a replacement for the detail view.
+panel is the source of truth for milestone context.
 
 Milestone Detail sections:
 
 ```text
 - Header: title, Primary Managed System, Analytics Area, owner, status, due date, actions
 - Overview: Why this milestone exists, source Finding / VOC / Survey context, reporter-safe summary candidate
-- Timeline: child Task Gantt by date and internal Task status
 - Tasks: child Task list with status, assignee, priority, and due date
 - Evidence: linked Evidence Highlights and source objects
 - Activity: decisions, audit events, and updates
 ```
 
-The Milestone list may show a mini timeline, but detailed scheduling belongs in
-the Timeline section of Milestone Detail. Reporter-facing summaries must not
-expose raw internal Task status, backlog priority, internal due dates, or
-Developer discussion from the Gantt.
+Reporter-facing summaries must not expose internal Task status, backlog priority,
+internal due dates, or Developer discussion.
 
 ## Permissions
 
