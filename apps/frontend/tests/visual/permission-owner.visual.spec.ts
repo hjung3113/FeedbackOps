@@ -78,25 +78,29 @@ test.describe('permission request composition and Managed System owner', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await installMockApi(page, { managedSystemDiagnostics: true, role: 'admin' });
     // Registered after the shared mock, so it answers first for this one list read.
-    await page.route('**/analytics-areas?*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          items: [
-            {
-              id: '44444444-4444-4444-8444-444444441184',
-              managed_system_id: '22222222-2222-4222-8222-222222221146',
-              slug: 'archive-area',
-              name: 'Archive Visual Area',
-              owner_team_id: null,
-              created_at: '2026-07-18T00:00:00.000Z',
-              archived_at: null,
-            },
-          ],
-          total: 1,
-        }),
-      }),
+    await page.route(
+      (url) => url.pathname.endsWith('/analytics-areas'),
+      (route) =>
+        route.request().method() !== 'GET' || route.request().resourceType() === 'document'
+          ? route.fallback()
+          : route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                items: [
+                  {
+                    id: '44444444-4444-4444-8444-444444441184',
+                    managed_system_id: '22222222-2222-4222-8222-222222221146',
+                    slug: 'archive-area',
+                    name: 'Archive Visual Area',
+                    owner_team_id: null,
+                    created_at: '2026-07-18T00:00:00.000Z',
+                    archived_at: null,
+                  },
+                ],
+                total: 1,
+              }),
+            }),
     );
     await page.goto('/admin/analytics-areas');
     await page.getByTestId('aa-detail-archive-area').click();
