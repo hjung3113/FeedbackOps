@@ -102,6 +102,8 @@ export interface PublicUpdateComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
+  /** Select the public conversation timeline after a successful post. */
+  onPosted?: (tab: 'public') => void;
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
@@ -123,6 +125,7 @@ export function PublicUpdateComposer({
   me,
   draftDoc: controlledDraftDoc,
   onDraftChange,
+  onPosted,
 }: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
   const { editorHandle, focusEditor } = useComposerEditorFocus();
@@ -200,6 +203,7 @@ export function PublicUpdateComposer({
       // travels — clearing it here as well would be a second, silent writer.
       setAttachmentResetToken((n) => n + 1);
       toast.success('공개 업데이트가 게시되었습니다.');
+      onPosted?.('public');
       focusEditor();
     },
     onError: (error) => {

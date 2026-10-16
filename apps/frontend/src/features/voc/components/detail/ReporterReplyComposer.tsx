@@ -64,6 +64,8 @@ export interface ReporterReplyComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
+  /** Select the public conversation timeline after a successful post. */
+  onPosted?: (tab: 'public') => void;
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
@@ -84,6 +86,7 @@ export function ReporterReplyComposer({
   me,
   draftDoc: controlledDraftDoc,
   onDraftChange,
+  onPosted,
 }: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
   const { editorHandle, focusEditor } = useComposerEditorFocus();
@@ -130,6 +133,7 @@ export function ReporterReplyComposer({
       // attachmentIds clears through the dropzone's onChange, not from here.
       setAttachmentResetToken((n) => n + 1);
       toast.success('답장이 등록되었습니다.');
+      onPosted?.('public');
       focusEditor();
     },
     onError: (error) => {

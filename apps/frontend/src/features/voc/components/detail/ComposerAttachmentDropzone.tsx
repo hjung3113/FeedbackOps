@@ -95,9 +95,9 @@ export function ComposerAttachmentDropzone({
           className="flex flex-1 cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         >
           <Paperclip className="h-3 w-3 shrink-0 text-text-muted" aria-hidden />
-          <span className="text-xs text-text-primary">{COPY.dropHint}</span>
+          <span className="break-keep text-xs text-text-primary">{COPY.dropHint}</span>
           <span className="flex-1" />
-          <span className="text-tiny text-text-muted">{COPY.footer}</span>
+          <span className="break-keep text-tiny text-text-muted">{COPY.footer}</span>
         </button>
         <input
           ref={inputRef}

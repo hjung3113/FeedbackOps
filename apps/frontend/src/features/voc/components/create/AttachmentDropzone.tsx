@@ -98,9 +98,9 @@ export function AttachmentDropzone({
           >
             <Paperclip className="h-3.5 w-3.5" />
           </span>
-          <span className="min-w-0 text-sm text-text-primary">{COPY.dropHint}</span>
+          <span className="min-w-0 break-keep text-sm text-text-primary">{COPY.dropHint}</span>
           <span className="flex-1" />
-          <span className="hidden text-xs text-text-muted sm:inline">{COPY.footer}</span>
+          <span className="hidden break-keep text-xs text-text-muted sm:inline">{COPY.footer}</span>
         </button>
         <input
           ref={inputRef}

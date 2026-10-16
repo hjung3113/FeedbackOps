@@ -14,6 +14,15 @@ import * as React from 'react';
 import { InternalCommentToolbar } from '../InternalCommentToolbar';
 
 describe('<InternalCommentToolbar>', () => {
+  it('uses the attachment picker focus-visible ring on toolbar buttons', () => {
+    render(<InternalCommentToolbar editor={null} onInsertMention={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '굵게' })).toHaveClass(
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-focus-ring',
+    );
+  });
+
   it('renders Bold, Italic, Code, List, Link, @Mention', () => {
     render(<InternalCommentToolbar editor={null} onInsertMention={() => {}} />);
 

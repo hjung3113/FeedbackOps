@@ -10,7 +10,7 @@
 
 import type { PublicUpdateSuccess } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -148,6 +148,20 @@ describe('<PublicUpdateComposer>', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mutationMock.onSuccess = undefined;
+  });
+
+  it('signals public only after a successful Public Update', () => {
+    const onPosted = vi.fn();
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} onPosted={onPosted} />, {
+      wrapper: makeWrapper(),
+    });
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
+    expect(onPosted).not.toHaveBeenCalled();
+
+    act(() => mutationMock.onSuccess?.(PUBLIC_UPDATE_ENVELOPE));
+
+    expect(onPosted).toHaveBeenCalledWith('public');
   });
 
   it('renders ReporterStatusChangeBlock for body+status path (status change)', () => {

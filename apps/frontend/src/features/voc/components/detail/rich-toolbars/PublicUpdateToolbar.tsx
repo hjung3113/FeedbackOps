@@ -54,6 +54,7 @@ function ToolbarButton({
         'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
         'hover:bg-surface-row-hover hover:text-text-primary',
         'disabled:cursor-not-allowed disabled:opacity-40',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
         isActive && 'bg-surface-row-selected text-text-primary',
       )}
     >

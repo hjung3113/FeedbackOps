@@ -149,13 +149,13 @@ describe('<ComposerSection> reply visibility (real useComposerVisibility)', () =
           })
         : new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
     ) as typeof globalThis.fetch;
-    const onInternalCommentAdded = vi.fn();
+    const onConversationPosted = vi.fn();
     render(
       <ComposerSection
         voc={someoneElses}
         me={meOf('admin')}
         canTriage
-        onInternalCommentAdded={onInternalCommentAdded}
+        onConversationPosted={onConversationPosted}
       />,
       { wrapper: Wrapper },
     );
@@ -164,6 +164,7 @@ describe('<ComposerSection> reply visibility (real useComposerVisibility)', () =
 
     fireEvent.click(screen.getByRole('button', { name: '내부 코멘트 추가' }));
 
-    await waitFor(() => expect(onInternalCommentAdded).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onConversationPosted).toHaveBeenCalledTimes(1));
+    expect(onConversationPosted).toHaveBeenCalledWith('internal');
   });
 });

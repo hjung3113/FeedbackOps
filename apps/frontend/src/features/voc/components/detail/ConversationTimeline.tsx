@@ -12,26 +12,32 @@ import {
 import { PublicTimeline } from './PublicTimeline';
 import { InternalTimeline } from './InternalTimeline';
 
+export interface ConversationPostSignal {
+  tab: 'public' | 'internal';
+  seq: number;
+}
+
 export interface ConversationTimelineProps {
   voc: VocDetailEnvelope;
   canTriage: boolean;
   actorNamesById?: ReadonlyMap<string, string> | undefined;
-  /** Changes after an internal comment is added; the timeline then shows the 내부 tab. */
-  internalCommentSignal?: number;
+  /** Latest successful post selects 공개, or 내부 when canTriage permits it. */
+  postSignal?: ConversationPostSignal;
 }
 
 export function ConversationTimeline({
   voc,
   canTriage,
   actorNamesById,
-  internalCommentSignal = 0,
+  postSignal,
 }: ConversationTimelineProps): React.ReactElement {
   const [selectedTab, setSelectedTab] = React.useState<'public' | 'internal'>('public');
-  const [seenInternalCommentSignal, setSeenInternalCommentSignal] =
-    React.useState(internalCommentSignal);
-  if (seenInternalCommentSignal !== internalCommentSignal) {
-    setSeenInternalCommentSignal(internalCommentSignal);
-    if (canTriage) setSelectedTab('internal');
+  const [seenPostSeq, setSeenPostSeq] = React.useState(postSignal?.seq);
+  if (seenPostSeq !== postSignal?.seq) {
+    setSeenPostSeq(postSignal?.seq);
+    if (postSignal && (postSignal.tab === 'public' || canTriage)) {
+      setSelectedTab(postSignal.tab);
+    }
   }
   const publicTabRef = React.useRef<HTMLButtonElement>(null);
   const internalTabRef = React.useRef<HTMLButtonElement>(null);

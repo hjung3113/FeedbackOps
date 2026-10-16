@@ -122,6 +122,18 @@ describe('<ReporterReplyComposer>', () => {
     vi.clearAllMocks();
   });
 
+  it('signals public after a successful Reporter Reply', () => {
+    const onPosted = vi.fn();
+    render(<ReporterReplyComposer voc={BASE_VOC} me={ME_REPORTER} onPosted={onPosted} />, {
+      wrapper: makeWrapper(),
+    });
+    expect(onPosted).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
+
+    expect(onPosted).toHaveBeenCalledWith('public');
+  });
+
   it('uses 제출자 as the fallback identity in the reply preview', async () => {
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_REPORTER} />, { wrapper: makeWrapper() });
 
