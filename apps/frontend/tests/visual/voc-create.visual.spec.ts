@@ -37,11 +37,12 @@ test.describe('VOC create pre-submit similar VOC visual harness (#293)', () => {
     expect((await availabilityResponse).status()).toBe(200);
     const peer = page.getByTestId('similar-voc-panel');
     await expect(peer).toContainText('Tableau 새로고침 실패');
-    // This is the existing create right column: Reporter / heuristic / severity, with no placeholder.
+    // The create right column: Reporter / heuristic, with no placeholder. The severity note is
+    // a help line under the title since #1236, not a right-column card.
     const rightColumn = peer.locator('..');
-    await expect(rightColumn.locator(':scope > *')).toHaveCount(3);
+    await expect(rightColumn.locator(':scope > *')).toHaveCount(2);
     await expect(rightColumn).toContainText('제출자');
-    await expect(rightColumn).toContainText('심각도 안내');
+    await expect(rightColumn).not.toContainText('심각도 안내');
     await expect(page.getByTestId('semantic-voc-panel')).toHaveCount(0);
     expect(previewPosts).toHaveLength(0);
   });
