@@ -242,6 +242,25 @@ export async function seedPreviewScale(handle: DbHandle, workspaceId: string): P
       };
     });
     await insert('finding.findings', findings, 'finding');
+    const highlights = findings.flatMap((finding) => {
+      const evidence = findingEvidence.get(finding.id);
+      if (!evidence) throw new Error('Missing scale Finding evidence');
+      return evidence.map((voc) => ({
+        id: stableUuid(workspaceId, `finding-evidence-highlight:${finding.id}:${voc.id}`),
+        workspace_id: workspaceId,
+        finding_id: finding.id,
+        primary_managed_system_id: finding.primary_managed_system_id,
+        source_type: 'voc',
+        source_id: voc.id,
+        approved_excerpt_id: null,
+        quote_or_summary: voc.title,
+        analytics_area_id: null,
+        sentiment: null,
+        importance: null,
+        created_by: admin,
+      }));
+    });
+    await insert('finding.evidence_highlights', highlights);
     const clusters = Array.from({ length: 60 }, (_, n) => ({
       ...base('cluster', n, 59),
       title: `${context(n).noun}: 유사 제보 묶음 ${n + 1}`,

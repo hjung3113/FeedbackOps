@@ -404,7 +404,7 @@ The seed is a separate, idempotent command (`pnpm --filter @fops/backend db:seed
 
 Core/personas modes do not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.
 
-- `SEED_MODE=scale pnpm --filter @fops/backend db:seed` is for throwaway preview DBs only. It includes personas and adds 40 reporters, 5,000 VOCs, 5,000 Tasks, 300 Findings, 250 Task Requests, 60 Clusters and 25 Milestones across Tableau/Power BI, with five years of history, evidence links and memberships. Existing baseline/preview rows survive. The cohort and reserved `fops-preview-scale-complete` actor marker commit atomically; stable IDs and per-group deduplication permit partial-cohort retries when the marker is absent. Scale creates no Survey data or Evidence Highlights.
+- `SEED_MODE=scale pnpm --filter @fops/backend db:seed` is for throwaway preview DBs only. It includes personas and adds 40 reporters, 5,000 VOCs, 5,000 Tasks, 300 Findings, 250 Task Requests, 60 Clusters and 25 Milestones across Tableau/Power BI, with five years of history, evidence links and memberships. Existing baseline/preview rows survive. The cohort and reserved `fops-preview-scale-complete` actor marker commit atomically; stable IDs and per-group deduplication permit partial-cohort retries when the marker is absent. Scale creates no Survey data; it inserts one VOC Evidence Highlight per `evidence_of` VOC, so `evidence_count` equals both the link count and the highlight-row count.
 
 ## Permission close-out migration contract (ADR-0066; proposed/new)
 
