@@ -194,8 +194,9 @@ export function TaskListRoute({
       onSelectionChange,
     },
   );
-  const total = tasksQuery.data?.pages[0]?.page?.total;
   const listPermissionDenied = !tasksQuery.isLoading && isPermissionDenied(tasksQuery.error);
+  // A denied refetch keeps the cached pages; the blocked state shows no count derived from them.
+  const total = listPermissionDenied ? undefined : tasksQuery.data?.pages[0]?.page?.total;
   const me = useMe();
   const detailQuery = useQuery({
     queryKey: ['task', selectedId],

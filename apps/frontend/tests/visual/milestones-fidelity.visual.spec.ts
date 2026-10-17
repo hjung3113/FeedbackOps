@@ -450,11 +450,8 @@ test.describe('milestone fidelity (final pixel pass)', () => {
     expect.soft(captured.avatar.radius, 'row avatar radius').toBe('9999px');
     expect.soft(captured.avatar.initial, 'row avatar initial').toBe('김');
 
-    // Meta line: 10px icons, 10px gap.
-    expect.soft(captured.metaIcons, 'meta icon sizes').toEqual([
-      { width: '10px', height: '10px' },
-      { width: '10px', height: '10px' },
-    ]);
+    // Meta line: one 10px icon, 10px gap.
+    expect.soft(captured.metaIcons, 'meta icon sizes').toEqual([{ width: '10px', height: '10px' }]);
     expect.soft(captured.metaGap, 'meta gap').toBe('10px');
   });
 });
