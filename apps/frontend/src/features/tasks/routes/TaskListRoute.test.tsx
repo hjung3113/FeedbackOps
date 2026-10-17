@@ -3,6 +3,7 @@ import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import {
   type MilestoneDetailDto,
   type TaskDetailDto,
@@ -452,6 +453,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
           id: VOC_ID,
           display_id: 'V-204',
           title: VOC_TITLE,
+          reporter_facing_status: 'progress',
         },
         finding: {
           id: FINDING_ID,
@@ -479,6 +481,14 @@ describe('Task detail Linked context source VOC (#378)', () => {
         ? vocBadge.compareDocumentPosition(findingBadge) & Node.DOCUMENT_POSITION_FOLLOWING
         : 0;
     expect(vocFirst).toBeTruthy();
+
+    // The reporter-facing status is its own labelled fact, outside the VOC node's
+    // button name, and never replaces the Task status (ADR-0005).
+    expect(within(trail).getByText('공개 상태')).toBeInTheDocument();
+    expect(within(trail).getByText(REPORTER_STATUS_LABELS.progress)).toBeInTheDocument();
+    expect(
+      within(trail).getByRole('button', { name: new RegExp(VOC_TITLE) }),
+    ).not.toHaveTextContent(REPORTER_STATUS_LABELS.progress);
 
     // Clicking navigates exactly like every other VOC link: /vocs URL state.
     await userEvent.click(within(trail).getByRole('button', { name: new RegExp(VOC_TITLE) }));
@@ -526,6 +536,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
       within(trail).queryByRole('button', { name: new RegExp(VOC_TITLE) }),
     ).not.toBeInTheDocument();
     expect(within(trail).queryByText('V-204')).not.toBeInTheDocument();
+    expect(within(trail).queryByText('공개 상태')).not.toBeInTheDocument();
     // Finding node unchanged.
     expect(within(trail).getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();
   });

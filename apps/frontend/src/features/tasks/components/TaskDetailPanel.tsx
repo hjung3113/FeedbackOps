@@ -6,9 +6,14 @@ import { getMilestone } from '@/lib/api/milestones';
 import { assignTaskMilestone, assignTaskResponsibility } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
-import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import {
+  TASK_PRIORITY_LABELS,
+  TASK_REQUEST_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import type { TaskDetailDto, TaskStatus } from '@fops/shared';
@@ -298,16 +303,8 @@ export function TaskDetailPanel({
 
         <div data-anchor="properties" className="border-t border-border-subtle py-2">
           <PanelSectionTitle inset="panel">속성</PanelSectionTitle>
-          <FieldRow label="상태">
-            <InternalTaskBadge status={task.status} />
-          </FieldRow>
-          <FieldRow label="우선순위">
-            <SeverityBadge
-              severity={PRIORITY_SEVERITY[task.priority]}
-              label={TASK_PRIORITY_LABELS[task.priority]}
-              ariaLabel={`우선순위 ${TASK_PRIORITY_LABELS[task.priority]}`}
-            />
-          </FieldRow>
+          <FieldRow label="상태">{TASK_STATUS_LABELS[task.status]}</FieldRow>
+          <FieldRow label="우선순위">{TASK_PRIORITY_LABELS[task.priority]}</FieldRow>
           <FieldRow label="담당자">
             <ResponsibilityEditor
               key={task.id}
@@ -420,6 +417,12 @@ export function TaskDetailPanel({
               category="출처 VOC"
               className="mt-2"
             />
+          )}
+          {sourceVoc?.visibility_state === 'allowed' && (
+            <dl className="mt-2 flex items-center gap-2 text-sm">
+              <dt className="text-text-muted">{GLOSSARY.reporterFacingStatus}</dt>
+              <dd>{REPORTER_STATUS_LABELS[sourceVoc.reporter_facing_status]}</dd>
+            </dl>
           )}
           <div className="mt-2">
             <LinkedEntityTrail

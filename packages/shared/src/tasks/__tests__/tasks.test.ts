@@ -91,6 +91,7 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
     id: U3,
     display_id: 'V-1042',
     title: 'Login latency complaints',
+    reporter_facing_status: 'reviewing',
   } as const;
 
   it('accepts the allowed verdict with id, display_id, and title', () => {
@@ -147,6 +148,22 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
       taskDetailDtoSchema.parse({
         ...baseTask,
         source: { voc: withoutId },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects allowed without reporter_facing_status', () => {
+    const { reporter_facing_status: _status, ...withoutStatus } = vocAllowed;
+    expect(() =>
+      taskDetailDtoSchema.parse({ ...baseTask, source: { voc: withoutStatus } }),
+    ).toThrow();
+  });
+
+  it.each(['summary_visible', 'denied'])('rejects reporter_facing_status on %s', (state) => {
+    expect(() =>
+      taskDetailDtoSchema.parse({
+        ...baseTask,
+        source: { voc: { visibility_state: state, reporter_facing_status: 'reviewing' } },
       }),
     ).toThrow();
   });

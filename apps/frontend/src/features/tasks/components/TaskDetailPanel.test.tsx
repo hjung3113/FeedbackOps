@@ -76,7 +76,8 @@ function renderPanel(current: TaskDetailDto) {
 describe('Task detail responsibility', () => {
   it('names Task priority as priority for assistive technology', async () => {
     renderPanel({ ...task, priority: 'urgent' });
-    expect(await screen.findAllByLabelText('우선순위 긴급')).toHaveLength(2);
+    // Title-line badge only; the 속성 value is plain text.
+    expect(await screen.findAllByLabelText('우선순위 긴급')).toHaveLength(1);
     expect(screen.queryByLabelText('심각도 긴급')).not.toBeInTheDocument();
   });
 

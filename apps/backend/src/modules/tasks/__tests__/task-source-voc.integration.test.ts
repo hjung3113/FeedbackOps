@@ -231,6 +231,11 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
   it('admin sees the finding-chain source VOC as allowed with its identifiers', async () => {
     const vocTitle = `SrcVoc VOC ${uid('allowed')}`;
     const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });
+    // A non-default reporter-facing status proves the field is read from the VOC row.
+    await migrateHandle.pool.query(
+      "update voc.vocs set reporter_facing_status = 'progress' where id = $1",
+      [chain.voc?.id],
+    );
 
     const res = await getTask(adminCookie, chain.taskId);
 
@@ -254,6 +259,7 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
         id: chain.voc?.id,
         display_id: chain.voc?.displayId,
         title: vocTitle,
+        reporter_facing_status: 'progress',
       },
     });
   });
@@ -278,6 +284,7 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
       id: chain.voc?.id,
       display_id: chain.voc?.displayId,
       title: vocTitle,
+      reporter_facing_status: 'received',
     });
 
     await migrateHandle.pool.query(
@@ -409,6 +416,7 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
         id: chain.voc?.id,
         display_id: chain.voc?.displayId,
         title: vocTitle,
+        reporter_facing_status: 'received',
       },
     });
   });
@@ -544,6 +552,7 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
         id: requestVoc.id,
         display_id: requestVoc.displayId,
         title: requestVocTitle,
+        reporter_facing_status: 'received',
       },
     });
     expect(JSON.stringify(body)).not.toContain(findingVoc.id);

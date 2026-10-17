@@ -1,4 +1,5 @@
 // VOC reference visibility resolution for cross-module read consumers.
+import type { ReporterFacingStatusEnum } from '@fops/shared';
 import { HttpError } from '../../../lib/errors.js';
 import type {
   ReadActorContext,
@@ -22,7 +23,7 @@ export function createVocReferenceReader(
    * VOC access decision plus the full-read endpoint gate (as getVocDetail
    * does through listLinks) onto the entity-link visibility vocabulary, without
    * assembling the full detail envelope:
-   *   kind 'full' + readable endpoint → 'allowed' (id/display_id/title from the VOC row)
+   *   kind 'full' + readable endpoint → 'allowed' (id/display_id/title/reporter_facing_status from the VOC row)
    *   kind 'full' + unreadable endpoint → 'hidden'
    *   kind 'summary'   → 'summary_visible' (no endpoint gate or identifiers forwarded)
    *   HttpError not_found.record (missing/archived/foreign-workspace row OR the
@@ -53,6 +54,7 @@ export function createVocReferenceReader(
           id: access.row.id,
           display_id: access.row.displayId,
           title: access.row.title,
+          reporter_facing_status: access.row.reporterFacingStatus as ReporterFacingStatusEnum,
         };
       }
       return { visibility_state: 'summary_visible' };
