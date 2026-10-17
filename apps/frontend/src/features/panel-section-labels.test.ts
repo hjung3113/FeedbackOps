@@ -21,7 +21,7 @@ const cases = [
   },
   {
     panel: 'Task Request',
-    sections: buildTaskRequestSections(false, true),
+    sections: buildTaskRequestSections(false),
     expected: [
       ['overview', '요약'],
       ['decision', '검토 결정'],
@@ -32,10 +32,11 @@ const cases = [
   },
   {
     panel: 'Task Request outcome',
-    sections: buildTaskRequestSections(true, false),
+    sections: buildTaskRequestSections(true),
     expected: [
       ['overview', '요약'],
       ['outcome', '결정 요약'],
+      ['source', '출처'],
       ['properties', '속성'],
       ['audit', '이력'],
     ],
@@ -53,7 +54,7 @@ const cases = [
   },
   {
     panel: 'Cluster',
-    sections: buildVocClusterDetailSections(6),
+    sections: buildVocClusterDetailSections(),
     expected: [
       ['overview', '요약'],
       ['why', '그룹화 사유'],
@@ -78,6 +79,7 @@ const cases = [
     expected: [
       ['summary', '요약'],
       ['metadata', '소스 / 심각도 / 신뢰도'],
+      ['execution', '실행'],
       ['evidence', 'Evidence'],
       ['managed-system', 'Managed System'],
       ['analytics-area', 'Analytics Area'],

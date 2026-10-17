@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 // #512 — shadow measurements use the real fops_app query/write role and
 // deterministic pgvector rows; migrateHandle is fixture setup/teardown only.
 
@@ -140,9 +141,11 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     await migrateHandle.pool.query(`delete from voc.vocs where id in (${fixtureVocs})`, [
       FIXTURE_PREFIX,
     ]);
-    await migrateHandle.pool.query(`delete from core.managed_systems where slug like $1 || '%'`, [
-      FIXTURE_PREFIX,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      `delete from core.managed_systems where slug like $1 || '%'`,
+      [FIXTURE_PREFIX],
+    );
     await migrateHandle.pool.query(
       `delete from core.actors
         where workspace_id in (
@@ -150,9 +153,11 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
         )`,
       [FIXTURE_PREFIX],
     );
-    await migrateHandle.pool.query(`delete from core.workspaces where name like $1 || '%'`, [
-      FIXTURE_PREFIX,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      `delete from core.workspaces where name like $1 || '%'`,
+      [FIXTURE_PREFIX],
+    );
   }
 
   async function seedVoc(
@@ -620,7 +625,7 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     );
     await seedPair(['[1,0]', '[0.8,0.6]'], managedSystemId, workspaceId, reporterId);
     const counts = async () =>
-      appHandle.pool.query<{
+      migrateHandle.pool.query<{
         clusters: number;
         members: number;
         decisions: number;

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -44,7 +45,7 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
   afterAll(async () => {
     await cleanupFixtures();
     await migrateHandle.pool.query(
-      `delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
+      'delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
@@ -75,14 +76,15 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
+      'delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
       `delete from permission.permission_grants where workspace_id = $1 and managed_system_id in (${managedSystems})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -211,6 +213,16 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     expect(updated.responses_identity_protected).toBe(true);
   });
 
+  it('clears description with an empty string and reads it back without changing title', async () => {
+    const survey = await createSurvey();
+    const response = await patch(adminCookie, survey.id, { description: '' });
+    expect(response.statusCode).toBe(200);
+    const readback = await getSurvey(survey.id);
+    expect(readback.statusCode).toBe(200);
+    expect(readback.json<{ description: string | null }>().description ?? '').toBe('');
+    expect(readback.json<{ title: string }>().title).toBe('Before patch');
+  });
+
   it('AC-2 rejects a scalar patch on an open survey without mutation', async () => {
     const survey = await createSurvey();
     const actor = await manager(survey.primary_managed_system_id);
@@ -252,7 +264,7 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     const denied = await patch(actor.cookie, draft.id, { title: 'Denied' });
     expect(denied.statusCode).toBe(403);
     expect((await getSurvey(draft.id)).json<{ title: string }>().title).toBe('Before patch');
-    const deniedAudits = await appHandle.pool.query(
+    const deniedAudits = await migrateHandle.pool.query(
       `select 1 from core.audit_log where subject_id = $1 and event_type = 'survey_updated'`,
       [draft.id],
     );

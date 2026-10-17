@@ -12,6 +12,16 @@ PATCH /entity-links/:id
 
 Link detach/revoke is represented by `PATCH /entity-links/:id` status
 transition. There is no hard-delete endpoint for entity links as of Slice 6.
+Generic detach requires both-endpoint readability and the same mutation
+capability creation requires for that tuple: source read and the target
+provider's `canCreateTarget` when defined, otherwise target read. Missing
+readability or creation capability returns the same non-disclosing
+`404 not_found.record` as an absent link. Command-only tuples stay excluded.
+Detaching `(finding, task, requested_task)` invokes the Findings-owned execution
+projection seam inside the detach transaction; it clears `linked_task_id` when
+no active `requested_task` link to a Task remains. Entity Links never writes
+Finding tables directly. Link history, recovery capture and detach audit stay atomic.
+
 The command-only `(voc_cluster, finding, evidence_of)` tuple is unavailable on
 every generic entity-link surface: POST, both GET/list modes, and PATCH/detach.
 Generic PATCH treats that tuple exactly as an absent link, returning the same
@@ -55,3 +65,23 @@ cursor?: string, status_counts?: { active, stale, detached, revoked } } }`.
 status filter includes `status_counts` for all list-visible rows matching the
 relation type and Managed System filters. Status, relation type, and Managed
 System filters apply to every page.
+
+## ADR-0064 canonical-link access (accepted; #740 cutover)
+
+Generic POST/GET/PATCH, all status filters, counts and cursors categorically
+exclude either `survey_response` endpoint. After cutover ordinary repositories
+read/write the explicitly column-listed owner-backed `core.entity_links_app`
+`security_barrier` updatable view with `WITH CHECK OPTION`; app raw canonical
+SELECT/INSERT/UPDATE (including surviving column ACLs) is revoked, no DELETE.
+Canonical UUIDs, tuple checks, active uniqueness and detach history remain intact.
+Ordinary creation serializes the tuple with a transaction advisory lock, looks up an
+active ordinary row, and uses INSERT RETURNING through the view. Detach uses UPDATE
+RETURNING. Real-role conflict/concurrency verification is required before deployment.
+
+Survey writes use Entity Links-owned narrow functions returning link ID/inserted
+state, not raw endpoint rows. Existing create-Finding writes `generated_finding`
+and `evidence_of`; proposed/new #816 attachment writes `evidence_of` only. Results
+uses the Survey-owned safe derived-Finding reader under independent source/target
+Managed System gates; generic Survey detach remains unavailable. Raw app audit
+SELECT is also revoked without deleting Actor/subject/detail history. Survey-derived
+Finding provider summaries are metadata-only; quotes require the authorized Survey seam.

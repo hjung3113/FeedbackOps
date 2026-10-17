@@ -1,9 +1,17 @@
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
 
 const {
@@ -12,6 +20,7 @@ const {
   useOpenSurvey,
   useSurvey,
   useSurveys,
+  useSurveyManageAnySystemGate,
   useSurveyManageGate,
   useWorkspaceActors,
   useRouteSearch,
@@ -24,6 +33,7 @@ const {
   useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useSurvey: vi.fn(),
   useSurveys: vi.fn(),
+  useSurveyManageAnySystemGate: vi.fn(() => ({ canManage: false })),
   useSurveyManageGate: vi.fn(),
   useWorkspaceActors: vi.fn(() => ({
     actors: [] as Array<{
@@ -45,7 +55,11 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => ({
   useSurveys,
 }));
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
+  useSurveyManageAnySystemGate,
   useSurveyManageGate,
+}));
+vi.mock('@/lib/useAnalyticsAreaFilterLabel', () => ({
+  useAnalyticsAreaFilterLabel: () => undefined,
 }));
 vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({ useManagedSystemNamesResult }));
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors }));
@@ -97,6 +111,32 @@ const survey: Survey = {
 };
 
 describe('/surveys/:surveyId route', () => {
+  beforeEach(() => {
+    useSurveyManageAnySystemGate.mockReturnValue({ canManage: false });
+  });
+
+  it('renders the Surveys toolbar and create action for a manager', () => {
+    useSurvey.mockReturnValue({
+      data: survey,
+      isLoading: false,
+      isError: false,
+    });
+    useSurveyManageGate.mockReturnValue({ canManage: true, gateState: undefined });
+    useSurveyManageAnySystemGate.mockReturnValue({ canManage: true });
+    useSurveys.mockReturnValue({
+      data: [survey],
+      isPending: false,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<SurveyDetailRoute />);
+
+    expect(screen.getByRole('heading', { name: 'Surveys' })).toBeInTheDocument();
+    expect(screen.getByTestId('survey-create-button')).toBeInTheDocument();
+  });
+
   it('renders the detail screen when the survey exists', () => {
     useSurvey.mockReturnValue({
       data: survey,
@@ -117,6 +157,54 @@ describe('/surveys/:surveyId route', () => {
 
     expect(screen.getByTestId('survey-list')).toBeInTheDocument();
     expect(screen.getByText('Q3 사용성 진단')).toBeInTheDocument();
+  });
+
+  it('shows results before the locked builder note and keeps the note muted', async () => {
+    const openSurvey = { ...survey, status: 'open' as const };
+    useSurvey.mockReturnValue({ data: openSurvey, isLoading: false, isError: false });
+    useSurveyManageGate.mockReturnValue({ canManage: false, gateState: 'absent' });
+    useSurveys.mockReturnValue({ data: [openSurvey], isLoading: false, error: null });
+
+    const rootRoute = createRootRoute({ component: () => <Outlet /> });
+    const surveyRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/surveys/$surveyId',
+      component: () => (
+        <DetailPanelHost>
+          <SurveyDetailRoute />
+        </DetailPanelHost>
+      ),
+    });
+    const resultsRoute = createRoute({
+      getParentRoute: () => surveyRoute,
+      path: '/results',
+      component: () => null,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([surveyRoute.addChildren([resultsRoute])]),
+      history: createMemoryHistory({ initialEntries: ['/surveys/survey-1'] }),
+    });
+    await router.load();
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const detail = screen.getByTestId('survey-detail');
+    const sections = [...detail.querySelectorAll('section')];
+    const resultsIndex = sections.findIndex((section) =>
+      within(section).queryByRole('heading', { name: '결과 요약' }),
+    );
+    const builderIndex = sections.findIndex((section) =>
+      within(section).queryByRole('heading', { name: 'Survey 빌더' }),
+    );
+    expect(resultsIndex).toBeGreaterThanOrEqual(0);
+    expect(resultsIndex).toBeLessThan(builderIndex);
+    expect(within(detail).getByRole('link', { name: /결과 요약 보기/ })).toBeInTheDocument();
+    const lockedNote = within(detail).getByText('질문 변경은 잠겨 있습니다.');
+    expect(lockedNote).toHaveClass('text-xs', 'text-text-muted');
   });
 
   it('wires successful lookups into the survey detail and builder routes', () => {

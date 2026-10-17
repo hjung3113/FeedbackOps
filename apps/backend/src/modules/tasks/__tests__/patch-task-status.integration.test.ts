@@ -17,8 +17,10 @@ import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import { cleanupSystemRecoveryFixtures } from '../../../test-support/recovery-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { createAuditService } from '../../core/audit/index.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 import {
   type TaskReleasedReviewCandidatesPayload,
   releasedReviewCandidatesHandler,
@@ -79,6 +81,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    await cleanupSystemRecoveryFixtures(migrateHandle, WORKSPACE_ID, `${SLUG_PREFIX}%`);
     await migrateHandle.pool.query(
       `delete from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
     );
@@ -212,7 +215,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       status: 'doing',
       source: null,
     });
-    const audit = await dbHandle.pool.query<{ detail: unknown }>(
+    const audit = await migrateHandle.pool.query<{ detail: unknown }>(
       `select detail from core.audit_log where workspace_id = $1 and event_type = 'task_status_changed' and subject_id = $2`,
       [WORKSPACE_ID, task.id],
     );
@@ -371,6 +374,16 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       { idempotencyKey: randomUUID(), ifMatch: reopened.json<{ updated_at: string }>().updated_at },
     );
     expect(secondRelease.statusCode).toBe(200);
+    const identity = await dbHandle.pool.query(
+      'SELECT occurrence,state FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('released-task-unresolved-voc', task.id)],
+    );
+    expect(identity.rows).toEqual([{ occurrence: 2, state: 'active' }]);
+    const histories = await dbHandle.pool.query(
+      'SELECT occurrence,outcome FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('released-task-unresolved-voc', task.id)],
+    );
+    expect(histories.rows).toEqual([{ occurrence: 1, outcome: 'resolved' }]);
     const releaseEvents = await migrateHandle.pool.query<{ data: Record<string, unknown> }>(
       `select data from pgboss.job_common
           where name = 'tasks.create_public_update_review_candidates'
@@ -624,7 +637,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       status: 'todo',
       updated_at: task.updatedAt,
     });
-    const audits = await dbHandle.pool.query<{ n: number }>(
+    const audits = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'task_status_changed' and subject_id = $2`,
       [WORKSPACE_ID, task.id],
     );

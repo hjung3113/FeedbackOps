@@ -1,4 +1,5 @@
 import type { FindingDto } from '@fops/shared';
+import type { Tx } from '../../db/tx.js';
 import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { checkFindingManage, checkFindingRead } from './authorization.js';
 import type { FindingReadRow, findCreatedFindingSourceLink } from './repo-read.js';
@@ -28,6 +29,8 @@ export function toDto(
     severity: row.severity,
     confidence: row.confidence,
     status: row.status,
+    owner_actor_id: row.owner_actor_id,
+    owner_team_id: row.owner_team_id,
     analytics_area_id: row.analytics_area_id,
     linked_task_id: row.linked_task_id,
     linked_milestone_id: row.linked_milestone_id,
@@ -90,9 +93,16 @@ export async function canReadFinding(
   deps: Pick<FindingsServiceDeps, 'checkService'>,
   actor: FindingsActor,
   managedSystemId: string,
+  options?: { tx: Tx },
 ): Promise<boolean> {
-  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
-    requireElevatedRole: true,
-  });
+  const decision = await checkFindingRead(
+    deps.checkService,
+    actor,
+    managedSystemId,
+    {
+      requireElevatedRole: true,
+    },
+    options,
+  );
   return decision.allow;
 }

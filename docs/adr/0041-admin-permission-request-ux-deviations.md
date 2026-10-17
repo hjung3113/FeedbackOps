@@ -2,6 +2,8 @@
 
 ## Status
 
+Amended by ADR-0066: `permission_self_approval` also governs direct self grants, alongside ADR-0061 self deny lifts; Task Request policy remains separate.
+
 Accepted 2026-08-02. Records approved decisions D1 and D8 for issues #288 and #276. Deviates from `docs/design-prototype/screen-admin-settings.jsx:209-217`, `docs/design-prototype/screenshots/final-baselines/admin-settings.png`, `docs/design-prototype/screen-permissions.jsx:310-315`, and `docs/design-prototype/screenshots/final-baselines/admin-permissions.png`.
 
 ## Context
@@ -21,3 +23,7 @@ D7, D9, and D13 are approved prototype-silent state extensions: inline dialog va
 ## Consequences
 
 The two approved production corrections intentionally differ from their prototype references without changing either permission policy or Task Request behavior.
+
+## Amended 2026-10-13 — ADR-0066
+
+Amended by ADR-0066: `permission_self_approval` also governs direct self grants, alongside ADR-0061 self deny lifts; Task Request policy remains separate. New behavior is accepted implementation work, not evidence of shipment. See [ADR-0066](0066-permission-request-lifecycle-and-direct-grant.md).

@@ -18,6 +18,8 @@ const createBodySchema = z.object({
   external_key: z.string().min(1).max(200).nullable().optional(),
   default_owner_actor_id: z.string().uuid().nullable().optional(),
   default_owner_team_id: z.string().uuid().nullable().optional(),
+  default_reviewer_actor_id: z.string().uuid().nullable().optional(),
+  default_reviewer_team_id: z.string().uuid().nullable().optional(),
 });
 
 // PATCH body. `slug` is intentionally absent — the route preHandler rejects
@@ -28,6 +30,8 @@ const updateBodySchema = z.object({
   external_key: z.string().min(1).max(200).nullable().optional(),
   default_owner_actor_id: z.string().uuid().nullable().optional(),
   default_owner_team_id: z.string().uuid().nullable().optional(),
+  default_reviewer_actor_id: z.string().uuid().nullable().optional(),
+  default_reviewer_team_id: z.string().uuid().nullable().optional(),
 });
 
 const listQuerySchema = z.object({
@@ -155,6 +159,41 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
         idempotencyKey !== undefined ? { idempotencyKey } : {},
       );
       return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'GET',
+    url: '/managed-systems/default-diagnostics',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    handler: async (req) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      return managedSystemService.getDefaultDiagnostics({
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      });
+    },
+  });
+
+  app.route({
+    method: 'GET',
+    url: '/managed-systems/default-candidates',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    schema: { querystring: z.object({ managed_system_id: z.string().uuid().optional() }).strict() },
+    handler: async (req) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const query = req.query as { managed_system_id?: string };
+      return managedSystemService.getDefaultCandidates(
+        {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        query.managed_system_id,
+      );
     },
   });
 

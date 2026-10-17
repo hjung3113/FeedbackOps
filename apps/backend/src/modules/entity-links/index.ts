@@ -9,6 +9,7 @@ export type { EntityLinkRow, LinkEndpointRow } from './repo.js';
 export { resolveVocEndpoint } from './repo.js';
 export {
   createEntityLink,
+  createSurveyFindingLink,
   detachEntityLink,
   findActiveEntityLink,
   selectActiveLinksForEndpoint,

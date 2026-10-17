@@ -1,8 +1,8 @@
 # `GET /actors` — workspace actor list
 
-Small read endpoint used by the Triage `<OwnerPicker>` and any future
-assignee-selection UI. Closes the post-Slice 3 #21 drift gap (FE shipped the
-hook in #21, BE route registered post-#21).
+General workspace identity read endpoint. Triage `<OwnerPicker>` actor choices
+use `GET /vocs/:id/owner-candidates` instead (#1172), so workspace membership
+alone never implies assignment eligibility.
 
 ## Contract
 
@@ -26,8 +26,8 @@ hook in #21, BE route registered post-#21).
 
 `role_level` is the canonical storage form (`admin | developer | user`,
 ADR-0006). The `kind: 'user' | 'team'` taxonomy used by `<OwnerPicker>` is a
-FE-only mapping inside `useWorkspaceActors`; today every BE row maps to
-`'user'` because the data model has no team actors (ADR-0018 teams stub).
+FE-only mapping in the Triage controller. Its VOC-scoped candidate API returns
+Actors only; teams retain their existing source (ADR-0018 teams stub).
 
 ## Schema
 

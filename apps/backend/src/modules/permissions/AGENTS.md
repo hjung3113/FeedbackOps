@@ -29,3 +29,11 @@ Permission is not a generic shared utility package.
 ## Verification
 
 - Test allow, deny, explicit deny override, request approval, rejection, expiry, revocation, and safe error payloads when touched.
+
+## Permission close-out contract
+
+- ADR-0066 requester withdrawal/edit/revisions and narrowed approval ship in #1080; selected owner/Admin context and explained risk ship in #1081. Governed direct grants and expired reissue are implemented in #1085; integration and release gates are conductor-owned.
+- Centralize capability/scope candidates; reject unsupported object authorization rather than stripping it into a broader grant. Source objects are provenance.
+- Approval and direct grant share a Permission-owned grant command; expired reissue preserves history through a new grant ID and superseded_at. Never revive or fake-revoke the predecessor.
+- Serialize by recipient through Auth's approved lock seam, then request, workspace policy, grant; requester commands preserve owner/workspace 404 privacy, and Admin authorization precedes replay.
+- Use Core-owned audit-question and authorized source-summary projections; requester reads omit risk/deny internals and all UI-facing reads omit email/restricted Survey data.

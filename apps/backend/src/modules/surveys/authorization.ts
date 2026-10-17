@@ -1,5 +1,6 @@
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import type { CheckService, Decision } from '../permissions/check-service.js';
 import {
   type Scope,
@@ -28,10 +29,6 @@ export async function actorSurveyReadScope(
     };
   }
   return actorScopeForCapability(db, actor, 'survey.read');
-}
-
-export function isSurveyInReadScope(scope: Scope, managedSystemId: string): boolean {
-  return scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId);
 }
 
 const denied: Decision = { allow: false, reason: 'no_grant', requestable: null };
@@ -98,4 +95,23 @@ export async function checkSurveyPersonalResponseRead(
     },
     options,
   );
+}
+
+/** Dashboard distinguishes authorized empty data from an empty denied scope. */
+export async function actorSurveyRecoveryScope(
+  db: Db,
+  checkService: CheckService,
+  actor: SurveyAuthorizationActor,
+): Promise<Scope> {
+  if (actor.role_level !== 'admin') return actorSurveyReadScope(db, checkService, actor);
+  const systems = [
+    ...new Set([
+      ...(await allManagedSystemIds(db, actor.workspace_id)),
+      ...(await listSurveyManagedSystemIds(db, actor.workspace_id)),
+    ]),
+  ];
+  const decisions = await Promise.all(
+    systems.map((id) => checkSurveyRead(checkService, actor, id)),
+  );
+  return { kind: 'scoped', managedSystemIds: systems.filter((_, i) => decisions[i]?.allow) };
 }

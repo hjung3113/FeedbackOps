@@ -205,10 +205,13 @@ conversion until another explicit choice is made. Preserve an explicit Area or
 `없음` choice across same-request refetches; selecting a different Task Request
 resets the conversion form.
 
-A successful review decision updates the canonical queue row and follows its
-result status tab once, keeping that Task Request selected. Use All if the
-result has no status tab. Revisiting the request must not replay an old result
-over newer row state or change the current tab.
+A successful review decision updates the canonical queue row and keeps the
+current tab. Keep the request selected if it still belongs to that tab; otherwise
+select the next row, or the previous row when deciding the last loaded row.
+Retain the decision panel/dialog until focus reaches the next selection or the
+confirmed empty-state heading after fresh data and remaining pages settle.
+Revisiting the request must not replay an old result over newer row state or
+change the current tab.
 
 `POST /task-requests/:id/link-task` is the alternative path when suitable work
 already exists. It requires an approved request and an existing Task in the same
@@ -320,8 +323,6 @@ Acceptance Criteria:
 - Milestone is created from the Tasks surface; Finding -> Milestone creation is future (WF-TASK-002).
 - Milestone can group Tasks.
 - Milestone Detail shows Why this milestone exists, source, Analytics Area, evidence count, and linked objects.
-- Milestone lists show compact schedule risk with a mini timeline.
-- Milestone Detail includes a Timeline section with a child Task Gantt chart.
 ```
 
 ## UI / UX Requirements
@@ -390,28 +391,23 @@ Show when linked context exists:
 
 Milestone UI should preserve the dense, list-first Task experience. The
 Milestones view shows each Milestone as a compact row with source context,
-Managed System, Analytics Area, owner, status, due date, progress, and a mini
-timeline for schedule risk scanning.
+Managed System, Analytics Area, owner, status, due date, and progress.
 
 Selecting a Milestone opens RightDetailPanel as the Milestone Detail. The detail
-panel is the source of truth for milestone context; the Gantt chart is a
-Timeline section inside the detail panel, not a replacement for the detail view.
+panel is the source of truth for milestone context.
 
 Milestone Detail sections:
 
 ```text
 - Header: title, Primary Managed System, Analytics Area, owner, status, due date, actions
 - Overview: Why this milestone exists, source Finding / VOC / Survey context, reporter-safe summary candidate
-- Timeline: child Task Gantt by date and internal Task status
 - Tasks: child Task list with status, assignee, priority, and due date
 - Evidence: linked Evidence Highlights and source objects
 - Activity: decisions, audit events, and updates
 ```
 
-The Milestone list may show a mini timeline, but detailed scheduling belongs in
-the Timeline section of Milestone Detail. Reporter-facing summaries must not
-expose raw internal Task status, backlog priority, internal due dates, or
-Developer discussion from the Gantt.
+Reporter-facing summaries must not expose internal Task status, backlog priority,
+internal due dates, or Developer discussion.
 
 ## Permissions
 
@@ -440,3 +436,19 @@ Developer discussion from the Gantt.
 - Sprint / cycle automation
 - Automatic priority decision
 ```
+
+## Responsibility routing (ADR-0067; implemented)
+
+Assigned-reviewer Actor/team fields on Task Request route pending work;
+`reviewer_actor_id` remains the actual deciding Actor. Reviewer default → eligible owner
+→ same-system Analytics Area team → shared authorized review queue never grants exclusive
+review or self-approval. Authorized explicit null opts out; invalid automatic candidates
+fall through with Admin warning, invalid explicit assignments reject `validation.failed`.
+
+Converted Task has `assignee_team_id` paired with `assignee_actor_id`.
+Use the owner resolver on omission, explicit Actor/team/null when permitted, retain Backlog,
+links/audit/idempotency, and notify only a concrete Actor once. Defaults change no existing
+assignments. Source-owned display/edit/filter and Home assigned-reviewer filter shipped with
+fields; personal views do not invent team membership or narrow operational totals.
+The older conversion assignee validation/status text describes shipped behavior; ADR-0067
+supersedes it only for explicit responsibility validation and default/null routing.

@@ -4,10 +4,12 @@ import { z } from 'zod';
 import { AUDIT_EVENT_DETAIL_SCHEMAS } from '../../enums/audit-events.js';
 import { notificationDtoSchema, notificationEventTypeSchema } from '../../notifications.js';
 import {
+  directPermissionGrantSchema,
   listPermissionDeniesResponseSchema,
   listPermissionGrantsResponseSchema,
   permissionDenyAdminItemSchema,
   permissionGrantAdminItemSchema,
+  permissionGrantOptionsSchema,
 } from '../admin.js';
 import { revokePermissionBodySchema, revokePermissionResultSchema } from '../decisions.js';
 
@@ -122,5 +124,98 @@ describe('Admin permission revocation contracts (ADR-0061)', () => {
         archived_at: null,
       }).subject_type,
     ).toBe('permission_grant');
+  });
+});
+
+describe('governed direct grant contracts (ADR-0066)', () => {
+  it('requires a trimmed reason and a strict known-capability direct body', () => {
+    const body = { actor_id: ACTOR_ID, capability: 'voc.read', reason: '  Approved access  ' };
+    expect(directPermissionGrantSchema.parse(body)).toEqual({ ...body, reason: 'Approved access' });
+    for (const override of [
+      { reason: ' ' },
+      { reason: 'x'.repeat(2001) },
+      { capability: 'unknown' },
+      { workspace_id: WORKSPACE_ID },
+      { expiration: null },
+      { object_id: ID },
+      { self_approval: { policy_citation: ' ', peer_reviewer_absence: 'none' } },
+    ]) {
+      expect(directPermissionGrantSchema.safeParse({ ...body, ...override }).success).toBe(false);
+    }
+  });
+
+  it('registers strict create/reissue audit provenance and paired self metadata', () => {
+    const detail = {
+      grant_id: ID,
+      grantee_actor_id: ACTOR_ID,
+      capability: 'voc.read',
+      managed_system_id: MANAGED_SYSTEM_ID,
+      reason: 'Approved access',
+      expires_at: null,
+      mode: 'create',
+    };
+    const schema = AUDIT_EVENT_DETAIL_SCHEMAS.permission_granted;
+    expect(schema.parse(detail)).toEqual(detail);
+    const reissue = { ...detail, mode: 'reissue', previous_grant_id: WORKSPACE_ID };
+    expect(schema.parse(reissue)).toEqual(reissue);
+    for (const invalid of [
+      { ...detail, mode: 'reissue' },
+      { ...detail, previous_grant_id: WORKSPACE_ID },
+      { ...detail, self_grant: true },
+      { ...detail, extra: true },
+      { ...detail, self_approval: { policy_citation: 'Policy', peer_reviewer_absence: 'None' } },
+    ])
+      expect(schema.safeParse(invalid).success).toBe(false);
+    const self = {
+      ...detail,
+      self_grant: true,
+      self_approval: { policy_citation: 'Policy', peer_reviewer_absence: 'None' },
+    };
+    expect(schema.parse(self)).toEqual(self);
+  });
+
+  it('carries optional voc.read prerequisites and rejects an unknown state', () => {
+    const recipient = {
+      id: ACTOR_ID,
+      display_name: 'Dev',
+      role_level: 'developer' as const,
+    };
+    const triage = {
+      capability: 'voc.triage' as const,
+      managed_system_id: MANAGED_SYSTEM_ID,
+      governance_required: false,
+      preflight: { state: 'available' as const },
+      prerequisites: [
+        {
+          capability: 'voc.read' as const,
+          managed_system_id: MANAGED_SYSTEM_ID,
+          state: 'missing' as const,
+        },
+      ],
+    };
+    const { prerequisites: _omitted, ...withoutPrerequisites } = triage;
+    const envelope = {
+      recipient,
+      self_policy: 'allowed' as const,
+      self_approval_required: false,
+    };
+    expect(
+      permissionGrantOptionsSchema.parse({ ...envelope, candidates: [triage] }).candidates[0],
+    ).toEqual(triage);
+    expect(
+      permissionGrantOptionsSchema.parse({ ...envelope, candidates: [withoutPrerequisites] })
+        .candidates[0],
+    ).toEqual(withoutPrerequisites);
+    expect(
+      permissionGrantOptionsSchema.safeParse({
+        ...envelope,
+        candidates: [
+          {
+            ...withoutPrerequisites,
+            prerequisites: [{ ...triage.prerequisites[0], state: 'blocked' }],
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });

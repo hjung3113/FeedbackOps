@@ -4,7 +4,7 @@ Date: 2026-09-28
 
 ## Status
 
-Accepted.
+Accepted. Amended by ADR-0069 for the new Analytics Area report output grain only.
 
 Closes the decision record required by issue #510 sub-issue 1 and governs its
 storage, commands, and gap predicate (sub-issue 2). The research input is
@@ -171,3 +171,11 @@ use the survey response as subject; detail is strict
 A direct Survey Response → Task Request path, a per-survey follow-up opt-in,
 threshold customization below the ADR-0033 floor, or a Finding merge state
 each reopens the relevant decision here.
+
+## Amended 2026-10-13 — Analytics Area report grain (ADR-0069)
+
+Decision 3's response grain still governs source decisions and the existing Dashboard summary queue.
+For the proposed/new Area report only, Survey projects the existing threshold-gated classifier to
+`follow_up_needed` and counts each closed Outcome Survey at most once. No response count or personal
+field is exposed, even to personal-read holders. The command, storage, resolution and personal-read
+contracts above remain in force; the report never calls personal readers.

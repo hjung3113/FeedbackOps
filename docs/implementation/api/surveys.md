@@ -7,6 +7,9 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 ```text
 POST /surveys
 GET /surveys
+GET /surveys/templates
+GET /surveys/copy-sources
+GET /surveys/:id/copy-source
 GET /surveys/:id
 PATCH /surveys/:id
 POST /surveys/:id/questions
@@ -37,11 +40,208 @@ Current reachable Finding task paths are in the `/findings/:id` family.
 `POST /surveys` requires `survey.manage`, an `Idempotency-Key`, and mutation
 rate limiting. Its strict request body is `{ type: 'discovery' | 'validation' |
 'outcome', title, description?, primary_managed_system_id, analytics_area_id?,
-operator_actor_id?, responses_identity_protected }`. It returns `201` with the
+operator_actor_id?, responses_identity_protected, starting_point? }`. It returns `201` with the
 Survey DTO: `{ id, workspace_id, display_id, type, status, title, description,
 primary_managed_system_id, analytics_area_id, operator_actor_id,
 responses_identity_protected, created_by, opened_at, closed_at, created_at,
 updated_at }`.
+
+### Built-in starting-point creation (#1073, ADR-0070)
+
+Requirement: FR-SURVEY-001. Session and matching Workspace guards remain in
+force. `starting_point` is optional and strict:
+`{ kind: 'builtin', template_id: nonempty string, version: positive integer }`.
+The shared `surveyStartingPointSchema` also accepts the delivered existing-source
+arm described below (#1074). Unknown template/version and source type mismatch
+return `422 validation.failed` (field path `starting_point` or `type`, code
+`invalid`). Raw question bodies and unknown fields at either body level are
+rejected by strict parsing. Omission keeps today's blank creation and audit unchanged.
+
+Keep all existing required fields, including explicit Managed System and
+privacy. A missing/foreign-workspace system returns `404 not_found.record`, an
+archived system `409 conflict.parent_archived`, and missing manage capability
+`403 permission.denied`, including an explicit Admin deny. Optional Analytics
+Area must be active and belong to the selected system; otherwise
+`422 validation.failed` with `fields: [{ path: ['analytics_area_id'], code:
+'out_of_scope' }]`. Operator resolution remains explicit → Managed System
+default → creator, with workspace membership and `survey.manage` validated.
+Title and description come only from the current request; catalog title and
+description are preview suggestions/guidance, never silent persisted defaults.
+
+On an idempotency miss, create one draft and the complete server-owned question
+graph inside the existing transaction. Each inserted question receives a fresh
+DB-generated UUID; dense `sort_order` and the full graph are validated before
+success. There are no branch questions in version 1. Write one
+`survey_question_created` structural audit per question and `survey_created`
+with optional `{ starting_point: { kind, template_id, version }, question_count }`
+in addition to its existing detail. The registered strict shared audit schema
+permits these metadata fields and rejects prompt/label/title/answer content.
+No Entity Link or response, approval, result, follow-up, Finding or distribution
+state is created/copied. The draft has current creator/operator, fresh times,
+null opened/closed times and independently chosen privacy/system/area.
+
+A failure in any question insertion, complete-graph validation or audit rolls
+back the Survey, questions, audits, Display ID counter and idempotency success.
+The compact `201` Survey DTO above stays unchanged, without `questions`; read
+persisted detail when entering the builder. UUIDv4 Idempotency-Key is required.
+Same Actor/key/body returns the same graph/metadata and one audit set; changed
+body/template/version with the same key returns
+`409 conflict.idempotency_key_reuse`. Do not reread/recreate on completed replay.
+
+### GET /surveys/templates — built-in preview catalog
+
+Requirement: FR-SURVEY-001. This route uses session and matching Workspace
+guards, the read rate tier, and `Cache-Control: private, no-cache`. Strict query
+`{ managed_system_id: uuid }` is required: omission, invalid UUID, `all`, repeated
+values and unknown keys return `422 validation.failed`. Validate same-Workspace
+active system and `survey.manage`, preserving Admin explicit-deny precedence;
+system/access failures use the same 404/409/403 codes as creation. This read
+writes no product objects or audits and grants no personal-response access.
+
+Response `200` is exactly `{ items: SurveyTemplate[] }`, parsed by exported
+`surveyTemplatesResponseSchema` in `packages/shared/src/surveys/templates.ts`.
+Items appear in Discovery, Validation, Outcome order. No pagination is needed
+for this three-item server-owned catalog. Each item has:
+
+| Field | Contract |
+| --- | --- |
+| `template_id` | `discovery-basic` / `validation-basic` / `outcome-basic`; immutable identity |
+| `version` | positive integer, currently 1; changing definition content requires a new version |
+| `type` | `discovery` / `validation` / `outcome` matching the built-in |
+| `title` | preview title suggestion: `Discovery 기본 템플릿`, `Validation 기본 템플릿`, `Outcome 기본 템플릿` |
+| `description` | preview guidance: `Managed System 사용 현황과 불편을 확인하세요.`, `제안된 개선 내용을 Survey 설명에 입력하세요.`, `출시된 개선 내용을 Survey 설명에 입력하세요.` respectively |
+| `questions` | nonempty array in visible order; no Survey/question UUIDs |
+
+Each strict question contains `key` (nonempty symbolic string), `kind`, `prompt`
+(nonempty), `is_required` (boolean), `sort_order` (dense integers from 0).
+`single_choice`/`multiple_choice` add `options: [{ key, label }]` (2–50
+nonempty-key/label choices, in visible order). `rating` adds integer
+`rating_min`/`rating_max` (0–10, min below max) and nonempty
+`rating_low_label`/`rating_high_label`. `text` has no extra fields. Fields for
+other kinds are absent, not null. Version 1 has no branches; preview keys never
+stand in for persisted UUIDs. The exact definitions below are the server-owned
+content contract, independent of the current Actor's target Survey fields.
+
+### Built-in definitions (version 1)
+
+| ID/type | Visible questions |
+| --- | --- |
+| `discovery-basic` / `discovery` | 0: `usage-frequency`, required `single_choice`: “이 Managed System을 얼마나 자주 사용하나요?” Options in order: `daily` “매일”, `weekly` “매주”, `monthly-or-less` “월 1회 이하”, `never` “사용한 적 없음”. 1: `pain-point`, optional `text`: “업무에서 가장 불편한 점은 무엇인가요?” |
+| `validation-basic` / `validation` | 0: `expected-usefulness`, required `rating`: “제안된 개선이 업무에 얼마나 도움이 될 것으로 예상하나요?” 1–5, low label “전혀 도움이 되지 않음”, high label “매우 도움이 됨”. 1: `improvement-feedback`, optional `text`: “개선안에서 보완할 점은 무엇인가요?” |
+| `outcome-basic` / `outcome` | 0: `released-usefulness`, required `rating`: “개선 후 이 Managed System이 업무에 얼마나 도움이 되나요?” 1–5, low label “전혀 도움이 되지 않음”, high label “매우 도움이 됨”. 1: `remaining-pain-point`, optional `text`: “개선 후에도 남아 있는 불편은 무엇인가요?” |
+
+Validation's proposal context and Outcome's released improvement belong in the
+operator's independently entered Survey description. Outcome remains positively
+oriented (1–2 poor low band, ADR-0055); this starter makes no automatic
+before/after causality or Task-completion claim.
+
+#1073 supplies built-in creation and #1074 supplies existing-definition reuse.
+The creation dialog (#1075) consumes these parsed reads and creates with a retained
+Idempotency-Key for unchanged uncertain attempts. Creation errors never fall back
+to blank creation; the builder loads persisted questions from GET detail. Source/read/token/snapshot/retry decisions are in
+[ADR-0070](../../adr/0070-survey-starting-templates-and-definition-reuse.md).
+
+### Existing Survey starting-point creation (#1074, ADR-0070)
+
+The additional strict request arm is exactly
+`{ kind: 'existing_survey', survey_id: uuid, definition_token: nonempty string }`
+(token maximum 256 characters). Source means the saved definition, never unsaved
+builder edits. All ordinary target validation above still applies, including
+archived target system → `409 conflict.parent_archived`.
+
+On the idempotency miss path, lock the source Survey before the target Managed
+System (matching source authoring lock order), and lock its ordered questions.
+Recheck current source read/manage and eligibility before comparing the token:
+
+| Source condition | Error |
+| --- | --- |
+| Missing, foreign Workspace, unreadable, or read revoked | `404 not_found.record` |
+| Readable but no manage, including manage revoked | `403 permission.denied` |
+| Authorized system/type mismatch, empty/invalid definition | `422 validation.failed` |
+| Authorized, eligible definition differs from preview token | `409 conflict.stale_write` |
+
+Eligible sources are same Workspace, same selected active Primary Managed
+System, saved draft/open/closed, with a nonempty valid complete graph and dense
+visible order. Explicit denies override Admin fallback. Personal-response read
+permission is neither required nor granted.
+
+The token covers type, Primary Managed System, ordered persisted question IDs,
+and every copied question field. Survey `updated_at` alone is insufficient.
+Create an independent draft through the same atomic graph command as built-ins:
+fresh Survey/Display ID and question UUIDs, parents inserted before children,
+branch parents remapped to new IDs, option/trigger keys retained, and dense
+visible order preserved even when a child visually precedes its parent.
+Copy no responses, answers, excerpts/approvals, results, follow-up decisions,
+Entity Links, Findings or distribution state. Title, description, privacy,
+Analytics Area, creator and operator use the current request/resolution only.
+
+Audit exactly `{ starting_point: { kind: 'existing_survey', survey_id },
+question_count }` in `survey_created`, plus one structural
+`survey_question_created` per copied question (including the new branch parent
+ID when present). Audit provenance is a separate strict allowlist from the
+request: never record the definition token or definition content. Any insertion,
+validation or audit failure rolls back target/questions/audits/counter/idempotency
+success together. The compact `201` response is unchanged. Same Actor/key/body
+replays the completed graph without rechecking a subsequently changed/revoked
+source; changed body/source/token with that key conflicts.
+
+### GET /surveys/copy-sources — eligible saved-source metadata
+
+Session and matching Workspace guards, read rate tier, and
+`Cache-Control: private, no-cache` apply. Strict query:
+`{ managed_system_id: uuid, q?: string, limit?: integer, cursor?: string }`.
+The system is required and must be active in the current Workspace. Missing or
+foreign system → 404, archived system → 409 `conflict.parent_archived`.
+Require current `survey.read` (denial → 404) and `survey.manage` (denial → 403),
+including explicit Admin denies. Unknown/repeated keys, invalid system/cursor,
+or limits outside 1–50 return `422 validation.failed`. `q` is trimmed, at most
+200 characters, and performs case-insensitive literal substring search over
+title and Display ID (wildcards are escaped). Default limit is 20, maximum 50.
+
+Response `200`, exported `surveyCopySourcesResponseSchema`, is exactly:
+`{ items: [{ survey_id, display_id, title, type, status, question_count }],
+page: { has_more: boolean, cursor?: string } }`. No other metadata is returned.
+Only eligible nonempty valid saved definitions appear. Newest first, ordered by
+`(created_at DESC, id DESC)`. The cursor is standard base64-encoded strict JSON
+`{ created_at: ISO timestamp, id: uuid }`, preserving PostgreSQL microseconds;
+the next page is strictly below that tuple. It represents the last emitted item
+and is present only when another page exists. Fetch at most `limit + 1` metadata
+rows, emit at most `limit`. No response/answer/VOC/Task joins or definition arrays
+are loaded by discovery; SQL checks definition validity and computes counts.
+This is live cursor pagination, not a frozen catalog across requests.
+
+### GET /surveys/:id/copy-source — selected definition snapshot
+
+Same guards, read tier and private/no-cache header. Path ID must be a UUID;
+query is strictly empty (unknown parameters → 422). In a short repeatable-read
+transaction, read same-Workspace source metadata and saved questions from one
+snapshot, require current read/manage, active source system and a nonempty valid
+definition. Missing/foreign/unreadable → 404, readable without manage → 403,
+archived system → 409, empty/invalid definition → 422.
+
+Response `200`, exported `surveyCopySourceResponseSchema`, is exactly
+`{ survey_id, display_id, title, type, definition_token, questions }`.
+Each ordered question is a strict allowlist:
+
+| Field | Contract |
+| --- | --- |
+| `id` | persisted question UUID; never a symbolic built-in key |
+| `kind` | `single_choice`, `multiple_choice`, `rating`, `text` |
+| `prompt`, `is_required`, `sort_order` | saved nonempty prompt, boolean, dense visible integer order from 0 |
+| `options` | choice array of 2–50 strict `{ key, label }` entries with nonempty unique keys/labels; null for other kinds |
+| `rating_min`, `rating_max` | integers 0–10, min below max for rating; null for other kinds |
+| `rating_low_label`, `rating_high_label` | saved nullable strings for rating; null for other kinds |
+| `branch_depth` | 0 or 1 |
+| `branch_parent_question_id` | persisted top-level single-choice parent UUID for a child; null otherwise |
+| `branch_trigger_option_key` | existing parent option key for a child; null otherwise |
+
+No Workspace/system/operator/creator/privacy/area/lifecycle/runtime fields or
+question timestamps/survey ID/parent-depth storage fields are returned. The
+source type is informational until the create request explicitly matches it;
+the frontend must use these dedicated schemas, not the symbolic built-in preview
+schema. #1075's creation dialog consumes this private snapshot for its read-only preview.
+
+### Existing Survey list and mutation commands
 
 `GET /surveys` accepts the optional query
 `managed_system_id=<uuid>|all` and returns a permission-filtered array of the
@@ -95,9 +295,18 @@ questions. A successful open/close updates the status and records respectively
 `GET /surveys/:id/form` is the respondent form read surface. Any authenticated
 Actor in the same Workspace may read an open Survey without `survey.read`; a
 missing or cross-Workspace Survey returns `404 not_found.record`, and a
-non-open Survey returns `409 conflict.survey_not_open`. Its DTO is respondent
-safe: form fields, questions, choices, and rating bounds only—never operator or
-personal-response data.
+non-open Survey returns `409 conflict.survey_not_open` with message
+`survey is not open`. After those checks, if the Survey is not in
+`survey.read_my_answerable_surveys(workspace, actor)` — queried with
+`select exists (select 1 from survey.read_my_answerable_surveys(…) where survey_id = $id)`
+and no table `SELECT` — the Actor has already answered and receives
+`409 conflict.survey_response_already_submitted` with message
+`survey response already submitted`, the same code and message as
+`POST /surveys/:id/responses`. A closed Survey is rejected as not-open before
+that check, even when a response already exists. The strict survey object is
+exactly `{ id, title, type, identity_protected, description }` where
+`description` is `string | null`, plus questions, choices, and rating bounds.
+The body never carries operator or respondent identity.
 
 `POST /surveys/:id/responses` is implemented for an authenticated Actor in the
 same Workspace and requires `Idempotency-Key`. It returns `201` with only
@@ -200,11 +409,17 @@ Candidate reads write `survey_response_personal_read` in the same transaction; a
 
 ### POST /survey-responses/:id/create-finding
 
-This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
+This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, owner_actor_id?, owner_team_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. Optional nullable owner fields use the Finding destination resolver only after the complete Survey source gate, preserving explicit/null/omitted semantics and approved-excerpt privacy. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
 
-The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`; backend-generated title and summary use only survey type/display ID, approved question label, and approved redacted excerpt. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
+The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`. After ADR-0064/#739 cutover the public `source_id` is
+NULL and the original response UUID is retained in a Survey-owned protected
+extension (proposed/new); generated title/summary contain deterministic Survey
+type/display ID and approved question metadata only, never excerpt text. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
 
-Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
+Same actor/key/body/source replays the original Finding with no duplicate side effects
+(subject to ADR-0015/ADR-0064 targeted legacy Survey cache sanitization); changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic raw survey-response highlight attachment remains rejected. ADR-0064
+uses the separate #1109 approval-selection command documented in
+`findings.md`, implemented in #816 after #739/#740.
 
 Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
@@ -278,3 +493,117 @@ POST /survey-responses/:id/create-voc
 ```
 
 If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response. Issue #185 pins the unregistered route to Fastify's `404` behavior with an integration test.
+
+## Close-out responsibility (ADR-0067)
+
+Survey operator resolution/validation is unchanged. Survey-response-derived Finding
+creation gains permitted proposed/new owner Actor/team input and safe default-resolution
+metadata through the Finding command, using the destination system and its `finding.manage`
+gate only after the Survey personal source seam. No target-owner disclosure bypasses source
+visibility. Outcome Dashboard integration preserves ADR-0055's aggregate count/safe Survey
+navigation and personal-response audits. The implemented response presentation/history adapter
+is Survey-owned, personal-gated with no Admin bypass, and does not duplicate decisions or
+expose response-derived identities/counts to non-holders. The personal routes are
+`GET /surveys/:id/outcome-follow-up/recovery-items`,
+`GET /surveys/:id/outcome-follow-up/history`, and
+`GET|PATCH /survey-responses/:id/outcome-follow-up/presentation`. See
+[Dashboard API — Outcome Survey adapter exception](dashboard.md#outcome-survey-adapter-exception)
+for strict bodies, visible/hidden pagination, occurrence reset and UTC history-window rules.
+Personal recovery GETs disclose response identities only while the personal classifier can
+provide the response/low-answer question pairs required for `survey_response_personal_read`.
+After withdrawal (including a raised anonymity threshold), history omits those response rows
+before count/paging, and point presentation GET returns `404 not_found.record`. Such GETs
+write no personal-read audit because they disclose no response identity. Stored immutable
+history is retained; each disclosed pair on an eligible read still audits in that transaction.
+
+## Analytics Area report destination extension (ADR-0069)
+
+The wire query keys, browser search, typed frontend forwarding and rendered filters are
+**implemented by #1077 (backend + shared + frontend)**. Keep existing unfiltered
+and legacy behavior; this list remains unpaged. Apply workspace and source authorization before
+Area filtering and classifier evaluation. A UUID matches only the source's own current `analytics_area_id`;
+`unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
+an empty authorized result, without catalog existence disclosure. Archived referenced Areas
+remain filterable; they are not selectable as new classifications. Browser key is
+`filter.analytics_area=<uuid|unset>`; clients translate it to the owning wire query key below.
+Grouped report counts and exact list membership must share the owner predicate, including
+cross-source availability rules; hidden links are not absent links. These ordinary reads write
+no source records or domain audit events. Source repair commands keep their existing gates/audits.
+
+`GET /surveys` gains wire `analytics_area_id=<uuid|unset>`, `status=open`, and `follow_up=needed`.
+The existing Survey list response remains an authorized Survey DTO array. The shared query
+schema is strict: unknown keys or invalid values return `422 validation.failed`. All filters
+intersect, including `status=open&follow_up=needed`, which returns `[]`.
+`follow_up=needed` uses the Survey-owned boolean from the ADR-0055 threshold-gated closed Outcome
+classifier: at least one currently poor response has resolution `open`. Count/list each Survey once,
+regardless of the number of poor responses. Open/draft, below-threshold and no-poor-answer Surveys
+never match; a qualifying current Finding or no-follow-up decision clears the corresponding response,
+and a Survey clears only when no unresolved poor response remains. Do not compute the filter by
+calling personal readers in a loop or exposing a response count/ID or answer-derived filter.
+The Survey owner provides the grouped safe batch projection `countGroupedSurveysForReport` for Dashboard composition (#1078).
+
+`survey.read` and explicit denies apply, including an explicit deny for an Admin. The report and
+ordinary filtered list add no personal-read fields or audits. Survey detail's existing
+`/surveys/:surveyId/follow-up` route calls `GET /surveys/:id/outcome-follow-up`; per-response
+commands retain fresh personal capability checks and the source's existing read/mutation audits.
+A personal-read holder still receives only Survey-grain report metrics.
+
+## GET /surveys/:id/evidence-candidates — #1109 (ADR-0064)
+
+ADR-0065 selects this endpoint for Finding's approved-excerpt picker; no separate
+`evidence-excerpts` endpoint is added. The picker uses a separately authorized
+Survey catalog, then these safe pages; it never fetches personal results to
+filter client-side. Preserve source/Survey-change reset, distinct response-state/
+no-approved-excerpt/error states and fresh submit revalidation. Attachment remains
+Finding-owned `POST /findings/:id/survey-evidence` with existing classification
+fields, target-first validation/error ordering and metadata-only replay as defined
+in `findings.md`. Inventory uses the linked-highlight audience, not this picker
+suppression. Neither this selection read nor safe attachment fabricates personal
+read audits; actual personal source reads keep existing audits.
+
+Backend and shared schemas are implemented by #1109; real-role migration and integration
+verification remain conductor-owned. The frontend picker is a separate implementation item.
+
+- **Auth:** authenticated session Actor/workspace; lookup Survey in workspace,
+  then `survey.read` on source Managed System. Missing/foreign/source-denied
+  (including explicit-denied Admin) returns `404 not_found.record`. Draft returns
+  `409 conflict.survey_results_unavailable` only after source access. No personal
+  grant is required. Existing explicit personal holders retain below-threshold
+  result exceptions; role alone grants no personal access.
+- **Query:** strict `{ limit?: integer 1..100, cursor?: opaque string }`, default
+  50; no arbitrary text/dimension filters. Stable bounded pages, with an opaque
+  cursor containing no response identity. Pages order by approval UUID; the cursor
+  binds workspace, Actor and Survey plus the last approval UUID. Each page uses a
+  repeatable-read snapshot. Recheck source permissions, current
+  approvals and result suppression on every page. Invalid ID/query/cursor uses
+  existing `422 validation.failed` envelope.
+- **Response:** `{ response_state, items, page }`, with
+  `response_state: none | below_threshold | visible`,
+  `items: [{ approved_excerpt_id, redacted_excerpt, question_label, survey_type,
+  survey_display_id, identity_protected }]`, and `page: { has_more, cursor? }`.
+  `approved_excerpt_id` is the approval selection reference, not a response ID;
+  schemas must be strict. Suppressed/none states have empty items and no numeric
+  suppressed count. Cursor is present only for another eligible page.
+- **Privacy:** derive state from actual response subjects and per-question answers,
+  not approval counts; preserve existing low positive bucket and text-answer
+  suppression. A visible Survey may still have suppressed questions. Personal
+  holders receive no response UUID in this endpoint. No respondent, response
+  deep link, exact submission time, raw answer, Survey title or audit internals.
+- **Side effects:** no links, counters or mutation/idempotency entries. Safe picker
+  reads write no fabricated personal-read audit. Use existing read rate limiting
+  (`rate_limited.actor`); actual personal source reads retain their own audits.
+
+### Derived Finding read cutover (ADR-0064/#740)
+
+Results uses a proposed/new Survey-owned workspace+Survey-ID reader that returns
+candidate Finding IDs and target scope only. Source Survey read/privacy and each
+Finding's target read gate remain independent, including different Managed
+Systems in the same workspace. No personal grant is required merely to discover
+already-derived accessible Findings. Active-approved responses retain the shipped
+Results action audience even when aggregates are suppressed. Approval-free discovery
+requires a cohort at or above the configured threshold; personal access alone does
+not enable it. These rules do not expose suppressed question counts or excerpts.
+The raw application `core.entity_links` response-ID join is removed; #740 revokes app raw link/audit reads without changing the existing
+personal result/follow-up response-ID gates. Linked quotes use the batch Survey
+projection with exact-active approval/source/target checks in one transaction
+snapshot. Existing attached-highlight audience is not tightened to picker suppression.

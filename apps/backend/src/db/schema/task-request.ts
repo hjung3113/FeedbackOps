@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { actors, managedSystems, workspaces } from './core.js';
+import { actors, managedSystems, teams, workspaces } from './core.js';
 
 export const taskRequestSchema = pgSchema('task_request');
 
@@ -25,12 +25,18 @@ export const taskRequests = taskRequestSchema.table(
       .references(() => actors.id),
     status: text('status').notNull().default('pending_review'),
     reviewerActorId: uuid('reviewer_actor_id').references(() => actors.id),
+    assignedReviewerActorId: uuid('assigned_reviewer_actor_id').references(() => actors.id),
+    assignedReviewerTeamId: uuid('assigned_reviewer_team_id').references(() => teams.id),
     decisionReason: text('decision_reason'),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    responsibilityXorCheck: check(
+      'task_requests_responsibility_xor_check',
+      sql`${t.assignedReviewerActorId} IS NULL OR ${t.assignedReviewerTeamId} IS NULL`,
+    ),
     workspaceDisplayUq: uniqueIndex('task_requests_workspace_display_id_uq').on(
       t.workspaceId,
       t.displayId,

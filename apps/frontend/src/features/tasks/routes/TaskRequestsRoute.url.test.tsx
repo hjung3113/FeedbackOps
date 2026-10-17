@@ -1,4 +1,5 @@
 import { fetchTaskRequests, getTaskRequest, resolveActors } from '@/lib/api';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
 import { parseAppSearch, stringifyAppSearch } from '@/lib/router/search-serialization';
 import { TasksRouteView, validateTasksSearch } from '@/routes/_authed/tasks';
@@ -33,7 +34,22 @@ vi.mock('@/lib/api', async (original) => ({
 vi.mock('@/lib/auth/useMe', () => ({
   useMe: () => ({ data: { actor: { id: 'actor', role_level: 'admin' } } }),
 }));
-vi.mock('@/lib/api/managed-systems', () => ({ fetchManagedSystems: async () => ({ items: [] }) }));
+vi.mock('@/lib/api/managed-systems', () => ({
+  fetchManagedSystems: vi.fn(async () => ({ items: [] })),
+}));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({
+    actors: [
+      {
+        id: '60000000-0000-0000-0000-000000000006',
+        display_name: '검토 운영자',
+        email: 'rev@example.test',
+        role_level: 'admin',
+        actor_type: 'internal_member',
+      },
+    ],
+  }),
+}));
 vi.mock('./task-requests/TaskRequestPanel', () => ({
   TaskRequestPanel: ({
     item,
@@ -68,6 +84,8 @@ const first: TaskRequestDto = {
   requested_outcome: 'Request A',
   requester_actor_id: 'actor',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -243,20 +261,38 @@ it('keeps the new cross-scope param while the previous off-page detail is cached
   expect(mounted.router.state.location.search.param).toBe('b1');
 });
 
-it('replaces the URL with the decided request and keeps its result-tab detail', async () => {
+it('reconciles cleared selection to fresh current-tab data after the decision overlay expires', async () => {
   vi.mocked(getTaskRequest).mockResolvedValue({ ...first, status: 'approved' });
   const mounted = mount(initial);
   fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-  await waitFor(() => expect(mounted.router.state.location.search.param).toBe('a1'));
+  await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
+  await settledQueue(mounted);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
   expect(mounted.history.length).toBe(1);
   expect(mounted.router.state.location.search).toEqual({
     view: 'requests',
     managedSystem: A,
     public_update: 'missing',
-    param: 'a1',
+    param: first.id,
   });
-  expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByTestId('detail')).toHaveTextContent('REQ-A');
+  expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('lets a newer explicit off-page selection own the queue after decision completion', async () => {
+  mockQueue([first, { ...second, primary_managed_system_id: A }], [second.id]);
+  const mounted = mount(`${initial}&param=a1`);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
+  await act(async () => {
+    await mounted.router.navigate({
+      to: '/tasks',
+      search: { view: 'requests', managedSystem: A, param: second.id },
+    });
+  });
+  expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-B');
+  await settledQueue(mounted);
+  expect(mounted.router.state.location.search.param).toBe(second.id);
+  expect(screen.getByTestId('detail')).toHaveTextContent('REQ-B');
 });
 
 // #1022 mocks parse the strict API query and keep summary reads separate from pages.
@@ -520,3 +556,92 @@ it.each(['row', 'scope+param'] as const)(
     replace.mockRestore();
   },
 );
+
+it('restores reviewer filters through URL navigation without changing scope or operational summary', async () => {
+  mockQueue([first, second]);
+  const mounted = mount(`${initial}&reviewer=me`);
+  await settledQueue(mounted);
+  expect(
+    vi
+      .mocked(fetchTaskRequests)
+      .mock.calls.some(
+        ([options]) => options?.reviewer === 'me' && options.managed_system_id === A,
+      ),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('combobox', { name: '검토자 필터' }));
+  fireEvent.click(await screen.findByRole('option', { name: '모든 검토자' }));
+  await waitFor(() => expect(mounted.router.state.location.search.reviewer).toBeUndefined());
+  expect(mounted.router.state.location.search.managedSystem).toBe(A);
+  await act(async () => {
+    mounted.history.back();
+  });
+  await waitFor(() => expect(mounted.router.state.location.search.reviewer).toBe('me'));
+  expect(screen.getByRole('combobox', { name: '검토자 필터' })).toHaveTextContent('내 검토 요청');
+});
+
+it('re-syncs the reviewer picker with committed search through Back and Forward after a team filter', async () => {
+  const TEAM_ID = '20000000-0000-0000-0000-000000000002';
+  vi.mocked(fetchManagedSystems).mockResolvedValue({
+    items: [
+      {
+        id: A,
+        workspace_id: 'workspace',
+        slug: 'billing-ops',
+        name: 'Billing Ops',
+        external_key: null,
+        default_owner_actor_id: null,
+        default_owner_team_id: null,
+        default_reviewer_actor_id: null,
+        default_reviewer_team_id: TEAM_ID,
+        archived_at: null,
+        archived_by_actor_id: null,
+        created_at: '2026-07-10T00:00:00.000Z',
+        updated_at: '2026-07-10T00:00:00.000Z',
+      },
+    ],
+    total: 1,
+  });
+  vi.mocked(resolveActors).mockResolvedValue({
+    actors: [],
+    teams: [{ id: TEAM_ID, name: '검토팀' }],
+  });
+  mockQueue([first, second]);
+  const mounted = mount(`${initial}&reviewer=me`);
+  await settledQueue(mounted);
+  fireEvent.click(screen.getByRole('combobox', { name: '검토자 필터' }));
+  fireEvent.click(await screen.findByRole('option', { name: '팀 · 검토팀' }));
+  await waitFor(() =>
+    expect(mounted.router.state.location.search).toEqual({
+      view: 'requests',
+      managedSystem: A,
+      public_update: 'missing',
+      reviewerTeam: TEAM_ID,
+    }),
+  );
+  await settledQueue(mounted);
+  expect(screen.getByRole('combobox', { name: '검토자 필터' })).toHaveTextContent('팀 · 검토팀');
+  await act(async () => {
+    mounted.history.back();
+  });
+  await waitFor(() => {
+    expect(mounted.router.state.location.search.reviewer).toBe('me');
+    expect(mounted.router.state.location.search.reviewerTeam).toBeUndefined();
+  });
+  await settledQueue(mounted);
+  expect(screen.getByRole('combobox', { name: '검토자 필터' })).toHaveTextContent('내 검토 요청');
+  await act(async () => {
+    mounted.history.forward();
+  });
+  await waitFor(() => expect(mounted.router.state.location.search.reviewerTeam).toBe(TEAM_ID));
+  await settledQueue(mounted);
+  expect(screen.getByRole('combobox', { name: '검토자 필터' })).toHaveTextContent('팀 · 검토팀');
+});
+
+it('shows the deep-linked reviewer Actor in the picker without a raw ID input', async () => {
+  mockQueue([first]);
+  const mounted = mount(`${initial}&reviewer=60000000-0000-0000-0000-000000000006`);
+  await settledQueue(mounted);
+  const picker = screen.getByRole('combobox', { name: '검토자 필터' });
+  expect(picker).toHaveTextContent('검토 운영자');
+  expect(document.querySelector('#reviewer-filter-id')).toBeNull();
+});

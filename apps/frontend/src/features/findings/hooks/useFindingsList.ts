@@ -4,6 +4,7 @@
 
 import { apiRequest } from '@/lib/api';
 import { ApiError, ApiParseError } from '@/lib/api/types';
+import { placeholderDataForSearchOnly } from '@/lib/query/placeholder-data-for-search';
 import { listFindingsResponseSchema } from '@fops/shared';
 import type { ListFindingsResponse } from '@fops/shared';
 import { type UseQueryResult, useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -39,20 +40,39 @@ export function useFindingsList(
 }
 
 const PAGE_SIZE = 50;
-export function useFindingsPages(managedSystemId?: string, execution?: 'none') {
+export function useFindingsPages(
+  managedSystemId?: string,
+  execution?: 'none',
+  assignment?: 'assigned' | 'unassigned',
+  analyticsAreaId?: string,
+  status?: 'active',
+  q?: string,
+) {
+  const queryKey = [
+    'findings',
+    'pages',
+    { managedSystemId, execution, assignment, analyticsAreaId, status, q },
+  ] as const;
   return useInfiniteQuery({
-    queryKey: ['findings', 'pages', { managedSystemId, execution }] as const,
+    queryKey,
+    placeholderData: (previousData, previousQuery) =>
+      placeholderDataForSearchOnly(queryKey, previousData, previousQuery),
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }) => {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (managedSystemId !== undefined) params.set('managed_system_id', managedSystemId);
       if (execution !== undefined) params.set('execution', execution);
+      if (assignment !== undefined) params.set('assignment', assignment);
+      if (analyticsAreaId !== undefined) params.set('analytics_area_id', analyticsAreaId);
+      if (status !== undefined) params.set('status', status);
+      if (q !== undefined) params.set('q', q);
       if (pageParam !== undefined) params.set('cursor', pageParam);
       return (
         await apiRequest('GET', `/findings?${params}`, listFindingsResponseSchema, { signal })
       ).data;
     },
-    getNextPageParam: (last) => (last.page?.has_more ? last.page.cursor : undefined),
+    getNextPageParam: (last: ListFindingsResponse) =>
+      last.page?.has_more ? last.page.cursor : undefined,
     staleTime: 30_000,
     retry: (count, error) =>
       !(error instanceof ApiParseError) &&

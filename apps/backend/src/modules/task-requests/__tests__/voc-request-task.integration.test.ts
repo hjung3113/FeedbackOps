@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // VOC / VOC Cluster -> Task Request creation (#136).
 //
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID. The conductor runs
@@ -13,9 +14,15 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
-import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertMsDirectly, insertTeamDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  denyCapability,
+  expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
 import { insertVocClusterRow } from '../../../test-support/voc-cluster-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
@@ -26,7 +33,7 @@ const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 const SLUG_PREFIX = 'it-voc-request-task';
 
-type SourceKind = 'voc' | 'voc_cluster';
+type SourceKind = 'voc' | 'voc_cluster' | 'finding';
 
 describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () => {
   let dbHandle: DbHandle;
@@ -36,6 +43,8 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
   let userCookie: string;
   let adminActorId: string;
   let userActorId: string;
+  const teamIds: string[] = [];
+  const foreignWorkspaceIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -89,10 +98,27 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
           and source_type in ('voc', 'voc_cluster')`,
       [WORKSPACE_ID],
     );
+    // Responsibility cases also create other link kinds on the fixture systems.
+    await migrateHandle.pool.query(
+      `delete from core.entity_links
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await migrateHandle.pool.query(
       `delete from task_request.task_requests
         where workspace_id = $1
           and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from permission.permission_denies
+        where workspace_id = $1
+          and managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
@@ -135,7 +161,23 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     await migrateHandle.pool.query('delete from voc_cluster.voc_clusters where workspace_id = $1', [
       WORKSPACE_ID,
     ]);
+    await migrateHandle.pool.query(
+      'delete from finding.findings where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      'delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+    await migrateHandle.pool.query('delete from core.teams where id = any($1::uuid[])', [teamIds]);
+    teamIds.length = 0;
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.workspaces where id = any($1::uuid[])',
+      [foreignWorkspaceIds],
+    );
+    foreignWorkspaceIds.length = 0;
   }
 
   async function seedVocSource(): Promise<{ id: string; msId: string }> {
@@ -168,16 +210,30 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     return { id: cluster.id, msId };
   }
 
+  async function seedFindingSource() {
+    const voc = await seedVocSource();
+    const finding = await insertFindingRow(dbHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: voc.msId,
+      sourceId: voc.id,
+      createdBy: adminActorId,
+    });
+    return { id: finding.id, msId: voc.msId };
+  }
+
   function requestTask(
     cookie: string,
     source: SourceKind,
     sourceId: string,
     idempotencyKey = randomUUID(),
+    responsibility: Record<string, string | null> = {},
   ) {
     const path =
       source === 'voc'
         ? `/vocs/${sourceId}/request-task`
-        : `/voc-clusters/${sourceId}/request-task`;
+        : source === 'finding'
+          ? `/findings/${sourceId}/request-task`
+          : `/voc-clusters/${sourceId}/request-task`;
     return app.inject({
       method: 'POST',
       url: path,
@@ -187,6 +243,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
         'idempotency-key': idempotencyKey,
       },
       payload: {
+        ...responsibility,
         evidence_summary: `${source} evidence summary`,
         requested_outcome: `${source} requested outcome`,
       },
@@ -231,7 +288,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       primary_managed_system_id: input.msId,
     });
 
-    const link = await dbHandle.pool.query<{ id: string }>(
+    const link = await migrateHandle.pool.query<{ id: string }>(
       `select id
          from core.entity_links
         where workspace_id = $1
@@ -245,7 +302,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     );
     expect(link.rowCount).toBe(1);
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1
@@ -261,6 +318,357 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       source_type: input.source,
     });
   }
+
+  it.each([
+    'owner',
+    'team',
+    'aa',
+    'queue',
+    'invalid_reviewer_owner',
+    'revoked',
+    'expired',
+    'denied',
+    'system',
+  ] as const)(
+    'resolves reviewer through %s with discoverable skipped rules and no replay diagnostic duplication',
+    async (mode) => {
+      const seeded = await seedVocSource();
+      const teamId = await insertTeamDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+      teamIds.push(teamId);
+      if (['owner', 'team', 'invalid_reviewer_owner'].includes(mode)) {
+        await migrateHandle.pool.query(
+          `update core.managed_systems set default_owner_actor_id = $1::uuid,
+          default_owner_team_id = $2::uuid where id = $3::uuid`,
+          [
+            ['owner', 'invalid_reviewer_owner'].includes(mode) ? adminActorId : null,
+            mode === 'team' ? teamId : null,
+            seeded.msId,
+          ],
+        );
+      }
+      if (mode === 'aa') {
+        const area = await migrateHandle.pool.query<{ id: string }>(
+          `insert into core.analytics_areas
+          (workspace_id, managed_system_id, slug, name, owner_team_id) values ($1, $2, $3, $3, $4) returning id`,
+          [WORKSPACE_ID, seeded.msId, uid(SLUG_PREFIX), teamId],
+        );
+        await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [
+          area.rows[0]?.id,
+          seeded.id,
+        ]);
+      }
+      if (mode === 'system' || mode === 'invalid_reviewer_owner') {
+        const sys = await dbHandle.pool.query<{ id: string }>(
+          `select id from core.actors
+            where external_id = 'system' and workspace_id = $1`,
+          [WORKSPACE_ID],
+        );
+        const systemActorId = sys.rows[0]?.id;
+        if (!systemActorId) throw new Error('seed system actor not found');
+        await migrateHandle.pool.query(
+          'update core.managed_systems set default_reviewer_actor_id = $1 where id = $2',
+          [systemActorId, seeded.msId],
+        );
+      }
+      if (['revoked', 'expired', 'denied'].includes(mode)) {
+        const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+        const grant = await grantCapability(
+          dbHandle,
+          WORKSPACE_ID,
+          dev.id,
+          'finding.manage',
+          seeded.msId,
+          adminActorId,
+        );
+        if (mode === 'revoked') await revokeCapabilityGrant(dbHandle, grant, adminActorId);
+        if (mode === 'expired') await expireCapabilityGrant(dbHandle, grant);
+        if (mode === 'denied')
+          await denyCapability(
+            dbHandle,
+            WORKSPACE_ID,
+            dev.id,
+            'finding.manage',
+            seeded.msId,
+            adminActorId,
+          );
+        await migrateHandle.pool.query(
+          'update core.managed_systems set default_reviewer_actor_id = $1 where id = $2',
+          [dev.id, seeded.msId],
+        );
+      }
+      const key = randomUUID();
+      const first = await requestTask(adminCookie, 'voc', seeded.id, key);
+      expect(first.statusCode).toBe(201);
+      const resolved = ['owner', 'team', 'aa', 'invalid_reviewer_owner'].includes(mode);
+      expect(first.json()).toMatchObject({
+        status: 'pending_review',
+        reviewer_actor_id: null,
+        assigned_reviewer_actor_id: ['owner', 'invalid_reviewer_owner'].includes(mode)
+          ? adminActorId
+          : null,
+        assigned_reviewer_team_id: ['team', 'aa'].includes(mode) ? teamId : null,
+        default_resolved: resolved,
+        source_rule:
+          mode === 'aa'
+            ? 'analytics_area_owner'
+            : resolved
+              ? 'managed_system_owner'
+              : 'workspace_fallback_queue',
+      });
+      const replay = await requestTask(adminCookie, 'voc', seeded.id, key);
+      expect(replay.json()).toEqual(first.json());
+      const diagnostics = await migrateHandle.pool.query<{ rule: string; category: string }>(
+        'select rule, category from core.responsibility_default_failures where managed_system_id = $1 order by rule',
+        [seeded.msId],
+      );
+      expect(diagnostics.rows).toHaveLength(
+        resolved ? (mode === 'invalid_reviewer_owner' ? 1 : 0) : 3,
+      );
+      expect(new Set(diagnostics.rows.map((row) => row.rule)).size).toBe(diagnostics.rows.length);
+      if (mode === 'owner' || mode === 'team') {
+        const warnings = await app.inject({
+          method: 'GET',
+          url: '/managed-systems/default-diagnostics',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        });
+        expect(warnings.statusCode).toBe(200);
+        expect(
+          warnings
+            .json()
+            .items.filter(
+              (item: { managed_system_id: string }) => item.managed_system_id === seeded.msId,
+            ),
+        ).toEqual([]);
+      }
+      if (mode === 'queue')
+        expect(diagnostics.rows).toEqual([
+          { rule: 'analytics_area_owner', category: 'missing' },
+          { rule: 'managed_system_owner', category: 'missing' },
+          { rule: 'managed_system_reviewer', category: 'missing' },
+        ]);
+      if (mode === 'invalid_reviewer_owner')
+        expect(diagnostics.rows).toEqual([
+          { rule: 'managed_system_reviewer', category: 'ineligible_actor' },
+        ]);
+      if (['revoked', 'expired', 'denied', 'system'].includes(mode))
+        expect(diagnostics.rows).toContainEqual({
+          rule: 'managed_system_reviewer',
+          category: 'ineligible_actor',
+        });
+    },
+  );
+
+  it('assignment preserves the open authorized queue and grants no self-approval', async () => {
+    const seeded = await seedClusterSource();
+    const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      dev.id,
+      'finding.manage',
+      seeded.msId,
+      adminActorId,
+    );
+    await migrateHandle.pool.query(
+      'update core.managed_systems set default_reviewer_actor_id = $1 where id = $2',
+      [dev.id, seeded.msId],
+    );
+    const cookie = await loginAs(app, dev.externalId);
+    const created = await requestTask(cookie, 'voc_cluster', seeded.id);
+    expect(created.statusCode).toBe(201);
+    const decide = (cookie: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/task-requests/${created.json().id}/approve`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'idempotency-key': randomUUID() },
+        payload: { reason: 'Real review' },
+      });
+    expect((await decide(cookie)).statusCode).toBe(403);
+    const actual = await decide(adminCookie);
+    expect(actual.statusCode).toBe(200);
+    expect(actual.json()).toMatchObject({
+      assigned_reviewer_actor_id: dev.id,
+      reviewer_actor_id: adminActorId,
+      status: 'approved',
+    });
+  });
+
+  it.each([
+    ['finding', seedFindingSource],
+    ['voc', seedVocSource],
+    ['voc_cluster', seedClusterSource],
+  ] as const)(
+    'routes %s to a real assigned reviewer distinct from the decision Actor, once on replay',
+    async (source, seed) => {
+      const seeded = await seed();
+      await migrateHandle.pool.query(
+        'update core.managed_systems set default_reviewer_actor_id = $1 where id = $2',
+        [adminActorId, seeded.msId],
+      );
+      const key = randomUUID();
+      const first = await requestTask(adminCookie, source, seeded.id, key);
+      expect(first.statusCode).toBe(201);
+      expect(first.json()).toMatchObject({
+        status: 'pending_review',
+        reviewer_actor_id: null,
+        assigned_reviewer_actor_id: adminActorId,
+        assigned_reviewer_team_id: null,
+        default_resolved: true,
+        source_rule: 'managed_system_reviewer',
+        managed_system_id: seeded.msId,
+      });
+      const second = await requestTask(adminCookie, source, seeded.id, key);
+      expect(second.json()).toEqual(first.json());
+      const audit = await migrateHandle.pool.query(
+        'select detail from core.audit_log where subject_id = $1 and event_type = $2',
+        [first.json().id, `task_request_created_from_${source}`],
+      );
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0]?.detail).toMatchObject({
+        assigned_reviewer_actor_id: adminActorId,
+        default_resolved: true,
+        source_rule: 'managed_system_reviewer',
+      });
+      const failures = await migrateHandle.pool.query(
+        'select 1 from core.responsibility_default_failures where managed_system_id = $1',
+        [seeded.msId],
+      );
+      expect(failures.rows).toHaveLength(0);
+    },
+  );
+
+  it.each(['explicit-team', 'archived-team', 'foreign-team', 'xor', 'unknown-team'] as const)(
+    'validates %s request responsibility without rejected side effects',
+    async (mode) => {
+      const seeded = await seedVocSource();
+      let teamWorkspaceId = WORKSPACE_ID;
+      if (mode === 'foreign-team') {
+        const workspace = await migrateHandle.pool.query<{ id: string }>(
+          'insert into core.workspaces (name) values ($1) returning id',
+          [uid(SLUG_PREFIX)],
+        );
+        const id = workspace.rows[0]?.id;
+        if (!id) throw new Error('foreign team workspace seed failed');
+        foreignWorkspaceIds.push(id);
+        teamWorkspaceId = id;
+      }
+      const teamId =
+        mode === 'unknown-team'
+          ? randomUUID()
+          : await insertTeamDirectly(migrateHandle, teamWorkspaceId, uid(SLUG_PREFIX));
+      if (mode !== 'unknown-team') teamIds.push(teamId);
+      if (mode === 'archived-team')
+        await migrateHandle.pool.query('update core.teams set archived_at = now() where id = $1', [
+          teamId,
+        ]);
+      const response = await requestTask(adminCookie, 'voc', seeded.id, randomUUID(), {
+        assigned_reviewer_actor_id: mode === 'xor' ? adminActorId : null,
+        assigned_reviewer_team_id: teamId,
+      });
+      expect(response.statusCode).toBe(mode === 'explicit-team' ? 201 : 422);
+      if (mode === 'explicit-team')
+        expect(response.json()).toMatchObject({
+          assigned_reviewer_actor_id: null,
+          assigned_reviewer_team_id: teamId,
+          reviewer_actor_id: null,
+          source_rule: 'explicit',
+          default_resolved: false,
+        });
+      else {
+        expect(response.json().code).toBe('validation.failed');
+        const rows = await migrateHandle.pool.query(
+          'select 1 from task_request.task_requests where primary_managed_system_id = $1',
+          [seeded.msId],
+        );
+        expect(rows.rows).toHaveLength(0);
+        const audits = await migrateHandle.pool.query(
+          "select 1 from core.audit_log where event_type = 'task_request_created_from_voc' and detail->>'source_voc_id' = $1::text",
+          [seeded.id],
+        );
+        expect(audits.rows).toHaveLength(0);
+        const links = await migrateHandle.pool.query(
+          "select 1 from core.entity_links where source_id = $1 and target_type = 'task_request'",
+          [seeded.id],
+        );
+        expect(links.rows).toHaveLength(0);
+      }
+      const diagnostics = await migrateHandle.pool.query(
+        'select 1 from core.responsibility_default_failures where managed_system_id = $1',
+        [seeded.msId],
+      );
+      expect(diagnostics.rows).toHaveLength(0);
+    },
+  );
+
+  it('explicit null opts out and a User reviewer rejects without request, link, audit or diagnostic writes', async () => {
+    const seeded = await seedVocSource();
+    await migrateHandle.pool.query(
+      'update core.managed_systems set default_reviewer_actor_id = $1 where id = $2',
+      [adminActorId, seeded.msId],
+    );
+    const optedOut = await requestTask(adminCookie, 'voc', seeded.id, randomUUID(), {
+      assigned_reviewer_actor_id: null,
+      assigned_reviewer_team_id: null,
+    });
+    expect(optedOut.statusCode).toBe(201);
+    expect(optedOut.json()).toMatchObject({
+      assigned_reviewer_actor_id: null,
+      assigned_reviewer_team_id: null,
+      reviewer_actor_id: null,
+      default_resolved: false,
+      source_rule: 'explicit_null',
+    });
+    const rejected = await requestTask(adminCookie, 'voc', seeded.id, randomUUID(), {
+      assigned_reviewer_actor_id: userActorId,
+    });
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json().code).toBe('validation.failed');
+    const rows = await migrateHandle.pool.query(
+      'select 1 from task_request.task_requests where primary_managed_system_id = $1',
+      [seeded.msId],
+    );
+    expect(rows.rows).toHaveLength(1);
+    const diagnostics = await migrateHandle.pool.query(
+      'select 1 from core.responsibility_default_failures where managed_system_id = $1',
+      [seeded.msId],
+    );
+    expect(diagnostics.rows).toHaveLength(0);
+  });
+
+  it('rejects an explicit system Actor as assigned reviewer despite its admin Role Level', async () => {
+    const seeded = await seedVocSource();
+    const sys = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors
+        where external_id = 'system' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const systemActorId = sys.rows[0]?.id;
+    if (!systemActorId) throw new Error('seed system actor not found');
+
+    const rejected = await requestTask(adminCookie, 'voc', seeded.id, randomUUID(), {
+      assigned_reviewer_actor_id: systemActorId,
+    });
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['assigned_reviewer_actor_id'], code: 'ineligible_actor' }] },
+    });
+    const rows = await migrateHandle.pool.query(
+      'select 1 from task_request.task_requests where primary_managed_system_id = $1',
+      [seeded.msId],
+    );
+    expect(rows.rows).toHaveLength(0);
+    const audits = await migrateHandle.pool.query(
+      "select 1 from core.audit_log where event_type = 'task_request_created_from_voc' and detail->>'source_voc_id' = $1::text",
+      [seeded.id],
+    );
+    expect(audits.rows).toHaveLength(0);
+    const diagnostics = await migrateHandle.pool.query(
+      'select 1 from core.responsibility_default_failures where managed_system_id = $1',
+      [seeded.msId],
+    );
+    expect(diagnostics.rows).toHaveLength(0);
+  });
 
   it.each([['voc', seedVocSource] as const, ['voc_cluster', seedClusterSource] as const])(
     'POST /%s request-task creates a pending_review request, source link, audit, and queue item',
@@ -329,6 +737,71 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     expect(denied.statusCode).toBe(403);
     expect(denied.json<{ code: string }>().code).toBe('permission.denied');
   });
+
+  async function requestTaskRows(vocId: string) {
+    const counts = await migrateHandle.pool.query<{
+      requests: number;
+      links: number;
+      audits: number;
+    }>(
+      `select
+         (select count(*)::int from task_request.task_requests
+           where workspace_id = $1 and source_type = 'voc' and source_id = $2::uuid) as requests,
+         (select count(*)::int from core.entity_links
+           where workspace_id = $1 and source_type = 'voc' and source_id = $2::uuid
+             and relation_type = 'requested_task') as links,
+         (select count(*)::int from core.audit_log
+           where workspace_id = $1 and event_type = 'task_request_created_from_voc'
+             and detail->>'source_voc_id' = $2::text) as audits`,
+      [WORKSPACE_ID, vocId],
+    );
+    return counts.rows[0];
+  }
+
+  it('hides a VOC from a non-reporter Admin with an explicit voc.read deny and writes nothing (#1216)', async () => {
+    const seeded = await seedVocSource();
+    await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      adminActorId,
+      'voc.read',
+      seeded.msId,
+      adminActorId,
+    );
+
+    const res = await requestTask(adminCookie, 'voc', seeded.id);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ code: 'not_found.record', message: 'voc not found' });
+    expect(await requestTaskRows(seeded.id)).toEqual({ requests: 0, links: 0, audits: 0 });
+  });
+
+  it('lets a non-reporter Admin without a deny request a Task (#1216 control)', async () => {
+    const seeded = await seedVocSource();
+    const res = await requestTask(adminCookie, 'voc', seeded.id);
+    expect(res.statusCode).toBe(201);
+    expect(await requestTaskRows(seeded.id)).toEqual({ requests: 1, links: 1, audits: 1 });
+  });
+
+  it.each(['admin', 'developer'] as const)(
+    'keeps the %s Reporter first even with a voc.read deny (#1216 control)',
+    async (kind) => {
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Reporter MS');
+      let cookie = adminCookie;
+      let reporterId = adminActorId;
+      if (kind === 'developer') {
+        const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+        await grantCapability(dbHandle, WORKSPACE_ID, dev.id, 'finding.manage', msId, adminActorId);
+        cookie = await loginAs(app, dev.externalId);
+        reporterId = dev.id;
+      }
+      const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Own VOC');
+      await denyCapability(dbHandle, WORKSPACE_ID, reporterId, 'voc.read', msId, adminActorId);
+
+      const res = await requestTask(cookie, 'voc', voc.id);
+      expect(res.statusCode).toBe(201);
+      expect(await requestTaskRows(voc.id)).toEqual({ requests: 1, links: 1, audits: 1 });
+    },
+  );
 
   it('POST /voc-clusters/:id/request-task is idempotent and requires cluster authority', async () => {
     const seeded = await seedClusterSource();

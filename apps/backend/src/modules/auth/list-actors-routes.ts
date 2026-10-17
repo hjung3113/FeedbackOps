@@ -76,6 +76,7 @@ export const listActorsRoutes: FastifyPluginAsync<ListActorsRoutesOptions> = asy
           displayName: actors.displayName,
           email: actors.email,
           roleLevel: actors.roleLevel,
+          actorType: actors.actorType,
         })
         .from(actors)
         .where(eq(actors.workspaceId, sess.workspace_id))
@@ -87,6 +88,7 @@ export const listActorsRoutes: FastifyPluginAsync<ListActorsRoutesOptions> = asy
           display_name: r.displayName,
           email: r.email,
           role_level: r.roleLevel as 'admin' | 'developer' | 'user',
+          actor_type: r.actorType as 'internal_member' | 'system',
         })),
       };
     },

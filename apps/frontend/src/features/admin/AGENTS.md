@@ -47,3 +47,35 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 ## Verification
 
 - Test Analytics Area tree restore, Managed System default editing, permission approval/rejection/revocation states, explicit deny display, and blocked-state return paths when touched.
+
+## Permission close-out contract
+
+- ADR-0066 selected-detail revision-safe review uses `selected-permission-request-detail.tsx` and the shared-schema API adapter. Explained risk presentation (#1084) and direct-grant UI (#1086) remain separate implementation items.
+- Clear decision drafts on request ID/revision changes; stale errors require refetch and fresh review, never auto-submit. Preserve tab/selected and Back restoration; cancelled history has no decision controls.
+- Direct workspace.admin grants require explicit governance mode/confirmation; self grants follow permission_self_approval. Server scope candidates, required reason, open-ask review and explicit deny-lift guidance are authoritative. Capability grants never imply Role Level promotion.
+- No client scores, email or restricted source text. Zero risk signals are shown only after successful calculation.
+
+## Close-out contract (ADR-0067; Coverage editor shipped #1088, defaults shipped #1089–#1091)
+
+- Shipped (#1088): the five Coverage band rows at `/admin/settings` (75/40 defaults,
+  integer `0 <= warn < good <= 100` validation, save/discard/error/retry) and all-scope
+  `dashboard-summary` invalidation after save; on a failed refetch Home and Coverage keep
+  cached rows under an explicit error indication, while Integration shows its own explicit
+  error state (system overview hidden, average stat omitted). Distinct Managed System
+  reviewer Actor/team defaults are registry/storage in #1089; creation routing shipped in
+  #1090/#1091. Respect server gates, audit and no-op semantics.
+- Surface safe automatic-default configuration warnings. Known teams may render; no team
+  CRUD/candidate listing or automatic reassignment is introduced.
+
+## Suggestion opt-in (ADR-0068; shipped #1098)
+
+The existing `/admin/settings` surface owns the single default-off Cluster
+suggestion option row (`사용` / `사용 안 함`). Preserve existing policies and permission gates. Disabling
+stops new suggestions while pending review remains available; explain that
+boundary with Korean chrome. Suggestion review stays in `features/voc-cluster/`;
+preview quota/model/scheduling consoles are not part of this addition.
+
+Render the section only after `GET /voc-cluster-suggestions` returns `available:true`;
+loading, errors and provider-disabled reads preserve the shipped settings layout.
+The required boolean remains in resolved settings. Hidden saved values are preserved,
+and only an edited field enters the existing partial PATCH/save bar.

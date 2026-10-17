@@ -17,7 +17,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
     useIdempotencyKey: () => ({ key: 'idem-key', markConsumed: vi.fn() }),
   };
 });
-vi.mock('../../hooks/useEvidenceMutations', () => ({
+vi.mock('../../hooks/useEvidenceMutations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../hooks/useEvidenceMutations')>()),
   useAddEvidenceHighlightMutation: () => ({ mutate: vi.fn(), isPending: false, reset: vi.fn() }),
   useLinkEvidenceMutation: () => ({ mutate: vi.fn(), isPending: false, reset: vi.fn() }),
 }));
@@ -36,6 +37,8 @@ const FINDING: FindingDto = {
   summary: '쿼리 플랜 개선 필요',
   source_type: 'manual',
   source_id: null,
+  owner_actor_id: null,
+  owner_team_id: null,
   evidence_count: 0,
   severity: 'high',
   confidence: 'medium',

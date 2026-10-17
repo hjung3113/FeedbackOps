@@ -16,6 +16,7 @@ import {
 } from '@tanstack/react-query';
 import * as React from 'react';
 
+import { useTaskPanelSelection } from '../../hooks/useTaskPanelSelection';
 import type { NameMaps } from './TaskRequestRow';
 import { isPermissionDenied } from './predicates';
 
@@ -59,61 +60,49 @@ export interface UseTaskRequestsQueueResult {
 export function useTaskRequestsQueue({
   selectedParam,
   managedSystem,
+  reviewer,
+  reviewerTeam,
   onSelectionChange,
 }: {
+  reviewer?: string | undefined;
+  reviewerTeam?: string | undefined;
   selectedParam?: string | undefined;
   managedSystem?: string | undefined;
   onSelectionChange?: ((id: string | null, replace: boolean) => void) | undefined;
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
+  const meQuery = useMe();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
-  const [linkMissing, setLinkMissing] = React.useState(false);
-  const [panelClosed, setPanelClosed] = React.useState(false);
-  const [panelContext, setPanelContext] = React.useState({ activeTab, managedSystem });
-  if (panelContext.activeTab !== activeTab || panelContext.managedSystem !== managedSystem) {
-    setPanelContext({ activeTab, managedSystem });
-    setPanelClosed(false);
-    setLinkMissing(false);
-  }
-  React.useEffect(() => {
-    if (selectedParam !== undefined) {
-      setPanelClosed(false);
-      setLinkMissing(false);
-    }
-  }, [selectedParam]);
-  const [selection, setSelection] = React.useState({
-    param: selectedParam,
-    id: selectedParam ?? null,
-  });
-  // Reconcile URL changes during render so a new scope never sees the previous detail query.
-  const selectedId = selection.param === selectedParam ? selection.id : (selectedParam ?? null);
-  if (selection.param !== selectedParam) setSelection({ param: selectedParam, id: selectedId });
-  const setLocalSelectedId = React.useCallback(
-    (id: string | null) => setSelection({ param: selectedParam, id }),
-    [selectedParam],
-  );
-  const setSelectedId = React.useCallback(
-    (id: string | null) => {
-      setPanelClosed(id === null);
-      setLinkMissing(false);
-      setLocalSelectedId(id);
-      onSelectionChange?.(id, id === null);
-    },
-    [onSelectionChange, setLocalSelectedId],
-  );
-
+  const [completedDecision, setCompletedDecision] = React.useState<{
+    item: TaskRequestDto;
+    context: string;
+    originParam: string | null;
+    selectionId: string | null;
+    overlayData: InfiniteData<ListTaskRequestsResponse> | undefined;
+  } | null>(null);
+  const decisionContext = JSON.stringify([activeTab, managedSystem, reviewer, reviewerTeam]);
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
   const summaryQuery = useQuery({
     queryKey: ['task-requests', managedSystem, 'summary'] as const,
     queryFn: ({ signal }) => fetchTaskRequests({ ...scope, signal, limit: 1 }),
   });
   const taskRequestsQuery = useInfiniteQuery({
-    queryKey: ['task-requests', managedSystem, 'pages', activeTab] as const,
+    queryKey: [
+      'task-requests',
+      managedSystem,
+      'pages',
+      activeTab,
+      ...(reviewer === undefined && reviewerTeam === undefined
+        ? []
+        : [reviewer, reviewerTeam, reviewer === 'me' ? meQuery.data?.actor.id : null]),
+    ] as const,
     staleTime: 30_000,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
       fetchTaskRequests({
         ...scope,
+        ...(reviewer === undefined ? {} : { reviewer }),
+        ...(reviewerTeam === undefined ? {} : { reviewer_team_id: reviewerTeam }),
         signal,
         limit: PAGE_SIZE,
         ...(activeTab === 'all' ? {} : { status: activeTab }),
@@ -121,9 +110,36 @@ export function useTaskRequestsQueue({
       }),
     getNextPageParam: (last) => (last.page?.has_more ? last.page.cursor : undefined),
   });
+  // Fresh pages own row content; retain completion separately for selection/focus.
   const items = React.useMemo(
-    () => taskRequestsQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [taskRequestsQuery.data],
+    () =>
+      (taskRequestsQuery.data?.pages.flatMap((page) => page.items) ?? []).flatMap((item) => {
+        if (
+          completedDecision?.context !== decisionContext ||
+          completedDecision.overlayData !== taskRequestsQuery.data ||
+          completedDecision.item.id !== item.id
+        )
+          return [item];
+        return activeTab === 'all' || completedDecision.item.status === activeTab
+          ? [completedDecision.item]
+          : [];
+      }),
+    [taskRequestsQuery.data, completedDecision, decisionContext, activeTab],
+  );
+  const { selectedId, linkMissing, setLocalSelectedId, selectRow, closePanel, markLinkMissing } =
+    useTaskPanelSelection({
+      selectedParam,
+      items,
+      context: [JSON.stringify([activeTab, reviewer, reviewerTeam]), managedSystem],
+      onSelectionChange,
+    });
+  const setSelectedId = React.useCallback(
+    (id: string | null) => {
+      setCompletedDecision(null);
+      if (id === null) closePanel();
+      else selectRow(id);
+    },
+    [closePanel, selectRow],
   );
   const selectedDetail = useQuery({
     queryKey: ['task-request', selectedId] as const,
@@ -136,7 +152,15 @@ export function useTaskRequestsQueue({
     retry: false,
   });
   const selected =
-    !linkMissing && selectedId
+    !linkMissing &&
+    selectedId &&
+    !(
+      completedDecision?.context === decisionContext &&
+      completedDecision.overlayData === taskRequestsQuery.data &&
+      completedDecision.item.id === selectedId &&
+      activeTab !== 'all' &&
+      completedDecision.item.status !== activeTab
+    )
       ? (items.find((item) => item.id === selectedId) ?? selectedDetail.data ?? null)
       : null;
   React.useEffect(() => {
@@ -150,24 +174,11 @@ export function useTaskRequestsQueue({
       (selectedDetail.error instanceof ApiError && selectedDetail.error.status === 404) ||
       filteredOut
     ) {
-      setLinkMissing(true);
-      setLocalSelectedId(null);
-      onSelectionChange?.(null, true);
+      markLinkMissing();
     }
-  }, [
-    selectedDetail.data,
-    selectedDetail.error,
-    managedSystem,
-    selectedId,
-    setLocalSelectedId,
-    onSelectionChange,
-  ]);
-  const restoredDetail =
-    selected?.id === selectedParam
-      ? selectedDetail.data?.id === selectedParam
-        ? selectedDetail.data
-        : selected
-      : null;
+  }, [selectedDetail.data, selectedDetail.error, managedSystem, selectedId, markLinkMissing]);
+  // `selected` already prefers the current queue row over a cached detail.
+  const restoredDetail = selected?.id === selectedParam ? selected : null;
   const followedParam = React.useRef({ param: selectedParam, consumed: false });
   React.useEffect(() => {
     followedParam.current = { param: selectedParam, consumed: false };
@@ -190,7 +201,6 @@ export function useTaskRequestsQueue({
     if (activeTab !== 'all' && activeTab !== destination) setActiveTab(destination);
   }, [selectedParam, selectedId, restoredDetail, managedSystem, activeTab]);
 
-  const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
@@ -201,7 +211,7 @@ export function useTaskRequestsQueue({
     () => [
       ...new Set(
         [...items, ...(selected ? [selected] : [])].flatMap((item) =>
-          [item.requester_actor_id, item.reviewer_actor_id].filter(
+          [item.requester_actor_id, item.reviewer_actor_id, item.assigned_reviewer_actor_id].filter(
             (id): id is string => id !== null,
           ),
         ),
@@ -209,10 +219,26 @@ export function useTaskRequestsQueue({
     ],
     [items, selected],
   );
+  const teamIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of [...items, ...(selected ? [selected] : [])]) {
+      if (item.assigned_reviewer_team_id) ids.add(item.assigned_reviewer_team_id);
+    }
+    // The reviewer filter's team picker offers teams already known in context:
+    // the current value and the scoped Managed System defaults.
+    if (reviewerTeam) ids.add(reviewerTeam);
+    const scoped =
+      managedSystem !== undefined && managedSystem !== 'all'
+        ? managedSystemsQuery.data?.items.find((system) => system.id === managedSystem)
+        : undefined;
+    if (scoped?.default_reviewer_team_id) ids.add(scoped.default_reviewer_team_id);
+    if (scoped?.default_owner_team_id) ids.add(scoped.default_owner_team_id);
+    return [...ids];
+  }, [items, selected, reviewerTeam, managedSystem, managedSystemsQuery.data?.items]);
   const actorsQuery = useQuery({
-    queryKey: ['actors-resolve', actorIds, []] as const,
-    queryFn: ({ signal }) => resolveActors({ actorIds }, signal),
-    enabled: actorIds.length > 0,
+    queryKey: ['actors-resolve', actorIds, teamIds] as const,
+    queryFn: ({ signal }) => resolveActors({ actorIds, teamIds }, signal),
+    enabled: actorIds.length > 0 || teamIds.length > 0,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -223,10 +249,23 @@ export function useTaskRequestsQueue({
     }
     const managedSystemsById: NameMaps['managedSystemsById'] = {};
     for (const ms of managedSystemsQuery.data?.items ?? []) {
-      managedSystemsById[ms.id] = { name: ms.name };
+      managedSystemsById[ms.id] = {
+        name: ms.name,
+        ...(ms.default_reviewer_team_id
+          ? { defaultReviewerTeamId: ms.default_reviewer_team_id }
+          : {}),
+        ...(ms.default_owner_team_id ? { defaultOwnerTeamId: ms.default_owner_team_id } : {}),
+      };
     }
-    return { actorsById, managedSystemsById };
-  }, [actorsQuery.data?.actors, managedSystemsQuery.data?.items]);
+    const teamsById = Object.fromEntries(
+      (actorsQuery.data?.teams ?? []).map((team) => [team.id, { name: team.name }]),
+    );
+    return {
+      actorsById,
+      managedSystemsById,
+      ...(Object.keys(teamsById).length > 0 ? { teamsById } : {}),
+    };
+  }, [actorsQuery.data?.actors, actorsQuery.data?.teams, managedSystemsQuery.data?.items]);
 
   const tabs = React.useMemo<ListToolbarTab[]>(
     () =>
@@ -254,44 +293,122 @@ export function useTaskRequestsQueue({
 
   const shown = items;
 
-  React.useEffect(() => {
-    if (
-      !panelClosed &&
-      !linkMissing &&
-      selectedParam === undefined &&
-      selectedId === null &&
-      shown[0]
-    )
-      setLocalSelectedId(shown[0].id);
-  }, [panelClosed, linkMissing, selectedId, shown, selectedParam, setLocalSelectedId]);
-
   const onDecisionComplete = React.useCallback(
     (updatedItem: TaskRequestDto) => {
       queryClient.setQueryData(['task-request', updatedItem.id], updatedItem);
-      queryClient.setQueriesData<InfiniteData<ListTaskRequestsResponse>>(
-        { queryKey: ['task-requests', managedSystem, 'pages'] },
-        (current) =>
-          current
-            ? {
-                ...current,
-                pages: current.pages.map((page) => ({
-                  ...page,
-                  items: page.items.filter((item) => item.id !== updatedItem.id),
-                })),
-              }
-            : current,
-      );
+      // Patch each cached status according to membership, retaining all-tab order.
+      for (const query of queryClient
+        .getQueryCache()
+        .findAll({ queryKey: ['task-requests', managedSystem, 'pages'] })) {
+        const tab = query.queryKey[3];
+        queryClient.setQueryData<InfiniteData<ListTaskRequestsResponse>>(
+          query.queryKey,
+          (current) =>
+            current
+              ? {
+                  ...current,
+                  pages: current.pages.map((page) => ({
+                    ...page,
+                    items: page.items.flatMap((item) =>
+                      item.id !== updatedItem.id
+                        ? [item]
+                        : tab === 'all' || tab === updatedItem.status
+                          ? [updatedItem]
+                          : [],
+                    ),
+                  })),
+                }
+              : current,
+        );
+      }
+      // A late result may update caches, but cannot take a newer selection's focus.
+      if (selectedId === updatedItem.id) {
+        const index = items.findIndex((item) => item.id === updatedItem.id);
+        const nextId =
+          activeTab === 'all' || activeTab === updatedItem.status
+            ? updatedItem.id
+            : (items[index + 1]?.id ?? items[index - 1]?.id ?? null);
+        setCompletedDecision({
+          item: updatedItem,
+          context: decisionContext,
+          originParam: selectedParam ?? null,
+          selectionId: nextId,
+          overlayData: queryClient.getQueryData<InfiniteData<ListTaskRequestsResponse>>([
+            'task-requests',
+            managedSystem,
+            'pages',
+            activeTab,
+            ...(reviewer === undefined && reviewerTeam === undefined
+              ? []
+              : [reviewer, reviewerTeam, reviewer === 'me' ? meQuery.data?.actor.id : null]),
+          ]),
+        });
+        setLocalSelectedId(nextId);
+        onSelectionChange?.(nextId, true);
+      }
       void queryClient.invalidateQueries({ queryKey: ['task-requests', managedSystem] });
-      setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
-      setLocalSelectedId(updatedItem.id);
-      onSelectionChange?.(updatedItem.id, true);
     },
-    [managedSystem, queryClient, setLocalSelectedId, onSelectionChange],
+    [
+      managedSystem,
+      queryClient,
+      onSelectionChange,
+      selectedId,
+      items,
+      activeTab,
+      decisionContext,
+      setLocalSelectedId,
+      selectedParam,
+      reviewer,
+      reviewerTeam,
+      meQuery.data?.actor.id,
+    ],
   );
+
+  React.useEffect(() => {
+    if (!completedDecision || completedDecision.context !== decisionContext) return;
+    if (
+      (selectedParam ?? null) !== completedDecision.originParam &&
+      (selectedParam ?? null) !== completedDecision.selectionId
+    ) {
+      setCompletedDecision(null);
+      return;
+    }
+    if (items.length === 0 && taskRequestsQuery.hasNextPage) {
+      if (!taskRequestsQuery.isFetching && !taskRequestsQuery.isError)
+        void taskRequestsQuery.fetchNextPage();
+      return;
+    }
+    if (taskRequestsQuery.isFetching || !taskRequestsQuery.isSuccess) return;
+    if (
+      !items.some((item) => item.id === selectedId) &&
+      (selectedId !== null || items.length > 0)
+    ) {
+      const nextId = items[0]?.id ?? null;
+      setCompletedDecision({ ...completedDecision, selectionId: nextId });
+      setLocalSelectedId(nextId);
+      onSelectionChange?.(nextId, true);
+    }
+  }, [
+    completedDecision,
+    selectedParam,
+    decisionContext,
+    items,
+    selectedId,
+    taskRequestsQuery.isFetching,
+    taskRequestsQuery.isSuccess,
+    taskRequestsQuery.isError,
+    taskRequestsQuery.hasNextPage,
+    taskRequestsQuery.fetchNextPage,
+    setLocalSelectedId,
+    onSelectionChange,
+  ]);
 
   return {
     activeTab,
-    setActiveTab,
+    setActiveTab: (tab) => {
+      setCompletedDecision(null);
+      setActiveTab(tab);
+    },
     hasItems: summaryQuery.isSuccess && (summaryQuery.data.page?.total ?? 0) > 0,
     selectedId,
     linkMissing,

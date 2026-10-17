@@ -1,11 +1,13 @@
 import {
   type FindingConfidence,
   type FindingSeverity,
+  type LinkedFindingDto,
   type VocClusterDto,
   findingConfidenceSchema,
   findingSeveritySchema,
 } from '@fops/shared';
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +28,7 @@ const clusterState = vi.hoisted(() => ({
     primary_managed_system_id: '40000000-0000-0000-0000-000000000004',
     member_count: 0,
     members: [],
-    linked_findings: [],
+    linked_findings: [] as LinkedFindingDto[],
     created_by: '50000000-0000-0000-0000-000000000005',
     created_at: '2026-07-10T00:00:00.000Z',
     updated_at: '2026-07-10T00:00:00.000Z',
@@ -45,6 +47,7 @@ const clusterState = vi.hoisted(() => ({
       role_level: 'admin',
     },
   ],
+  roleLevel: 'user' as 'user' | 'admin' | 'developer',
 }));
 
 vi.mock('@/features/voc-cluster/hooks/useVocClusterDetail', () => ({
@@ -63,9 +66,15 @@ vi.mock('@/lib/cross-system/useManagedSystem', () => ({ useManagedSystem: () => 
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: clusterState.actors }),
 }));
-vi.mock('@/lib/auth/useMe', () => ({ useMe: () => ({ data: { actor: { role_level: 'user' } } }) }));
+vi.mock('@/lib/auth/useMe', () => ({
+  useMe: () => ({ data: { actor: { role_level: clusterState.roleLevel } } }),
+}));
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="/">{children}</a>,
+  Link: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <a href="/" className={className}>
+      {children}
+    </a>
+  ),
   useNavigate: () => vi.fn(),
 }));
 
@@ -88,8 +97,10 @@ const confidenceLabels: Record<FindingConfidence, string> = {
 
 describe('VocClusterDetailPanel identity', () => {
   beforeEach(() => {
+    clusterState.roleLevel = 'user';
     clusterState.data.owner_user_id = '20000000-0000-0000-0000-000000000002';
     clusterState.data.confirmed_by = '30000000-0000-0000-0000-000000000003';
+    clusterState.data.linked_findings = [];
     clusterState.actors = [
       {
         id: '20000000-0000-0000-0000-000000000002',
@@ -122,6 +133,45 @@ describe('VocClusterDetailPanel identity', () => {
     for (const label of ['심각도', '신뢰도', '담당자']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+  });
+
+  it('renders a linked Finding id once', () => {
+    const findingId = '60000000-0000-0000-0000-000000000006';
+    clusterState.data.linked_findings = [
+      { id: findingId, display_id: 'FIN-1240', status: 'active' },
+    ];
+
+    render(<VocClusterDetailPanel clusterId={cluster.id} />);
+
+    const findingCard = screen.getByTestId(`cluster-linked-finding-${findingId}`);
+    expect(within(findingCard).getAllByText('FIN-1240')).toHaveLength(1);
+    const overview = screen
+      .getByTestId('cluster-detail-title')
+      .closest<HTMLElement>('[data-anchor="overview"]');
+    if (!overview) throw new Error('Expected the Cluster overview section');
+    expect(within(overview).queryByText('VOC Cluster', { exact: true })).not.toBeInTheDocument();
+    const sectionNav = screen.getByTestId('detail-panel-section-nav-strip');
+    expect(within(sectionNav).getByRole('button', { name: '멤버' })).toBeInTheDocument();
+    expect(within(sectionNav).queryByRole('button', { name: /멤버\s*0/ })).not.toBeInTheDocument();
+  });
+
+  it('uses Finding 열기 as the primary footer action and Finding 생성 as secondary when linked', () => {
+    const findingId = '60000000-0000-0000-0000-000000000006';
+    clusterState.roleLevel = 'admin';
+    clusterState.data.linked_findings = [
+      { id: findingId, display_id: 'FIN-1240', status: 'active' },
+    ];
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <VocClusterDetailPanel clusterId={cluster.id} />
+      </QueryClientProvider>,
+    );
+
+    const footer = within(screen.getByTestId('cluster-cta-footer'));
+    expect(footer.getByRole('link', { name: 'Finding 열기' })).toHaveClass('bg-accent-primary');
+    expect(footer.getByRole('button', { name: 'Finding 생성' })).toHaveClass('bg-surface-raised');
+    expect(footer.getAllByRole('link', { name: 'Finding 열기' })).toHaveLength(1);
   });
 
   it('uses safe labels when owner and confirmer actor names are unavailable', () => {

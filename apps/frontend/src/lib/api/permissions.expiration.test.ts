@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const apiClientMock = vi.hoisted(() => vi.fn());
+const apiRequestMock = vi.hoisted(() => vi.fn());
 
-vi.mock('./client', () => ({ apiClient: apiClientMock }));
+vi.mock('./client', () => ({ apiRequest: apiRequestMock }));
 
 import { decidePermissionRequest } from './permissions';
 
@@ -13,8 +13,14 @@ describe('permission approval expiration request body', () => {
   it.each([{ expiration: '2027-01-31T23:59:59.000Z' }, { expiration: null }])(
     'sends the selected approval expiration',
     async ({ expiration }) => {
-      apiClientMock.mockResolvedValue({
-        data: { id: REQUEST_ID, status: 'approved', grant_id: REQUEST_ID },
+      apiRequestMock.mockResolvedValue({
+        data: {
+          id: REQUEST_ID,
+          revision: 8,
+          updated_at: '2026-10-13T00:00:00.000Z',
+          status: 'approved',
+          grant_id: REQUEST_ID,
+        },
       });
 
       await decidePermissionRequest(
@@ -22,15 +28,17 @@ describe('permission approval expiration request body', () => {
         'approve',
         '',
         IDEMPOTENCY_KEY,
+        7,
         undefined,
         expiration,
       );
 
-      expect(apiClientMock).toHaveBeenCalledWith(
+      expect(apiRequestMock).toHaveBeenCalledWith(
         'POST',
         `/permissions/requests/${REQUEST_ID}/approve`,
+        expect.objectContaining({ parse: expect.any(Function) }),
         {
-          body: { reason: undefined, expiration },
+          body: { expected_revision: 7, expiration },
           idempotencyKey: IDEMPOTENCY_KEY,
         },
       );

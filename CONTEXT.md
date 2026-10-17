@@ -43,8 +43,12 @@ An evidence-based judgment object that summarizes a problem, pattern, or executi
 _Avoid_: Task, survey result, VOC
 
 **Evidence Highlight**:
-A compact evidence fragment stored on one **Finding**, taken from a **VOC**, a Survey Response, or a manual note, that explains why the **Finding** exists. It keeps its source reference and its visibility never exceeds its source's; a Survey Response highlight is an approved, redacted excerpt, never respondent identity or raw response text (ADR-0033).
+A compact evidence fragment stored on one **Finding**, taken from a **VOC**, a Survey Response, or a manual note, that explains why the **Finding** exists. It keeps its source reference and its visibility never exceeds its source's; a Survey Response highlight is an approved, redacted excerpt, never respondent identity or raw response text (ADR-0033, ADR-0064). Its text is available only while the exact approval is active and source/target access permits it; Survey-derived Finding summaries contain source metadata only.
 _Avoid_: Quote, tag, attachment
+
+**Approved Survey Excerpt**:
+A redacted fragment explicitly approved as Survey evidence. Result readers may reuse it only when result privacy rules allow it and they can manage the target **Finding**; personal-response access is not required for this safe reuse (ADR-0064). Revocation withdraws future evidence reads without erasing independently authored prose.
+_Avoid_: Raw response, respondent identity, permanent public quote
 
 **Task Request**:
 A reviewed execution candidate for one **Managed System**.
@@ -59,8 +63,16 @@ A **Sensitive Permission** allowing a **Developer** to approve a **Task Request*
 _Avoid_: default developer approval, unaudited shortcut
 
 **Permission Request**:
-A request to grant or modify an **Actor**'s **Managed System Permission Scope** or **Role Level**. Decided by an **Admin**; all decisions are audited.
+An **Actor**'s ask for capability access within supported workspace or **Managed System Permission Scope**, reviewed through administrative authority. Requested and granted scope may differ by supported narrowing. It does not promote **Role Level**; decisions and requester changes are audited (ADR-0066).
 _Avoid_: Access ticket, permission grant, role change request
+
+**Permission Grant**:
+Capability authority granted to an **Actor** for a supported scope, optionally expiring. It can follow an approved **Permission Request** or a governed direct grant; it does not change **Role Level**.
+_Avoid_: Promotion, request approval record
+
+**Request Withdrawal**:
+The requester closes an open **Permission Request** as `cancelled`, retaining history. It neither revokes a **Permission Grant** nor denies access (ADR-0066).
+_Avoid_: Rejection, grant revocation, deletion
 
 **Sensitive Permission**:
 A permission whose grant or use requires a written reason and explicit audit metadata, not granted by default. Includes **Task Request Self-Approval**.
@@ -127,8 +139,20 @@ The single **Managed System** that owns the scope, permissions, defaults, and da
 _Avoid_: Multi-system ownership
 
 **Default Owner**:
-The **Actor** or team prefilled as responsible for a **Managed System** when a new **VOC** is created. Stored on the Managed System; the prefill itself is deferred (ADR-0059 D1).
+The **Actor** or team used as the creation-time responsibility default for **VOC**, **Finding**, or **Task** in a **Managed System**. Assignment does not complete triage or start execution. ADR-0067 accepts this close-out behavior; it is implemented.
 _Avoid_: Final assignee, triage decision
+
+**Default Reviewer**:
+The **Actor** or team used as the creation-time review routing default for a **Task Request**; it is distinct from the **Actor** who actually decides the request. Assignment does not grant review authority or self-approval.
+_Avoid_: Decision Actor, exclusive approver
+
+**Fallback Queue**:
+The existing authorized operational queue for unassigned work within its **Managed System Permission Scope**, used when automatic responsibility cannot resolve. It preserves actionable intake without granting access.
+_Avoid_: Assigned team, new permission scope
+
+**Recovery Item**:
+A shared identity for one category of workflow gap on a source record. Source-owned repairs determine resolution; personal hiding changes only the current **Actor**'s presentation of the current occurrence. A reopened gap is a new occurrence of the same item.
+_Avoid_: Independent work object, dismiss decision, duplicate assignment
 
 **VOC Source Context**:
 The situation in which a VOC was submitted, such as direct use, proxy registration from a user report, or operational discovery.
@@ -230,13 +254,27 @@ _Avoid_: Visibility, permission, frontend filter
 An action-queue surface that groups outstanding **VOC**, **Task Request**, **Task**, **Survey**, and **Finding** work needing an **Actor**'s attention within their **Managed System Permission Scope**. Not a chart-only reporting page.
 _Avoid_: Chart page, BI report, analytics view, KPI tile board
 
+**Analytics Area operational report**:
+A current operational snapshot of readable **VOC**, **Finding**, **Task**, and **Survey** work grouped by each object's own current **Analytics Area** within its **Managed System**, used by **Admin** and same-scope **Developer** to open the work needing attention. Unclassified work remains valid; linked objects do not inherit attribution, **Task Request** has no Area total, and Survey follow-up counts Surveys rather than responses (ADR-0069).
+_Avoid_: Funnel, improvement score, historical Area snapshot
+
 **Coverage**:
-The ratio of records that have an expected follow-up to all records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage`, so partial integration is not mistaken for total system truth.
+The ratio of records that have an expected follow-up to all records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage` (ADR-0067 adds configurable per-metric bands and neutral `집계 대상 없음` for an empty denominator; unavailable data remains distinct), so partial integration is not mistaken for total system truth.
+
+The ratio of records with the defined connection to eligible records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage`, so partial integration is not mistaken for total system truth.
 _Avoid_: Test coverage, BI metric
 
 **VOC Cluster**:
 A manually curated grouping of related **VOC** records used by **Developer** and **Admin** for internal triage and bulk operations. **VOC** records remain independent and are not merged. Not visible to **Reporters** in MVP.
 _Avoid_: VOC merge, deduplication, duplicate group, parent VOC
+
+**VOC Cluster Suggestion**:
+An automatically proposed pair of existing **VOC** records for an authorized **Developer** or **Admin** to review. It is not a **VOC Cluster**; only human confirmation creates the curated grouping, and rejection prevents automatic re-proposal unless promptly undone (ADR-0068).
+_Avoid_: Auto Cluster, provisional Cluster, Cluster Candidate, merged VOC
+
+**Draft Similar-VOC Preview**:
+An optional similarity check of unsaved **VOC** prose that helps the author find an existing authorized **VOC** before submission. It permits navigation only and creates no **VOC** or relationship (ADR-0068).
+_Avoid_: Draft VOC, automatic duplicate decision, join mutation
 
 **Cluster Candidate**:
 A **VOC** selected as a target of a cluster-scoped bulk action; bulk actions apply individually to each candidate rather than to the cluster as a single record.
@@ -333,7 +371,7 @@ _Avoid_: Cluster member as a single bulk target, merged record, bare "candidate"
 - **Reporter Reply** does not automatically change **Reporter-Facing VOC Status**.
 - **VOC Cluster** is not reporter-visible in MVP.
 - **VOC Cluster** does not merge **VOC** records; each **VOC** remains independent.
-- MVP **VOC Cluster** supports manual create, add/remove membership, and confirm; cluster merge/split is a later feature.
+- MVP **VOC Cluster** supports manual create, add/remove membership, and confirm; confirming a **VOC Cluster Suggestion** creates a human-curated Cluster. Suggestions themselves are not execution evidence or linkable records (ADR-0068). Cluster merge/split is a later feature.
 - Cluster bulk update behavior is candidate-only; selected **VOC** records receive individual **Public Updates**.
 - **VOC Triage State**, **Reporter-Facing VOC Status**, and **Task Status** are separate state machines with no automatic cross-mapping; canonical enums in `docs/design/15-data-contracts.md`, locked by ADR-0005.
 - **Task Status** reaching Released may create a reporter-facing status review candidate; it does not automatically resolve the **VOC**.
@@ -349,7 +387,8 @@ _Avoid_: Cluster member as a single bulk target, merged record, bare "candidate"
 - A record may appear in both an assigned-work view (because it is assigned to me) and **Dashboard** (because it is in my scope); these are independent views, not different storage.
 - Assigned-work views never widen beyond the current **Actor**; **Dashboard** never narrows to one assignee by default.
 - A **Permission Request** is created by the requesting **Actor** and decided by an **Admin** within the same **Workspace**.
-- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission.
+- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission. The requester may edit a pending ask or withdraw an open ask to `cancelled`, retaining identity and history (ADR-0066; accepted, implementation pending).
+- A governed direct **Permission Grant** uses the same supported scope and self-approval policy as approval; an overlapping Explicit Deny must be lifted explicitly, and a matching open ask goes through review. Neither path changes **Role Level** (ADR-0066).
 - **Sensitive Permission** grants and uses require a reason and are audited.
 - Rejected **Permission Requests** must not be immediately resubmitted for the same scope without new justification.
 

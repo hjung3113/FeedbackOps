@@ -1,8 +1,12 @@
 import {
   createFindingFromSurveyResponseRequestSchema,
+  listSurveysQuerySchema,
   outcomeFollowUpDecisionRequestSchema,
+  recoveryPresentationPatchSchema,
+  surveyEvidenceCandidatesQuerySchema,
   surveyQuestionKindSchema,
   surveyResponseSubmissionSchema,
+  surveyStartingPointSchema,
   surveyTypeSchema,
 } from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
@@ -30,6 +34,7 @@ const create = z
     analytics_area_id: uuid.optional(),
     operator_actor_id: uuid.optional(),
     responses_identity_protected: z.boolean(),
+    starting_point: surveyStartingPointSchema.optional(),
   })
   .strict();
 const update = z
@@ -145,9 +150,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     );
   });
   app.get('/surveys', { preHandler: pre, ...rate('read') }, async (req, reply) => {
-    const q = z
-      .object({ managed_system_id: z.union([uuid, z.literal('all')]).optional() })
-      .safeParse(req.query);
+    const q = listSurveysQuerySchema.safeParse(req.query);
     if (!q.success)
       return sendError(reply, 'validation.failed', 'invalid query parameters', {
         fields: fieldsFromZodIssues(q.error.issues),
@@ -156,8 +159,54 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       await opts.surveysService.listSurvey(
         actor(req),
         q.data.managed_system_id === 'all' ? undefined : q.data.managed_system_id,
+        q.data,
       ),
     );
+  });
+  app.get('/surveys/templates', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = z.object({ managed_system_id: uuid }).strict().safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply
+      .header('cache-control', 'private, no-cache')
+      .send(await opts.surveysService.getSurveyTemplates(actor(req), query.data.managed_system_id));
+  });
+  app.get('/surveys/copy-sources', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = z
+      .object({
+        managed_system_id: uuid,
+        q: z.string().trim().max(200).optional(),
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+        cursor: z.string().min(1).max(1024).optional(),
+      })
+      .strict()
+      .safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply.header('cache-control', 'private, no-cache').send(
+      await opts.surveysService.getSurveyCopySources(actor(req), {
+        managed_system_id: query.data.managed_system_id,
+        limit: query.data.limit,
+        ...(query.data.q !== undefined ? { q: query.data.q } : {}),
+        ...(query.data.cursor !== undefined ? { cursor: query.data.cursor } : {}),
+      }),
+    );
+  });
+  app.get('/surveys/:id/copy-source', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+    const query = z.object({}).strict().safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply
+      .header('cache-control', 'private, no-cache')
+      .send(await opts.surveysService.getSurveyCopySource(actor(req), id));
   });
   app.get('/surveys/:id', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
@@ -169,6 +218,19 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
     return reply.send(await opts.surveysService.getRespondentForm(actor(req), id));
   });
+  app.get(
+    '/surveys/:id/evidence-candidates',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const query = parse(surveyEvidenceCandidatesQuerySchema, req.query, reply);
+      if (!query) return;
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.getEvidenceCandidates(actor(req), id, query));
+    },
+  );
   app.get('/surveys/:id/results', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
@@ -179,6 +241,90 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       });
     return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
+  app.get(
+    '/surveys/:id/outcome-follow-up/recovery-items',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const parsed = z
+        .object({
+          presentation: z.enum(['visible', 'hidden']).default('visible'),
+          limit: z.coerce.number().int().min(1).max(100).default(50),
+          cursor: z.string().min(1).max(4096).optional(),
+        })
+        .strict()
+        .safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid recovery query', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.listOutcomeRecovery(actor(req), id, parsed.data));
+    },
+  );
+  app.get(
+    '/surveys/:id/outcome-follow-up/history',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const parsed = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(100).default(50),
+          cursor: z.string().min(1).max(4096).optional(),
+        })
+        .strict()
+        .safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid history query', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.getOutcomeRecoveryHistory(actor(req), id, parsed.data));
+    },
+  );
+  app.get(
+    '/survey-responses/:id/outcome-follow-up/presentation',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const parsed = emptyQuery.safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.getOutcomeRecoveryPresentation(actor(req), id));
+    },
+  );
+  app.patch(
+    '/survey-responses/:id/outcome-follow-up/presentation',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const query = emptyQuery.safeParse(req.query);
+      if (!query.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(query.error.issues),
+        });
+      const parsed = recoveryPresentationPatchSchema.safeParse(req.body);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid presentation', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(
+          await opts.surveysService.patchOutcomeRecoveryPresentation(actor(req), id, parsed.data),
+        );
+    },
+  );
   app.get(
     '/surveys/:id/outcome-follow-up',
     { preHandler: pre, ...rate('read') },

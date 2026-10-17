@@ -33,6 +33,7 @@ import type { Db } from '../../db/client.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
+import { isOrdinarilyRequestable } from './supported-scope-policy.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Decision shape — locked verbatim by issue #4. Do not extend without an
@@ -156,7 +157,7 @@ export function createCheckService(deps: CheckServiceDeps) {
     }
 
     // (3) direct capability grant. Active = NOT revoked AND (expires_at NULL
-    // OR expires_at > now()). We fetch all rows for (actor, capability) and
+    // OR expires_at > now()). We fetch unsuperseded rows for (actor, capability) and
     // classify rather than filtering in SQL so we can distinguish
     // grant_expired / grant_revoked from no_grant in a single round-trip.
     const grantRows = await db
@@ -172,6 +173,7 @@ export function createCheckService(deps: CheckServiceDeps) {
           eq(permissionGrants.workspaceId, actor.workspace_id),
           eq(permissionGrants.actorId, actor.actor_id),
           eq(permissionGrants.capability, capability),
+          isNull(permissionGrants.supersededAt),
         ),
       );
 
@@ -226,26 +228,22 @@ export function createCheckService(deps: CheckServiceDeps) {
     // If we saw a revoked or expired grant earlier and nothing else allowed,
     // surface that distinct reason. Revoked takes precedence over expired
     // because revocation is an intentional action vs. passive expiry.
+    // A capability that cannot be requested ordinarily (workspace.admin) carries
+    // no requestable scope on any of these denies, like explicit_deny.
+    const requestableScope: RequestableScope[] | null = isOrdinarilyRequestable(capability)
+      ? [{ workspace_id: actor.workspace_id }]
+      : null;
     if (sawRevoked) {
-      return {
-        allow: false,
-        reason: 'grant_revoked',
-        requestable: [{ workspace_id: actor.workspace_id }],
-      };
+      return { allow: false, reason: 'grant_revoked', requestable: requestableScope };
     }
     if (sawExpired) {
-      return {
-        allow: false,
-        reason: 'grant_expired',
-        requestable: [{ workspace_id: actor.workspace_id }],
-      };
+      return { allow: false, reason: 'grant_expired', requestable: requestableScope };
     }
 
     // (6) requestable computation (Slice 1): no explicit deny here, so the
     // actor MAY request workspace-only scope on this capability. Slice 2
     // extends with MS scope candidates.
-    const requestable: RequestableScope[] = [{ workspace_id: actor.workspace_id }];
-    return { allow: false, reason: 'no_grant', requestable };
+    return { allow: false, reason: 'no_grant', requestable: requestableScope };
   }
 
   async function capabilityScope(
@@ -258,10 +256,24 @@ export function createCheckService(deps: CheckServiceDeps) {
     if (actor.workspace_id !== scope.workspace_id)
       return { kind: 'scoped', managed_system_ids: [] };
 
-    const bypass = actor.role_level === 'admin' ? adminModuleBypassFor(capability) : 'none';
-    if (bypass === 'always') return { kind: 'all' };
+    return resolveCapabilityScope(db, actor, capability, now);
+  }
 
-    const denyRows = await db
+  return { checkCapability, capabilityScope };
+}
+
+/** Single capability scope rule, shared by HTTP hints and db/tx read-model filters. */
+export async function resolveCapabilityScope(
+  db: Tx,
+  actor: ActorContext,
+  capability: Capability,
+  now: () => Date = () => new Date(),
+): Promise<CapabilityScope> {
+  const bypass = actor.role_level === 'admin' ? adminModuleBypassFor(capability) : 'none';
+  if (bypass === 'always') return { kind: 'all' };
+
+  const [denyRows, grantRows] = await Promise.all([
+    db
       .select({ managedSystemId: permissionDenies.managedSystemId })
       .from(permissionDenies)
       .where(
@@ -271,15 +283,8 @@ export function createCheckService(deps: CheckServiceDeps) {
           eq(permissionDenies.capability, capability),
           isNull(permissionDenies.revokedAt),
         ),
-      );
-    if (denyRows.some((row) => row.managedSystemId === null)) {
-      return { kind: 'scoped', managed_system_ids: [] };
-    }
-    const deniedIds = new Set(
-      denyRows.map((row) => row.managedSystemId).filter((id): id is string => id !== null),
-    );
-
-    const grantRows = await db
+      ),
+    db
       .select({
         managedSystemId: permissionGrants.managedSystemId,
         revokedAt: permissionGrants.revokedAt,
@@ -291,36 +296,42 @@ export function createCheckService(deps: CheckServiceDeps) {
           eq(permissionGrants.workspaceId, actor.workspace_id),
           eq(permissionGrants.actorId, actor.actor_id),
           eq(permissionGrants.capability, capability),
+          isNull(permissionGrants.supersededAt),
         ),
-      );
-    const rightNow = now();
-    const isActive = (row: {
-      revokedAt: Date | null;
-      expiresAt: Date | null;
-    }) =>
-      row.revokedAt === null &&
-      (row.expiresAt === null || row.expiresAt.getTime() > rightNow.getTime());
-    const broadAllow =
-      grantRows.some((row) => row.managedSystemId === null && isActive(row)) ||
-      roleSatisfies(actor.role_level, capability) ||
-      bypass === 'unless_denied';
-    if (broadAllow && deniedIds.size === 0) return { kind: 'all' };
-
-    const allowedIds = broadAllow
-      ? await allManagedSystemIds(db, actor.workspace_id)
-      : grantRows
-          .filter(
-            (row): row is typeof row & { managedSystemId: string } =>
-              row.managedSystemId !== null && isActive(row),
-          )
-          .map((row) => row.managedSystemId);
-    return {
-      kind: 'scoped',
-      managed_system_ids: allowedIds.filter((id) => !deniedIds.has(id)),
-    };
+      ),
+  ]);
+  if (denyRows.some((row) => row.managedSystemId === null)) {
+    return { kind: 'scoped', managed_system_ids: [] };
   }
+  const deniedIds = new Set(
+    denyRows.map((row) => row.managedSystemId).filter((id): id is string => id !== null),
+  );
 
-  return { checkCapability, capabilityScope };
+  const rightNow = now();
+  const isActive = (row: {
+    revokedAt: Date | null;
+    expiresAt: Date | null;
+  }) =>
+    row.revokedAt === null &&
+    (row.expiresAt === null || row.expiresAt.getTime() > rightNow.getTime());
+  const broadAllow =
+    grantRows.some((row) => row.managedSystemId === null && isActive(row)) ||
+    roleSatisfies(actor.role_level, capability) ||
+    bypass === 'unless_denied';
+  if (broadAllow && deniedIds.size === 0) return { kind: 'all' };
+
+  const allowedIds = broadAllow
+    ? await allManagedSystemIds(db, actor.workspace_id)
+    : grantRows
+        .filter(
+          (row): row is typeof row & { managedSystemId: string } =>
+            row.managedSystemId !== null && isActive(row),
+        )
+        .map((row) => row.managedSystemId);
+  return {
+    kind: 'scoped',
+    managed_system_ids: allowedIds.filter((id) => !deniedIds.has(id)),
+  };
 }
 
 /**

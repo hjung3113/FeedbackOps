@@ -1,3 +1,4 @@
+import { RecoveryFreshness } from '@/features/integration/public';
 import {
   DASHBOARD_HOP_ROUTES,
   type DashboardSummary,
@@ -15,7 +16,8 @@ import {
 } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
-import type * as React from 'react';
+import * as React from 'react';
+import { OwnerPermissionRequestDialog } from './OwnerPermissionRequestDialog';
 
 import {
   type MinePermissionRequestRow,
@@ -24,9 +26,10 @@ import {
   fetchTaskRequests,
   listTasks,
 } from '@/lib/api';
+import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
-import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
 import { TASK_REQUEST_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import {
   HOME_COPY,
@@ -42,6 +45,7 @@ import {
 } from '@/lib/cross-system/useUnreadNotificationCount';
 import { formatRelativeTime } from '@/lib/format/datetime';
 import { InternalLink } from '@/lib/router/InternalLink';
+import { hrefWithManagedSystem } from '@/lib/router/managed-system-href';
 import { AnswerableSurveysPanel } from './AnswerableSurveysPanel';
 import { InboxPanel } from './InboxPanel';
 
@@ -58,10 +62,12 @@ export function HomeScreen({
   managedSystemId,
   activeTab = 'dashboard',
   onTabChange,
+  recovery,
 }: {
   managedSystemId?: string;
   activeTab?: HomeTab;
   onTabChange?: (tab: HomeTab) => void;
+  recovery?: { queue: React.ReactNode; detailPanel: React.ReactNode };
 }): React.ReactElement {
   const me = useMe();
   const queryClient = useQueryClient();
@@ -89,8 +95,15 @@ export function HomeScreen({
     retry: false,
   });
   const pendingRequests = useQuery({
-    queryKey: ['home-pending-task-requests'] as const,
-    queryFn: ({ signal }) => fetchTaskRequests({ status: 'pending_review', signal }),
+    queryKey: ['home-pending-task-requests', me.data?.actor.id, managedSystemId] as const,
+    enabled: me.data?.actor.id !== undefined,
+    queryFn: ({ signal }) =>
+      fetchTaskRequests({
+        status: 'pending_review',
+        reviewer: 'me',
+        ...(managedSystemId === undefined ? {} : { managed_system_id: managedSystemId }),
+        signal,
+      }),
     retry: false,
   });
   const openPermissionRequests = useQuery({
@@ -99,6 +112,23 @@ export function HomeScreen({
     retry: false,
   });
   const actorName = me.data?.actor.display_name ?? '지원';
+  const assignedTasks = myTasks.data?.items ?? [];
+  const assignedRequests = pendingRequests.data?.items ?? [];
+  const permissionRequests = openPermissionRequests.data?.requests ?? [];
+  const hasPersonalAssignments = assignedTasks.length > 0 || assignedRequests.length > 0;
+  const hasSummaryActivity =
+    summary.data !== undefined &&
+    (summary.data.action_queues.some((queue) => queue.count > 0) ||
+      summary.data.coverage.length > 0 ||
+      Object.values(summary.data.kpis ?? {}).some((count) => count !== undefined && count > 0));
+  // A User actor gets 403 from both personal-work queries: that actor holds no Tasks, so Home leads
+  // with Survey and 내 VOC. Loading and other errors keep the operator layout.
+  const personalWorkDenied = [myTasks, pendingRequests].every((query) =>
+    isPermissionDenied(query.error),
+  );
+  // Once a Permission Request has shown, its panel stays mounted so the withdraw focus fallback survives.
+  const [sawPermissionRequests, setSawPermissionRequests] = React.useState(false);
+  if (permissionRequests.length > 0 && !sawPermissionRequests) setSawPermissionRequests(true);
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['dashboard-summary', managedSystemId] });
   };
@@ -113,30 +143,41 @@ export function HomeScreen({
         if (value === 'dashboard' || value === 'inbox') onTabChange?.(value);
       }}
     >
-      <PageShell contentClassName="max-w-none">
+      <PageShell contentClassName="max-w-none" detailPanel={activeTab === 'dashboard' ? recovery?.detailPanel : undefined}>
         <section data-testid="home-screen">
           <header className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-text-primary">
                 {HOME_COPY.title(actorName)}
               </h1>
-              <p className="mt-3 text-sm text-text-muted">
-                {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
-              </p>
+              {activeTab === 'dashboard' && (
+                <p className="mt-3 text-sm text-text-muted">
+                  {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
+                </p>
+              )}
             </div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
-                <RefreshCw className="h-3.5 w-3.5" />
-                {HOME_COPY.refresh}
-              </Button>
-              <Button asChild variant="primary" size="sm">
-                <InternalLink href="/vocs?action=create">
-                  <Plus className="h-3.5 w-3.5" />
-                  {HOME_COPY.newVoc}
-                </InternalLink>
-              </Button>
-            </div>
+            {activeTab === 'dashboard' && (
+              <div className="flex shrink-0 gap-2">
+                <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {HOME_COPY.refresh}
+                </Button>
+                <Button asChild variant="primary" size="sm">
+                  <InternalLink href="/vocs?action=create">
+                    <Plus className="h-3.5 w-3.5" />
+                    {HOME_COPY.newVoc}
+                  </InternalLink>
+                </Button>
+              </div>
+            )}
           </header>
+          {activeTab === 'dashboard' && (
+            <RecoveryFreshness
+              computedAt={summary.data?.computed_at}
+              failed={summary.isError}
+              updatedAt={summary.dataUpdatedAt}
+            />
+          )}
           <TabsList aria-label={HOME_INBOX_COPY.tabListLabel} className="mb-4">
             <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
             {/* oxlint-disable-next-line shadcn/no-restyle -- the Inbox tab keeps an 8px gap before its unread-count badge */}
@@ -150,35 +191,79 @@ export function HomeScreen({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard" className="mt-0">
-            {summary.isError ? (
-              <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+            {personalWorkDenied ? (
+              <div className="space-y-7" data-testid="home-reporter-layout">
+                <AnswerableSurveysPanel />
+                <InternalLink
+                  href="/vocs?view=my"
+                  className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
+                >
+                  {HOME_COPY.myVocs}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </InternalLink>
+                {(permissionRequests.length > 0 || sawPermissionRequests) && (
+                  <OpenRequestsPanel requests={permissionRequests} />
+                )}
+                {summary.isError && (
+                  <p className="text-sm text-accent-danger">{HOME_COPY.summaryError}</p>
+                )}
+                {hasSummaryActivity && (
+                  <HomeSummary
+                    summary={summary.data}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {summary.data !== undefined && summary.data.coverage.length > 0 && (
+                  <CoveragePanel
+                    coverage={summary.data.coverage}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {recovery?.queue}
+              </div>
             ) : (
-              <HomeSummary summary={summary.data} />
+              <>
+                {hasPersonalAssignments && (
+                  <div className="mb-9">
+                    <MyWorkPanel tasks={assignedTasks} requests={assignedRequests} />
+                  </div>
+                )}
+                {summary.isError ? (
+                  <p className="mb-5 text-sm text-accent-danger">{HOME_COPY.summaryError}</p>
+                ) : (
+                  <HomeSummary
+                    summary={summary.data}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {(!hasPersonalAssignments || (summary.data?.coverage.length ?? 0) > 0) && (
+                  <div
+                    className={`mt-9 grid gap-7 ${
+                      !hasPersonalAssignments && (summary.data?.coverage.length ?? 0) > 0
+                        ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+                        : 'grid-cols-1'
+                    }`}
+                  >
+                    {!hasPersonalAssignments && (
+                      <MyWorkPanel tasks={assignedTasks} requests={assignedRequests} />
+                    )}
+                    {summary.data !== undefined && summary.data.coverage.length > 0 && (
+                      <CoveragePanel
+                        coverage={summary.data.coverage}
+                        {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                      />
+                    )}
+                  </div>
+                )}
+                <div className="mt-9">
+                  <OpenRequestsPanel requests={permissionRequests} />
+                </div>
+                {recovery?.queue}
+                <div className="mt-9">
+                  <AnswerableSurveysPanel />
+                </div>
+              </>
             )}
-            <div
-              className={`mt-9 grid gap-7 ${
-                summary.data !== undefined && summary.data.coverage.length > 0
-                  ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
-                  : 'grid-cols-1'
-              }`}
-            >
-              <MyWorkPanel
-                tasks={myTasks.data?.items ?? []}
-                requests={pendingRequests.data?.items ?? []}
-              />
-              {summary.data !== undefined && summary.data.coverage.length > 0 && (
-                <CoveragePanel
-                  coverage={summary.data.coverage}
-                  {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-                />
-              )}
-            </div>
-            <div className="mt-9">
-              <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
-            </div>
-            <div className="mt-9">
-              <AnswerableSurveysPanel />
-            </div>
           </TabsContent>
           <TabsContent value="inbox" className="mt-0">
             <InboxPanel />
@@ -192,9 +277,67 @@ export function HomeScreen({
 function OpenRequestsPanel({
   requests,
 }: { requests: MinePermissionRequestRow[] }): React.ReactElement {
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const rowRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const headingRef = React.useRef<HTMLHeadingElement>(null);
+  const openedIndex = React.useRef(0);
+  const [returnFocus, setReturnFocus] = React.useState<{
+    id: string;
+    removed: boolean;
+  } | null>(null);
+
+  function openRequest(id: string): void {
+    openedIndex.current = requests.findIndex((request) => request.id === id);
+    setReturnFocus(null);
+    setSelectedId(id);
+  }
+
+  // Every close path returns focus to the row that opened the dialog. A
+  // withdrawn row is gone by close time, so the row at its former index (or
+  // the heading when the list emptied) takes focus instead.
+  function closeDialog(closedId: string | null, removed = false): void {
+    if (closedId === null) {
+      setSelectedId(null);
+      return;
+    }
+    setReturnFocus({ id: closedId, removed });
+    setSelectedId(null);
+  }
+
+  React.useEffect(() => {
+    if (selectedId !== null || returnFocus === null) return;
+    setReturnFocus(null);
+    const row = returnFocus.removed ? undefined : rowRefs.current.get(returnFocus.id);
+    if (row) {
+      row.focus();
+      return;
+    }
+    // The removed row can still sit in a stale requests render; skip it before
+    // applying the captured open index.
+    const remaining = requests.filter((request) => request.id !== returnFocus.id);
+    const next = remaining[Math.min(openedIndex.current, remaining.length - 1)];
+    if (next) rowRefs.current.get(next.id)?.focus();
+    else headingRef.current?.focus();
+  }, [selectedId, returnFocus, requests]);
+
   return (
     <section>
-      <PanelHeading title={HOME_COPY.openRequests} />
+      {selectedId ? (
+        <OwnerPermissionRequestDialog
+          key={selectedId}
+          id={selectedId}
+          onClose={(options) => closeDialog(selectedId, options?.removed === true)}
+        />
+      ) : null}
+      <div className="mb-3 flex items-center justify-between">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-xs font-semibold uppercase tracking-wide text-text-muted outline-hidden"
+        >
+          {HOME_COPY.openRequests}
+        </h2>
+      </div>
       {requests.length === 0 ? (
         <div className="rounded-md border border-border-subtle bg-surface-card">
           <p className="px-4 py-5 text-sm text-text-muted">{HOME_COPY.noOpenRequests}</p>
@@ -205,17 +348,40 @@ function OpenRequestsPanel({
           data-testid="home-open-requests-list"
         >
           {requests.map((request) => (
-            <li
-              key={request.id}
-              className="border-b border-border-subtle px-4 py-3 last:border-b-0"
-            >
-              <p className="text-sm font-medium text-text-primary">
-                {getCapabilityDisplayLabel(request.requested_capability)}
-              </p>
-              <p className="text-xs text-text-muted">
-                {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]} ·{' '}
-                {formatRelativeTime(request.created_at)}
-              </p>
+            <li key={request.id} className="border-b border-border-subtle last:border-b-0">
+              <button
+                type="button"
+                data-testid={`home-open-request-${request.id}`}
+                ref={(node) => {
+                  if (node) rowRefs.current.set(request.id, node);
+                  else rowRefs.current.delete(request.id);
+                }}
+                onClick={() => openRequest(request.id)}
+                className="flex min-h-row-default w-full items-center gap-3 px-4 text-left hover:bg-surface-row-hover"
+              >
+                <span
+                  className={`h-4 w-row-accent shrink-0 rounded-pill ${
+                    request.status === 'needs_more_info' ? 'bg-accent-warn' : 'bg-accent-info'
+                  }`}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-text-primary">
+                    {getCapabilityDisplayLabel(request.requested_capability)}
+                  </span>
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
+                    {request.status === 'needs_more_info' ? (
+                      <span className="shrink-0 rounded bg-accent-warn/10 px-1.5 py-0.5 text-caption font-medium text-accent-warn">
+                        {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]}
+                      </span>
+                    ) : (
+                      <span>{MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]}</span>
+                    )}
+                    <span>·</span>
+                    <span className="truncate">{formatRelativeTime(request.created_at)}</span>
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" />
+              </button>
             </li>
           ))}
         </ul>
@@ -224,19 +390,25 @@ function OpenRequestsPanel({
   );
 }
 
-function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): React.ReactElement {
+function HomeSummary({
+  summary,
+  managedSystemId,
+}: {
+  summary: DashboardSummary | undefined;
+  managedSystemId?: string;
+}): React.ReactElement {
   const kpis = summary?.kpis;
   const queues = summary?.action_queues ?? [];
   const activeQueues = queues.filter((queue) => queue.count > 0);
   const zeroQueues = queues.filter((queue) => queue.count === 0);
   const kpiKeys = Object.keys(HOME_KPI_COPY) as Array<keyof typeof HOME_KPI_COPY>;
+  const visibleKpiKeys = kpiKeys.filter((key) => kpis?.[key] !== undefined);
   return (
     <>
-      <div className="mb-8 flex flex-wrap gap-2" data-testid="home-kpis">
-        {kpis &&
-          kpiKeys.map((key) => {
-            const value = kpis[key];
-            if (value === undefined) return null;
+      {visibleKpiKeys.length > 0 && (
+        <div className="mb-8 flex flex-wrap gap-2" data-testid="home-kpis">
+          {visibleKpiKeys.map((key) => {
+            const value = kpis?.[key];
             return (
               <div
                 key={key}
@@ -251,12 +423,13 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
                       : 'ml-1.5 font-semibold tabular-nums text-text-primary'
                   }
                 >
-                  {key === 'coverage_percent' ? `${value}%` : value}
+                  {value}
                 </span>
               </div>
             );
           })}
-      </div>
+        </div>
+      )}
       {/* #521 follows empty-state AC over the populated docs/design-prototype/screen-home.jsx example. */}
       {summary !== undefined && activeQueues.length > 0 && (
         <>
@@ -267,7 +440,11 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
           </div>
           <div className="flex flex-col gap-2" data-testid="home-action-queues">
             {activeQueues.map((queue) => (
-              <ActionQueueRow key={queue.id} queue={queue} />
+              <ActionQueueRow
+                key={queue.id}
+                queue={queue}
+                {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+              />
             ))}
           </div>
         </>
@@ -279,7 +456,7 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
             <InternalLink
               className="inline-flex items-center rounded-full border border-border-subtle bg-surface-card px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
               data-testid={`home-zero-queue-${queue.id}`}
-              href={queue.next_action.route}
+              href={hrefWithManagedSystem(queue.next_action.route, managedSystemId)}
               key={queue.id}
             >
               {HOME_QUEUE_COPY[queue.id].title} 0
@@ -293,7 +470,11 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
 
 function ActionQueueRow({
   queue,
-}: { queue: DashboardSummary['action_queues'][number] }): React.ReactElement {
+  managedSystemId,
+}: {
+  queue: DashboardSummary['action_queues'][number];
+  managedSystemId?: string;
+}): React.ReactElement {
   const copy = HOME_QUEUE_COPY[queue.id];
   const countClass =
     queue.severity === 'urgent'
@@ -340,7 +521,7 @@ function ActionQueueRow({
         {queue.secondary_action && copy.secondaryAction ? (
           <InternalLink
             className="text-xs text-text-secondary hover:text-text-primary"
-            href={queue.secondary_action.route}
+            href={hrefWithManagedSystem(queue.secondary_action.route, managedSystemId)}
           >
             {copy.secondaryAction}
           </InternalLink>
@@ -348,7 +529,7 @@ function ActionQueueRow({
           <span />
         )}
         <Button asChild variant="primary" size="sm" wrapText className="max-w-full">
-          <InternalLink href={queue.next_action.route}>
+          <InternalLink href={hrefWithManagedSystem(queue.next_action.route, managedSystemId)}>
             <span className="min-w-0 wrap-break-word">{copy.primaryAction}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           </InternalLink>
@@ -412,32 +593,45 @@ function coverageHopHref(
   managedSystemId: string | undefined,
 ): string | undefined {
   if (id === 'milestone-outcome') return undefined;
-  const route = DASHBOARD_HOP_ROUTES[id];
-  if (managedSystemId === undefined) return route;
-  const url = new URL(route, 'http://localhost');
-  url.searchParams.set('managedSystem', managedSystemId);
-  return `${url.pathname}?${url.searchParams.toString()}`;
+  return hrefWithManagedSystem(DASHBOARD_HOP_ROUTES[id], managedSystemId);
 }
+
+// #1087 UX: value text follows the band colour like Coverage does, so a real
+// red 0% never reads like the neutral no-data row.
+const HOME_COVERAGE_VALUE_TONE: Record<DashboardSummary['coverage'][number]['status'], string> = {
+  good: 'text-accent-success',
+  warn: 'text-accent-warn',
+  bad: 'text-accent-danger',
+  no_data: 'text-text-muted',
+};
 
 function CoverageMetricRow({
   item,
   href,
 }: { item: DashboardSummary['coverage'][number]; href: string | undefined }): React.ReactElement {
+  // ADR-0067 56-1/O2: total zero is neutral 집계 대상 없음, not a green 0/0 · 0%.
+  const noData = item.status === 'no_data';
   const body = (
     <>
       <div className="flex justify-between gap-2 text-xs">
         <span className="text-text-primary">{COVERAGE_METRIC_LABELS[item.id]}</span>
-        <span className="shrink-0 tabular-nums text-text-muted">
-          {item.value} / {item.total} · {item.percent}%
-        </span>
+        {noData ? (
+          <span className="shrink-0 text-text-muted">{COVERAGE_NO_DATA_LABEL}</span>
+        ) : (
+          <span className={`shrink-0 tabular-nums ${HOME_COVERAGE_VALUE_TONE[item.status]}`}>
+            {item.value} / {item.total} · {item.percent}%
+          </span>
+        )}
       </div>
-      <ProgressMeter
-        value={item.percent}
-        size="thin"
-        tone={item.status === 'bad' ? 'danger' : item.status === 'warn' ? 'warning' : 'success'}
-        className="mt-2 w-full"
-        trackTone="row-selected"
-      />
+      {!noData && (
+        <ProgressMeter
+          value={item.percent}
+          size="thin"
+          tone={item.status === 'bad' ? 'danger' : item.status === 'warn' ? 'warning' : 'success'}
+          className="mt-2 w-full"
+          trackTone="row-selected"
+        />
+      )}
     </>
   );
   return href === undefined ? (

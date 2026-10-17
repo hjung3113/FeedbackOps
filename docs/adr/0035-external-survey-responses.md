@@ -4,7 +4,10 @@ Date: 2026-07-30
 
 ## Status
 
-Proposed
+Rejected 2026-10-13 by the owner. MVP respondents stay AD-authenticated internal
+Actors (FOP-OUT-008), and the MVP close-out in `docs/design/13-mvp-roadmap.md`
+does not schedule public links. A future external-respondent need starts from a
+new ADR; this record stays as reference for that design.
 
 Supersedes the authenticated-Actor-only respondent rule for the new public-link
 surface described here. It does not supersede ADR-0033's identity-protection,

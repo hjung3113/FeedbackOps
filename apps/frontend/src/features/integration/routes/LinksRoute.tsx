@@ -42,7 +42,7 @@ function toSearchableRelationType(value: string | undefined): SearchableRelation
 const STATUS_TABS: ListToolbarTab[] = [
   { value: 'all', label: GLOSSARY.all },
   { value: 'active', label: '활성' },
-  { value: 'stale', label: '오래됨', urgent: true },
+  { value: 'stale', label: '오래됨' },
   { value: 'detached', label: '분리됨' },
   { value: 'revoked', label: '취소됨' },
 ];
@@ -218,10 +218,14 @@ export function LinksRoute() {
           : items.filter((link) => link.status === status).length,
       );
     }
-    return STATUS_TABS.map((tab) => ({
-      ...tab,
-      badgeCount: counts.get(tab.value) ?? 0,
-    }));
+    return STATUS_TABS.map((tab) => {
+      const count = counts.get(tab.value) ?? 0;
+      return {
+        ...tab,
+        badgeCount: count,
+        ...(tab.value === 'stale' && count > 0 ? { urgent: true } : {}),
+      };
+    });
   }, [countInventory.data, countInventory.isSuccess]);
 
   function handleStatusChange(next: string): void {

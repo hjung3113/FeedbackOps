@@ -1,3 +1,4 @@
+import { TasksRouteView } from '@/routes/_authed/tasks';
 import { type TaskDto, listTasksQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -50,6 +51,7 @@ const task: TaskDto = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: null,
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,
@@ -116,11 +118,19 @@ describe('Task list paging and independent selection', () => {
                   primary_managed_system_id: '30000000-0000-0000-0000-000000000099',
                 });
           if (url.pathname === `/tasks/${task.id}`) return response(task);
-          listTasksQuerySchema.parse(Object.fromEntries(url.searchParams));
+          expect(
+            listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)).public_update,
+          ).toBe('missing');
           return response({ items: [task], page: { total: 1, has_more: false } });
         }),
       );
-      mount(<TaskListRoute selectedParam={second.id} managedSystem={ms} />);
+      mount(
+        <TaskListRoute
+          selectedParam={second.id}
+          managedSystem={ms}
+          filters={{ public_update: 'missing' }}
+        />,
+      );
       await waitFor(() =>
         expect(navigate).toHaveBeenCalledWith({
           to: '/tasks',
@@ -144,19 +154,126 @@ describe('Task list paging and independent selection', () => {
       expect(screen.queryByText(second.id)).not.toBeInTheDocument();
     },
   );
-  it('AC-981 keeps the Task board on a request without limit', async () => {
+  it('AC-981 bounds the Task board to a page per status column instead of one unbounded request', async () => {
     const queries: Array<ReturnType<typeof listTasksQuerySchema.parse>> = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), 'http://localhost');
-        queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
-        return response({ items: [task] });
+        if (url.pathname !== '/tasks') return response({ items: [] });
+        const query = listTasksQuerySchema.parse(Object.fromEntries(url.searchParams));
+        queries.push(query);
+        return response({
+          items: query.status === 'backlog' ? [task] : [],
+          page: { has_more: false, total: query.status === 'backlog' ? 1 : 0 },
+        });
       }),
     );
     mount(<TaskBoardRoute />);
     await screen.findByText('TASK-1');
-    expect(queries[0]?.limit).toBeUndefined();
-    expect(queries[0]?.cursor).toBeUndefined();
+    expect(queries.length).toBeGreaterThan(0);
+    for (const query of queries) {
+      expect(query.limit).toBeDefined();
+      expect(query.cursor).toBeUndefined();
+    }
+    expect(
+      queries
+        .filter((query) => query.limit === 50)
+        .map((query) => query.status)
+        .sort(),
+    ).toEqual(['backlog', 'doing', 'done', 'released', 'reopened', 'review', 'todo'].sort());
   });
+});
+
+it.each(['backlog', 'my'] as const)(
+  'sends intersecting report filters from %s on every page',
+  async (view) => {
+    const queries: Array<ReturnType<typeof listTasksQuerySchema.parse>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname === `/tasks/${task.id}`) return response(task);
+        if (url.pathname === `/tasks/${second.id}`) return response(second);
+        queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
+        return response({
+          items: queries.length === 1 ? [task] : [second],
+          page: { total: 2, has_more: queries.length === 1, cursor: 'next' },
+        });
+      }),
+    );
+    mount(
+      <TaskListRoute
+        view={view}
+        managedSystem={ms}
+        filters={{
+          'filter.analytics_area': 'unset',
+          status: 'doing',
+          status_group: 'in-flight',
+          overdue: true,
+          public_update: 'missing',
+          reporter_update: 'needed',
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '더 불러오기' }));
+    await waitFor(() => expect(queries).toHaveLength(2));
+    for (const query of queries)
+      expect(query).toMatchObject({
+        managed_system_id: ms,
+        analytics_area_id: 'unset',
+        status: 'doing',
+        status_group: 'in-flight',
+        overdue: 'true',
+        public_update: 'missing',
+        reporter_update: 'needed',
+        ...(view === 'my' ? { assignee: 'me' } : {}),
+      });
+    expect(queries[1]?.cursor).toBe('next');
+  },
+);
+
+it('keeps board requests limited to the existing public_update filter', async () => {
+  const queries: Array<ReturnType<typeof listTasksQuerySchema.parse>> = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname !== '/tasks') return response({ items: [] });
+      const query = listTasksQuerySchema.parse(Object.fromEntries(url.searchParams));
+      queries.push(query);
+      return response({
+        items: query.status === 'backlog' ? [task] : [],
+        page: { has_more: false, total: query.status === 'backlog' ? 1 : 0 },
+      });
+    }),
+  );
+  mount(
+    <TasksRouteView
+      search={{
+        view: 'board',
+        managedSystem: ms,
+        'filter.analytics_area': 'unset',
+        status: 'doing',
+        status_group: 'in-flight',
+        overdue: true,
+        public_update: 'missing',
+        reporter_update: 'needed',
+      }}
+    />,
+  );
+  await screen.findByText('TASK-1');
+  // Backlog column page: only the scope and the public-update filter, plus its own paging.
+  expect(queries.find((query) => query.status === 'backlog')).toEqual({
+    managed_system_id: ms,
+    public_update: 'missing',
+    status: 'backlog',
+    limit: 50,
+  });
+  for (const query of queries) {
+    expect(query).not.toHaveProperty('overdue');
+    expect(query).not.toHaveProperty('status_group');
+    expect(query).not.toHaveProperty('reporter_update');
+    expect(query).not.toHaveProperty('analytics_area_id');
+  }
 });

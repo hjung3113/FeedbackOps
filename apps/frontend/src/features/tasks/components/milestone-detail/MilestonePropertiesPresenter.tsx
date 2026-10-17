@@ -3,27 +3,18 @@ import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { MilestoneDetailDto } from '@fops/shared';
 import { FieldRow, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@fops/ui';
 
-import {
-  MilestoneManagedSystemPill,
-  MilestoneOutlineBadge,
-  MilestoneOwnerChip,
-  MilestonePanelSectionTitle,
-} from '../MilestoneIdentity';
+import { MilestoneOwnerChip, MilestonePanelSectionTitle } from '../MilestoneIdentity';
 import { STATUS_OPTIONS } from './constants';
 import type { UseMilestoneStatusEditResult } from './useMilestoneStatusEdit';
 import type { UseMilestoneTitleEditResult } from './useMilestoneTitleEdit';
 
 export function MilestonePropertiesPresenter({
   milestone,
-  managedSystemName,
-  areaName,
   ownerName,
   titleEdit,
   statusEdit,
 }: {
   milestone: MilestoneDetailDto;
-  managedSystemName: string;
-  areaName: string | undefined;
   ownerName: string | undefined;
   titleEdit: UseMilestoneTitleEditResult;
   statusEdit: UseMilestoneStatusEditResult;
@@ -66,17 +57,6 @@ export function MilestonePropertiesPresenter({
             <span className="text-sm text-accent-danger">{statusError}</span>
           )}
         </span>
-      </FieldRow>
-      {/* Managed System is create-only (A3/A8): read-only text, never an input. */}
-      <FieldRow label="Managed System" layout="property">
-        <MilestoneManagedSystemPill name={managedSystemName} />
-      </FieldRow>
-      <FieldRow label="Analytics Area" layout="property">
-        {areaName !== undefined ? (
-          <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>
-        ) : (
-          <span className="text-text-muted">—</span>
-        )}
       </FieldRow>
       {/* Missing owner lookup keeps the explicit em dash fallback. */}
       <FieldRow label={GLOSSARY.owner} layout="property">

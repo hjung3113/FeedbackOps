@@ -1,3 +1,4 @@
+import { workspaceActorsFixture } from '../../fixtures/permissions';
 import {
   TRIAGE_AREA_IDS,
   triageAreaActors,
@@ -8,7 +9,13 @@ import {
   triageAreaReviewCandidates,
   triageAreaTriageVoc,
 } from '../../fixtures/triage-analytics-area';
-import { vocCreateAnalyticsAreas, vocCreatePeersByManagedSystem } from '../../fixtures/voc-create';
+import {
+  vocCreateAnalyticsAreas,
+  vocCreatePeersByManagedSystem,
+  vocCreatePreviewAvailability,
+  vocCreateSimilarityPreview,
+} from '../../fixtures/voc-create';
+import { decidedNoFollowUpVoc, eligibleNoFollowUpVoc } from '../../fixtures/voc-no-follow-up';
 import {
   VOC_REVIEW_IDS,
   populatedReviewCandidates,
@@ -28,6 +35,23 @@ export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;
   const handlers: MockApiHandler[] = [];
   const triageScenario = options.triageAreaScenario;
+  if (options.vocNoFollowUp) {
+    const voc = options.vocNoFollowUp === 'eligible' ? eligibleNoFollowUpVoc : decidedNoFollowUpVoc;
+    handlers.push(
+      { method: 'GET', path: '/vocs', handle: (route) => json(route, 200, { items: [voc] }) },
+      {
+        method: 'GET',
+        path: `/vocs/${VOC_REVIEW_IDS.voc}`,
+        handle: (route) => json(route, 200, voc),
+      },
+      // The decider renders by name only when /actors knows them.
+      {
+        method: 'GET',
+        path: '/actors',
+        handle: (route) => json(route, 200, workspaceActorsFixture),
+      },
+    );
+  }
 
   if (triageScenario) {
     handlers.push({
@@ -115,6 +139,16 @@ export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
 
   if (options.vocCreate) {
     handlers.push(
+      {
+        method: 'GET',
+        path: '/vocs/similarity-preview/availability',
+        handle: (route) => json(route, 200, vocCreatePreviewAvailability),
+      },
+      {
+        method: 'POST',
+        path: '/vocs/similarity-preview',
+        handle: (route) => json(route, 200, vocCreateSimilarityPreview),
+      },
       {
         method: 'GET',
         path: '/analytics-areas',

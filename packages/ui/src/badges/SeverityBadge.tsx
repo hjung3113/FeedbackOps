@@ -1,20 +1,19 @@
 import type * as React from 'react';
-import { type SeverityEnum, SeverityIndicator } from '../indicators/SeverityIndicator.js';
+import {
+  SEVERITY_LABELS,
+  type SeverityEnum,
+  SeverityIndicator,
+} from '../indicators/SeverityIndicator.js';
 import { StatusBadgeFrame } from './StatusBadgeFrame.js';
 
 export interface SeverityBadgeProps {
   severity: SeverityEnum;
   label?: string;
+  ariaLabel?: string;
   className?: string;
 }
 
-/** Korean label per severity level. */
-export const SEVERITY_LABELS: Record<SeverityEnum, string> = {
-  low: '낮음',
-  medium: '중간',
-  high: '높음',
-  critical: '심각',
-};
+export { SEVERITY_LABELS } from '../indicators/SeverityIndicator.js';
 
 const SEVERITY_CLASS: Record<SeverityEnum, string> = {
   low: 'text-severity-low-label',
@@ -32,20 +31,21 @@ const SEVERITY_CLASS: Record<SeverityEnum, string> = {
  * fails WCAG AA 4.5:1 as text at 12% tint even once the syntax is fixed, so
  * the fix is the `-label` token, not just wrapping `token` in `rgb()`).
  */
-export function SeverityBadge({ severity, label, className }: SeverityBadgeProps) {
+export function SeverityBadge({ severity, label, ariaLabel, className }: SeverityBadgeProps) {
   const token = `--severity-${severity}`;
   const severityClass = SEVERITY_CLASS[severity];
 
   return (
     <StatusBadgeFrame
       appearance="severity"
+      ariaLabel={ariaLabel ?? `심각도 ${label ?? SEVERITY_LABELS[severity]}`}
       textClassName={severityClass}
       tintClassName="bg-(--status-badge-tint)"
       {...(className !== undefined ? { className } : {})}
       token={token}
       // oxlint-disable-next-line shadcn/no-inline-styles -- tint is picked from the closed severity map and keeps the exact rgb alpha measured for #525 contrast
       style={{ '--status-badge-tint': `rgb(var(${token}) / 0.12)` } as React.CSSProperties}
-      indicator={<SeverityIndicator severity={severity} />}
+      indicator={<SeverityIndicator severity={severity} decorative />}
     >
       {label ?? SEVERITY_LABELS[severity]}
     </StatusBadgeFrame>

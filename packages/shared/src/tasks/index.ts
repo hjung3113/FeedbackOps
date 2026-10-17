@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listPageSchema } from '../list-page.js';
+import { reporterFacingStatusEnumSchema } from '../vocs/list-item.js';
 
 import { taskStatusSchema } from './status.js';
 
@@ -21,6 +22,7 @@ export const taskDtoSchema = z
     status: taskStatusSchema,
     priority: taskPrioritySchema,
     assignee_actor_id: z.string().uuid().nullable(),
+    assignee_team_id: z.string().uuid().nullable(),
     due_date: isoDateSchema.nullable(),
     milestone_id: z.string().uuid().nullable(),
     analytics_area_id: z.string().uuid().nullable(),
@@ -28,6 +30,17 @@ export const taskDtoSchema = z
     created_by: z.string().uuid(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
+    default_resolved: z.boolean().optional(),
+    source_rule: z
+      .enum([
+        'explicit',
+        'explicit_null',
+        'managed_system_owner',
+        'analytics_area_owner',
+        'workspace_fallback_queue',
+      ])
+      .optional(),
+    managed_system_id: z.string().uuid().optional(),
   })
   .strict();
 export type TaskDto = z.infer<typeof taskDtoSchema>;
@@ -70,6 +83,9 @@ export const taskDetailSourceSchema = z
             id: z.string().uuid(),
             display_id: z.string(),
             title: z.string(),
+            // Reporter-facing state machine, separate from Task status (ADR-0005);
+            // only the allowed variant carries it.
+            reporter_facing_status: reporterFacingStatusEnumSchema,
           })
           .strict(),
         z.object({ visibility_state: z.literal('summary_visible') }).strict(),
@@ -109,6 +125,7 @@ export const convertTaskRequestRequestSchema = z
     title: z.string().trim().min(1).max(200),
     priority: taskPrioritySchema.default('medium'),
     assignee_actor_id: z.string().uuid().nullable().optional(),
+    assignee_team_id: z.string().uuid().nullable().optional(),
     due_date: isoDateSchema.nullable().optional(),
     milestone_id: z.string().uuid().nullable().optional(),
     analytics_area_id: z.string().uuid().nullable().optional(),
@@ -123,13 +140,57 @@ export const linkExistingTaskRequestSchema = z
   .strict();
 export type LinkExistingTaskRequest = z.infer<typeof linkExistingTaskRequestSchema>;
 
+/** Comma list used by the Task list filters: trimmed, empty and repeated tokens dropped. */
+export function splitTaskListTokens(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((token) => token.trim())
+        .filter((token) => token !== ''),
+    ),
+  ];
+}
+
+// Validated as wire input (a plain string) so single values keep their legacy shape and saved
+// views store what the client sent; the service splits the tokens again.
+function taskTokenList(token: z.ZodTypeAny, max: number) {
+  return z.string().refine((value) => {
+    const tokens = splitTaskListTokens(value);
+    return (
+      tokens.length >= 1 && tokens.length <= max && tokens.every((t) => token.safeParse(t).success)
+    );
+  });
+}
+
 export const listTasksQuerySchema = z
   .object({
+    q: z
+      .string()
+      .trim()
+      .max(100)
+      .optional()
+      .transform((value) => (value === undefined || value === '' ? undefined : value)),
     status: taskStatusSchema.optional(),
-    assignee: z.union([z.string().uuid(), z.literal('me')]).optional(),
+    // `me`, `unassigned` (no actor and no team) and actor UUIDs; comma list, OR within the list.
+    assignee: taskTokenList(
+      z.union([z.string().uuid(), z.literal('me'), z.literal('unassigned')]),
+      20,
+    ).optional(),
+    assignee_team_id: z.string().uuid().optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    analytics_area_id: z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    // `in-flight` = todo/doing/review; `open` = backlog/todo/doing/review/reopened.
+    status_group: z.enum(['in-flight', 'open']).optional(),
+    priority: taskTokenList(taskPrioritySchema, 4).optional(),
+    overdue: z.literal('true').optional(),
+    reporter_update: z.literal('needed').optional(),
     public_update: z.literal('missing').optional(),
-    milestone_id: z.string().uuid().optional(),
+    // Exact Milestone ids plus `any` / `none`; comma list, OR within the list.
+    milestone_id: taskTokenList(
+      z.union([z.string().uuid(), z.literal('any'), z.literal('none')]),
+      20,
+    ).optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })
@@ -145,3 +206,11 @@ export const listTasksResponseSchema = z
   })
   .strict();
 export type ListTasksResponse = z.infer<typeof listTasksResponseSchema>;
+
+export const assignTaskResponsibilityRequestSchema = z
+  .object({
+    assignee_actor_id: z.string().uuid().nullable(),
+    assignee_team_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type AssignTaskResponsibilityRequest = z.infer<typeof assignTaskResponsibilityRequestSchema>;

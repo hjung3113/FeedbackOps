@@ -1,4 +1,5 @@
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { adminDetailFixture } from '@/test/permission-details';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,6 +42,7 @@ const REQUEST: AdminPermissionRequestRow = {
   requester_actor_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   requested_capability: 'workspace.read',
   requested_managed_system_id: null,
+  revision: 1,
   requested_expiration: '2099-12-31T23:59:59.000Z',
   reason: 'Review the requested access.',
   status: 'pending',
@@ -54,7 +56,9 @@ const REQUEST_WITHOUT_EXPIRATION: AdminPermissionRequestRow = {
 };
 
 function renderDetail() {
-  return render(<PermissionRequestDetail request={REQUEST} onClose={() => {}} />);
+  return render(
+    <PermissionRequestDetail request={adminDetailFixture(REQUEST)} onClose={() => {}} />,
+  );
 }
 
 function localDateValue(date: Date) {
@@ -91,6 +95,22 @@ afterEach(() => {
 });
 
 describe('permission request expiration visibility and approval', () => {
+  it('clears the entire decision draft when the same request revision changes without expiry change', () => {
+    const view = renderDetail();
+    chooseApproval();
+    fireEvent.change(screen.getByLabelText(/사유/), { target: { value: 'old decision' } });
+    fireEvent.click(screen.getByRole('radio', { name: '만료 없음' }));
+    view.rerender(
+      <PermissionRequestDetail
+        request={adminDetailFixture({ ...REQUEST, revision: 2, reason: 'new ask' })}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText(/사유/)).toHaveValue('');
+    expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '승인' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('shows the requested expiration in the compact row', () => {
     const requests = [REQUEST, REQUEST_WITHOUT_EXPIRATION];
     mocks.useConsole.mockReturnValue({
@@ -138,7 +158,12 @@ describe('permission request expiration visibility and approval', () => {
   });
 
   it('includes “만료 없음” in the keep option accessible name when no date was requested', () => {
-    render(<PermissionRequestDetail request={REQUEST_WITHOUT_EXPIRATION} onClose={() => {}} />);
+    render(
+      <PermissionRequestDetail
+        request={adminDetailFixture(REQUEST_WITHOUT_EXPIRATION)}
+        onClose={() => {}}
+      />,
+    );
     chooseApproval();
 
     expect(screen.getByRole('radio', { name: '요청 만료일 유지 · 만료 없음' })).toBeInTheDocument();
@@ -222,7 +247,9 @@ describe('permission request expiration visibility and approval', () => {
       code: 'validation.failed',
       detail: { fields: [{ path: ['expiration'], code: 'too_small' }] },
     };
-    view.rerender(<PermissionRequestDetail request={REQUEST} onClose={() => {}} />);
+    view.rerender(
+      <PermissionRequestDetail request={adminDetailFixture(REQUEST)} onClose={() => {}} />,
+    );
 
     expect(screen.getByRole('alert')).toHaveTextContent('만료일은 현재 시각보다 이후여야 합니다.');
     expect(screen.getByLabelText('새 만료일')).toHaveAttribute('aria-invalid', 'true');

@@ -78,6 +78,8 @@ export function useTaskRequestLink({
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success(`Task ${task.display_id}을 연결했습니다.`);
       setLinkOpen(false);

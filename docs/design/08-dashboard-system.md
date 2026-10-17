@@ -14,7 +14,7 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-The recovery-item model in this section (shared id, detail panel, snooze/mute, history, `computed_at`) is deferred target design (ADR-0059 D3); `GET /dashboard/summary` is what ships.
+The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. 56-H adds backend presentation/history/occurrence tracking; 56-I implements Integration-owned shared frontend navigation, personal presentation/history and independent freshness on Home, Integration and Coverage. Desktop-1440 visual baselines and the ~5k scale measurement (`recovery-scale.integration.test.ts`, opt-in `RECOVERY_SCALE=1`) were verified at delivery; every warm summary/list/detail/history p95 stayed within §4's 500 ms budget. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
 
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
@@ -98,7 +98,7 @@ Task Dashboard:
 - Managed System별 Task
 - Milestone 진행률
 - 지연 Task
-- Blocked Task
+- In-flight Task (Todo/Doing/Review); Task has no Blocked status (ADR-0003, amended by ADR-0027)
 - Analytics Area별 Task
 ```
 
@@ -145,9 +145,9 @@ Finding or Task is not a gap unless one of the expected-link conditions applies.
 ```
 
 Attaching Survey evidence to an existing VOC is context enrichment, not follow-up
-completion. A poor Outcome Survey recovery item is resolved only by an allowed
-follow-up decision such as Finding, Task Request, linked execution work, or an
-explicit no-follow-up-needed decision.
+completion. ADR-0055 clears a poor Outcome Survey response gap only through a qualifying current
+`generated_finding` link or a current `no_follow_up` decision. Task Request/execution
+links and evidence attachment alone do not clear it.
 
 No-follow-up-needed is an operational decision, not a passive absence of work.
 It requires an authorized Admin or same Managed System Developer with the
@@ -158,6 +158,16 @@ items; the original decision history is not deleted.
 Active Dashboard queues hide recovery items resolved by no-follow-up-needed.
 Dashboard history and source object detail show that the gap was resolved by a
 no-follow-up decision.
+
+VOC #1226 implements this with `voc.triage` (deny-first on the VOC's Managed
+System), required reason and audited POST/DELETE `/vocs/:id/no-follow-up`.
+Only high/critical VOCs without direct or Cluster-origin follow-up may record a
+current decision. That decision clears the canonical `no-link`/`high-no-link`
+predicate, navigation counts, high-follow-up coverage and Area report counts.
+Withdrawal re-evaluates current truth; it creates a new visible recovery
+occurrence only while severity, archival and links still leave an active gap.
+Reporter-facing status and direct Task-link coverage remain separate.
+
 
 Milestone progress is a Task Dashboard grouping in MVP. Milestone-to-Outcome-Survey gap detection is a future cross-system workflow, not an MVP action queue.
 
@@ -188,7 +198,7 @@ MVP metric scope:
 - total vs linked coverage
 - Managed System breakdowns
 - Analytics Area breakdowns only when data exists
-- overdue, blocked, and simple progress counts
+- overdue and simple Task progress counts; blocked is a Milestone status, not a Task metric
 ```
 
 Out of MVP metric scope:
@@ -263,8 +273,69 @@ Acceptance Criteria:
 ```text
 - VOC, Finding, Task, and Survey metrics can be grouped by Managed System.
 - Analytics Area breakdowns appear only when Analytics Area data exists and are nested under or filtered by Managed System.
-- Archived Analytics Areas remain visible in historical metrics.
+- Referenced archived Analytics Areas remain visible with archive labels in the current snapshot; this report does not reconstruct historical classifications (ADR-0069).
 ```
+
+### Analytics Area operational report — FR-DASH-002 (MUST)
+
+Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
+Implemented in Slice 59 (#1077, #1078, #1079); ADR-0069 records the attribution, audience and safe metric-grain decision.
+Endpoint authority: `docs/implementation/api/dashboard.md`; source list filters are in the owning API contracts.
+
+Purpose: an Admin or same-scope Developer can identify the Analytics Area needing attention and open the exact work that explains each number. It is a current operational snapshot, with supporting partial-integration ratios, not a funnel or an improvement-success score.
+
+#### Navigation and presentation
+
+1. `/integration/coverage` uses its existing PageShell and gains two URL-backed tabs: default overview (omit `view`) and `view=areas`, labeled `Analytics Area별 현황`. The Area tab supports `managedSystem=<uuid|all>` and optional `filter.analytics_area=<uuid|unset>`. Scope changes clear an incompatible Area filter and pagination. Back/Forward/refresh restore tab and filters.
+2. Show a compact table grouped under Managed System. Rows come from the union of readable VOC/Finding/Task/Survey classifications, including Areas with no VOCs. Areas with no readable data are not fabricated as zero rows. Keep a `미지정` row per Managed System when readable objects have a null Area. If all records are unclassified, explain that Area selection is optional and still show that row.
+3. Retain referenced archived Areas/Managed Systems with `보관됨` labels and UUID identity. Current classification is used; reclassification moves the record at the next refresh. This is not a historical time-series snapshot. Source records follow their owning archived/status exclusions.
+4. Put operational counts/links first; put supporting ratios on a secondary line in the matching domain cell. Reuse shipped Coverage components and Korean chrome. The explanatory copy is: `현재 조회 범위의 현황입니다. 연결이 없어도 후속 조치가 필요한 항목은 아닐 수 있습니다.` Show `computed_at` as `기준 시각`.
+5. An unavailable metric is `—` with a scope explanation and no action; an authorized empty count is `0`. A ratio with total zero is `해당 없음`, with no percentage, status color, or repair action. Loading/error/permission loss never appear as zero. Unexpected backing-read errors fail visibly and offer retry.
+6. Every nonzero action count is a keyboard-accessible internal link preserving Managed System, Area, and the metric's exact source filter. Show the active filters on the destination with an explicit clear action. A zero work count has no repair CTA. Counts can change between snapshot and arrival; re-evaluate live permissions and state there.
+
+#### Metric definitions
+
+All counts are distinct source objects within their own authorized scope. The destination filters below are implemented (#1077); their wire contracts are the ADR-0069 sections of `docs/implementation/api/{voc,findings,tasks,surveys}.md`.
+
+| Signal / decision supported | Definition per Area | Next action / destination contract |
+| --- | --- | --- |
+| VOC context: which Area needs triage staffing? | Non-archived VOC total, explicitly including resolved/closed VOCs; separate unassigned count means both user/team owner are null. Do not label the total “open VOC.” | Total → `/vocs?view=inbox`; unassigned → same route with `tab=unassigned`, scoped to this Area. Open VOC detail to assign/triage through VOC commands. |
+| High Severity follow-up: what needs a decision? | High/critical VOCs missing the canonical expected follow-up: direct or qualifying cluster-origin Finding/Task Request/Task link, or an authorized no-follow-up resolution. A missing Finding alone is not a gap. | Exact `high-no-link` recovery/list predicate → Area-filtered VOC Inbox; choose Request Task, Finding when synthesis is needed, or the authorized resolution flow. |
+| VOC→Task context: how much evidence is linked? | Value = non-archived VOCs with a direct active VOC→Task link; total = non-archived VOCs. No ratio of independent VOC/Finding/Task population sizes. | Supporting ratio opens its **unlinked complement**, `tab=no-task`, with the same Area. Label as connection inspection, not a requirement to create work. |
+| Finding handoff: what needs execution planning? | Active Finding total; value = active Findings with a canonical active `requested_task` link to Task Request or Task; gap = active Findings without it. Draft/not_actionable Findings are not execution gaps. | Active list or exact `execution=none` list → `/findings`, scoped to Area. Selected Finding owns Request Task/Link Existing Task. A Request connection is not approval, conversion, or work completion. |
+| Task execution: what needs planning or rescheduling? | Counts by the seven actual Task statuses; foreground in-flight = Todo/Doing/Review, plus a separate overdue count for Backlog/Todo/Doing/Review/Reopened with non-null `due_date < as_of_date`. No Blocked Task metric. | `/tasks?view=backlog` with Area and single `status`, `status_group=in-flight`, or `overdue=true`, matching the clicked count. Open Task detail to act; Backlog remains separate from work started. |
+| Released communication: where should the reporter situation be reviewed? | Existing Released-update ratio: denominator = Released Tasks with an active `voc→task evidence_of` link to a non-archived VOC; numerator = those with at least one linked non-skipped Public Update. Separate gap = Released Tasks with at least one linked VOC whose reporter status is neither resolved nor closed. | Update complement → Area-filtered Task list with `public_update=missing`; unresolved gap → exact `reporter_update=needed` Task filter. Open Task's approved linked VOC route/review action; publish through VOC, never automatically resolve it. |
+| Survey operation/outcome: what needs investigation? | Open Survey count; separate **number of closed Outcome Surveys** with Survey-owned `follow_up_needed=true`. Each Survey contributes at most one, regardless of poor-response count. Reuse the threshold/low-band/resolution classifier of ADR-0055. | `status=open` / `follow_up=needed` → `/surveys` scoped to Area. From the listed Survey open its existing `/surveys/:id/follow-up`; personal actions retain the source gate and read audits. |
+| Unclassified context: are the Area numbers incomplete? | The `미지정` row contains the same domain counts/ratios for null classifications; Managed System context shows classified/total counts separately by domain. It is informational, not a missing-work queue. | Each count opens that domain's `filter.analytics_area=unset` list. VOC can be corrected in triage; other records use only an existing permitted owner workflow. Classification is never forced to clear the row. |
+
+#### Attribution and safety
+
+- A VOC/Finding/Task/Survey contributes only to its own current `analytics_area_id`, not every linked Area, source Area, owner team, or inherited name. Cross-Area links within a Managed System remain valid. Coverage is attributed to the metric's source object (VOC for VOC→Task, Finding for handoff, Task for Released communication, Survey for outcome).
+- A null Area is valid. Area, slug, and owner team never grant authorization; identical Area names/slugs in different Managed Systems remain separate. Catalog administration permission is not required to read this report.
+- Use the owning source authorization seam and its declared Admin rules per metric, including Survey explicit-deny enforcement. For a cross-source metric requiring otherwise unavailable linked facts, omit that metric instead of treating hidden links as absent or returning an “all minus visible” total. Source jumps and actions receive fresh checks.
+- Survey results expose no response counts, IDs, scores, answer text, respondent metadata, timestamps, or response-grain actions on this report, even for a personal-read holder. Survey totals count Surveys, not responses. The classifier remains threshold-gated before producing the safe Survey-level signal; no respondent/answer filter or response-derived bucket is introduced.
+- Low raw connection coverage alone is not operational failure. Only policy/state-defined gaps get follow-up emphasis. No automatic VOC→Task creation, Survey Response→VOC conversion, Area permissions, or Task→reporter-status mapping is introduced.
+- Pending Task Request and Permission Request totals are not Area metrics. `Task Request 검토` opens `/tasks?view=requests&managedSystem=<system>` and clearly represents the whole Managed System review queue.
+- Do not average percentages into a composite Area score, sum overlapping gaps as “unique problems,” rank by an invented priority score, or claim release/updates prove outcome improvement. The report has no trend/cohort controls, export workflow, or customizable charts.
+
+#### Acceptance
+
+- A first-time scoped Developer can enter Integration, choose the Area tab, see a real positive gap, open its exact filtered list, perform the permitted source action, and return/refresh to see the gap change without losing scope. An Admin can compare permitted Areas across Managed Systems; a User cannot gain internal visibility via a direct report URL.
+- Scope/absence, null/archived attribution, multi-link deduplication, Task date/status boundaries, and Survey safety all pass the route/rendered tests in ADR-0069 → Implementation issues. No displayed action is an unimplemented destination filter.
+
+#### Implementation boundary and non-goals
+
+Dashboard composes approved grouped source reads; Analytics Areas supplies catalog metadata only.
+A fixed set of grouped queries and batch metadata reads replaces per-Area, per-record and per-Survey fanout.
+Report rows are cursor-paginated (default 50, maximum 100); classification context totals precede Area selection and paging.
+The new report requires `computed_at` and a UTC `as_of_date` even while summary recovery detail/history remains separate scheduled work.
+Canonical VOC expected-follow-up/no-follow-up resolution is a dependency on the ADR-0059 D3 close-out work,
+not report-owned storage. Snooze/history UI is not a dependency for this report.
+
+No Reporter report, new route tree, derived Task Request Area, Area grants, hierarchy, mandatory classification,
+backfill, persisted report lifecycle, composite score, trend/cohort controls, export or chart builder.
+No stronger claim that every linked reporter has been updated after release. Deferred extensions and reopen conditions
+are in `docs/design/14-post-mvp-backlog.md`. Ordered implementation and acceptance are in ADR-0069.
 
 ### FR-DASH-003: Show Coverage
 
@@ -314,3 +385,52 @@ Acceptance Criteria:
 - Custom dashboard builder
 - Export-heavy analytics
 ```
+
+## Close-out bounded recovery contract (ADR-0067; staged G/H/I)
+
+56-G implements `GET /dashboard/recovery-items` (strict `view=operational|actionable`, default
+50/max 100) and `GET /dashboard/recovery-items/:id`, plus required server `computed_at` on
+summary/list/detail. Scope/category/current owner repair eligibility precede count and paging.
+G strict DTOs contain identity, state, reason/priority/severity, safe source/affected summaries,
+current repair intents and derived hints. 56-H adds truthful occurrence, personal presentation, visible/hidden totals and safe
+resolution metadata, plus a separately paged history endpoint. Deterministic opaque category/source addresses may return a
+readable resolved selection without proof of an earlier gap; they grant no access. Unknown,
+foreign, incompatible or unreadable addresses share 404. G's Survey list counts Surveys while
+summary retains response counts; this is the explicit parity exception. Empty Survey scopes
+fail closed, and generic holder/non-holder reads disclose no personal responses or audits.
+Wire format, compatibility and action fields: `docs/implementation/api/dashboard.md`.
+
+The following occurrence/presentation/history capabilities are 56-H backend behavior; the
+rendered navigation, hiding controls and computation-time display are implemented by 56-I through `features/integration/public.ts`. Source workflows retain mutation ownership; successful repairs refresh the shared recovery and summary queries.
+
+The six emitted queue IDs/grains are `unassigned-voc` (VOC), `high-severity-unlinked`
+(VOC), `actionable-finding-no-execution` (Finding), `released-task-unresolved-voc`
+(Task, not one row per VOC), `permission-requests-pending` (workspace Admin Permission
+Request), and `bad-outcome-no-followup` (aggregate count with Survey-owned adapter).
+The broader example queue wishlist above is not added by this slice.
+
+Stable opaque identity is workspace/category/source; reopening increments occurrence.
+One-day/seven-day snooze and current-occurrence mute affect only the session Actor;
+provide hidden-items/restore, reset hiding on reopen, never reduce operational counts.
+Detail is compact and backend-driven, independently gates affected summaries/source jumps,
+and keeps readable resolved selections open. Responsibility hints derive from source
+assignment, including safe team/unassigned/multiple-responsible labels, never email or
+independent ownership. Integration owns the shared UI/public seam used by Home.
+
+History is three UTC calendar months by resolution time: inclusive first instant of the
+current UTC month minus two whole months, with current permission filtering before count/LIMIT.
+Visible/hidden list selection also precedes cursor/LIMIT; their sum retains the same authorized
+category/System/view matched set, and cursors bind the presentation selector.
+Source/link commands atomically record real transitions through a Dashboard recorder;
+pg-boss discovers/reconciles drift with truthful observation time. No generic resolve or
+GET projection writes, fabricated historical repairs, or audit deletion. Survey response
+presentation/history stays Survey-owned behind personal access; non-holders only receive
+aggregate count and Survey-level safe navigation/booleans, never response-derived identities.
+
+Coverage has five Admin-editable 75/40 default pairs; empty denominator is neutral
+`집계 대상 없음` (`no_data`), whereas unreadable metrics stay omitted.
+Changing colors does not change ratios, queues or anonymity. Show last successful server
+`computed_at` on Home/Coverage/Integration, including failed refresh states.
+Warm summary/list/detail p95 <=500ms and summary p95 <=develop ×1.2+50ms on the same
+5k-VOC/5k-Task throwaway dataset; UI criteria and mutation-fanout measurements are locked
+in ADR-0067. FE implementation does not establish these budgets: the separate scale worker and conductor own API/fanout measurement, rendered review and the visual harness.

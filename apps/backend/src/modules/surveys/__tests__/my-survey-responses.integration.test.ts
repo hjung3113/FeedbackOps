@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { mySurveyResponsesResponseSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
@@ -110,7 +111,8 @@ describe.skipIf(!runIntegration)('my survey response history route (#548)', () =
       WORKSPACE_ID,
       `${SLUG}%`,
     ]);
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id=$1 and slug like $2',
       [WORKSPACE_ID, `${SLUG}%`],
     );

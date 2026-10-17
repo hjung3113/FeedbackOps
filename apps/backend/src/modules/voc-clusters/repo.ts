@@ -3,7 +3,9 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
+import { escapeLikePattern } from '../../lib/sql-like.js';
 import type { Scope } from '../permissions/scope-service.js';
+import { similarVocVisibilityPredicate } from '../voc/authorization.js';
 
 export interface VocClusterRow {
   id: string;
@@ -37,17 +39,6 @@ export interface VocClusterMemberRow {
   primary_managed_system_id?: string;
   reporter_id?: string;
   archived_at?: Date | null;
-}
-
-export interface SameManagedSystemCandidatePeerRow {
-  voc_id: string;
-  display_id: string;
-  title: string;
-  severity: 'low' | 'medium' | 'high' | 'critical' | null;
-  reporter_facing_status: string;
-  primary_managed_system_id: string;
-  reporter_id: string;
-  archived_at: Date | null;
 }
 
 function toDate(value: Date | string): Date {
@@ -100,19 +91,6 @@ function mapMemberRow(row: Record<string, unknown>): VocClusterMemberRow {
     ...(row.archived_at !== undefined
       ? { archived_at: row.archived_at === null ? null : toDate(row.archived_at as Date | string) }
       : {}),
-  };
-}
-
-function mapCandidatePeerRow(row: Record<string, unknown>): SameManagedSystemCandidatePeerRow {
-  return {
-    voc_id: row.voc_id as string,
-    display_id: row.display_id as string,
-    title: row.title as string,
-    severity: (row.severity as SameManagedSystemCandidatePeerRow['severity']) ?? null,
-    reporter_facing_status: row.reporter_facing_status as string,
-    primary_managed_system_id: row.primary_managed_system_id as string,
-    reporter_id: row.reporter_id as string,
-    archived_at: row.archived_at === null ? null : toDate(row.archived_at as Date | string),
   };
 }
 
@@ -264,7 +242,7 @@ export async function listCreatedFindingsForClusters(
       : sql`f.primary_managed_system_id = ANY(${sqlUuidArray(input.findingReadScope.managedSystemIds)})`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT l.source_id AS cluster_id, f.id, f.display_id, f.status
-    FROM core.entity_links l
+    FROM core.entity_links_app l
     JOIN finding.findings f
       ON f.id = l.target_id
       AND f.workspace_id = l.workspace_id
@@ -382,26 +360,69 @@ export async function listVocClusterMembersForClusters(
   return result.rows.map(mapMemberRow);
 }
 
+export interface CandidatePeerPageRow {
+  voc_id: string;
+  display_id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  reporter_facing_status: string;
+  cursor_timestamp: string;
+}
+
+// Authorization is the SQL face of the VOC read rule, applied before paging so every page is
+// full and unreadable VOCs are neither returned nor counted. Fetches limit + 1 rows.
 export async function listSameManagedSystemCandidatePeers(
   db: Db | Tx,
-  input: { workspaceId: string; clusterId: string; primaryManagedSystemId: string },
-): Promise<SameManagedSystemCandidatePeerRow[]> {
+  input: {
+    workspaceId: string;
+    clusterId: string;
+    primaryManagedSystemId: string;
+    readScope: Scope;
+    actorId: string;
+    q?: string;
+    cursor?: { timestamp: string; id: string };
+    limit: number;
+  },
+): Promise<CandidatePeerPageRow[]> {
+  const predicates = [
+    sql`v.workspace_id = ${input.workspaceId}`,
+    sql`v.primary_managed_system_id = ${input.primaryManagedSystemId}`,
+    sql`v.archived_at IS NULL`,
+    similarVocVisibilityPredicate(input.readScope, input.actorId, sql`v`),
+    sql`NOT EXISTS (
+      SELECT 1
+      FROM voc_cluster.voc_cluster_members m
+      WHERE m.cluster_id = ${input.clusterId}
+        AND m.voc_id = v.id
+    )`,
+  ];
+  if (input.q !== undefined) {
+    const escaped = escapeLikePattern(input.q);
+    predicates.push(
+      sql`(v.display_id ILIKE ${`${escaped}%`} ESCAPE '\\' OR v.title ILIKE ${`%${escaped}%`} ESCAPE '\\')`,
+    );
+  }
+  if (input.cursor !== undefined) {
+    predicates.push(
+      sql`(v.created_at, v.id) < (${input.cursor.timestamp}::timestamptz, ${input.cursor.id}::uuid)`,
+    );
+  }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT v.id AS voc_id, v.display_id, v.title, v.severity, v.reporter_facing_status,
-           v.primary_managed_system_id, v.reporter_id, v.archived_at
+    SELECT v.created_at::text AS cursor_timestamp,
+           v.id AS voc_id, v.display_id, v.title, v.severity, v.reporter_facing_status
     FROM voc.vocs v
-    WHERE v.workspace_id = ${input.workspaceId}
-      AND v.primary_managed_system_id = ${input.primaryManagedSystemId}
-      AND v.archived_at IS NULL
-      AND NOT EXISTS (
-        SELECT 1
-        FROM voc_cluster.voc_cluster_members m
-        WHERE m.cluster_id = ${input.clusterId}
-          AND m.voc_id = v.id
-      )
+    WHERE ${sql.join(predicates, sql` AND `)}
     ORDER BY v.created_at DESC, v.id DESC
+    LIMIT ${input.limit + 1}
   `);
-  return result.rows.map(mapCandidatePeerRow);
+  return result.rows.map((row) => ({
+    voc_id: row.voc_id as string,
+    display_id: row.display_id as string,
+    title: row.title as string,
+    severity: (row.severity as CandidatePeerPageRow['severity']) ?? null,
+    reporter_facing_status: row.reporter_facing_status as string,
+    cursor_timestamp: row.cursor_timestamp as string,
+  }));
 }
 
 export async function insertVocClusterMember(

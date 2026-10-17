@@ -46,7 +46,7 @@ export function TriageBlock({
 
       {/* 심각도 */}
       <FieldRow label="심각도" inset="none">
-        {voc.severity !== null ? (
+        {voc.severity != null ? (
           <SeverityBadge severity={voc.severity} />
         ) : (
           <span className="text-text-muted text-sm">미설정</span>

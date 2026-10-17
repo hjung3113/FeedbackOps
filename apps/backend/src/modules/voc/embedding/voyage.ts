@@ -12,7 +12,7 @@ export interface VoyageFetchResponse {
 
 export type VoyageFetch = (
   input: string,
-  init: { method: 'POST'; headers: Record<string, string>; body: string },
+  init: { method: 'POST'; headers: Record<string, string>; body: string; signal?: AbortSignal },
 ) => Promise<VoyageFetchResponse>;
 
 export interface VoyageEmbeddingProviderOptions {
@@ -55,7 +55,8 @@ export function createVoyageEmbeddingProvider(
   }
 
   return {
-    async embed(texts: string[]): Promise<EmbeddingResult> {
+    identity: () => ({ provider: 'voyage', model: VOYAGE_MODEL, dimensions }),
+    async embed(texts: string[], callOptions?: { signal?: AbortSignal }): Promise<EmbeddingResult> {
       if (texts.length === 0) {
         return {
           vectors: [],
@@ -69,6 +70,7 @@ export function createVoyageEmbeddingProvider(
       let response: VoyageFetchResponse;
       try {
         response = await options.fetch(VOYAGE_EMBEDDINGS_URL, {
+          ...(callOptions?.signal ? { signal: callOptions.signal } : {}),
           method: 'POST',
           headers: {
             Authorization: `Bearer ${options.apiKey}`,

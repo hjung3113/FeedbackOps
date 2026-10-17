@@ -11,7 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
+import { actors, analyticsAreas, managedSystems, teams, workspaces } from './core.js';
 import { taskRequests } from './task-request.js';
 
 export const taskSchema = pgSchema('task');
@@ -75,6 +75,7 @@ export const tasks = taskSchema.table(
     status: text('status').notNull().default('backlog'),
     priority: text('priority').notNull().default('medium'),
     assigneeActorId: uuid('assignee_actor_id').references(() => actors.id),
+    assigneeTeamId: uuid('assignee_team_id').references(() => teams.id),
     dueDate: date('due_date'),
     milestoneId: uuid('milestone_id').references(() => milestones.id, {
       onDelete: 'restrict',
@@ -88,6 +89,13 @@ export const tasks = taskSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    responsibilityXorCheck: check(
+      'tasks_responsibility_xor_check',
+      sql`${t.assigneeActorId} IS NULL OR ${t.assigneeTeamId} IS NULL`,
+    ),
+    recoveryReleasedIdx: index('tasks_recovery_released_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(sql`${t.status} = 'released'`),
     workspaceDisplayUq: uniqueIndex('tasks_workspace_display_id_uq').on(t.workspaceId, t.displayId),
     workspaceStatusIdx: index('tasks_workspace_status_idx').on(t.workspaceId, t.status),
     workspaceManagedSystemIdx: index('tasks_workspace_managed_system_idx').on(

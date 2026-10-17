@@ -22,12 +22,37 @@ describe('TriageSummaryCard', () => {
     );
     expect(screen.getByText('변경 없음 — 현재 값 그대로 확정됩니다.')).toBeInTheDocument();
     expect(screen.queryByTestId(/^summary-diff-row-/)).not.toBeInTheDocument();
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 공개 상태:',
-    );
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('접수됨');
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
+    const status = screen.getByTestId('summary-reporter-status');
+    expect(status).toHaveTextContent('공개 상태:');
+    expect(status).toHaveTextContent('접수됨');
+    expect(status).toHaveTextContent('확정해도 공개 상태는 바뀌지 않습니다.');
+    expect(screen.queryByText(/확정 시 공개 상태/)).not.toBeInTheDocument();
     expect(screen.queryByText('Cluster')).not.toBeInTheDocument();
+  });
+
+  it.each(['untriaged', 'needs_more_information'] as const)(
+    'says unchanged values are confirmed as they are for a %s VOC',
+    (triageState) => {
+      render(
+        <TriageSummaryCard
+          panelState={BASE_STATE}
+          baseline={BASE_STATE}
+          triageState={triageState}
+        />,
+      );
+      expect(screen.getByTestId('summary-no-changes')).toHaveTextContent(
+        '변경 없음 — 현재 값 그대로 확정됩니다.',
+      );
+    },
+  );
+
+  it('shows plain 변경 없음 for an already triaged VOC, with no confirm promise', () => {
+    render(
+      <TriageSummaryCard panelState={BASE_STATE} baseline={BASE_STATE} triageState="triaged" />,
+    );
+    const note = screen.getByTestId('summary-no-changes');
+    expect(note).toHaveTextContent('변경 없음');
+    expect(note).not.toHaveTextContent('그대로 확정됩니다');
   });
 
   it('shows only the changed Severity diff and keeps the status transition', () => {
@@ -45,10 +70,7 @@ describe('TriageSummaryCard', () => {
     expect(row.querySelector('.line-through')).toHaveTextContent('중간');
     expect(row.querySelector('.text-text-primary')).toHaveTextContent('심각');
     expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 공개 상태:',
-    );
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
+    expect(screen.getByTestId('summary-reporter-status')).toHaveTextContent('접수됨');
   });
 
   it('shows an Owner diff from unset to the actor display name', () => {
@@ -67,10 +89,9 @@ describe('TriageSummaryCard', () => {
     expect(row).toHaveTextContent('김철수');
     expect(row.querySelector('.line-through')).toHaveTextContent('미지정');
     expect(row.querySelector('.text-text-primary')).toHaveTextContent('김철수');
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 공개 상태:',
-    );
-    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('담당자 배정됨');
+    // The staged owner never predicts a status change.
+    expect(screen.getByTestId('summary-reporter-status')).toHaveTextContent('접수됨');
+    expect(screen.getByTestId('summary-reporter-status')).not.toHaveTextContent('담당자 배정됨');
     expect(screen.queryByText('Cluster')).not.toBeInTheDocument();
   });
 
@@ -95,7 +116,7 @@ describe('TriageSummaryCard', () => {
 
   it('omits the reporter-status line when the caller has no status', () => {
     render(<TriageSummaryCard panelState={BASE_STATE} baseline={BASE_STATE} />);
-    expect(screen.queryByTestId('reporter-status-transition')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('summary-reporter-status')).not.toBeInTheDocument();
   });
 
   it('shows Analytics Area names rather than id fragments in a changed-field diff', () => {

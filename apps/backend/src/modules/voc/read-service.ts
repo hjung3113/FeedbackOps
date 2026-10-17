@@ -13,12 +13,14 @@
 // ETag header: weak W/"<voc.updated_at-ISO>". ADR-0031 disables conditional
 // detail 304 responses because similarity is peer-derived.
 
+import type { ReporterFacingStatusEnum } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { EntityLinksService } from '../entity-links/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { createVocConversationReader } from './read/conversation.js';
 import { createVocDetailReaders } from './read/detail.js';
 import { createVocListReaders } from './read/list.js';
+import { createVocOwnerCandidatesReader } from './read/owner-candidates.js';
 import { createVocReferenceReader } from './read/reference.js';
 
 // ── Public interface ─────────────────────────────────────────────────────────
@@ -41,7 +43,13 @@ export interface ReadActorContext {
  * duplicated permission predicates (see #423 regression).
  */
 export type VocReferenceResolution =
-  | { visibility_state: 'allowed'; id: string; display_id: string; title: string }
+  | {
+      visibility_state: 'allowed';
+      id: string;
+      display_id: string;
+      title: string;
+      reporter_facing_status: ReporterFacingStatusEnum;
+    }
   | { visibility_state: 'summary_visible' }
   | { visibility_state: 'denied' }
   | { visibility_state: 'hidden' };
@@ -57,10 +65,13 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     countVocs: listReaders.countVocs,
     countGroupedVocs: listReaders.countGroupedVocs,
     getVocDetail: detailReaders.getVocDetail,
+    getOwnerCandidates: createVocOwnerCandidatesReader(deps, detailReaders.resolveVocAccess),
     resolveVocReference: referenceReader.resolveVocReference,
     resolveDisplayId: detailReaders.resolveVocDisplayId,
     getConversation: conversationReader.getConversation,
+    canReadConversationEntry: conversationReader.canReadConversationEntry,
     composeDetailEnvelope: detailReaders.composeDetailEnvelope,
+    resolveWriteResponseAccess: detailReaders.resolveWriteResponseAccess,
   };
 }
 

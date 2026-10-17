@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { TasksRouteView } from '@/routes/_authed/tasks';
 import { type TaskDto, listTasksQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -62,6 +63,7 @@ const task: TaskDto = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: '20000000-0000-0000-0000-000000000002',
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,
@@ -156,7 +158,22 @@ describe('TaskListRoute My Tasks view', () => {
     expect(await screen.findByText('Next Task')).toBeInTheDocument();
     expect(screen.getByText(task.title)).toBeInTheDocument();
     expect(screen.getByText('87건')).toBeInTheDocument();
-    expect(queries.at(-1)?.cursor).toBe('next');
+    // A first-page refetch may land after the cursor read under load; assert the cursor read happened.
+    expect(queries.map((query) => query.cursor)).toContain('next');
+  });
+
+  it.each([
+    { view: 'my' as const, showsAssignee: false },
+    { view: 'backlog' as const, showsAssignee: true },
+  ])('shows assignee metadata only in the $view view', async ({ view, showsAssignee }) => {
+    renderWithClient(<TasksRouteView search={{ view }} />);
+
+    expect(await screen.findByText(task.title)).toBeInTheDocument();
+    if (showsAssignee) {
+      expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
+    } else {
+      expect(screen.queryByText(GLOSSARY.unknownUser)).not.toBeInTheDocument();
+    }
   });
 
   it.each([

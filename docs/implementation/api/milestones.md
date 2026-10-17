@@ -179,6 +179,16 @@ idempotency behavior: Idempotency-Key required; hash includes the raw request
 `primary_managed_system_id` is not a PATCH field: the Managed System is
 immutable after create.
 
+## Progress
+
+Every MilestoneDto and MilestoneDetailDto includes a progress summary:
+`released_done`, `in_flight`, `queued`, `total`, and `percent`. Child Tasks
+with status `done` or `released` count as `released_done`; `doing`, `review`,
+or `reopened` count as `in_flight`; `backlog` or `todo` count as `queued`.
+`total` counts every child Task. `percent` is the rounded percentage of
+`released_done / total`, or zero when there are no child Tasks. A Milestone with
+no grouped child-Task row receives zeroes for every count and percentage.
+
 ## Status
 
 ADR-0050. The persisted set is `planning | in_progress | blocked | released`.

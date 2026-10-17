@@ -135,6 +135,12 @@ const VOC_ADMIN_VIEW: VocDetailEnvelope = {
   permission_decisions: {},
 };
 
+/** Same VOC, but the Admin is its Reporter — the only Admin case that offers the Reply tab. */
+const VOC_ADMIN_IS_REPORTER: VocDetailEnvelope = {
+  ...VOC_ADMIN_VIEW,
+  reporter_id: ME_ADMIN.actor.id,
+};
+
 /** Reporter on their own untriaged VOC — sees Reply tab only */
 const VOC_REPORTER_VIEW: VocDetailEnvelope = {
   ...VOC_ADMIN_VIEW,
@@ -248,7 +254,22 @@ describe('Composer flow — integration (C6.3)', () => {
   });
 
   // ── Test 1: Admin sees all 3 tabs ─────────────────────────────────────────
-  it('admin sees all three composer tabs (Public update, Reporter reply, Internal note)', () => {
+  it('admin who is the reporter sees all three composer tabs (Public update, Reporter reply, Internal note)', () => {
+    const Wrapper = makeWrapper();
+
+    render(
+      <Wrapper>
+        <ComposerSection voc={VOC_ADMIN_IS_REPORTER} me={ME_ADMIN} canTriage={true} />
+      </Wrapper>,
+    );
+
+    // Tab labels from ComposerTabs TAB_CONFIGS: 'Public update', 'Reporter reply', 'Internal note'
+    expect(screen.getByRole('tab', { name: /공개 업데이트/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /제출자 답변/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /내부 코멘트/i })).toBeInTheDocument();
+  });
+
+  it('admin on another reporter VOC has no Reporter reply tab', () => {
     const Wrapper = makeWrapper();
 
     render(
@@ -257,10 +278,9 @@ describe('Composer flow — integration (C6.3)', () => {
       </Wrapper>,
     );
 
-    // Tab labels from ComposerTabs TAB_CONFIGS: 'Public update', 'Reporter reply', 'Internal note'
     expect(screen.getByRole('tab', { name: /공개 업데이트/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /제출자 답변/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /내부 코멘트/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /제출자 답변/i })).not.toBeInTheDocument();
   });
 
   // ── Test 2: Reporter sees only Reply tab ───────────────────────────────────
@@ -285,7 +305,7 @@ describe('Composer flow — integration (C6.3)', () => {
 
     render(
       <Wrapper>
-        <ComposerSection voc={VOC_ADMIN_VIEW} me={ME_ADMIN} canTriage={true} />
+        <ComposerSection voc={VOC_ADMIN_IS_REPORTER} me={ME_ADMIN} canTriage={true} />
       </Wrapper>,
     );
 

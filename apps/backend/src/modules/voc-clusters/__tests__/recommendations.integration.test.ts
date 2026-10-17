@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -237,9 +238,11 @@ describe.skipIf(!runIntegration)('VOC cluster similarity recommendations', () =>
         'delete from permission.permission_grants where actor_id=any($1::uuid[])',
         [[partialActorId, noVocReadActorId, reporterActorId, triageActorId]],
       );
-      await ops.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [
-        [primaryMsId, otherMsId],
-      ]);
+      await deleteRecoveryFixtureParents(
+        ops,
+        'delete from core.managed_systems where id=any($1::uuid[])',
+        [[primaryMsId, otherMsId]],
+      );
       await ops.pool.query('delete from core.sessions where actor_id=any($1::uuid[])', [
         [partialActorId, noVocReadActorId, reporterActorId, triageActorId],
       ]);
@@ -261,6 +264,7 @@ describe.skipIf(!runIntegration)('VOC cluster similarity recommendations', () =>
         expect.objectContaining({ voc_id: visibleCandidateId }),
         expect.objectContaining({ voc_id: reporterCandidateId }),
       ]),
+      page: { has_more: false },
     });
     const candidateIds = response
       .json()
@@ -289,6 +293,7 @@ describe.skipIf(!runIntegration)('VOC cluster similarity recommendations', () =>
     expect(outOfScope.json()).toEqual({
       candidate_basis: 'same_managed_system_active_voc',
       candidates: [],
+      page: { has_more: false },
     });
   });
 
@@ -298,6 +303,7 @@ describe.skipIf(!runIntegration)('VOC cluster similarity recommendations', () =>
     expect(response.json()).toEqual({
       candidate_basis: 'same_managed_system_active_voc',
       candidates: [expect.objectContaining({ voc_id: reporterCandidateId })],
+      page: { has_more: false },
     });
     expect(response.body).not.toContain(visibleCandidateId);
   });
@@ -308,6 +314,7 @@ describe.skipIf(!runIntegration)('VOC cluster similarity recommendations', () =>
     expect(response.json()).toEqual({
       candidate_basis: 'same_managed_system_active_voc',
       candidates: [],
+      page: { has_more: false },
     });
     expect(response.body).not.toContain(visibleCandidateId);
     expect(response.body).not.toContain(reporterCandidateId);
@@ -319,6 +326,7 @@ describe.skipIf(!runIntegration)('VOC cluster similarity recommendations', () =>
     expect(response.json()).toEqual({
       candidate_basis: 'same_managed_system_active_voc',
       candidates: [],
+      page: { has_more: false },
     });
     expect(response.body).not.toContain(visibleCandidateId);
   });

@@ -6,7 +6,6 @@ import { GLOSSARY } from '@/lib/copy/glossary';
 
 import {
   Button,
-  Callout,
   DetailPanelSectionNav,
   FieldRow,
   ManagedSystemMark,
@@ -31,7 +30,7 @@ import { teamName } from './teamName.js';
 
 // ============================================================
 // AnalyticsAreaSlideOver — 460px read-only AA detail drawer.
-// Overview / Guardrail / Definition / Workload / Findings / Used by.
+// Overview / Definition / Workload / Findings / Used by.
 // Built with the @fops/ui sheet (Radix dialog) wrapper; right side, 460px.
 // ============================================================
 export function AnalyticsAreaSlideOver({
@@ -55,11 +54,10 @@ export function AnalyticsAreaSlideOver({
   const lead = teamName(area, resolved);
   const created = formatDate(area.created_at);
 
-  // Workload + Findings are Slice 4/5 surfaces (not built). Shells render with
-  // "—" placeholders; no counts available from the DTO (locked decision #88).
+  // Workload + Findings are Slice 4/5 surfaces (not built). Keep the explicit
+  // "—" values and one quiet explanation; no counts come from the DTO (#88).
   const sections: PanelSection[] = [
     { id: 'overview', label: '개요' },
-    { id: 'guardrail', label: '권한 경계' },
     { id: 'definition', label: '정의' },
     { id: 'workload', label: ANALYTICS_AREA_WORKLOAD_SIGNALS_LABEL },
     { id: 'findings', label: ANALYTICS_AREA_RECENT_FINDINGS_LABEL },
@@ -85,15 +83,15 @@ export function AnalyticsAreaSlideOver({
         data-testid="aa-slide-over"
       >
         <SheetTitle className="sr-only">{area.name}</SheetTitle>
-        <SheetDescription className="sr-only">
-          Analytics Area 상세 — analytics-area/{area.slug}
-        </SheetDescription>
-        <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-3">
+        <SheetDescription className="sr-only">Analytics Area 상세</SheetDescription>
+        <div
+          data-testid="aa-slide-over-header"
+          className="flex h-toolbar shrink-0 items-center border-b border-border-subtle pl-6 pr-12"
+        >
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-primary/15 px-2 py-0.5 text-xs font-medium text-accent-primary">
             <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" />
             Analytics Area
           </span>
-          <span className="font-mono text-xs text-text-muted">analytics-area/{area.slug}</span>
         </div>
 
         <DetailPanelSectionNav sections={sections} scrollRef={scrollRef} />
@@ -112,13 +110,6 @@ export function AnalyticsAreaSlideOver({
                 </>
               }
             />
-          </div>
-
-          <div data-anchor="guardrail" className="px-4 py-3">
-            <Callout tone="blue" icon={<Shield className="h-4 w-4" />} title="권한 경계가 아닙니다">
-              Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage 필터, 대시보드 탭,
-              Survey 대상 지정에만 사용되며 권한 확인에는 영향을 주지 않습니다.
-            </Callout>
           </div>
 
           <div data-anchor="definition" className="px-4 py-3">
@@ -164,19 +155,13 @@ export function AnalyticsAreaSlideOver({
                 <span className="text-xs text-text-muted">이 Analytics Area에 연결됨</span>
               </div>
             </div>
-            <p className="mt-2 text-xs text-text-muted" data-testid="aa-workload-defer">
-              Findings · Evidence 집계는 이후 화면이 제공되면 연결됩니다.
-            </p>
           </div>
 
           <div data-anchor="findings" className="px-4 py-3">
             <PanelSectionTitle>{ANALYTICS_AREA_RECENT_FINDINGS_LABEL}</PanelSectionTitle>
-            <div
-              className="rounded-md border border-border-subtle bg-surface-card p-4 text-center text-xs text-text-muted"
-              data-testid="aa-findings-defer"
-            >
-              Findings 목록은 이후 화면에서 연결됩니다.
-            </div>
+            <p className="text-xs text-text-muted" data-testid="aa-findings-defer">
+              Findings · Evidence 집계와 목록은 아직 제공되지 않습니다.
+            </p>
           </div>
 
           <div data-anchor="used-by" className="px-4 py-3">

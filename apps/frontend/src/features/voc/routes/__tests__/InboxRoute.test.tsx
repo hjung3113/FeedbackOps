@@ -8,12 +8,13 @@
 //   - VocDetailPanel is mounted when `selected` is set
 
 import { ApiError } from '@/lib/api/types';
+import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { listVocsQuerySchema } from '@fops/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type * as UseVocListModule from '../../hooks/useVocList';
+import type * as UseVocListPagesModule from '../../hooks/useVocListPages';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiClient: apiClientMock };
 });
 
-// ── Stub useVocList ────────────────────────────────────────────────────────────
+// ── Stub useVocListPages ────────────────────────────────────────────────────────────
 
 const MOCK_VOC_ITEMS = [
   {
@@ -138,9 +139,31 @@ const MOCK_VOC_ITEMS = [
 
 const useVocListMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../hooks/useVocList', () => ({
-  useVocList: useVocListMock,
+vi.mock('../../hooks/useVocListPages', () => ({
+  useVocListPages: useVocListMock,
 }));
+
+/** An infinite-query-shaped result for the stubbed pages hook. */
+function pagesResult(
+  items: unknown[],
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    data: { pages: [{ items, page: { has_more: false } }], pageParams: [undefined] },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    fetchNextPage: vi.fn(),
+    ...extra,
+  };
+}
+
+// The Area control has its own route-level suite (InboxRoute.paging-area.test.tsx);
+// this file's react-query stub returns an items-shaped object for every useQuery.
+vi.mock('../../components/VocAreaFilterSelect', () => ({ VocAreaFilterSelect: () => null }));
 
 // ── Stub VocDetailPanel ───────────────────────────────────────────────────────
 
@@ -176,15 +199,30 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // VocList imports useQuery for managed-systems — stub @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
-  // The real useVocList imports this. The mock useQuery below ignores it.
-  keepPreviousData: (previous: unknown) => previous,
-  useQuery: (options: {
+  // The real useVocListPages imports these two. Its placeholder data is not exercised here.
+  hashKey: (key: unknown) => JSON.stringify(key),
+  useInfiniteQuery: (options: {
     queryKey?: readonly unknown[];
-    queryFn?: (context: { signal: AbortSignal }) => Promise<unknown>;
+    queryFn?: (context: {
+      signal: AbortSignal;
+      pageParam: string | undefined;
+    }) => Promise<unknown>;
   }) => {
     if (options.queryKey?.[0] === 'vocs' && options.queryFn) {
-      void options.queryFn({ signal: new AbortController().signal });
+      void options.queryFn({ signal: new AbortController().signal, pageParam: undefined });
     }
+    return {
+      data: { pages: [{ items: [], page: { has_more: false } }], pageParams: [undefined] },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage: vi.fn(),
+    };
+  },
+  useQuery: () => {
     return { data: { items: [] }, isLoading: false, error: null, refetch: vi.fn() };
   },
 }));
@@ -214,18 +252,73 @@ describe('useInboxRoute', () => {
     apiClientMock.mockReset();
     openRequestAccessMock.mockReset();
     apiClientMock.mockResolvedValue({ data: { items: [] } });
-    useVocListMock.mockReturnValue({
-      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult(MOCK_VOC_ITEMS));
+  });
+
+  it.each(['my', 'inbox'] as const)('%s only exposes permitted severity controls', (view) => {
+    render(<InboxTestHarness view={view} />);
+    const high = screen.queryAllByRole('tab', { name: /^높음/ });
+    expect(high).toHaveLength(view === 'my' ? 0 : 2);
+    fireEvent.click(screen.getByRole('button', { name: /정렬/ }));
+    if (view === 'my') {
+      expect(screen.queryByText('심각도 높은순')).not.toBeInTheDocument();
+      expect(screen.queryByText('심각도 낮은순')).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText('심각도 높은순')).toBeInTheDocument();
+      expect(screen.getByText('심각도 낮은순')).toBeInTheDocument();
+    }
+  });
+
+  it.each(['my', 'inbox'] as const)('%s severity filter follows the list perspective', (view) => {
+    searchState = { 'filter.severity': 'high' };
+    render(<InboxTestHarness view={view} />);
+    fireEvent.click(screen.getByRole('button', { name: /^필터/ }));
+    if (view === 'my') {
+      expect(screen.queryByText('심각도')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: '높음' })).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText('심각도')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: '높음' })).toBeChecked();
+    }
+  });
+
+  it.each(['high', 'high-no-link'] as const)(
+    'restores My VOC with a stale severity sort and %s tab using safe defaults',
+    async (tab) => {
+      const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+        '../../hooks/useVocListPages',
+      );
+      useVocListMock.mockImplementation(useVocListPages);
+      searchState = { view: 'my', sort: 'severity:desc', tab, 'filter.severity': 'high' };
+      render(<InboxTestHarness view="my" />);
+      await waitFor(() => expect(apiClientMock).toHaveBeenCalled());
+      for (const [method, url] of apiClientMock.mock.calls) {
+        if (method !== 'GET' || !String(url).startsWith('/vocs?')) continue;
+        const params = new URL(String(url), 'http://localhost').searchParams;
+        expect(params.get('sort')).toBe('created_at:desc');
+        expect(params.has('tab')).toBe(false);
+        expect(params.has('filter.severity')).toBe(false);
+        expect(listVocsQuerySchema.safeParse(Object.fromEntries(params)).success).toBe(true);
+      }
+      const navigation = navigateMock.mock.calls.find(([value]) => value.replace)?.[0];
+      expect(navigation).toBeDefined();
+      expect(navigation.search(searchState)).toEqual({ view: 'my' });
+    },
+  );
+
+  it('keeps Inbox severity sorting and tabs when restoring a URL', () => {
+    searchState = { view: 'inbox', sort: 'severity:desc', tab: 'high' };
+    render(<InboxTestHarness view="inbox" />);
+    expect(useVocListMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'severity:desc', tab: 'high' }),
+    );
   });
 
   it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
-    const { useVocList } =
-      await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     const route = vocsRoute as unknown as {
       options: { validateSearch: (raw: unknown) => Record<string, unknown> };
     };
@@ -244,6 +337,85 @@ describe('useInboxRoute', () => {
       expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute('aria-selected', 'false');
     });
   });
+
+  it.each(['11111111-1111-4111-8111-111111111111', 'unset'])(
+    'forwards Area %s and removes only the Area key',
+    async (area) => {
+      const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+        '../../hooks/useVocListPages',
+      );
+      useVocListMock.mockImplementation(useVocListPages);
+      searchState = {
+        view: 'inbox',
+        managedSystem: 'all',
+        tab: 'no-task',
+        'filter.analytics_area': area,
+      };
+      render(<InboxTestHarness view="inbox" />);
+      await waitFor(() => {
+        const request = apiClientMock.mock.calls.find(([method]) => method === 'GET')?.[1];
+        expect(typeof request).toBe('string');
+        const query = listVocsQuerySchema.parse(
+          Object.fromEntries(new URL(request, 'http://localhost').searchParams),
+        );
+        expect(query['filter.analytics_area']).toBe(area);
+        expect(query.tab).toBe('no-task');
+      });
+      const label = area === 'unset' ? 'Analytics Area: 미지정' : 'Analytics Area: 선택한 Area';
+      fireEvent.click(screen.getByRole('button', { name: `${label} 필터 제거` }));
+      const navigation = navigateMock.mock.calls.at(-1)?.[0];
+      expect(navigation.search(searchState)).toEqual({
+        view: 'inbox',
+        managedSystem: 'all',
+        tab: 'no-task',
+      });
+      fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+      expect(navigateMock.mock.calls.at(-1)?.[0].search(searchState)).toEqual({
+        view: 'inbox',
+        managedSystem: 'all',
+        tab: 'no-task',
+      });
+    },
+  );
+
+  it('UUID Area without a tab fetches the full non-archived Inbox', async () => {
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
+    const area = '11111111-1111-4111-8111-111111111111';
+    searchState = { view: 'inbox', 'filter.analytics_area': area };
+    render(<InboxTestHarness view="inbox" />);
+    await waitFor(() => {
+      const request = apiClientMock.mock.calls.find(([method]) => method === 'GET')?.[1];
+      const query = listVocsQuerySchema.parse(
+        Object.fromEntries(new URL(request, 'http://localhost').searchParams),
+      );
+      expect(query['filter.analytics_area']).toBe(area);
+      expect(query.tab).toBeUndefined();
+    });
+    expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it.each([
+    ['11111111-1111-4111-8111-111111111111', 'Analytics Area: 선택한 Area'],
+    ['unset', 'Analytics Area: 미지정'],
+  ])(
+    'shows filtered-empty Inbox copy for Area %s with a single reset control',
+    async (area, label) => {
+      useVocListMock.mockReturnValue(pagesResult([]));
+      searchState = { view: 'inbox', 'filter.analytics_area': area };
+      render(<InboxTestHarness view="inbox" />);
+
+      expect(await screen.findByText('현재 조건에 맞는 VOC가 없습니다')).toBeInTheDocument();
+      expect(screen.getByText(`${label} 조건으로 표시 중입니다.`)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '+ 새 VOC 작성' })).not.toBeInTheDocument();
+      expect(screen.queryByText('큐가 비었습니다')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '필터 초기화' })).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+      expect(navigateMock.mock.calls.at(-1)?.[0].search(searchState)).toEqual({ view: 'inbox' });
+    },
+  );
 
   it('renders 3 VocList rows for inbox view', async () => {
     searchState = { view: 'inbox' };
@@ -307,12 +479,7 @@ describe('useInboxRoute', () => {
 
   it('opens VOC creation when the 내 VOC empty-state button is clicked', () => {
     searchState = { view: 'my' };
-    useVocListMock.mockReturnValue({
-      data: { items: [], next_cursor: undefined },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult([]));
     render(<InboxTestHarness view="my" />);
 
     fireEvent.click(screen.getByRole('button', { name: '+ 새 VOC 작성' }));
@@ -486,11 +653,18 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC 수신함');
+    const panel = await screen.findByRole('heading', { name: 'VOC 수신함', level: 4 });
     // #562: specs/voc.md R-VOC-INBOX — nothing requestable -> blocked_not_requestable.
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'blocked_not_requestable');
     expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
     expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+    expect(screen.queryByPlaceholderText(LIST_SEARCH_PLACEHOLDER)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '정렬' })).not.toBeInTheDocument();
+    const createLink = screen.getByRole('link', { name: 'VOC 생성' });
+    expect(createLink).toHaveClass('bg-surface-raised');
+    expect(createLink).not.toHaveClass('bg-accent-primary');
   });
 
   it('shows the Korean denied reason and links to 내 VOC for a 403', async () => {
@@ -518,6 +692,16 @@ describe('useInboxRoute', () => {
     expect(myVocsLink).toHaveAttribute('data-search', JSON.stringify({ view: 'my' }));
   });
 
+  it('uses a neutral unassigned badge in the Inbox unassigned tab', async () => {
+    useVocListMock.mockReturnValue(pagesResult(MOCK_VOC_ITEMS));
+    searchState = { view: 'inbox', tab: 'unassigned' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const badge = await screen.findAllByText('담당자 없음');
+    expect(badge[0]).toHaveClass('bg-surface-canvas', 'text-text-muted');
+    expect(badge[0]).not.toHaveClass('bg-accent-danger/10', 'text-accent-danger');
+  });
+
   it('adds a request-access CTA only when the Inbox error provides the permission', async () => {
     useVocListMock.mockReturnValue({
       data: undefined,
@@ -532,7 +716,7 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC 수신함');
+    const panel = await screen.findByRole('heading', { name: 'VOC 수신함', level: 4 });
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'request_access');
     const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
     expect(screen.getAllByRole('button', { name: '권한 요청하기' })).toHaveLength(1);
@@ -627,7 +811,7 @@ describe('useInboxRoute', () => {
   // ── Server-side text search (#821) ──────────────────────────────────────────
 
   const SEARCH_BOX_ROLE = 'searchbox';
-  const SEARCH_BOX_NAME = '필터, 키워드…';
+  const SEARCH_BOX_NAME = '제목 또는 ID';
 
   function searchBox() {
     return screen.getByRole(SEARCH_BOX_ROLE, { name: SEARCH_BOX_NAME });
@@ -664,8 +848,10 @@ describe('useInboxRoute', () => {
   }
 
   it('writes the debounced q to the URL and sends it on GET /vocs', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     const route = vocsRoute as unknown as {
       options: { validateSearch: (raw: unknown) => Record<string, unknown> };
     };
@@ -699,8 +885,10 @@ describe('useInboxRoute', () => {
   });
 
   it('drops the active tab while searching and restores it when the search is cleared', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     searchState = { view: 'inbox', tab: 'high' };
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
@@ -725,8 +913,10 @@ describe('useInboxRoute', () => {
   });
 
   it('removes q from the URL and the request when the box is emptied', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     searchState = { view: 'inbox', q: '로그인' };
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
@@ -755,8 +945,10 @@ describe('useInboxRoute', () => {
   });
 
   it('searches inside a tab the user picks during the search', async () => {
-    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
-    useVocListMock.mockImplementation(useVocList);
+    const { useVocListPages } = await vi.importActual<typeof UseVocListPagesModule>(
+      '../../hooks/useVocListPages',
+    );
+    useVocListMock.mockImplementation(useVocListPages);
     searchState = { view: 'inbox', tab: 'high', q: '로그인' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -770,12 +962,7 @@ describe('useInboxRoute', () => {
   });
 
   it('shows the search empty state when q is set and the list is empty', async () => {
-    useVocListMock.mockReturnValue({
-      data: { items: [], next_cursor: undefined },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult([]));
     searchState = { view: 'inbox', q: '없는 검색어' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -929,13 +1116,7 @@ describe('useInboxRoute', () => {
   });
 
   it('shows skeletons instead of the previous empty page while placeholder data is in flight', () => {
-    useVocListMock.mockReturnValue({
-      data: { items: [], next_cursor: undefined },
-      isLoading: false,
-      isPlaceholderData: true,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult([], { isPlaceholderData: true }));
     searchState = { view: 'inbox', q: '다음' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -944,13 +1125,7 @@ describe('useInboxRoute', () => {
   });
 
   it('keeps previous rows mounted while the next page is placeholder data', () => {
-    useVocListMock.mockReturnValue({
-      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
-      isLoading: false,
-      isPlaceholderData: true,
-      error: null,
-      refetch: vi.fn(),
-    });
+    useVocListMock.mockReturnValue(pagesResult(MOCK_VOC_ITEMS, { isPlaceholderData: true }));
     searchState = { view: 'inbox', q: '다음' };
     render(<InboxTestHarness view="inbox" />);
 

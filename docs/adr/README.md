@@ -2,7 +2,7 @@
 
 ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `CONTEXT.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
 
-**To add an ADR:** take the next number (highest below + 1, currently `0063`), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
+**To add an ADR:** take the next number (highest below + 1; close-out slices reserved 0064–0070 for their ADRs), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the user-level `domain-modeling` skill's `ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
 
 ## Product scope and domain model
 
@@ -13,11 +13,11 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 ## Architecture, platform and operations
 
 - [0007](0007-core-technology-stack.md) Core technology stack — Node 22, Fastify, Postgres 16, Drizzle, Zod, TanStack, Vitest, Biome, pnpm + Turborepo. *Accepted, amended by 0062*
-- [0008](0008-audit-log-storage-and-immutability.md) Audit log storage and immutability — one `core.audit_log` table committed with the mutation, append-only by DB role grants. *Accepted*
+- [0008](0008-audit-log-storage-and-immutability.md) Audit log storage and immutability — one `core.audit_log` table committed with the mutation, append-only by DB role grants. *Accepted, app read grant amended by 0064*
 - [0009](0009-background-jobs-with-pg-boss.md) Background jobs with pg-boss — jobs run in the backend process, idempotent, locked retry defaults. *Accepted*
 - [0012](0012-error-code-contract.md) API error code contract — one envelope, stable dotted codes, field-path validation detail, conditional `requestable_permission`. *Accepted*
 - [0013](0013-observability-logs-first-deployment-k8s.md) Observability and deployment — Docker on internal k8s, structured stdout logs only, `/health/live` + `/health/ready`, no metrics/tracing yet. *Accepted*
-- [0015](0015-operational-safety-rate-limit-headers-migrations-idempotency.md) Operational safety — Postgres-backed rate limits, helmet CSP and no CORS, Drizzle Kit SQL migrations, `Idempotency-Key`. *Accepted*
+- [0015](0015-operational-safety-rate-limit-headers-migrations-idempotency.md) Operational safety — Postgres-backed rate limits, helmet CSP and no CORS, Drizzle Kit SQL migrations, `Idempotency-Key`. *Accepted, Survey cache replay amended by 0064*
 
 ## Auth, roles and permissions
 
@@ -26,6 +26,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0048](0048-role-level-extension.md) Role Level extension — checklist for adding a role across enum, DB CHECK, local unions and domain gates. *Accepted*
 - [0056](0056-capability-based-admin-navigation.md) Capability-based Admin navigation — Admin entries appear only when `workspace.admin` is approved; direct links stay gated. *Accepted*
 - [0061](0061-admin-revoke-permission-grants-and-denies.md) Admin revokes active Permission grants and denies — revocation audit, notification, and re-request behavior. *Accepted*
+- [0066](0066-permission-request-lifecycle-and-direct-grant.md) Permission Request lifecycle and governed direct grants — requester withdrawal/edit, revision-safe narrowed approval, explained risk and direct-grant governance; single-object enforcement deferred. *Accepted (not implemented)*
 
 ## Managed System registry, teams and display IDs
 
@@ -66,13 +67,15 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 
 - [0031](0031-similar-voc-same-managed-system-heuristic.md) Same-Managed-System similar-VOC heuristic — authorized peers, newest first, capped at three; fallback beside embeddings. *Accepted, amended*
 - [0034](0034-voc-embedding-similarity-infrastructure.md) VOC embedding similarity — pgvector behind a provider port; recommendations are a separate resource with dismissal. *Accepted, implemented*
-- [0046](0046-pre-submit-similar-voc-surface.md) Pre-submit similar-VOC surface — shows the 0031 heuristic peers, navigation only, no draft embedding preview. *Accepted*
-- [0054](0054-voc-cluster-autogen-shadow-job.md) Cluster auto-generation shadow job — hourly pair measurement at >= 0.60 into a non-domain table; no cluster writes. *Accepted*
+- [0046](0046-pre-submit-similar-voc-surface.md) Pre-submit similar-VOC surface — shows the 0031 heuristic peers, navigation only; paid-preview deferral superseded for #340. *Accepted, amended by 0068*
+- [0054](0054-voc-cluster-autogen-shadow-job.md) Cluster auto-generation shadow job — hourly pair measurement at >= 0.60 into a non-domain table; no cluster writes; choice (b) resolved by 0068. *Accepted, amended*
+
+- [0068](0068-voc-cluster-suggestions-and-draft-preview.md) VOC Cluster suggestions and paid draft preview — choice (b), human Cluster creation, durable suggestion rejection/undo, explicit-click preview and atomic actor/workspace paid budgets. *Accepted 2026-10-13*
 
 ## Entity links and Findings
 
 - [0023](0023-entity-link-visibility-decision-and-summary-contract.md) Entity-link visibility and summary contract — backend verdicts allowed/hidden/denied/summary_visible; `request_access` deferred. *Accepted, amended by 0024, 0032*
-- [0024](0024-finding-as-entity-link-target-and-provider-registry.md) Finding as link target and provider registry — `created_finding` link, `finding.read`/`finding.manage`, Finding status endpoint. *Accepted*
+- [0024](0024-finding-as-entity-link-target-and-provider-registry.md) Finding as link target and provider registry — `created_finding` link, `finding.read`/`finding.manage`, Finding status endpoint. *Accepted, amended by 0064*
 - [0032](0032-task-reporter-summary-read-time-projection.md) Task reporter summary — Reporter sees a read-time projection of Task title and coarse status only. *Accepted*
 - [0047](0047-entity-link-voc-read-required-not-triage.md) Entity-link VOC read needs `voc.read` — `voc.triage` alone is not enough to read or create VOC links. *Accepted*
 
@@ -90,11 +93,14 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 
 ## Surveys
 
-- [0033](0033-survey-evidence-anonymity-safe-summary-contract.md) Survey evidence, anonymity and safe summaries — identity-protected responses, no Admin bypass for personal reads, threshold 5. *Accepted, amended by 0053*
-- [0035](0035-external-survey-responses.md) External survey responses — public-link responses store no Actor, dedupe by cookie identity. *Proposed (not implemented)*
-- [0036](0036-survey-link-distribution-and-respondent-model.md) Survey link distribution — opaque 30-day revocable links; no recipients or delivery channels. *Proposed (not implemented)*
+- [0033](0033-survey-evidence-anonymity-safe-summary-contract.md) Survey evidence, anonymity and safe summaries — identity-protected responses, no Admin bypass for personal reads, threshold 5. *Accepted, amended by 0053, 0064*
+- [0035](0035-external-survey-responses.md) External survey responses — public-link responses store no Actor, dedupe by cookie identity. *Rejected 2026-10-13*
+- [0036](0036-survey-link-distribution-and-respondent-model.md) Survey link distribution — opaque 30-day revocable links; no recipients or delivery channels. *Rejected 2026-10-13*
 - [0053](0053-survey-result-response-state.md) Survey result response state — `none` / `below_threshold` / `visible` without exposing small counts. *Accepted*
 - [0055](0055-outcome-survey-follow-up-decisions.md) Outcome Survey follow-up — low-band poor-response classifier; Finding or no-follow-up decision clears the gap. *Accepted*
+
+- [0064](0064-survey-provenance-read-boundary.md) Survey provenance read boundary and safe approved-excerpt reuse — trusted application authorization, protected bindings, metadata-only Finding summaries, filtered link/audit access and suppression-aware reuse. *Accepted 2026-10-13; implementation pending #739/#740/#816*
+- [0065](0065-evidence-inventory-and-approved-excerpt-reuse.md) Evidence inventory and approved Survey excerpt reuse — Findings-owned safe search inventory, Integration ListShell and Finding-local approved-excerpt picker. *Accepted and implemented (#739/#740, #816, #1040, #1107, #1109)*
 
 ## Notifications
 
@@ -106,14 +112,20 @@ These record where the product deliberately differs from `docs/design-prototype/
 
 - [0037](0037-link-finding-deferred-out-of-mvp.md) Survey result Link Finding out of MVP — `next_actions` ship `create_finding` and `request_task` only. *Accepted*
 - [0038](0038-entity-link-management-surface-out-of-mvp.md) Entity-link management and My Work out of MVP — per-record projections only; no detach UI. *Accepted*
-- [0039](0039-survey-creation-requires-a-dialog.md) Survey creation dialog — `New survey` collects the four required fields; keyboard reorder added. *Accepted*
+- [0039](0039-survey-creation-requires-a-dialog.md) Survey creation dialog — explicit system/privacy and persisted-ID navigation; keyboard reorder added; source selection amended by 0070 (2026-10-13), visible selection shipped #1075. *Accepted, amended by 0070*
 - [0040](0040-ux-voc-home-navigation-deviations.md) VOC and Home navigation deviations — dead My Work entries removed; sixth Inbox tab `high-no-link`. *Accepted*
 - [0041](0041-admin-permission-request-ux-deviations.md) Admin Permission Request UX deviations — setting relabelled for Permission Requests; own detail header. *Accepted*
 - [0057](0057-approved-ux-deviations-from-prototype-579.md) Approved UX deviations (#579) — enum display labels, Korean-first copy, layout items B1-B10. *Accepted, amended by 0060*
 
 ## Scope decisions
 
-- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links unscheduled. *Accepted*
+- [0067](0067-responsibility-defaults-and-recovery-items.md) Responsibility defaults and Dashboard recovery items — five Coverage bands/no-data, source-owned Actor/team routing with fallback, bounded recovery presentation/history and Survey exception. *Accepted and implemented (#1087–#1094)*
+
+- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — D1/D3 are superseded by 0067; D2 is narrowed by 0070 and the three Survey starting points, definition reuse, and dialog selection shipped in #1073–#1075; public survey links remain rejected. *Accepted, amended by 0067 and 0070*
+
+- [0069](0069-analytics-area-report.md) Analytics Area report attribution and safe metric grain — Coverage tab, current classification, Survey-level output and exact source links. *Accepted and implemented in #1077–#1079*
+
+- [0070](0070-survey-starting-templates-and-definition-reuse.md) Survey starting templates and definition reuse — three built-in backend starters, same-system snapshot reuse and visible dialog selection shipped in #1073–#1075; amends 0039 and narrows 0059 D2. *Accepted and implemented*
 
 ## Status legend
 

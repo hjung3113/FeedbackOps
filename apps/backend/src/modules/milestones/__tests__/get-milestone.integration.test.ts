@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #514 A5 — Milestone get authorization: per-row finding.manage,
 // not_found.record for other-workspace/missing ids, User denied.
 //
@@ -83,15 +84,19 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
       await migrateHandle.pool.query('delete from task.milestones where workspace_id = $1', [
         otherWorkspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-        otherWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id = $1',
+        [otherWorkspaceId],
+      );
       await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         otherWorkspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
-        otherWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWorkspaceId],
+      );
     }
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }

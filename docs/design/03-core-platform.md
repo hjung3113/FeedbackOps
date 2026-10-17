@@ -98,7 +98,7 @@ Managed System may be used as:
 - Analytics Area grouping context
 ```
 
-Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (only the Survey operator default is built; the rest is deferred, ADR-0059); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
+Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (Survey operator and ADR-0067 VOC/Finding owner defaults are built, as is ADR-0067 Task Request/Task routing); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
 
 Project language in older docs is superseded for MVP. If needed later, use Work Initiative for execution grouping instead of scope, permissions, and defaults.
 
@@ -141,7 +141,7 @@ Acceptance Criteria:
 
 ```text
 - Managed Systems are managed inside the workspace, not as separate app shells.
-- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators. (Only the Survey operator default is built; ADR-0059 D1.)
+- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators. (Survey operator and VOC/Finding owner routing are built; Task Request/Task routing remains the separate 56-F item.)
 - Default owner or team may prefill the actual owner field, but does not mean the record is triaged.
 - Authorized users can override defaults on individual records.
 - Managed System filters are available on managed-system-scoped lists and dashboards.
@@ -217,3 +217,26 @@ See `09-permission-access.md`.
 - Code module mapping
 - Advanced taxonomy governance
 ```
+
+## Responsibility inputs (ADR-0067; registry/storage implemented by #1089)
+
+Managed System has a nullable Actor/team reviewer pair independent of its owner pair;
+Admin edits/audits it beside the owner. Task Request first uses reviewer, then eligible
+owner. Destination services resolve/write assignments; Core exposes transaction-aware
+inputs only. Team defaults work without member selection or permission grants; no team
+CRUD/membership/candidate-list surface is introduced. Automatic invalid defaults fall
+through to a visible scoped fallback with Admin warning; explicit invalid targets reject.
+Default edits leave existing assignments intact. Survey's dedicated operator rule is unchanged.
+
+
+Admin Registry edits owner/reviewer independently and refetches the safe, server-authorized
+configuration diagnostics after save. The endpoint and transaction failure-input contract
+are in `docs/implementation/api/core.md`. #1090/#1091 own creation-time routing and failure
+production; the nullable source columns added by #1089 do not backfill responsibility.
+
+Registry configuration diagnostics follow the effective Task Request chain: an empty
+reviewer with an owner eligible for `finding.manage` does not warn. Configured invalid
+defaults still warn; an empty/broken chain warns. Admin sees a marked registry row and a
+settings action per warning. Actor choices come from the authorized server candidate read;
+currently configured ineligible Actors remain visible and marked, and field errors explain
+save-time eligibility failures. See `docs/implementation/api/core.md` for the read contract.

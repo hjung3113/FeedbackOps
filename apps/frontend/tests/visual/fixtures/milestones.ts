@@ -175,6 +175,7 @@ export const milestoneTasksFixture: TaskDto[] = [
     // Prototype TASK-902 assignee is u-4 (data.js:382), not u-5; u5 stays on
     // the Notification Reliability milestone it actually owns.
     assignee_actor_id: MILESTONE_ACTOR_IDS.u4,
+    assignee_team_id: null,
     due_date: '2026-06-15',
     milestone_id: MILESTONE_IDS.sso,
     analytics_area_id: MILESTONE_ANALYTICS_AREA_IDS.product,
@@ -197,18 +198,21 @@ export const milestoneActorsFixture = listActorsResponseSchema.parse({
       display_name: '김지원',
       email: 'u1@example.test',
       role_level: 'admin',
+      actor_type: 'internal_member',
     },
     {
       id: MILESTONE_ACTOR_IDS.u2,
       display_name: '박서연',
       email: 'u2@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
     {
       id: MILESTONE_ACTOR_IDS.u3,
       display_name: '이도윤',
       email: 'u3@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
     // Prototype u-4 (data.js Users: 최민서) — TASK-902's assignee (F3).
     {
@@ -216,12 +220,14 @@ export const milestoneActorsFixture = listActorsResponseSchema.parse({
       display_name: '최민서',
       email: 'u4@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
     {
       id: MILESTONE_ACTOR_IDS.u5,
       display_name: '정하늘',
       email: 'u5@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
   ],
 });
@@ -237,6 +243,8 @@ export const milestoneManagedSystemsFixture: {
     external_key: null;
     default_owner_actor_id: null;
     default_owner_team_id: null;
+    default_reviewer_actor_id: null;
+    default_reviewer_team_id: null;
     archived_at: null;
     archived_by_actor_id: null;
     created_at: string;
@@ -253,6 +261,8 @@ export const milestoneManagedSystemsFixture: {
       external_key: null,
       default_owner_actor_id: null,
       default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
       archived_at: null,
       archived_by_actor_id: null,
       created_at: LOOKUP_TIMESTAMP,
@@ -266,6 +276,8 @@ export const milestoneManagedSystemsFixture: {
       external_key: null,
       default_owner_actor_id: null,
       default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
       archived_at: null,
       archived_by_actor_id: null,
       created_at: LOOKUP_TIMESTAMP,
@@ -279,6 +291,8 @@ export const milestoneManagedSystemsFixture: {
       external_key: null,
       default_owner_actor_id: null,
       default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
       archived_at: null,
       archived_by_actor_id: null,
       created_at: LOOKUP_TIMESTAMP,
@@ -292,6 +306,8 @@ export const milestoneManagedSystemsFixture: {
       external_key: null,
       default_owner_actor_id: null,
       default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
       archived_at: null,
       archived_by_actor_id: null,
       created_at: LOOKUP_TIMESTAMP,

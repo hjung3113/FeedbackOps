@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 // Integration tests for Slice 2 #9 schema (ADR-0017 + ADR-0018).
 //
 // Verifies the load-bearing constraints on managed_systems / analytics_areas
@@ -36,7 +37,10 @@ describe.skipIf(!runIntegration)('Slice 2 schema invariants', () => {
   // Each test cleans up its own rows; ms slugs are namespaced per test.
   beforeEach(async () => {
     await handle.pool.query(`delete from core.analytics_areas where slug like 'test-%'`);
-    await handle.pool.query(`delete from core.managed_systems where slug like 'test-%'`);
+    await deleteRecoveryFixtureParents(
+      handle,
+      `delete from core.managed_systems where slug like 'test-%'`,
+    );
     await handle.pool.query(`delete from core.teams where name like 'test-%'`);
   });
 
@@ -185,5 +189,140 @@ describe.skipIf(!runIntegration)('Slice 2 schema invariants', () => {
         [WORKSPACE_ID, adminActorId, BOGUS_UUID],
       ),
     ).rejects.toMatchObject({ code: '23503' });
+  });
+
+  it('56-D reviewer pair allows null and rejects simultaneous Actor/team', async () => {
+    const team = await handle.pool.query<{ id: string }>(
+      "insert into core.teams (workspace_id, name) values ($1, 'test-reviewer-team') returning id",
+      [WORKSPACE_ID],
+    );
+    const historical = await handle.pool.query(
+      `select default_reviewer_actor_id, default_reviewer_team_id
+      from core.managed_systems where workspace_id = $1 and slug in ('tableau','power-bi')`,
+      [WORKSPACE_ID],
+    );
+    expect(historical.rowCount).toBeGreaterThan(0);
+    for (const row of historical.rows)
+      expect(row).toEqual({ default_reviewer_actor_id: null, default_reviewer_team_id: null });
+    await expect(
+      handle.pool.query(
+        `insert into core.managed_systems
+      (workspace_id, slug, name, default_reviewer_actor_id, default_reviewer_team_id)
+      values ($1, 'test-reviewer-xor', 'Reviewer', $2, $3)`,
+        [WORKSPACE_ID, adminActorId, team.rows[0]?.id],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  });
+
+  it.each([
+    ['finding', 'findings', 'owner_actor_id', 'owner_team_id'],
+    ['task_request', 'task_requests', 'assigned_reviewer_actor_id', 'assigned_reviewer_team_id'],
+    ['task', 'tasks', 'assignee_actor_id', 'assignee_team_id'],
+  ])(
+    '56-D %s responsibility columns are nullable with XOR and no historical backfill',
+    async (schema, table, actorColumn, teamColumn) => {
+      const columns = await handle.pool.query(
+        `select column_name, is_nullable from information_schema.columns
+      where table_schema = $1 and table_name = $2 and column_name = any($3::text[])`,
+        [schema, table, [actorColumn, teamColumn]],
+      );
+      expect(columns.rows).toHaveLength(2);
+      expect(columns.rows.every((row) => row.is_nullable === 'YES')).toBe(true);
+      const constraints = await handle.pool.query(
+        `select pg_get_constraintdef(c.oid) as definition from pg_constraint c
+      join pg_class t on t.oid = c.conrelid join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = $1 and t.relname = $2 and c.contype = 'c'`,
+        [schema, table],
+      );
+      expect(
+        constraints.rows.some(
+          (row) => row.definition.includes(actorColumn) && row.definition.includes(teamColumn),
+        ),
+      ).toBe(true);
+      const rows = await handle.pool.query(
+        `select count(*)::int as count from "${schema}"."${table}" where "${teamColumn}" is not null`,
+      );
+      expect(rows.rows[0]?.count).toBe(0);
+    },
+  );
+
+  it('56-D source XOR constraints reject mixed responsibility and preserve decision/provenance', async () => {
+    const client = await handle.pool.connect();
+    await client.query('begin');
+    try {
+      const system = await client.query<{ id: string }>(
+        "select id from core.managed_systems where workspace_id = $1 and slug = 'tableau' and archived_at is null",
+        [WORKSPACE_ID],
+      );
+      expect(system.rowCount).toBe(1);
+      const systemId = system.rows[0]?.id;
+      const team = await client.query<{ id: string }>(
+        "insert into core.teams (workspace_id, name) values ($1, 'test-source-xor') returning id",
+        [WORKSPACE_ID],
+      );
+      const teamId = team.rows[0]?.id;
+      const finding = await client.query<{ id: string }>(
+        `insert into finding.findings
+        (workspace_id, display_id, primary_managed_system_id, title, summary, source_type, severity, created_by)
+        values ($1, 'FND-56D-SCHEMA', $2, 'Schema', 'Schema', 'manual', 'medium', $3) returning id`,
+        [WORKSPACE_ID, systemId, adminActorId],
+      );
+      const request = await client.query<{ id: string }>(
+        `insert into task_request.task_requests
+        (workspace_id, display_id, source_type, source_id, primary_managed_system_id, evidence_summary, requested_outcome,
+          requester_actor_id, status, reviewer_actor_id, decision_reason, decided_at)
+        values ($1, 'TR-56D-SCHEMA', 'finding', $2, $3, 'Schema', 'Schema', $4, 'approved', $4, 'Actual decision', '2026-10-01T00:00:00Z') returning id`,
+        [WORKSPACE_ID, finding.rows[0]?.id, systemId, adminActorId],
+      );
+      const task = await client.query<{ id: string }>(
+        `insert into task.tasks
+        (workspace_id, display_id, primary_managed_system_id, title, assignee_actor_id, created_by)
+        values ($1, 'TASK-56D-SCHEMA', $2, 'Schema', $3, $3) returning id`,
+        [WORKSPACE_ID, systemId, adminActorId],
+      );
+      for (const [table, actorColumn, teamColumn, id] of [
+        ['finding.findings', 'owner_actor_id', 'owner_team_id', finding.rows[0]?.id],
+        [
+          'task_request.task_requests',
+          'assigned_reviewer_actor_id',
+          'assigned_reviewer_team_id',
+          request.rows[0]?.id,
+        ],
+        ['task.tasks', 'assignee_actor_id', 'assignee_team_id', task.rows[0]?.id],
+      ]) {
+        await client.query('savepoint mixed_pair');
+        await expect(
+          client.query(
+            `update ${table} set ${actorColumn} = $2, ${teamColumn} = $3 where id = $1`,
+            [id, adminActorId, teamId],
+          ),
+        ).rejects.toMatchObject({ code: '23514' });
+        await client.query('rollback to savepoint mixed_pair');
+        await client.query(
+          `update ${table} set ${actorColumn} = null, ${teamColumn} = $2 where id = $1`,
+          [id, teamId],
+        );
+      }
+      const decision = await client.query(
+        `select reviewer_actor_id, decision_reason, decided_at,
+        assigned_reviewer_actor_id, assigned_reviewer_team_id from task_request.task_requests where id = $1`,
+        [request.rows[0]?.id],
+      );
+      expect(decision.rows[0]).toEqual({
+        reviewer_actor_id: adminActorId,
+        decision_reason: 'Actual decision',
+        decided_at: new Date('2026-10-01T00:00:00Z'),
+        assigned_reviewer_actor_id: null,
+        assigned_reviewer_team_id: teamId,
+      });
+      const provenance = await client.query(
+        'select created_by from finding.findings where id = $1',
+        [finding.rows[0]?.id],
+      );
+      expect(provenance.rows[0]?.created_by).toBe(adminActorId);
+    } finally {
+      await client.query('rollback');
+      client.release();
+    }
   });
 });

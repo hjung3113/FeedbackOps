@@ -11,6 +11,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { ReporterReplyToolbar } from '../ReporterReplyToolbar';
 
 describe('<ReporterReplyToolbar>', () => {
+  it('uses the attachment picker focus-visible ring on toolbar buttons', () => {
+    render(<ReporterReplyToolbar editor={null} />);
+    expect(screen.getByRole('button', { name: '굵게' })).toHaveClass(
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-focus-ring',
+    );
+  });
+
   it('renders Bold, Italic, and Link buttons', () => {
     render(<ReporterReplyToolbar editor={null} />);
 

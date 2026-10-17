@@ -353,4 +353,40 @@ describe.skipIf(!runIntegration)('persona seed layer', () => {
       ).resolves.toMatchObject({ allow: false });
     }
   });
+
+  it('persona seed excludes superseded grant history from its existence check', async () => {
+    await runWithSeedMode('personas', () => runSeed(handle));
+    const old = await handle.pool.query<{ id: string; actor_id: string; capability: string }>(
+      `select g.id, g.actor_id, g.capability from permission.permission_grants g
+       join core.actors a on a.id = g.actor_id where a.workspace_id = $1
+       and a.external_id = 'mock-developer-1' and g.capability = 'voc.read'
+       and g.revoked_at is null and g.superseded_at is null limit 1`,
+      [WORKSPACE_ID],
+    );
+    const predecessor = old.rows[0];
+    if (!predecessor) throw new Error('persona voc.read grant missing');
+    await handle.pool.query(
+      'update permission.permission_grants set superseded_at = now() where id = $1',
+      [predecessor.id],
+    );
+    try {
+      await runWithSeedMode('personas', () => runSeed(handle));
+      const current = await handle.pool.query<{ id: string }>(
+        `select id from permission.permission_grants where actor_id = $1 and capability = $2
+         and revoked_at is null and superseded_at is null`,
+        [predecessor.actor_id, predecessor.capability],
+      );
+      expect(current.rows).toHaveLength(1);
+      expect(current.rows[0]?.id).not.toBe(predecessor.id);
+    } finally {
+      await handle.pool.query(
+        'delete from permission.permission_grants where actor_id = $1 and capability = $2 and id <> $3',
+        [predecessor.actor_id, predecessor.capability, predecessor.id],
+      );
+      await handle.pool.query(
+        'update permission.permission_grants set superseded_at = null where id = $1',
+        [predecessor.id],
+      );
+    }
+  });
 });

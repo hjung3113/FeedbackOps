@@ -1,0 +1,143 @@
+name: feedbackops-release-1060
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.release.example to .env.release}
+    volumes:
+      - release-postgres-data:/var/lib/postgresql/data
+      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/10-feedbackops-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 1g
+
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:6.0.4
+    environment:
+      JSON_CONFIG: >-
+        {"interactiveLogin":true,"tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"subject","match":".*","claims":{"sub":"$${subject}","email":"$${subject}@example.local","email_verified":true,"name":"$${subject}"}}]}]}
+    ports:
+      - "8080:8080"
+      - "3001:3001"
+    mem_limit: 512m
+
+  migrate:
+    image: feedbackops-release-1060-migrate:local
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      target: migrate
+    command: ["node_modules/.bin/drizzle-kit", "migrate"]
+    environment:
+      DATABASE_URL: postgresql://fops_app:fops_app@postgres:5432/feedbackops
+      DATABASE_URL_MIGRATE: postgresql://fops_migrate:fops_migrate@postgres:5432/feedbackops
+      WORKSPACE_ID: ${WORKSPACE_ID:?set WORKSPACE_ID in .env.release}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 768m
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env.release}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env.release}
+    volumes:
+      - release-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+
+  minio-bootstrap:
+    image: feedbackops-release-1060-backend:local
+    entrypoint: ["node"]
+    command: ["dist/cli/storage-bootstrap.js"]
+    environment:
+      STORAGE_S3_ENDPOINT: http://minio:9000
+      STORAGE_S3_REGION: us-east-1
+      STORAGE_S3_BUCKET: ${STORAGE_S3_BUCKET:-fops-attachments}
+      STORAGE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env.release}
+      STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env.release}
+      STORAGE_S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      minio:
+        condition: service_healthy
+    mem_limit: 256m
+
+  backend:
+    image: feedbackops-release-1060-backend:local
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    network_mode: service:oidc
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3001
+      AUTH_PROVIDER: oidc
+      DATABASE_URL: postgresql://fops_app:fops_app@postgres:5432/feedbackops
+      WORKSPACE_ID: ${WORKSPACE_ID:?set WORKSPACE_ID in .env.release}
+      OIDC_ISSUER_URL: http://localhost:8080/default
+      OIDC_CLIENT_ID: feedbackops-release-local
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env.release}
+      OIDC_REDIRECT_URI: http://localhost:4173/auth/callback
+      OIDC_SCOPES: openid email profile
+      TRUSTED_PROXY_HOPS: "1"
+      PUBLIC_ATTACHMENT_ORIGIN: "'self'"
+      STORAGE_S3_ENDPOINT: http://minio:9000
+      STORAGE_S3_REGION: us-east-1
+      STORAGE_S3_BUCKET: ${STORAGE_S3_BUCKET:-fops-attachments}
+      STORAGE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env.release}
+      STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env.release}
+      STORAGE_S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio-bootstrap:
+        condition: service_completed_successfully
+      oidc:
+        condition: service_started
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health/live').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    mem_limit: 1g
+
+  frontend:
+    image: feedbackops-release-1060-frontend:local
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    environment:
+      BACKEND_URL: http://oidc:3001
+    ports:
+      - "4173:8080"
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --header 'Accept: text/html' http://127.0.0.1:8080/index.html || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    mem_limit: 128m
+
+volumes:
+  release-postgres-data:
+  release-minio-data:

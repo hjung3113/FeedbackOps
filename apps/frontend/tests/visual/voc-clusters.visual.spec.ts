@@ -71,11 +71,20 @@ test.describe('/voc-clusters visual harness', () => {
     await page.getByTestId('cluster-add-voc-button').click();
 
     const dialog = page.getByTestId('add-voc-modal');
-    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.existingVoc}`)).toBeDisabled();
-    await expect(dialog.getByTestId(`add-voc-included-${IDS.existingVoc}`)).toHaveText(
-      '이미 포함됨',
-    );
-    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.candidateVoc}`)).toBeEnabled();
+    // Current members are listed in the Cluster detail, not in the picker.
+    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.existingVoc}`)).toHaveCount(0);
+    await expect(page.getByTestId(`cluster-member-row-${IDS.existingVoc}`)).toBeVisible();
+    await expect(dialog.getByTestId(`add-voc-add-${IDS.candidateVoc}`)).toBeEnabled();
     await expectVisual(page, dialog, 'cluster-add-member-already-included.png');
   });
+});
+
+test('renders the available Cluster suggestion pair', async ({ page }) => {
+  await installMockApi(page, { clusterSuggestions: 'populated' });
+  await page.goto('/voc-clusters');
+  await page.getByRole('tab', { name: /^Cluster 제안/ }).click();
+  await page.getByRole('button', { name: /VOC-12/ }).click();
+  const panel = page.getByTestId('cluster-suggestion-panel');
+  await expect(panel.getByRole('button', { name: '확인 후 Cluster 생성' })).toBeVisible();
+  await expectVisual(page, panel, 'voc-cluster-suggestions-populated.png');
 });

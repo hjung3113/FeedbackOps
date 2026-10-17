@@ -231,6 +231,11 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
   it('admin sees the finding-chain source VOC as allowed with its identifiers', async () => {
     const vocTitle = `SrcVoc VOC ${uid('allowed')}`;
     const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });
+    // A non-default reporter-facing status proves the field is read from the VOC row.
+    await migrateHandle.pool.query(
+      "update voc.vocs set reporter_facing_status = 'progress' where id = $1",
+      [chain.voc?.id],
+    );
 
     const res = await getTask(adminCookie, chain.taskId);
 
@@ -254,11 +259,14 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
         id: chain.voc?.id,
         display_id: chain.voc?.displayId,
         title: vocTitle,
+        reporter_facing_status: 'progress',
       },
     });
   });
 
-  it('a non-reporter admin loses source VOC visibility after an explicit voc.read deny', async () => {
+  // #1170: Admin scope honours explicit denies like a Developer's grants. A voc.read deny
+  // with triage still allowed is summary territory (no identifiers); denying both hides it.
+  it('a non-reporter admin with an explicit voc.read deny sees only a summary, and nothing once voc.triage is denied too', async () => {
     const vocTitle = `SrcVoc VOC ${uid('deniedadmin')}`;
     const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });
     // Fresh actor isolates the rate-limit bucket and stays in the existing cleanup cohort.
@@ -276,12 +284,29 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
       id: chain.voc?.id,
       display_id: chain.voc?.displayId,
       title: vocTitle,
+      reporter_facing_status: 'received',
     });
 
     await migrateHandle.pool.query(
       `insert into permission.permission_denies
          (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
        values ($1, $2, 'voc.read', $3, 'test-deny', $4)`,
+      [WORKSPACE_ID, reader.id, chain.msId, adminActorId],
+    );
+
+    const readDenied = await getTask(cookie, chain.taskId);
+    expect(readDenied.statusCode).toBe(200);
+    expect(readDenied.json<{ source: Record<string, unknown> }>().source.voc).toEqual({
+      visibility_state: 'summary_visible',
+    });
+    expect(readDenied.body).not.toContain(chain.voc?.id ?? '');
+    expect(readDenied.body).not.toContain(chain.voc?.displayId ?? '');
+    expect(readDenied.body).not.toContain(vocTitle);
+
+    await migrateHandle.pool.query(
+      `insert into permission.permission_denies
+         (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+       values ($1, $2, 'voc.triage', $3, 'test-deny', $4)`,
       [WORKSPACE_ID, reader.id, chain.msId, adminActorId],
     );
 
@@ -391,6 +416,7 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
         id: chain.voc?.id,
         display_id: chain.voc?.displayId,
         title: vocTitle,
+        reporter_facing_status: 'received',
       },
     });
   });
@@ -526,6 +552,7 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
         id: requestVoc.id,
         display_id: requestVoc.displayId,
         title: requestVocTitle,
+        reporter_facing_status: 'received',
       },
     });
     expect(JSON.stringify(body)).not.toContain(findingVoc.id);

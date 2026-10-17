@@ -14,6 +14,7 @@
 
 import {
   Button,
+  Callout,
   Checkbox,
   ManagedSystemMark,
   OutlineBadge,
@@ -29,6 +30,8 @@ import type * as React from 'react';
 import { useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
+import { formatDateTime } from '@/lib/format/datetime';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 import { scopeMark } from '../lib/scopeMark.js';
@@ -38,7 +41,7 @@ import { EditDialog, RegisterDialog } from './ManagedSystemsDialogs.js';
 import { useManagedSystemsRegistry } from './useManagedSystemsRegistry.js';
 
 const SUBTITLE =
-  'Managed System은 권한과 집계의 기준 단위입니다. 프로젝트와는 다릅니다. 시스템별 기본 담당자, Analytics Area 매핑, 활성 상태를 관리합니다.';
+  'Managed System은 권한과 집계의 기준 단위입니다. 기본 담당자·검토자, Analytics Area 매핑, 활성 상태를 관리합니다.';
 
 export function ManagedSystemsAdminPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -93,8 +96,16 @@ function ManagedSystemsBody({
   // slug (ADR-0017), so Configure hands the archived row's fields to Register.
   const [reregisterFrom, setReregisterFrom] = useState<ManagedSystemDto | null>(null);
 
-  const { systems, areasByMs, renderedAreaCount, resolved, listQuery, requestsCount, invalidate } =
-    useManagedSystemsRegistry(includeArchived);
+  const {
+    systems,
+    areasByMs,
+    renderedAreaCount,
+    resolved,
+    listQuery,
+    diagnosticsQuery,
+    requestsCount,
+    invalidate,
+  } = useManagedSystemsRegistry(includeArchived);
 
   return (
     <section className="space-y-8">
@@ -134,12 +145,83 @@ function ManagedSystemsBody({
                 areas={areasByMs.get(m.id) ?? []}
                 resolved={resolved}
                 last={i === systems.length - 1}
+                warning={Boolean(
+                  diagnosticsQuery.data?.items.some((item) => item.managed_system_id === m.id),
+                )}
                 onConfigure={() => setEditTarget(m)}
               />
             ))}
           </div>
         )}
       </div>
+
+      {diagnosticsQuery.isPending ? (
+        <output className="block text-sm text-text-muted">
+          {MANAGED_SYSTEM_COPY.diagnosticsLoading}
+        </output>
+      ) : diagnosticsQuery.isError ? (
+        <Callout
+          tone="red"
+          title={MANAGED_SYSTEM_COPY.diagnostics}
+          action={
+            <Button variant="subtle" size="sm" onClick={() => void diagnosticsQuery.refetch()}>
+              {MANAGED_SYSTEM_COPY.retry}
+            </Button>
+          }
+        >
+          <p role="alert">{MANAGED_SYSTEM_COPY.diagnosticsError}</p>
+        </Callout>
+      ) : diagnosticsQuery.data.items.length > 0 ? (
+        <Callout tone="amber" title={MANAGED_SYSTEM_COPY.diagnostics}>
+          <p className="mb-2">{MANAGED_SYSTEM_COPY.diagnosticsHint}</p>
+          <ul className="flex flex-col gap-2">
+            {diagnosticsQuery.data.items.map((warning) => {
+              const target = systems.find((system) => system.id === warning.managed_system_id);
+              // Names are not unique (ADR-0017); the slug tells same-name systems apart.
+              const systemLabel = target
+                ? systems.some((system) => system.id !== target.id && system.name === target.name)
+                  ? `${target.name} (${target.slug})`
+                  : target.name
+                : 'Managed System';
+              return (
+                <li
+                  key={`${warning.managed_system_id}-${warning.workflow}-${warning.rule}-${warning.category}-${warning.origin}`}
+                >
+                  {systemLabel}
+                  {' · '}
+                  {warning.origin === 'configuration' ? (
+                    MANAGED_SYSTEM_COPY.roles[warning.responsibility]
+                  ) : (
+                    <>
+                      {MANAGED_SYSTEM_COPY.workflows[warning.workflow]}
+                      {' · '}
+                      {MANAGED_SYSTEM_COPY.rules[warning.rule]}
+                    </>
+                  )}
+                  {' · '}
+                  <span>{MANAGED_SYSTEM_COPY.categories[warning.category]}</span>
+                  {' · '}
+                  <span>
+                    {warning.origin === 'configuration'
+                      ? MANAGED_SYSTEM_COPY.currentConfiguration
+                      : `${MANAGED_SYSTEM_COPY.creationFailure(warning.count)} · ${MANAGED_SYSTEM_COPY.lastFailure} ${warning.last_failed_at ? formatDateTime(warning.last_failed_at) : '—'}`}
+                  </span>{' '}
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => {
+                      if (target) setEditTarget(target);
+                    }}
+                    aria-label={`${systemLabel} 설정 열기`}
+                  >
+                    설정
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </Callout>
+      ) : null}
 
       {/* ── Permission requests ───────────────────────────────────── */}
       <div>
@@ -169,12 +251,6 @@ function ManagedSystemsBody({
               검토 대기 · 추가 정보 필요 · 고위험 · 직접 승인까지 검토 콘솔에서 확인합니다.
             </span>
           </div>
-          <Button variant="secondary" size="sm" asChild>
-            <Link to="/admin/permissions/requests" data-testid="ms-review-button">
-              <ArrowRight className="h-3 w-3" />
-              검토
-            </Link>
-          </Button>
         </div>
       </div>
 
@@ -264,22 +340,27 @@ function RegistryRow({
   areas,
   resolved,
   last,
+  warning,
   onConfigure,
 }: {
   row: ManagedSystemDto;
   areas: AnalyticsAreaDto[];
   resolved: ResolveActorsResponse | undefined;
   last: boolean;
+  warning: boolean;
   onConfigure: () => void;
 }) {
   const mark = scopeMark(row.slug, row.name);
   const owner = ownerUser(row, resolved);
+  const reviewer = row.default_reviewer_actor_id
+    ? resolved?.actors.find((actor) => actor.id === row.default_reviewer_actor_id)?.display_name
+    : resolved?.teams.find((team) => team.id === row.default_reviewer_team_id)?.name;
   return (
     <div
       data-testid={`managed-system-row-${row.slug}`}
       className={`grid grid-cols-(--managed-system-row-columns) items-center gap-3 px-4 py-3${last ? '' : ' border-b border-border-subtle'}`}
       style={
-        { '--managed-system-row-columns': '40px 1.6fr 1.1fr 1.4fr 110px' } as React.CSSProperties
+        { '--managed-system-row-columns': '40px 1.2fr 1.6fr 1.5fr 110px' } as React.CSSProperties
       }
     >
       <ManagedSystemMark label={mark.label} color={mark.color} size={28} />
@@ -287,16 +368,27 @@ function RegistryRow({
         <div className="flex items-center gap-1.5">
           <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
           {row.archived_at !== null ? <OutlineBadge>보관됨</OutlineBadge> : null}
+          {warning ? <OutlineBadge>{MANAGED_SYSTEM_COPY.rowWarning}</OutlineBadge> : null}
         </div>
         <div className="truncate font-mono text-xs text-text-muted">managed-system/{row.slug}</div>
       </div>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-text-muted">기본 담당자</span>
-        {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
-          <span className="text-xs text-text-muted">(미지정)</span>
-        ) : (
-          <UserChip user={owner} size="sm" />
-        )}
+      <div className="grid min-w-0 grid-cols-2 gap-4">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-xs text-text-muted">기본 담당자</span>
+          {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
+            <span className="text-xs text-text-muted">(미지정)</span>
+          ) : (
+            <UserChip user={owner} size="sm" />
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-xs text-text-muted">{MANAGED_SYSTEM_COPY.reviewer}</span>
+          {!row.default_reviewer_actor_id && !row.default_reviewer_team_id ? (
+            <span className="text-xs text-text-muted">(미지정)</span>
+          ) : (
+            <UserChip user={reviewer ? { display_name: reviewer } : null} size="sm" />
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {areas.map((a) => (

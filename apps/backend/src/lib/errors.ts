@@ -3,7 +3,7 @@
 // or call `sendError` from a handler; application services raise the same
 // instance and a Fastify error handler renders the envelope.
 
-import type { ErrorCode } from '@fops/shared';
+import type { ErrorCode, SimilarityPreviewBudgetDetail } from '@fops/shared';
 import type { FastifyReply } from 'fastify';
 
 const STATUS_BY_PREFIX: ReadonlyArray<[string, number]> = [
@@ -40,6 +40,7 @@ export type DetailField = {
 };
 
 export type DetailShape =
+  | SimilarityPreviewBudgetDetail
   | {
       fields: DetailField[];
       hint?: string | undefined;
@@ -60,6 +61,9 @@ export type DetailShape =
         reason_required?: boolean;
       };
     }
+  | { request_id: string; review_route: string }
+  | { deny_ids: string[]; lift_route: string }
+  | { current_revision: number }
   | { current_updated_at: string }
   | { current_triage_state: string }
   | {

@@ -1,6 +1,6 @@
-import type { TaskDetailDto } from '@fops/shared';
+import type { EntityLinkDto, TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -171,6 +171,7 @@ describe('<VocDetailPanel>', () => {
       priority: 'critical',
       primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
       assignee_actor_id: OTHER_ACTOR_ID,
+      assignee_team_id: null,
       due_date: null,
     },
   };
@@ -183,6 +184,7 @@ describe('<VocDetailPanel>', () => {
     status: 'done',
     priority: 'urgent',
     assignee_actor_id: OTHER_ACTOR_ID,
+    assignee_team_id: null,
     due_date: '2026-07-31',
     milestone_id: null,
     analytics_area_id: null,
@@ -192,6 +194,332 @@ describe('<VocDetailPanel>', () => {
     updated_at: '2026-07-18T09:00:00.000Z',
     source: null,
   };
+
+  // #1174b U2-1 fixtures: Finding links on the VOC detail read model.
+  const FINDING_TRAIL_ID = '66666666-6666-4666-8666-666666666666';
+
+  function allowedFindingTrailLink(relationType: 'evidence_of' | 'created_finding'): EntityLinkDto {
+    return {
+      id: '11111111-1111-4111-8111-111111111180',
+      source_type: 'voc',
+      source_id: DETAIL_ENVELOPE.id,
+      target_type: 'finding',
+      target_id: FINDING_TRAIL_ID,
+      relation_type: relationType,
+      visibility: 'internal_only',
+      status: 'active',
+      managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+      created_by: OTHER_ACTOR_ID,
+      created_at: '2026-07-18T09:00:00.000Z',
+      updated_at: null,
+      visibility_state: 'allowed',
+      target_summary: {
+        type: 'finding',
+        id: FINDING_TRAIL_ID,
+        display_id: 'FIN-1200',
+        title: '로그 유실 Finding',
+        summary: '수집 파이프라인 오류',
+        severity: 'high',
+        confidence: null,
+        status: 'active',
+        primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+        evidence_count: 2,
+      },
+    };
+  }
+
+  const deniedFindingTrailLink: EntityLinkDto = {
+    id: '11111111-1111-4111-8111-111111111181',
+    source_type: 'voc',
+    target_type: 'finding',
+    relation_type: 'evidence_of',
+    status: 'active',
+    managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+    created_by: OTHER_ACTOR_ID,
+    created_at: '2026-07-18T09:00:00.000Z',
+    updated_at: null,
+    visibility_state: 'denied',
+  };
+
+  const hiddenFindingTrailLink: EntityLinkDto = {
+    ...deniedFindingTrailLink,
+    visibility_state: 'hidden',
+  };
+
+  function renderAsOperatorWithLinks(links: EntityLinkDto[]) {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'developer' },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+  }
+
+  it.each(['draft', 'active', 'converted'] as const)(
+    'keeps the Finding display ID in paired links and trails for %s status',
+    (status) => {
+      const base = allowedFindingTrailLink('evidence_of');
+      if (base.visibility_state !== 'allowed' || base.target_summary?.type !== 'finding') {
+        throw new Error('expected Finding fixture');
+      }
+      const link: EntityLinkDto = {
+        ...base,
+        target_summary: { ...base.target_summary, status },
+      };
+      vi.mocked(useVocDetail).mockReturnValue(
+        makeDetailQuery({
+          data: {
+            ...DETAIL_ENVELOPE,
+            links: [link],
+            linked_execution: {
+              findingRef: { type: 'finding', id: FINDING_TRAIL_ID },
+              taskRef: null,
+              trails: [{ origin: 'direct', links: [link] }],
+            },
+          },
+        }),
+      );
+      vi.mocked(useMe).mockReturnValue(
+        makeMeQuery({
+          data: {
+            ...ME_RESPONSE,
+            actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'developer' },
+          },
+        }),
+      );
+      renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+      const row = screen.getByRole('button', { name: /로그 유실 Finding/ });
+      expect(within(row).getByText('FIN-1200')).toBeInTheDocument();
+      expect(screen.queryByText(/^(draft|active|converted)$/)).not.toBeInTheDocument();
+    },
+  );
+
+  it('shows Cluster-origin Finding provenance and selects the linked-state CTA', async () => {
+    const clusterId = '77777777-7777-4777-8777-777777777777';
+    const cluster = {
+      type: 'voc_cluster' as const,
+      id: clusterId,
+      display_id: 'CLU-1225',
+      title: '공통 장애 Cluster',
+      summary: null,
+      status: 'draft',
+      primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+    };
+    const direct = allowedFindingTrailLink('evidence_of');
+    if (direct.visibility_state !== 'allowed') throw new Error('expected allowed fixture');
+    const inherited: EntityLinkDto = {
+      ...direct,
+      source_type: 'voc_cluster',
+      source_id: clusterId,
+      source_summary: cluster,
+    };
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: {
+          ...DETAIL_ENVELOPE,
+          links: [],
+          linked_execution: {
+            findingRef: { type: 'finding', id: FINDING_TRAIL_ID },
+            taskRef: null,
+            trails: [{ origin: 'cluster', cluster, links: [inherited] }],
+          },
+        },
+      }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'developer' },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.getByText('공통 장애 Cluster')).toBeInTheDocument();
+    expect(screen.queryByText('연결된 실행 없음')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finding 생성' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '연결된 실행 확인' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /로그 유실 Finding/ }));
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/findings',
+      search: { selected: FINDING_TRAIL_ID },
+    });
+  });
+
+  it.each(['allowed', 'hidden', 'denied'] as const)(
+    'projects a Request-only %s trail into the section and CTA',
+    async (state) => {
+      const requestId = '88888888-8888-4888-8888-888888888888';
+      const base = allowedFindingTrailLink('evidence_of');
+      const link =
+        state === 'allowed'
+          ? {
+              ...base,
+              target_type: 'task_request' as const,
+              target_id: requestId,
+              relation_type: 'requested_task' as const,
+              target_summary: {
+                type: 'task_request' as const,
+                id: requestId,
+                display_id: 'REQ-1225',
+                source_type: 'voc',
+                source_id: DETAIL_ENVELOPE.id,
+                evidence_summary: '증거',
+                requested_outcome: 'Request만 있는 후속 조치',
+                status: 'pending_review',
+                primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+                requester_actor_id: OTHER_ACTOR_ID,
+              },
+            }
+          : {
+              id: base.id,
+              source_type: 'voc' as const,
+              target_type: 'task_request' as const,
+              relation_type: 'requested_task' as const,
+              status: 'active' as const,
+              managed_system_id: base.managed_system_id,
+              created_by: base.created_by,
+              created_at: base.created_at,
+              updated_at: null,
+              visibility_state: state,
+            };
+      vi.mocked(useVocDetail).mockReturnValue(
+        makeDetailQuery({
+          data: {
+            ...DETAIL_ENVELOPE,
+            links: [],
+            linked_execution: {
+              findingRef: null,
+              taskRef: null,
+              trails: [{ origin: 'direct', links: [link] }],
+            },
+          },
+        }),
+      );
+      vi.mocked(useMe).mockReturnValue(
+        makeMeQuery({
+          data: {
+            ...ME_RESPONSE,
+            actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'developer' },
+          },
+        }),
+      );
+      renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+      if (state === 'hidden') {
+        expect(screen.getByText('연결된 실행 없음')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Finding 생성' })).toBeInTheDocument();
+      } else {
+        expect(screen.queryByText('연결된 실행 없음')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '연결된 실행 확인' })).toBeInTheDocument();
+      }
+      if (state === 'allowed') {
+        await userEvent.click(screen.getByRole('button', { name: /Request만 있는 후속 조치/ }));
+        expect(navigate).toHaveBeenCalledWith({
+          to: '/tasks',
+          search: { view: 'requests', param: requestId },
+        });
+      } else {
+        expect(screen.queryByText('Request만 있는 후속 조치')).not.toBeInTheDocument();
+        expect(navigate).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('uses the inherited Task summary and opens its allowed node without a direct VOC Task', async () => {
+    const inherited: EntityLinkDto = {
+      ...allowedTaskLink,
+      source_type: 'task_request',
+      source_id: '88888888-8888-4888-8888-888888888888',
+      relation_type: 'converted_to',
+      target_summary: { ...allowedTaskLink.target_summary, status: 'doing' },
+    };
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: {
+          ...DETAIL_ENVELOPE,
+          links: [],
+          linked_execution: {
+            findingRef: null,
+            taskRef: { type: 'task', id: allowedTaskLink.target_id },
+            trails: [{ origin: 'cluster', links: [inherited] }],
+          },
+        },
+      }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'developer' },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.queryByText('연결된 실행 없음')).not.toBeInTheDocument();
+    const trail = within(screen.getByTestId('voc-follow-up-trail'));
+    await userEvent.click(trail.getByRole('button', { name: /내부 Task 제목/ }));
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/tasks',
+      search: { param: allowedTaskLink.target_id },
+    });
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  // #1174b U2-1: the trail lists Finding links the actor may read; 연결된 실행 없음
+  // is suppressed by a Task or a visible Finding link, never by a hidden one.
+  it.each(['evidence_of', 'created_finding'] as const)(
+    'lists and opens an allowed %s Finding link and drops 연결된 실행 없음',
+    async (relationType) => {
+      renderAsOperatorWithLinks([allowedFindingTrailLink(relationType)]);
+
+      expect(screen.queryByText('연결된 실행 없음')).not.toBeInTheDocument();
+      expect(screen.getByTestId('linked-finding-allowed')).toHaveTextContent('로그 유실 Finding');
+      expect(screen.getByText('FIN-1200')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /로그 유실 Finding/ }));
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/findings',
+        search: { selected: FINDING_TRAIL_ID },
+      });
+    },
+  );
+
+  it('keeps 연결된 실행 없음 when the only Finding link is hidden', () => {
+    renderAsOperatorWithLinks([hiddenFindingTrailLink]);
+
+    expect(screen.getByText('연결된 실행 없음')).toBeInTheDocument();
+    expect(screen.queryByText('로그 유실 Finding')).not.toBeInTheDocument();
+    expect(screen.queryByText('관련 엔티티')).not.toBeInTheDocument();
+  });
+
+  it('suppresses 연결된 실행 없음 for a denied Finding link without naming it', () => {
+    renderAsOperatorWithLinks([deniedFindingTrailLink]);
+
+    expect(screen.queryByText('연결된 실행 없음')).not.toBeInTheDocument();
+    expect(screen.getByTestId('linked-finding-denied')).toBeInTheDocument();
+    expect(screen.queryByText('로그 유실 Finding')).not.toBeInTheDocument();
+    expect(screen.queryByText('FIN-1200')).not.toBeInTheDocument();
+  });
+
+  // #1174b V2-6: the trail renders the shared Task status label, never the raw status.
+  it('renders the trail Task status label for a backlog Task', () => {
+    vi.mocked(getTask).mockResolvedValue({ ...cachedTask, status: 'backlog' });
+    renderAsOperatorWithLinks([
+      {
+        ...allowedTaskLink,
+        target_summary: { ...allowedTaskLink.target_summary, status: 'backlog' },
+      },
+    ]);
+
+    expect(screen.getAllByText('Backlog').length).toBeGreaterThan(0);
+    expect(screen.queryByText('backlog', { exact: true })).not.toBeInTheDocument();
+  });
 
   it('uses the 50px toolbar height while the VOC detail is loading', () => {
     vi.mocked(useVocDetail).mockReturnValue(

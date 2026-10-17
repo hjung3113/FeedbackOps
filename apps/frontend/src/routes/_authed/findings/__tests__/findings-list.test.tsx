@@ -19,7 +19,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,10 +32,12 @@ vi.mock('@fops/ui', async () => {
     ...actual,
     ListShell: ({
       toolbar,
+      tabs,
       list,
       detailPanel,
     }: {
       toolbar?: { title: string; subtitle?: string; actions?: React.ReactNode };
+      tabs?: React.ReactNode;
       list: React.ReactNode;
       detailPanel?: React.ReactNode;
     }) => (
@@ -47,6 +49,7 @@ vi.mock('@fops/ui', async () => {
             <div>{toolbar.actions}</div>
           </header>
         )}
+        {tabs && <div data-testid="list-shell-tabs">{tabs}</div>}
         <main>{list}</main>
         <aside data-testid="list-shell-detail-slot">{detailPanel}</aside>
       </div>
@@ -126,6 +129,8 @@ const findings = [
     summary: '결제 실패 VOC가 반복됩니다.',
     source_type: 'voc_cluster' as const,
     source_id: '22222222-2222-2222-2222-222222222222',
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 3,
     severity: 'high' as const,
     confidence: 'medium' as const,
@@ -147,6 +152,8 @@ const findings = [
     summary: '배송 지연 문의가 증가했습니다.',
     source_type: 'manual' as const,
     source_id: null,
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 1,
     severity: 'medium' as const,
     confidence: null,
@@ -162,6 +169,30 @@ const findings = [
 ];
 
 const useFindingsListMock = vi.hoisted(() => vi.fn());
+const requestAccessFlowMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/features/admin/permissions/request-access-button', () => ({
+  RequestAccessButton: ({
+    capability,
+    managedSystemId,
+    returnRouteIntent,
+    renderTrigger,
+  }: {
+    capability: string;
+    managedSystemId?: string;
+    returnRouteIntent: string;
+    renderTrigger: (open: () => void) => React.ReactNode;
+  }) => (
+    <div
+      data-testid="request-access-flow"
+      data-capability={capability}
+      data-managed-system-id={managedSystemId}
+      data-return-route-intent={returnRouteIntent}
+    >
+      {renderTrigger(() => requestAccessFlowMock())}
+    </div>
+  ),
+}));
 
 vi.mock('@/features/findings/hooks/useFindingsList', () => ({
   useFindingsPages: (...args: unknown[]) => {
@@ -299,6 +330,61 @@ describe('FindingsListPage', () => {
     expect(screen.getByTestId('finding-row-FND-101')).toHaveAttribute('data-selected', 'true');
   });
 
+  it.each([
+    {
+      kind: 'requestable',
+      permission: {
+        permission: 'finding.read',
+        managed_system_id: '99999999-9999-9999-9999-999999999999',
+      },
+      state: 'request_access',
+    },
+    { kind: 'not requestable', permission: undefined, state: 'blocked_not_requestable' },
+  ] as const)(
+    'hides list controls and shows the recovery action when Findings access is $kind',
+    async ({ permission, state }) => {
+      useFindingsListMock.mockReturnValue({
+        data: undefined,
+        isPending: false,
+        isError: true,
+        isSuccess: false,
+        error: new ApiError(403, {
+          code: 'permission.denied',
+          message: 'finding.read required',
+          ...(permission !== undefined ? { requestable_permission: permission } : {}),
+        }),
+        refetch: vi.fn(),
+      });
+
+      await renderFindingsPage('/findings?q=결제&status=active&execution=none&assignment=assigned');
+
+      expect(await screen.findByTestId('permission-blocked')).toHaveAttribute('data-state', state);
+      expect(screen.queryByTestId('list-shell-tabs')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByText(/상태:/)).not.toBeInTheDocument();
+
+      if (permission !== undefined) {
+        const requestFlow = screen.getByTestId('request-access-flow');
+        expect(requestFlow).toHaveAttribute('data-capability', permission.permission);
+        expect(requestFlow).toHaveAttribute('data-return-route-intent', '/findings');
+        const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
+        expect(requestButton).toHaveClass('bg-surface-raised');
+        expect(requestButton).not.toHaveClass('bg-accent-primary');
+        fireEvent.click(requestButton);
+        expect(requestAccessFlowMock).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('link', { name: '내 VOC' })).not.toBeInTheDocument();
+      } else {
+        expect(screen.getByRole('link', { name: '내 VOC' })).toHaveAttribute(
+          'href',
+          '/vocs?view=my',
+        );
+      }
+    },
+  );
+
   it('redirects a direct Finding URL to the selected list panel and preserves returnTo', async () => {
     const findingId = '11111111-1111-1111-1111-111111111111';
     const returnTo = '/vocs?view=inbox&selected=22222222-2222-2222-2222-222222222222';
@@ -345,6 +431,18 @@ describe('FindingsListPage', () => {
   });
 
   it('renders severity, confidence, and owner enrichment in finding rows', async () => {
+    useFindingsListMock.mockReturnValue({
+      data: {
+        items: findings.map((finding, index) =>
+          index === 0 ? { ...finding, owner_actor_id: finding.created_by } : finding,
+        ),
+      },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      error: null,
+    });
     await renderFindingsPage();
 
     const richRow = screen.getByTestId('finding-row-FND-101');
@@ -385,6 +483,50 @@ describe('FindingsListPage', () => {
     expect(within(row).getByText('중간')).toBeInTheDocument();
   });
 
+  it('renders a team owner by its resolved name, falling back to the short id', async () => {
+    const originalFetch = globalThis.fetch;
+    const teamId = '50000000-0000-0000-0000-000000000005';
+    let resolveTeams: ((response: Response) => void) | undefined;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveTeams = resolve;
+        }),
+    );
+    try {
+      const row = await renderFindingRow({ owner_team_id: teamId });
+
+      // Unresolved (resolve query pending): short-id fallback.
+      expect(row).toHaveTextContent(`팀 · ${teamId.slice(0, 8)}`);
+
+      await act(async () => {
+        resolveTeams?.(
+          new Response(
+            JSON.stringify({
+              actors: [],
+              teams: [{ id: teamId, name: '[seed] VOC owner team' }],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      });
+
+      await waitFor(() => expect(row).toHaveTextContent('[seed] VOC owner team'));
+      expect(row).not.toHaveTextContent(`팀 · ${teamId.slice(0, 8)}`);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('gives the assignment filter a visible 담당자 label next to its value', async () => {
+    await renderFindingsPage();
+
+    const tabs = screen.getByTestId('list-shell-tabs');
+    const trigger = within(tabs).getByRole('combobox', { name: '담당자 필터' });
+    expect(within(trigger).getByText('담당자:')).toBeInTheDocument();
+    expect(within(trigger).getByText('전체')).toBeInTheDocument();
+  });
+
   it.each(findingConfidenceSchema.options)(
     'renders Finding confidence %s with its shared label',
     async (confidence) => {
@@ -409,7 +551,10 @@ describe('FindingsListPage', () => {
     });
     await renderFindingsPage();
 
-    expect(screen.getByTestId('permission-blocked')).toHaveAttribute('data-state', 'denied');
+    expect(screen.getByTestId('permission-blocked')).toHaveAttribute(
+      'data-state',
+      'blocked_not_requestable',
+    );
     expect(
       screen.getByText(
         'Finding 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',

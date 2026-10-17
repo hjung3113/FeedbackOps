@@ -1,20 +1,25 @@
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Button, DetailPanelSectionNav, DirtyConfirmation } from '@fops/ui';
 import type { PanelSection } from '@fops/ui';
-import type * as React from 'react';
+import * as React from 'react';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import type { MeResponse } from '@/lib/auth/useMe';
-import { SAME_MANAGED_SYSTEM_VOC_LABEL, VOC_DETAIL_BODY_LABEL } from '@/lib/copy/voc';
+import {
+  SAME_MANAGED_SYSTEM_VOC_LABEL,
+  VOC_DETAIL_BODY_LABEL,
+  VOC_FOLLOW_UP_COPY,
+} from '@/lib/copy/voc';
 import { ComposerSection } from './ComposerSection';
-import { ConversationTimeline } from './ConversationTimeline';
+import { type ConversationPostSignal, ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
 import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
-import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
+import { LinkedEntityTrailSection, hasVisibleFollowUp } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
+import { NoFollowUpSection } from './NoFollowUpSection';
 import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { SimilarVocSection } from './SimilarVocSection';
 import { TriageBlock } from './TriageBlock';
@@ -65,6 +70,7 @@ export function FullDetailView({
     actorNamesById,
     analyticsAreasById,
     canTriage,
+    noFollowUpScope,
     linkedTask,
     requestTaskIsPending,
     pendingReviewCount,
@@ -80,6 +86,9 @@ export function FullDetailView({
     handleSimilarVocSelect,
     handleOpenTriage,
     handleOpenTask,
+    handleOpenFinding,
+    handleOpenCluster,
+    handleOpenRequest,
   } = useVocDetailPanelController({
     voc,
     vocId,
@@ -87,6 +96,12 @@ export function FullDetailView({
     canRenderAllowedTask,
     me,
     ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+  });
+
+  // One sequence across all successful posts: the latest post selects its timeline tab.
+  const [postSignal, setPostSignal] = React.useState<ConversationPostSignal>({
+    tab: 'public',
+    seq: 0,
   });
 
   const detailSections = isReporterArm
@@ -136,33 +151,32 @@ export function FullDetailView({
           )}
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
-            {/* Relocated metadata strip — severity/managed-system/AA/source-context
-                chips moved out of the title block per .review/title-reference.png */}
-            <IdentityMetadataStrip
-              voc={voc}
-              analyticsAreaName={
-                voc.analytics_area_id != null
-                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
-                  : null
-              }
-            />
+            {/* Managed System and source context remain visible below the body. */}
+            <IdentityMetadataStrip voc={voc} />
           </div>
+          {!isReporterArm && (
+            <NoFollowUpSection
+              key={noFollowUpScope}
+              vocId={vocId}
+              state={voc.follow_up}
+              canTriage={canTriage}
+              actorNames={actorNamesById}
+            />
+          )}
           <div data-anchor="trail">
             <LinkedExecutionSection
               voc={voc}
+              isReporterContext={!canRenderAllowedTask}
               linkedTask={linkedTask}
-              hasReporterTaskSummary={
-                voc.links?.some(
-                  (link) =>
-                    link.visibility_state === 'summary_visible' &&
-                    (link.source_type === 'task' || link.target_type === 'task'),
-                ) ?? false
-              }
             />
             <LinkedEntityTrailSection
               links={voc.links ?? []}
+              trails={voc.linked_execution.trails}
+              onOpenCluster={handleOpenCluster}
+              onOpenRequest={handleOpenRequest}
               isReporterContext={!canRenderAllowedTask}
               onOpenTask={handleOpenTask}
+              onOpenFinding={handleOpenFinding}
             />
             {requestTaskOpen && (
               <TaskRequestDraftCard
@@ -186,7 +200,12 @@ export function FullDetailView({
             </div>
           )}
           <div data-anchor="conversation">
-            <ConversationTimeline voc={voc} canTriage={canTriage} actorNamesById={actorNamesById} />
+            <ConversationTimeline
+              voc={voc}
+              canTriage={canTriage}
+              actorNamesById={actorNamesById}
+              postSignal={postSignal}
+            />
           </div>
           <div data-anchor="compose">
             <ComposerSection
@@ -194,6 +213,9 @@ export function FullDetailView({
               me={me}
               canTriage={canTriage}
               onDirtyChange={setComposerDirty}
+              onConversationPosted={(tab) =>
+                setPostSignal((previous) => ({ tab, seq: previous.seq + 1 }))
+              }
             />
             {canCreateFinding && pendingReviewCount > 0 && (
               <div className="mt-2 flex justify-end">
@@ -218,15 +240,21 @@ export function FullDetailView({
           {...(canCreateFinding
             ? {
                 primaryAction: {
-                  label: 'Finding 생성',
-                  onClick: () => setCreateFindingOpen(true),
+                  label: hasVisibleFollowUp(voc, !canRenderAllowedTask)
+                    ? VOC_FOLLOW_UP_COPY.showExecution
+                    : VOC_FOLLOW_UP_COPY.createFinding,
+                  onClick: () => {
+                    if (hasVisibleFollowUp(voc, !canRenderAllowedTask)) {
+                      scrollRef.current?.querySelector('[data-anchor="trail"]')?.scrollIntoView();
+                    } else setCreateFindingOpen(true);
+                  },
                 },
               }
             : {})}
           {...(canRequestTask
             ? {
                 secondaryAction: {
-                  label: 'Task 요청',
+                  label: VOC_FOLLOW_UP_COPY.requestTask,
                   onClick: () => setRequestTaskOpen(true),
                   testId: 'voc-request-task-button',
                 },

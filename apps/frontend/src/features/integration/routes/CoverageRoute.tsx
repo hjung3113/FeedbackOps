@@ -1,3 +1,5 @@
+import { AREA_REPORT_COPY as AREA_COPY } from '@/lib/copy/area-report';
+import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
 import {
   DASHBOARD_HOP_ROUTES,
   type DashboardActionQueueId,
@@ -5,6 +7,7 @@ import {
   type DashboardSummary,
 } from '@fops/shared';
 import {
+  ActiveFilterBar,
   Button,
   Label,
   PageShell,
@@ -15,20 +18,30 @@ import {
   ProgressMeter,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
   SkeletonRows,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Activity, AlertTriangle, Filter, RefreshCw, Shield } from 'lucide-react';
 import * as React from 'react';
+import { AnalyticsAreaReportPanel } from '../components/AnalyticsAreaReportPanel';
+import { RecoveryFreshness } from '../recovery/RecoveryFreshness';
 
 import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
-import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { useMe } from '@/lib/auth/useMe';
+import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
+import { WORKSPACE_SETTINGS_COVERAGE_COPY } from '@/lib/copy/workspace-settings';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { InternalLink } from '@/lib/router/InternalLink';
 
 type ByManagedSystemRow = DashboardSummary['by_managed_system'][number];
@@ -38,6 +51,9 @@ type PerSystemCoverageCell = NonNullable<ByManagedSystemRow['coverage']>['voc-ta
 /** The route's own search contract (links.tsx keeps the same local shape). */
 interface CoverageSearch {
   managedSystem?: string;
+  view?: 'areas';
+  'filter.analytics_area'?: string;
+  cursor?: string;
 }
 
 // The prototype subtitle pitches editable thresholds (direction C, deferred);
@@ -86,24 +102,30 @@ function hopHref(
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
 
-// Absent key = em dash; a permitted empty result is present with zero.
+// Absent key = em dash; a permitted empty result is present with zero. A
+// total-zero cell is the neutral no-data state (ADR-0067 56-1/O2), not a red 0%.
 function coverageCellText(cell: PerSystemCoverageCell): string {
-  return cell === undefined ? '—' : `${cell.value} / ${cell.total} · ${cell.percent}%`;
+  if (cell === undefined) return '—';
+  return cell.status === 'no_data'
+    ? COVERAGE_NO_DATA_LABEL
+    : `${cell.value} / ${cell.total} · ${cell.percent}%`;
 }
 
 function queueCellText(count: number | undefined): string {
   return count === undefined ? '—' : String(count);
 }
 
-// The server's 75/40 good/warn/bad band maps directly to presentation.
-// No client-side thresholds (plan-513: direction C is out).
+// The server's 75/40 good/warn/bad bands map directly to presentation.
+// No client-side thresholds (plan-513: direction C is out). no_data keeps the
+// row neutral: an empty denominator is absence of work, not a failure color.
 const COVERAGE_STATUS_TONE: Record<
   DashboardSummary['coverage'][number]['status'],
-  { text: string; meter: 'success' | 'warning' | 'danger' }
+  { text: string; meter: 'success' | 'warning' | 'danger' | null }
 > = {
   good: { text: 'text-accent-success', meter: 'success' },
   warn: { text: 'text-accent-warn', meter: 'warning' },
   bad: { text: 'text-accent-danger', meter: 'danger' },
+  no_data: { text: 'text-text-muted', meter: null },
 };
 
 const SEVERITY_TONE: Record<
@@ -127,8 +149,24 @@ const SEVERITY_TONE: Record<
   },
 };
 
+const ZERO_QUEUE_TONE = {
+  icon: <Shield className="h-3.5 w-3.5" aria-hidden="true" />,
+  text: 'text-text-muted',
+  chip: 'bg-surface-canvas text-text-muted',
+} as const;
+
 export function CoverageRoute(): React.ReactElement {
   const search = useSearch({ strict: false }) as CoverageSearch;
+  const isAreas = search.view === 'areas';
+  const area = search['filter.analytics_area'];
+  const me = useMe();
+  // FE display hint only (ADR-0067 56-C): the settings route is server-gated by
+  // workspace.admin; the link shows only for an authorized Admin (ADR-0056
+  // capability-based Admin discovery) and stays hidden while the check is
+  // pending, failed, or denied.
+  const isAdmin = me.data?.actor.role_level === 'admin';
+  const workspaceAdminCheck = usePermissionCheck({ capability: 'workspace.admin' });
+  const canAccessWorkspaceAdmin = workspaceAdminCheck.data?.state === 'approved';
   // `from` is what types the search reducer (see LinksRoute: without it the
   // reducer gets the router-wide search union and stops assigning).
   const navigate = useNavigate({ from: '/integration/coverage' });
@@ -139,8 +177,32 @@ export function CoverageRoute(): React.ReactElement {
   const managedSystemId =
     managedSystem !== undefined && managedSystem !== 'all' ? managedSystem : undefined;
 
+  const areaLabel = useAnalyticsAreaFilterLabel(isAreas ? area : undefined, managedSystemId);
+  const scopedAreas = useQuery({
+    queryKey: ['coverage-area-options', managedSystemId],
+    enabled: isAreas && managedSystemId !== undefined,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const items: Awaited<ReturnType<typeof fetchAnalyticsAreas>>['items'] = [];
+      let offset = 0;
+      while (true) {
+        const page = await fetchAnalyticsAreas({
+          includeArchived: true,
+          limit: 500,
+          offset,
+          signal,
+          ...(managedSystemId ? { managedSystemId } : {}),
+        });
+        items.push(...page.items);
+        offset += page.items.length;
+        if (offset >= page.total || page.items.length === 0) return items;
+      }
+    },
+  });
+
   const summary = useQuery({
     queryKey: ['dashboard-summary', managedSystemId] as const,
+    enabled: !isAreas,
     queryFn: ({ signal }) =>
       fetchDashboardSummary({
         signal,
@@ -155,6 +217,7 @@ export function CoverageRoute(): React.ReactElement {
   });
   const areasQuery = useQuery({
     queryKey: ['analytics-areas', { includeArchived: true }] as const,
+    enabled: !isAreas,
     queryFn: ({ signal }) => fetchAnalyticsAreas({ includeArchived: true, signal }),
     staleTime: 10 * 60 * 1000,
   });
@@ -175,7 +238,9 @@ export function CoverageRoute(): React.ReactElement {
     void navigate({
       to: '/integration/coverage',
       search: (previous) => {
-        const { managedSystem: _dropped, ...rest } = previous;
+        const { managedSystem: _dropped, cursor: _cursor, ...remaining } = previous;
+        const { 'filter.analytics_area': previousArea, ...withoutArea } = remaining;
+        const rest = value !== 'all' && previousArea !== 'unset' ? withoutArea : remaining;
         // Defaults are omitted from the URL (routes-and-layout.md); the schema
         // still accepts an explicit all for deep links.
         return value === 'all' ? rest : { ...rest, managedSystem: value };
@@ -183,7 +248,36 @@ export function CoverageRoute(): React.ReactElement {
     });
   }
 
+  function handleAreaChange(value: string): void {
+    void navigate({
+      search: (previous) => {
+        const { 'filter.analytics_area': _area, cursor: _cursor, ...rest } = previous;
+        return value === 'all' ? rest : { ...rest, 'filter.analytics_area': value };
+      },
+    });
+  }
+  function handlePage(cursor: string | undefined): void {
+    void navigate({
+      search: (previous) => {
+        const { cursor: _cursor, ...rest } = previous;
+        return cursor ? { ...rest, cursor } : rest;
+      },
+    });
+  }
+  function handleTab(view: string): void {
+    void navigate({
+      search: (previous) => {
+        if (view === 'areas') return { ...previous, view: 'areas' };
+        const { view: _view, 'filter.analytics_area': _area, cursor: _cursor, ...rest } = previous;
+        return rest;
+      },
+    });
+  }
+
   const refresh = (): void => {
+    void queryClient.invalidateQueries({
+      queryKey: ['dashboard-area-report', me.data?.workspace_id, me.data?.actor.id],
+    });
     void queryClient.invalidateQueries({ queryKey: ['dashboard-summary', managedSystemId] });
   };
 
@@ -209,6 +303,13 @@ export function CoverageRoute(): React.ReactElement {
             <p className="mt-3 text-sm text-text-muted">{PARTIAL_COVERAGE_SUBTITLE}</p>
           </div>
           <div className="flex shrink-0 gap-2">
+            {isAdmin && canAccessWorkspaceAdmin && (
+              <Button asChild variant="subtle" size="sm">
+                <InternalLink href="/admin/settings#coverage" data-testid="coverage-settings-link">
+                  {WORKSPACE_SETTINGS_COVERAGE_COPY.editBands}
+                </InternalLink>
+              </Button>
+            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="subtle" size="sm" data-testid="coverage-filter-button">
@@ -236,6 +337,28 @@ export function CoverageRoute(): React.ReactElement {
                     </SelectContent>
                   </Select>
                 </div>
+                {isAreas && managedSystemId && (
+                  <div className="mt-3 flex flex-col gap-1.5">
+                    <Label htmlFor="coverage-filter-area">Analytics Area</Label>
+                    <Select value={area ?? 'all'} onValueChange={handleAreaChange}>
+                      <SelectTrigger id="coverage-filter-area">
+                        <SelectValue placeholder={AREA_COPY.allAreas} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all">{AREA_COPY.allAreas}</SelectItem>
+                          <SelectItem value="unset">{AREA_COPY.unset}</SelectItem>
+                          {(scopedAreas.data ?? []).map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.name}
+                              {item.archived_at ? ` · ${AREA_COPY.archived}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
             <Button variant="subtle" size="sm" onClick={refresh} data-testid="coverage-refresh">
@@ -244,231 +367,272 @@ export function CoverageRoute(): React.ReactElement {
             </Button>
           </div>
         </header>
-        {summary.isError && (
-          <p className="mb-5 text-sm text-accent-danger">커버리지 요약을 불러올 수 없습니다.</p>
-        )}
+        <Tabs value={isAreas ? 'areas' : 'overview'} onValueChange={handleTab}>
+          <TabsList>
+            <TabsTrigger value="overview">{AREA_COPY.overview}</TabsTrigger>
+            <TabsTrigger value="areas">{AREA_COPY.tab}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="areas">
+            {isAreas && (
+              <>
+                <ActiveFilterBar
+                  items={
+                    area
+                      ? [{ key: 'area', label: areaLabel, onRemove: () => handleAreaChange('all') }]
+                      : []
+                  }
+                  onClearAll={() => handleAreaChange('all')}
+                />
+                <AnalyticsAreaReportPanel
+                  managedSystemId={managedSystemId}
+                  area={area}
+                  cursor={search.cursor}
+                  onPage={handlePage}
+                />
+              </>
+            )}
+          </TabsContent>
+          <TabsContent value="overview">
+            <RecoveryFreshness
+              computedAt={summary.data?.computed_at}
+              failed={summary.isError}
+              updatedAt={summary.dataUpdatedAt}
+            />
+            {summary.isError && (
+              <p className="mb-5 text-sm text-accent-danger">커버리지 요약을 불러올 수 없습니다.</p>
+            )}
 
-        {summary.isPending ? (
-          <div className="space-y-2 p-4" data-testid="coverage-pending">
-            <SkeletonRows count={4} size="compact" />
-          </div>
-        ) : summary.data === undefined ? null : isEmptySummary ? (
-          <div
-            className="rounded-md border border-border-subtle bg-surface-card p-8 text-center"
-            data-testid="coverage-empty"
-          >
-            <p className="text-sm font-medium text-text-primary">표시할 커버리지가 없습니다</p>
-            <p className="mt-2 text-sm text-text-muted">
-              이 범위에 대한 커버리지 또는 연결 없음 항목이 대시보드에 없습니다. 받을 수 없는 항목은
-              생략됩니다 — 0과 같지 않습니다.
-            </p>
-          </div>
-        ) : (
-          <>
-            <PanelSectionTitle>커버리지 신호</PanelSectionTitle>
-            <div
-              className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
-              data-testid="coverage-signals"
-            >
-              {(summary.data?.coverage ?? []).map((item) => {
-                const href = hopHref(hopRoute(item.id), item.id, managedSystem);
-                const tone = COVERAGE_STATUS_TONE[item.status];
-                const CoverageRowLink: React.ElementType = href === undefined ? 'a' : InternalLink;
-                return (
-                  <CoverageRowLink
-                    key={item.id}
-                    {...(href !== undefined ? { href } : {})}
-                    data-testid={`coverage-row-${item.id}`}
-                    className={`grid grid-cols-(--coverage-row-columns) items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
-                    style={
-                      {
-                        '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 56px',
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-text-primary">
-                        {COVERAGE_METRIC_LABELS[item.id]}
-                      </div>
-                    </div>
-                    <div className="text-right text-xs tabular-nums text-text-muted">
-                      {item.value} / {item.total}
-                    </div>
-                    <ProgressMeter
-                      data-testid={`coverage-bar-fill-${item.id}`}
-                      value={item.percent}
-                      tone={tone.meter}
-                      className="w-full"
-                      trackTone="row-selected"
-                    />
-                    <div
-                      data-testid={`coverage-percent-${item.id}`}
-                      className={`text-right text-sm font-semibold tabular-nums ${tone.text}`}
-                    >
-                      {item.percent}%
-                    </div>
-                  </CoverageRowLink>
-                );
-              })}
-            </div>
-
-            <PanelSectionTitle>연결 없음 항목</PanelSectionTitle>
-            <div
-              className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
-              data-testid="coverage-queues"
-            >
-              {(summary.data?.action_queues ?? []).map((queue) => {
-                const tone = SEVERITY_TONE[queue.severity];
-                const href = hopHref(hopRoute(queue.id), queue.id, managedSystem);
-                const CoverageQueueLink: React.ElementType =
-                  href === undefined ? 'a' : InternalLink;
-                return (
-                  <CoverageQueueLink
-                    key={queue.id}
-                    {...(href !== undefined ? { href } : {})}
-                    data-testid={`coverage-queue-row-${queue.id}`}
-                    className="flex items-center gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0 hover:bg-surface-row-hover"
-                  >
-                    <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${tone.chip}`}
-                    >
-                      {tone.icon}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-text-primary">
-                        {HOME_QUEUE_COPY[queue.id].title}
-                      </div>
-                      <div className="truncate text-xs text-text-muted">
-                        {HOME_QUEUE_COPY[queue.id].detail}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className={`text-lg font-semibold tabular-nums ${tone.text}`}>
-                        {queue.count}
-                      </div>
-                      <div className="text-xs text-text-muted">건</div>
-                    </div>
-                  </CoverageQueueLink>
-                );
-              })}
-            </div>
-
-            <PanelSectionTitle>Managed System별 커버리지</PanelSectionTitle>
-            <div
-              className="overflow-x-auto rounded-md border border-border-subtle bg-surface-card"
-              data-testid="coverage-by-system"
-            >
-              <table
-                className="w-full border-collapse text-left text-xs"
-                data-testid="coverage-table"
+            {summary.isPending ? (
+              <div className="space-y-2 p-4" data-testid="coverage-pending">
+                <SkeletonRows count={4} size="compact" />
+              </div>
+            ) : summary.data === undefined ? null : isEmptySummary ? (
+              <div
+                className="rounded-md border border-border-subtle bg-surface-card p-8 text-center"
+                data-testid="coverage-empty"
               >
-                <thead>
-                  <tr className="border-b border-border-subtle text-caption uppercase tracking-wide text-text-muted">
-                    <th scope="col" className="px-4 py-2 font-medium">
-                      Managed System
-                    </th>
-                    {COVERAGE_COLUMNS.map((id) => (
-                      <th
-                        key={id}
-                        scope="col"
-                        data-testid={`coverage-col-${id}`}
-                        className="px-3 py-2 text-right font-medium"
-                      >
-                        {COVERAGE_METRIC_LABELS[id]}
-                      </th>
-                    ))}
-                    {QUEUE_COLUMNS.map((id) => (
-                      <th
-                        key={id}
-                        scope="col"
-                        data-testid={`coverage-queue-col-${id}`}
-                        className="px-3 py-2 text-right font-medium"
-                      >
-                        {HOME_QUEUE_COPY[id].sidebarLabel}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(summary.data?.by_managed_system ?? []).flatMap((row) => {
-                    const systemRow = (
-                      <tr
-                        key={row.managed_system_id}
-                        data-testid={`coverage-system-row-${row.managed_system_id}`}
-                        className="border-b border-border-subtle last:border-b-0"
-                      >
-                        <td className="px-4 py-2.5 text-sm font-medium text-text-primary">
-                          {systemName(row.managed_system_id)}
-                        </td>
-                        {COVERAGE_COLUMNS.map((id) => (
-                          <td
-                            key={id}
-                            data-testid={`coverage-cell-${row.managed_system_id}-${id}`}
-                            className="px-3 py-2.5 text-right tabular-nums text-text-secondary"
+                <p className="text-sm font-medium text-text-primary">표시할 커버리지가 없습니다</p>
+                <p className="mt-2 text-sm text-text-muted">
+                  이 범위에 대한 커버리지 또는 연결 없음 항목이 대시보드에 없습니다. 받을 수 없는
+                  항목은 생략됩니다 — 0과 같지 않습니다.
+                </p>
+              </div>
+            ) : (
+              <>
+                <PanelSectionTitle>커버리지 신호</PanelSectionTitle>
+                <div
+                  className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
+                  data-testid="coverage-signals"
+                >
+                  {/* #1087 UX: no-data rows need no action, so they sort after rows
+              with a denominator; ties keep the server order (stable sort). */}
+                  {[...(summary.data?.coverage ?? [])]
+                    .sort((a, b) => Number(a.status === 'no_data') - Number(b.status === 'no_data'))
+                    .map((item) => {
+                      const href = hopHref(hopRoute(item.id), item.id, managedSystem);
+                      const tone = COVERAGE_STATUS_TONE[item.status];
+                      const CoverageRowLink: React.ElementType =
+                        href === undefined ? 'a' : InternalLink;
+                      return (
+                        <CoverageRowLink
+                          key={item.id}
+                          {...(href !== undefined ? { href } : {})}
+                          data-testid={`coverage-row-${item.id}`}
+                          className={`grid grid-cols-(--coverage-row-columns) items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
+                          style={
+                            {
+                              '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 88px',
+                            } as React.CSSProperties
+                          }
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-text-primary">
+                              {COVERAGE_METRIC_LABELS[item.id]}
+                            </div>
+                          </div>
+                          <div className="text-right text-xs tabular-nums text-text-muted">
+                            {item.value} / {item.total}
+                          </div>
+                          <ProgressMeter
+                            data-testid={`coverage-bar-fill-${item.id}`}
+                            value={item.percent}
+                            {...(tone.meter !== null ? { tone: tone.meter } : {})}
+                            className="w-full"
+                            trackTone="row-selected"
+                          />
+                          <div
+                            data-testid={`coverage-percent-${item.id}`}
+                            className={`whitespace-nowrap text-right text-sm font-semibold tabular-nums ${tone.text}`}
                           >
-                            {coverageCellText(row.coverage?.[id])}
-                          </td>
+                            {item.status === 'no_data'
+                              ? COVERAGE_NO_DATA_LABEL
+                              : `${item.percent}%`}
+                          </div>
+                        </CoverageRowLink>
+                      );
+                    })}
+                </div>
+
+                <PanelSectionTitle>연결 없음 항목</PanelSectionTitle>
+                <div
+                  className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
+                  data-testid="coverage-queues"
+                >
+                  {(summary.data?.action_queues ?? []).map((queue) => {
+                    const tone =
+                      queue.count === 0 ? ZERO_QUEUE_TONE : SEVERITY_TONE[queue.severity];
+                    const href = hopHref(hopRoute(queue.id), queue.id, managedSystem);
+                    const CoverageQueueLink: React.ElementType =
+                      href === undefined ? 'a' : InternalLink;
+                    return (
+                      <CoverageQueueLink
+                        key={queue.id}
+                        {...(href !== undefined ? { href } : {})}
+                        data-testid={`coverage-queue-row-${queue.id}`}
+                        className="flex items-center gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0 hover:bg-surface-row-hover"
+                      >
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${tone.chip}`}
+                        >
+                          {tone.icon}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {HOME_QUEUE_COPY[queue.id].title}
+                          </div>
+                          <div className="truncate text-xs text-text-muted">
+                            {HOME_QUEUE_COPY[queue.id].detail}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className={`text-lg font-semibold tabular-nums ${tone.text}`}>
+                            {queue.count}
+                          </div>
+                          <div className="text-xs text-text-muted">건</div>
+                        </div>
+                      </CoverageQueueLink>
+                    );
+                  })}
+                </div>
+
+                <PanelSectionTitle>Managed System별 커버리지</PanelSectionTitle>
+                <div
+                  className="overflow-x-auto rounded-md border border-border-subtle bg-surface-card"
+                  data-testid="coverage-by-system"
+                >
+                  <table
+                    className="w-full border-collapse text-left text-xs"
+                    data-testid="coverage-table"
+                  >
+                    <thead>
+                      <tr className="border-b border-border-subtle text-caption uppercase tracking-wide text-text-muted">
+                        <th scope="col" className="px-4 py-2 font-medium">
+                          Managed System
+                        </th>
+                        {COVERAGE_COLUMNS.map((id) => (
+                          <th
+                            key={id}
+                            scope="col"
+                            data-testid={`coverage-col-${id}`}
+                            className="px-3 py-2 text-right font-medium"
+                          >
+                            {COVERAGE_METRIC_LABELS[id]}
+                          </th>
                         ))}
                         {QUEUE_COLUMNS.map((id) => (
-                          <td
+                          <th
                             key={id}
-                            data-testid={`coverage-queue-cell-${row.managed_system_id}-${id}`}
-                            className="px-3 py-2.5 text-right tabular-nums text-text-secondary"
+                            scope="col"
+                            data-testid={`coverage-queue-col-${id}`}
+                            className="px-3 py-2 text-right font-medium"
                           >
-                            {queueCellText(row.action_queues?.[id])}
-                          </td>
+                            {HOME_QUEUE_COPY[id].sidebarLabel}
+                          </th>
                         ))}
                       </tr>
-                    );
-                    const areaRows = (row.analytics_areas ?? []).map(
-                      (area: ManagedSystemCoverageArea) => (
-                        <tr
-                          key={area.analytics_area_id}
-                          data-testid={`coverage-area-row-${area.analytics_area_id}`}
-                          className="border-b border-border-subtle bg-surface-canvas/60 text-text-muted last:border-b-0"
-                        >
-                          <td
-                            data-testid={`coverage-area-name-${area.analytics_area_id}`}
-                            className="pl-8 pr-3 py-2 text-sm text-text-secondary"
+                    </thead>
+                    <tbody>
+                      {(summary.data?.by_managed_system ?? []).flatMap((row) => {
+                        const systemRow = (
+                          <tr
+                            key={row.managed_system_id}
+                            data-testid={`coverage-system-row-${row.managed_system_id}`}
+                            className="border-b border-border-subtle last:border-b-0"
                           >
-                            ↳{' '}
-                            {areasById[area.analytics_area_id] ??
-                              area.analytics_area_id.slice(0, 8)}
-                          </td>
-                          {COVERAGE_COLUMNS.map((id) => (
-                            <td
-                              key={id}
-                              data-testid={`coverage-cell-${area.analytics_area_id}-${id}`}
-                              className="px-3 py-2 text-right tabular-nums"
-                            >
-                              {coverageCellText(
-                                area.coverage?.[id as 'voc-task' | 'high-followup'],
-                              )}
+                            <td className="px-4 py-2.5 text-sm font-medium text-text-primary">
+                              {systemName(row.managed_system_id)}
                             </td>
-                          ))}
-                          {QUEUE_COLUMNS.map((id) => (
-                            <td
-                              key={id}
-                              data-testid={`coverage-queue-cell-${area.analytics_area_id}-${id}`}
-                              className="px-3 py-2 text-right tabular-nums"
+                            {COVERAGE_COLUMNS.map((id) => (
+                              <td
+                                key={id}
+                                data-testid={`coverage-cell-${row.managed_system_id}-${id}`}
+                                className="break-keep px-3 py-2.5 text-right tabular-nums text-text-secondary"
+                              >
+                                {coverageCellText(row.coverage?.[id])}
+                              </td>
+                            ))}
+                            {QUEUE_COLUMNS.map((id) => (
+                              <td
+                                key={id}
+                                data-testid={`coverage-queue-cell-${row.managed_system_id}-${id}`}
+                                className="px-3 py-2.5 text-right tabular-nums text-text-secondary"
+                              >
+                                {queueCellText(row.action_queues?.[id])}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                        const areaRows = (row.analytics_areas ?? []).map(
+                          (area: ManagedSystemCoverageArea) => (
+                            <tr
+                              key={area.analytics_area_id}
+                              data-testid={`coverage-area-row-${area.analytics_area_id}`}
+                              className="border-b border-border-subtle bg-surface-canvas/60 text-text-muted last:border-b-0"
                             >
-                              {queueCellText(
-                                area.action_queues?.[
-                                  id as 'unassigned-voc' | 'high-severity-unlinked'
-                                ],
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      ),
-                    );
-                    return [systemRow, ...areaRows];
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                              <td
+                                data-testid={`coverage-area-name-${area.analytics_area_id}`}
+                                className="pl-8 pr-3 py-2 text-sm text-text-secondary"
+                              >
+                                ↳{' '}
+                                {areasById[area.analytics_area_id] ??
+                                  area.analytics_area_id.slice(0, 8)}
+                              </td>
+                              {COVERAGE_COLUMNS.map((id) => (
+                                <td
+                                  key={id}
+                                  data-testid={`coverage-cell-${area.analytics_area_id}-${id}`}
+                                  className="break-keep px-3 py-2 text-right tabular-nums"
+                                >
+                                  {coverageCellText(
+                                    area.coverage?.[id as 'voc-task' | 'high-followup'],
+                                  )}
+                                </td>
+                              ))}
+                              {QUEUE_COLUMNS.map((id) => (
+                                <td
+                                  key={id}
+                                  data-testid={`coverage-queue-cell-${area.analytics_area_id}-${id}`}
+                                  className="px-3 py-2 text-right tabular-nums"
+                                >
+                                  {queueCellText(
+                                    area.action_queues?.[
+                                      id as 'unassigned-voc' | 'high-severity-unlinked'
+                                    ],
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ),
+                        );
+                        return [systemRow, ...areaRows];
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </section>
     </PageShell>
   );

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Slice 8 exit criteria: the Survey Response boundary is a route-level
 // contract.  Existing focused suites cover each command; this suite pins their
 // union so a future route or registry addition cannot reintroduce VOC creation.
@@ -89,7 +90,7 @@ describe.skipIf(!runIntegration)(
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(
-        'delete from finding.evidence_highlights where finding_id in (' + findings + ')',
+        `delete from finding.evidence_highlights where finding_id in (${findings})`,
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(`delete from finding.findings where id in (${findings})`, [
@@ -132,10 +133,15 @@ describe.skipIf(!runIntegration)(
         'delete from core.actors where workspace_id=$1 and external_id like $2',
         [WORKSPACE_ID, `${SLUG}-%`],
       );
-      await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
-        WORKSPACE_ID,
-        `${SLUG}%`,
-      ]);
+      await migrateHandle.pool.query(
+        `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
+        [WORKSPACE_ID, `${SLUG}%`],
+      );
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        `delete from core.managed_systems where id in (${systems})`,
+        [WORKSPACE_ID, `${SLUG}%`],
+      );
       await migrateHandle.pool.query("delete from core.rate_limits where key like $1 || '%'", [
         WORKSPACE_ID,
       ]);

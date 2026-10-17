@@ -1,5 +1,6 @@
 import type { SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 
 export type SurveyResponseEvidenceSubject = {
@@ -154,29 +155,15 @@ export async function readApprovedResultExcerptsPersonal(
   return result.rows;
 }
 
-export async function listDerivedFindingsForResponses(
+export async function listDerivedFindingsForSurvey(
   tx: Tx,
   workspaceId: string,
-  responseIds: string[],
+  surveyId: string,
+  includeUnapproved: boolean,
 ): Promise<Array<{ finding_id: string; primary_managed_system_id: string }>> {
-  if (responseIds.length === 0) return [];
-  const ids = sql`ARRAY[${sql.join(
-    responseIds.map((id) => sql`${id}`),
-    sql`, `,
-  )}]::uuid[]`;
   const result = await tx.execute<{ finding_id: string; primary_managed_system_id: string }>(sql`
-    select distinct f.id as finding_id, f.primary_managed_system_id
-      from core.entity_links el
-      join finding.findings f
-        on f.id = el.target_id
-       and f.workspace_id = el.workspace_id
-     where el.workspace_id = ${workspaceId}
-       and el.source_type = 'survey_response'
-       and el.target_type = 'finding'
-       and el.relation_type = 'generated_finding'
-       and el.status = 'active'
-       and el.source_id = any(${ids})
-     order by f.id
+    SELECT * FROM survey.read_derived_findings(
+      ${workspaceId}::uuid, ${surveyId}::uuid, ${includeUnapproved}::boolean)
   `);
   return result.rows;
 }
@@ -244,4 +231,106 @@ export async function hasActiveApprovedResponseExcerpt(
   // a returned row exists only while the approval is active.
   const rows = await readApprovedResponseExcerpts(tx, workspaceId, responseId, [approvedExcerptId]);
   return rows.length > 0;
+}
+
+export async function bindFindingResponse(
+  tx: Tx,
+  workspaceId: string,
+  findingId: string,
+  responseId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select survey.bind_finding_response(${workspaceId}, ${findingId}, ${responseId})`,
+  );
+}
+
+export async function bindHighlightResponse(
+  tx: Tx,
+  workspaceId: string,
+  highlightId: string,
+  responseId: string,
+  approvalId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select survey.bind_highlight_response(${workspaceId}, ${highlightId}, ${responseId}, ${approvalId})`,
+  );
+}
+
+export type FindingHighlightEvidence = {
+  highlight_id: string;
+  primary_managed_system_id: string;
+  survey_type: SurveyType;
+  survey_display_id: string;
+  identity_protected: boolean;
+  question_label: string;
+  approved_excerpt_snapshot: string;
+};
+
+export async function readFindingHighlightEvidence(
+  tx: Tx,
+  workspaceId: string,
+  findingId: string,
+  highlightIds: string[],
+): Promise<FindingHighlightEvidence[]> {
+  if (highlightIds.length === 0) return [];
+  const result = await tx.execute<FindingHighlightEvidence>(sql`
+    select * from survey.read_finding_highlight_evidence(
+      ${workspaceId}, ${findingId}, ${sqlUuidArray(highlightIds)})
+  `);
+  return result.rows;
+}
+
+/** Bounded cross-Finding reader; locks the entire batch's responses in UUID order. */
+export async function readInventoryHighlightEvidence(
+  tx: Tx,
+  workspaceId: string,
+  highlightIds: string[],
+): Promise<FindingHighlightEvidence[]> {
+  if (highlightIds.length === 0) return [];
+  const result = await tx.execute<FindingHighlightEvidence>(sql`
+    select * from survey.read_inventory_highlight_evidence(
+      ${workspaceId}, ${sqlUuidArray(highlightIds)})
+  `);
+  return result.rows;
+}
+
+/** Safe approval columns only; eligibility is applied before the bounded page. */
+export async function readEvidenceCandidatePage(
+  tx: Tx,
+  workspaceId: string,
+  surveyId: string,
+  questionIds: string[],
+  after: string | null,
+  limit: number,
+): Promise<
+  Array<{ approved_excerpt_id: string; redacted_excerpt: string; question_label: string }>
+> {
+  if (questionIds.length === 0) return [];
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    redacted_excerpt: string;
+    question_label: string;
+  }>(sql`
+    SELECT a.id AS approved_excerpt_id, a.redacted_excerpt, q.prompt AS question_label
+    FROM survey.survey_response_excerpt_approvals a
+    JOIN survey.survey_questions q ON q.workspace_id=a.workspace_id AND q.survey_id=a.survey_id
+      AND q.id=a.question_id AND q.kind='text'
+    WHERE a.workspace_id=${workspaceId}::uuid AND a.survey_id=${surveyId}::uuid
+      AND a.revoked_at IS NULL AND a.question_id=ANY(${sqlUuidArray(questionIds)})
+      AND (${after}::uuid IS NULL OR a.id>${after}::uuid)
+    ORDER BY a.id LIMIT ${limit}
+  `);
+  return result.rows;
+}
+
+/** Internal selection resolution; no response UUID is serialized to the caller. */
+export async function lockAttachmentResponse(
+  tx: Tx,
+  workspaceId: string,
+  approvalId: string,
+): Promise<string | null> {
+  const result = await tx.execute<{ response_id: string }>(sql`
+    SELECT response_id FROM survey.lock_attachment_response(${workspaceId}::uuid, ${approvalId}::uuid)
+  `);
+  return result.rows[0]?.response_id ?? null;
 }

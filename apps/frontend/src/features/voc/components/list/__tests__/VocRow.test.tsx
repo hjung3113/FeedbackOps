@@ -1,4 +1,4 @@
-import type { VocListItem } from '@fops/shared';
+import { type VocListItem, vocListItemSchema } from '@fops/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VocRow } from '../VocRow';
@@ -164,23 +164,6 @@ describe('<VocRow>', () => {
     expect(screen.queryByText('Analytics Area 없음')).not.toBeInTheDocument();
   });
 
-  it('shows a checkbox and toggling it calls onToggleCheck without onSelect', () => {
-    const onToggleCheck = vi.fn();
-    render(
-      <VocRow
-        voc={BASE_VOC}
-        selected={false}
-        onSelect={onSelect}
-        managedSystem={null}
-        onToggleCheck={onToggleCheck}
-      />,
-    );
-    const checkbox = screen.getByLabelText('VOC-001 선택');
-    fireEvent.click(checkbox);
-    expect(onToggleCheck).toHaveBeenCalledTimes(1);
-    expect(onSelect).not.toHaveBeenCalled();
-  });
-
   it('calls onSelect on click', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
     fireEvent.click(screen.getByRole('row'));
@@ -299,15 +282,14 @@ describe('<VocRow>', () => {
     expect(screen.getByRole('row').className).toContain('opacity-60');
   });
 
-  it('renders dimmed SeverityIndicator when severity is null', () => {
+  it('omits the standalone severity glyph when severity is null and keeps the neutral stripe', () => {
     const vocNoSeverity: VocListItem = { ...BASE_VOC, severity: null };
     const { container } = render(
       <VocRow voc={vocNoSeverity} selected={false} onSelect={onSelect} managedSystem={null} />,
     );
-    // SeverityIndicator renders with data-severity attribute
-    const indicator = container.querySelector('[data-severity]');
-    expect(indicator).not.toBeNull();
-    expect(indicator?.getAttribute('data-severity')).toBe('low');
+    expect(container.querySelector('[data-severity]')).toBeNull();
+    expect(screen.queryByLabelText('심각도 미지정')).not.toBeInTheDocument();
+    expect(screen.getByTestId('voc-row-left-bar')).toHaveClass('bg-border-strong');
   });
 
   it('renders relative time in trailing area', () => {
@@ -316,4 +298,33 @@ describe('<VocRow>', () => {
     const rowEl = screen.getByRole('row');
     expect(rowEl.textContent).toMatch(/분|시간|일/);
   });
+});
+
+it('hides absent severity after parsing the reporter wire row', () => {
+  const { severity: _hidden, ...wire } = BASE_VOC;
+  const voc = vocListItemSchema.parse({
+    ...wire,
+    primary_managed_system_id: BASE_VOC.id,
+    reporter_id: BASE_VOC.id,
+  });
+  const { container } = render(<VocRow voc={voc} selected={false} onSelect={vi.fn()} />);
+  expect(container.querySelector('[data-severity]')).toBeNull();
+  expect(screen.queryByText('높음')).not.toBeInTheDocument();
+  expect(screen.getByTestId('voc-row-left-bar')).toHaveClass('bg-border-strong');
+});
+
+it('announces a triaged medium row once in Korean', () => {
+  const voc = vocListItemSchema.parse({
+    ...BASE_VOC,
+    primary_managed_system_id: BASE_VOC.id,
+    reporter_id: BASE_VOC.id,
+    severity: 'medium',
+    triage_state: 'triaged',
+  });
+  const { container } = render(<VocRow voc={voc} selected={false} onSelect={vi.fn()} />);
+  expect(screen.getAllByRole('img', { name: '심각도 중간' })).toHaveLength(1);
+  const indicators = container.querySelectorAll('[data-severity]');
+  expect(
+    Array.from(indicators).filter((el) => el.getAttribute('aria-hidden') !== 'true'),
+  ).toHaveLength(0);
 });

@@ -13,7 +13,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
-import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertMsDirectly, insertTeamDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { randomUUID, uid } from '../../../test-support/ids.js';
 import {
@@ -43,6 +43,7 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
   let msBId: string;
   let requestAId: string;
   let requestBId: string;
+  const teamIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -125,7 +126,13 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
            or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
+    await migrateHandle.pool.query(
+      'delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+    await migrateHandle.pool.query('delete from core.teams where id = any($1::uuid[])', [teamIds]);
+    teamIds.length = 0;
   }
 
   async function seedFixtures(): Promise<void> {
@@ -192,6 +199,97 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
   function ids(body: { items: Array<{ id: string }> }): string[] {
     return body.items.map((item) => item.id);
   }
+
+  it('filters assigned Actor/team before paging and keeps operational status totals scope-wide', async () => {
+    const teamId = await insertTeamDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+    teamIds.push(teamId);
+    await migrateHandle.pool.query(
+      'update task_request.task_requests set assigned_reviewer_actor_id = $1 where id = $2',
+      [adminActorId, requestAId],
+    );
+    await migrateHandle.pool.query(
+      'update task_request.task_requests set assigned_reviewer_actor_id = $1 where id = $2',
+      [userActorId, requestBId],
+    );
+    const teamRequest = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc',
+      sourceId: vocId,
+      primaryManagedSystemId: msAId,
+      requesterActorId: userActorId,
+    });
+    await migrateHandle.pool.query(
+      'update task_request.task_requests set assigned_reviewer_team_id = $1 where id = $2',
+      [teamId, teamRequest.id],
+    );
+    await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc',
+      sourceId: vocId,
+      primaryManagedSystemId: msAId,
+      requesterActorId: userActorId,
+    });
+    const read = (filter: string) =>
+      app.inject({
+        method: 'GET',
+        url: `/task-requests?limit=1&${filter}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+    const mine = await read('reviewer=me');
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json().items.map((row: { id: string }) => row.id)).toEqual([requestAId]);
+    expect(mine.json().page).toMatchObject({
+      total: 1,
+      has_more: false,
+      status_counts: { pending_review: 4 },
+    });
+    expect(
+      (await read(`reviewer=${userActorId}`)).json().items.map((row: { id: string }) => row.id),
+    ).toEqual([requestBId]);
+    expect(
+      (await read(`reviewer_team_id=${teamId}`)).json().items.map((row: { id: string }) => row.id),
+    ).toEqual([teamRequest.id]);
+  });
+
+  it('edits assigned reviewer atomically without changing actual review or granting authority', async () => {
+    const key = randomUUID();
+    const body = { assigned_reviewer_actor_id: adminActorId, assigned_reviewer_team_id: null };
+    const send = () =>
+      app.inject({
+        method: 'POST',
+        url: `/task-requests/${requestAId}/reviewer`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`, 'Idempotency-Key': key },
+        payload: body,
+      });
+    const first = await send();
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      ...body,
+      reviewer_actor_id: null,
+      status: 'pending_review',
+    });
+    expect((await send()).json()).toEqual(first.json());
+    const audit = await migrateHandle.pool.query(
+      "select detail from core.audit_log where subject_id = $1 and event_type = 'task_request_reviewer_assigned'",
+      [requestAId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]?.detail).toMatchObject({ to_actor_id: adminActorId, to_team_id: null });
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/task-requests/${requestAId}/reviewer`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`, 'Idempotency-Key': randomUUID() },
+      payload: { ...body, assigned_reviewer_actor_id: userActorId },
+    });
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json().code).toBe('validation.failed');
+    const row = await app.inject({
+      method: 'GET',
+      url: `/task-requests/${requestAId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(row.json()).toMatchObject(body);
+  });
 
   it('AC-981: walks opt-in pages in full-list order with exact first-page total', async () => {
     const headers = { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` };

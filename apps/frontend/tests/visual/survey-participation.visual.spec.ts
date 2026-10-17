@@ -34,7 +34,7 @@ test.describe('Survey participation visual harness', () => {
     const form = page.getByTestId('survey-respondent-form');
     await expect(form).toBeVisible();
     await expect(
-      form.getByRole('radiogroup', { name: /리포트 사용 빈도를 평가해 주세요/ }),
+      form.getByRole('group', { name: /리포트 사용 빈도를 평가해 주세요/ }),
     ).toBeVisible();
     await expect(form.getByText('훨씬 자주')).toBeVisible();
     await expect(form.getByText('거의 없음')).toBeVisible();
@@ -42,7 +42,9 @@ test.describe('Survey participation visual harness', () => {
     await expect(form.getByRole('textbox', { name: '개선할 점을 적어주세요.' })).toBeVisible();
     await expectVisual(page, form, 'survey-respondent-form.png');
 
-    await form.getByRole('button', { name: '3' }).click();
+    // The radio is visually hidden; users click its score chip (the wrapping label).
+    await form.locator('label', { has: page.getByRole('radio', { name: '3' }) }).click();
+    await expect(form.getByRole('radio', { name: '3' })).toBeChecked();
     await page.getByRole('button', { name: '제출' }).click();
     const success = page.getByTestId('survey-response-success');
     await expect(success).toBeVisible();

@@ -71,6 +71,8 @@ function makeFinding(id: string, summary: string) {
     primary_managed_system_id: ids.system,
     title: 'Survey follow-up',
     summary,
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 1,
     severity: 'high',
     confidence: null,
@@ -835,6 +837,8 @@ describe('SurveyResultsSummary', () => {
 
     const button = screen.getByRole('button', { name: 'Finding 생성' });
     expect(button).toBeDisabled();
+    expect(button).toHaveClass('bg-surface-raised');
+    expect(button).not.toHaveClass('bg-accent-primary');
     expect(screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.')).toBeInTheDocument();
     await user.click(button);
     expect(screen.queryByTestId('survey-create-finding-draft')).not.toBeInTheDocument();

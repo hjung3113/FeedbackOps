@@ -61,7 +61,7 @@ describe('#864 saving a view right after typing keeps q', () => {
       resolvePost = resolve;
     });
     const { router } = mountInboxHarness({ onSavedViewPost: resolvePost });
-    const box = await screen.findByRole('searchbox', { name: '필터, 키워드…' });
+    const box = await screen.findByRole('searchbox', { name: '제목 또는 ID' });
     const nameField = await screen.findByLabelText('저장된 보기 이름');
 
     // Mount and the first reads stay on real timers. Freeze only the

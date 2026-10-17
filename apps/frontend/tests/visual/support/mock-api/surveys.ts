@@ -24,8 +24,11 @@ import {
 } from '../../fixtures/survey-results';
 import {
   surveyBuilderDragOverVisualFixture,
+  surveyCopySourceVisualFixture,
+  surveyCopySourcesVisualFixture,
   surveyDetailVisualFixture,
   surveyEmptyBuilderVisualFixture,
+  surveyTemplateVisualFixture,
   surveyVisualActorsFixture,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
@@ -90,6 +93,29 @@ export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] 
   }
 
   if (options.surveyScenario) {
+    handlers.push(
+      {
+        method: 'GET',
+        path: '/surveys/templates',
+        handle: (route) => json(route, 200, surveyTemplateVisualFixture),
+      },
+      {
+        method: 'GET',
+        path: '/surveys/copy-sources',
+        handle: (route) => json(route, 200, surveyCopySourcesVisualFixture),
+      },
+      {
+        method: 'GET',
+        path: `/surveys/${surveyVisualFixture.id}/copy-source`,
+        handle: (route) => json(route, 200, surveyCopySourceVisualFixture),
+      },
+      {
+        // The create dialog reads the selected system's Analytics Areas.
+        method: 'GET',
+        path: '/analytics-areas',
+        handle: (route) => json(route, 200, { items: [], total: 0 }),
+      },
+    );
     handlers.push({
       method: 'GET',
       path: '/surveys',

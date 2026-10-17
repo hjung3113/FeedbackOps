@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 // #168 step 3 — voc.embed_voc handler against the real voc.voc_embeddings
 // table (ADR-0034 D2/D6). Covers idempotence, in-place content refresh,
 // version coexistence, and the disabled-provider contract.
@@ -38,10 +39,11 @@ function countingProvider(inner: EmbeddingProvider): CountingProvider {
   const texts: string[][] = [];
   return {
     provider: {
-      async embed(input) {
+      identity: () => inner.identity(),
+      async embed(input, options) {
         calls += 1;
         texts.push(input);
-        return inner.embed(input);
+        return inner.embed(input, options);
       },
     },
     calls: () => calls,
@@ -97,7 +99,8 @@ describe.skipIf(!runIntegration)('voc.embed_voc handler (#168)', () => {
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in ${scope}`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -236,6 +239,7 @@ describe.skipIf(!runIntegration)('voc.embed_voc handler (#168)', () => {
     });
     const inner = fake(ACTIVE_VERSION);
     const stalling: EmbeddingProvider = {
+      identity: () => fake(1).identity(),
       async embed(texts) {
         await gate;
         return inner.embed(texts);

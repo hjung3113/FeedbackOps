@@ -12,6 +12,7 @@ export type CountVocsQuery = Pick<
   | 'filter.severity'
   | 'filter.reporter_facing_status'
   | 'filter.owner'
+  | 'filter.analytics_area'
 > & { analyticsAreaId?: string };
 
 export type VocCountReader = Pick<VocReadService, 'countVocs'>;
@@ -41,3 +42,5 @@ export type VocGroupedCountArgs = {
 export type VocReferenceReader = Pick<VocReadService, 'resolveVocReference'>;
 export type VocDisplayIdReader = Pick<VocReadService, 'resolveDisplayId'>;
 export type VocDetailReader = Pick<VocReadService, 'getVocDetail'>;
+
+export type VocAttachmentReader = Pick<VocReadService, 'getVocDetail' | 'canReadConversationEntry'>;

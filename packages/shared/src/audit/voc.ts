@@ -31,6 +31,13 @@ const sourceContextSchema = z.enum([
 
 // ── voc_created ────────────────────────────────────────────────────────────
 export const vocCreatedDetailSchema = z.object({
+  owner_user_id: z.string().uuid().nullable().optional(),
+  owner_team_id: z.string().uuid().nullable().optional(),
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
   voc_id: uuid(),
   workspace_id: uuid(),
   primary_managed_system_id: uuid(),
@@ -38,6 +45,7 @@ export const vocCreatedDetailSchema = z.object({
   reporter_id: uuid(),
   source_context: sourceContextSchema,
 });
+
 export type VocCreatedDetail = z.infer<typeof vocCreatedDetailSchema>;
 
 // ── voc_triage_committed ───────────────────────────────────────────────────
@@ -270,7 +278,23 @@ export type VocRecommendationConfirmedDetail = z.infer<
   typeof vocRecommendationConfirmedDetailSchema
 >;
 
+export const vocNoFollowUpRecordedDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    actor_id: uuid(),
+    reason: z.string().min(1).max(2000),
+  })
+  .strict();
+export const vocNoFollowUpWithdrawnDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    actor_id: uuid(),
+  })
+  .strict();
+
 export const VOC_AUDIT_EVENT_TYPES = [
+  'voc_no_follow_up_recorded',
+  'voc_no_follow_up_withdrawn',
   'voc_created',
   'voc_triage_committed',
   'voc_severity_set',
@@ -300,6 +324,8 @@ export const VOC_RECOMMENDATION_AUDIT_EVENT_TYPES = [
 // the tuples, which keeps Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS) in the
 // historical event order.
 export const VOC_AUDIT_EVENT_DETAIL_SCHEMAS = {
+  voc_no_follow_up_recorded: vocNoFollowUpRecordedDetailSchema,
+  voc_no_follow_up_withdrawn: vocNoFollowUpWithdrawnDetailSchema,
   voc_created: vocCreatedDetailSchema,
   voc_triage_committed: vocTriageCommittedDetailSchema,
   voc_severity_set: vocSeveritySetDetailSchema,

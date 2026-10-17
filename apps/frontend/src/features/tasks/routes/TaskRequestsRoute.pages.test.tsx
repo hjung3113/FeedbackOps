@@ -1,7 +1,7 @@
 import { ApiError } from '@/lib/api/types';
 import { type TaskRequestDto, listTaskRequestsQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
@@ -47,6 +47,8 @@ const first: TaskRequestDto = {
   requested_outcome: 'First request',
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -83,6 +85,94 @@ function mount(selectedParam?: string, managedSystem?: string) {
 
 describe('Task Request cursor screens', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it('accepts fresh current-tab data after an auto-selected decision overlay expires', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname.includes('/actors')) return response({ actors: [], teams: [] });
+        const query = listTaskRequestsQuerySchema.parse(Object.fromEntries(url.searchParams));
+        return response({
+          items: query.status === 'approved' ? [] : [first],
+          page: {
+            total: query.status === 'approved' ? 0 : 1,
+            has_more: false,
+            ...(query.limit === 1 ? { status_counts: counts } : {}),
+          },
+        });
+      }),
+    );
+    const client = mount();
+    expect(await screen.findByTestId('selected-request')).toHaveTextContent('REQ-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Approve selected' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
+    );
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-1');
+  });
+
+  it.each(['empty', 'populated'] as const)(
+    'follows the approved tab after a pending auto-selection (%s)',
+    async (state) => {
+      const approved = { ...second, status: 'approved' as const };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), 'http://localhost');
+          if (url.pathname === `/task-requests/${first.id}`) return response(first);
+          if (url.pathname.includes('/actors')) return response({ actors: [], teams: [] });
+          const query = listTaskRequestsQuerySchema.parse(Object.fromEntries(url.searchParams));
+          const items =
+            query.status === 'approved' ? (state === 'populated' ? [approved] : []) : [first];
+          return response({
+            items,
+            page: {
+              total: items.length,
+              has_more: false,
+              ...(query.limit === 1
+                ? {
+                    status_counts: {
+                      ...counts,
+                      pending_review: 1,
+                      approved: state === 'populated' ? 1 : 0,
+                    },
+                  }
+                : {}),
+            },
+          });
+        }),
+      );
+      const client = mount();
+      expect(await screen.findByTestId('selected-request')).toHaveTextContent('REQ-1');
+      fireEvent.mouseDown(screen.getByRole('tab', { name: /^승인됨/ }), { button: 0 });
+      await waitFor(() => {
+        const page = client.getQueryState(['task-requests', undefined, 'pages', 'approved']);
+        expect(page?.status).toBe('success');
+        expect(page?.fetchStatus).toBe('idle');
+      });
+      await waitFor(() => expect(client.isFetching()).toBe(0));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        if (state === 'populated') {
+          expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-2');
+        } else {
+          expect(screen.queryByTestId('selected-request')).not.toBeInTheDocument();
+        }
+      });
+      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.queryByTestId('tasks-link-missing')).not.toBeInTheDocument();
+    },
+  );
+
   it('AC-981 sends a server status and 50-row limit, appends cursor rows, and reads exact summary badges', async () => {
     const queries: Array<ReturnType<typeof listTaskRequestsQuerySchema.parse>> = [];
     vi.stubGlobal(
@@ -130,9 +220,12 @@ describe('Task Request cursor screens', () => {
     expect(screen.getByRole('tab', { name: '전체 , 69' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Approve selected' }));
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true'),
+      expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
     );
-    expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-2');
+    expect(screen.getByTestId('selected-request')).toHaveTextContent('REQ-1');
   });
 
   it('AC-981 zero pending with approved rows shows summary badges and the filtered-empty copy', async () => {

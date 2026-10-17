@@ -5,12 +5,36 @@
 
 import { z } from 'zod';
 
+import { COVERAGE_METRIC_IDS, coverageThresholdPairSchema } from '../dashboard.js';
+
+const coverageChangesSchema = z
+  .object(
+    Object.fromEntries(
+      COVERAGE_METRIC_IDS.map((id) => [
+        id,
+        z
+          .object({ from: coverageThresholdPairSchema, to: coverageThresholdPairSchema })
+          .strict()
+          .optional(),
+      ]),
+    ),
+  )
+  .strict()
+  .refine((changes) => Object.keys(changes).length > 0, {
+    message: 'at least one effective metric change is required',
+  });
+
 export const WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES = ['workspace_settings_updated'] as const;
 
 export const workspaceSettingsUpdatedDetailSchema = z
   .object({
     changes: z
       .object({
+        coverage_thresholds: coverageChangesSchema.optional(),
+        voc_cluster_suggestions_enabled: z
+          .object({ from: z.boolean(), to: z.boolean() })
+          .strict()
+          .optional(),
         permission_self_approval: z
           .object({
             from: z.enum(['allowed', 'forbidden']),

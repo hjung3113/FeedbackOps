@@ -1,8 +1,10 @@
-import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
+import { convertTaskRequest, fetchPermissionCheck, resolveActors } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { GENERIC_ERROR_MESSAGE, mapUnknownError } from '@/lib/api/errorMapper';
 import { listMilestones } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
@@ -14,6 +16,7 @@ import {
   taskPrioritySchema,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -47,6 +50,10 @@ export interface UseTaskRequestConversionResult {
   titleMaxLength: number;
   priority: TaskPriority;
   setPriority: (value: TaskPriority) => void;
+  responsibilityMode: 'automatic' | 'unassigned' | 'actor' | 'team';
+  setResponsibilityMode: (value: 'automatic' | 'unassigned' | 'actor' | 'team') => void;
+  teamId: string;
+  setTeamId: (value: string) => void;
   assigneeId: string;
   setAssigneeId: (value: string) => void;
   dueDate: string;
@@ -69,6 +76,7 @@ export interface UseTaskRequestConversionResult {
   /** Last conversion mutation's settled error, independent of toast state. */
   error: Error | null;
   canConvert: boolean;
+  canAssign: boolean;
   canSubmit: boolean;
   submit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
@@ -80,8 +88,11 @@ export function useTaskRequestConversion({
   defaultAnalyticsAreaResolved = true,
 }: UseTaskRequestConversionArgs): UseTaskRequestConversionResult {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const itemRef = React.useRef(item);
-  itemRef.current = item;
+  React.useEffect(() => {
+    itemRef.current = item;
+  }, [item]);
   const selectedRequestId = item.id;
   const lastResetRequestIdRef = React.useRef(selectedRequestId);
   const [convertOpen, setConvertOpen] = React.useState(false);
@@ -91,6 +102,10 @@ export function useTaskRequestConversion({
   const [convertTitleError, setConvertTitleError] = React.useState<string | null>(null);
   const convertTitleInputRef = React.useRef<HTMLInputElement>(null);
   const [convertPriority, setConvertPriority] = React.useState<TaskPriority>('medium');
+  const [responsibilityMode, setResponsibilityMode] = React.useState<
+    'automatic' | 'unassigned' | 'actor' | 'team'
+  >('automatic');
+  const [teamId, setTeamId] = React.useState('');
   const [convertAssigneeId, setConvertAssigneeId] = React.useState('');
   const [convertDueDate, setConvertDueDate] = React.useState('');
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
@@ -107,6 +122,8 @@ export function useTaskRequestConversion({
     setConvertTitleError(null);
     setConvertPriority('medium');
     setConvertAssigneeId('');
+    setResponsibilityMode('automatic');
+    setTeamId('');
     setConvertDueDate('');
     setConvertMilestoneId('');
     setConvertAnalyticsAreaSelection({ kind: 'none' });
@@ -248,7 +265,13 @@ export function useTaskRequestConversion({
         {
           title,
           priority: convertPriority,
-          assignee_actor_id: convertAssigneeId.trim() || null,
+          ...(responsibilityMode === 'automatic'
+            ? {}
+            : responsibilityMode === 'actor'
+              ? { assignee_actor_id: convertAssigneeId.trim(), assignee_team_id: null }
+              : responsibilityMode === 'team'
+                ? { assignee_actor_id: null, assignee_team_id: teamId.trim() }
+                : { assignee_actor_id: null, assignee_team_id: null }),
           due_date: convertDueDate.trim() || null,
           milestone_id: convertMilestoneId || null,
           analytics_area_id:
@@ -259,12 +282,39 @@ export function useTaskRequestConversion({
         crypto.randomUUID(),
       );
     },
-    onSuccess: (task) => {
+    onSuccess: async (task) => {
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success(`Task ${task.display_id}로 전환했습니다.`);
+      void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
+      let assignee = TASK_REQUEST_COPY.unassigned;
+      if (task.assignee_actor_id || task.assignee_team_id) {
+        // Resolve the server's actual recipient through the same read seam as the editor.
+        const actorIds = task.assignee_actor_id ? [task.assignee_actor_id] : [];
+        const teamIds = task.assignee_team_id ? [task.assignee_team_id] : [];
+        const identities = await queryClient
+          .fetchQuery({
+            queryKey: ['actors-resolve', actorIds, teamIds],
+            queryFn: ({ signal }) => resolveActors({ actorIds, teamIds }, signal),
+            staleTime: 60_000,
+          })
+          .catch(() => null);
+        assignee = task.assignee_actor_id
+          ? (identities?.actors.find((actor) => actor.id === task.assignee_actor_id)
+              ?.display_name ?? GLOSSARY.unknownUser)
+          : `팀 · ${identities?.teams.find((team) => team.id === task.assignee_team_id)?.name ?? TASK_REQUEST_COPY.unknownTeam}`;
+      }
+      toast.success(TASK_REQUEST_COPY.converted(task.display_id, assignee), {
+        duration: Number.POSITIVE_INFINITY,
+        action: {
+          label: TASK_REQUEST_COPY.openTask,
+          onClick: () => {
+            void navigate({ to: '/tasks', search: { view: 'backlog', param: task.id } });
+          },
+        },
+      });
       setConvertOpen(false);
     },
     onError: (err) => {
@@ -306,6 +356,14 @@ export function useTaskRequestConversion({
     titleMaxLength: TASK_TITLE_MAX_LENGTH,
     priority: convertPriority,
     setPriority: setConvertPriority,
+    responsibilityMode,
+    setResponsibilityMode: (value) => {
+      setResponsibilityMode(value);
+      setConvertAssigneeId('');
+      setTeamId('');
+    },
+    teamId,
+    setTeamId,
     assigneeId: convertAssigneeId,
     setAssigneeId: setConvertAssigneeId,
     dueDate: convertDueDate,
@@ -330,10 +388,13 @@ export function useTaskRequestConversion({
     isPending: convertMutation.isPending,
     result: convertMutation.data ?? null,
     error: convertMutation.error ?? null,
+    canAssign: canManage && (currentRole === 'admin' || currentRole === 'developer'),
     canConvert: canConvertTaskRequest(item.status) && canManage,
     canSubmit:
       canConvertTaskRequest(item.status) &&
       canManage &&
+      (responsibilityMode !== 'actor' || convertAssigneeId.trim() !== '') &&
+      (responsibilityMode !== 'team' || teamId.trim() !== '') &&
       analyticsAreaChoiceInitialized &&
       analyticsAreaSelection.kind !== 'unresolved' &&
       !selectedAnalyticsAreaUnavailable,

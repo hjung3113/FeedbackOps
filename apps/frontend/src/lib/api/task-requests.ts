@@ -15,6 +15,8 @@ import { apiClient } from './client';
 export async function fetchTaskRequests(
   options: {
     status?: TaskRequestStatus;
+    reviewer?: string;
+    reviewer_team_id?: string;
     managed_system_id?: string;
     limit?: number;
     cursor?: string;
@@ -22,6 +24,8 @@ export async function fetchTaskRequests(
   } = {},
 ): Promise<ListTaskRequestsResponse> {
   const qs = new URLSearchParams();
+  if (options.reviewer !== undefined) qs.set('reviewer', options.reviewer);
+  if (options.reviewer_team_id !== undefined) qs.set('reviewer_team_id', options.reviewer_team_id);
   if (options.limit !== undefined) qs.set('limit', String(options.limit));
   if (options.cursor !== undefined) qs.set('cursor', options.cursor);
   if (options.status !== undefined) qs.set('status', options.status);
@@ -82,5 +86,17 @@ export async function getTaskRequest(id: string, signal?: AbortSignal): Promise<
     taskRequestDtoSchema,
     signal === undefined ? {} : { signal },
   );
+  return response.data;
+}
+
+export async function assignTaskRequestReviewer(
+  id: string,
+  body: import('@fops/shared').AssignTaskRequestReviewerRequest,
+  idempotencyKey: string,
+) {
+  const response = await apiRequest('POST', `/task-requests/${id}/reviewer`, taskRequestDtoSchema, {
+    body,
+    idempotencyKey,
+  });
   return response.data;
 }

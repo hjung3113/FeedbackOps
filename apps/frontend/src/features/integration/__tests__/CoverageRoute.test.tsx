@@ -8,13 +8,13 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import {
   IntegrationCoverageRouteShell,
-  integrationCoverageSearchSchema,
+  validateIntegrationCoverageSearch,
 } from '../../../routes/_authed/integration/coverage';
 
 const MS_A = '77777777-0000-0000-0000-0000000000a1';
@@ -26,6 +26,7 @@ const AREA_A = '88888888-0000-0000-0000-0000000000a1';
 // row's high-severity queue); a permitted empty result renders the digit 0
 // (MS_A finding-execution 0/4, MS_A unassigned-voc 0, MS_B bad-outcome 0).
 const SUMMARY = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: { coverage_percent: 18 },
   action_queues: [
     {
@@ -86,10 +87,43 @@ const SUMMARY = dashboardSummarySchema.parse({
 // action_queues, and by_managed_system empty. The page must explain
 // availability, not render zeros.
 const EMPTY_SUMMARY = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {},
   action_queues: [],
   coverage: [],
   by_managed_system: [],
+});
+
+// ADR-0067 56-1/O2: an empty denominator keeps value/total/percent at zero and
+// carries status no_data; the route must render it neutrally at every grain.
+const NO_DATA_SUMMARY = dashboardSummarySchema.parse({
+  ...SUMMARY,
+  coverage: [
+    { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
+    ...SUMMARY.coverage.filter((item) => item.id !== 'voc-task'),
+  ],
+  by_managed_system: [
+    {
+      managed_system_id: MS_A,
+      coverage: {
+        'voc-task': { value: 0, total: 0, percent: 0, status: 'no_data' },
+        'finding-execution': { value: 0, total: 4, percent: 0, status: 'bad' },
+      },
+      action_queues: { 'unassigned-voc': 0, 'high-severity-unlinked': 4 },
+      analytics_areas: [
+        {
+          analytics_area_id: AREA_A,
+          coverage: { 'voc-task': { value: 0, total: 0, percent: 0, status: 'no_data' } },
+          action_queues: { 'unassigned-voc': 1 },
+        },
+      ],
+    },
+    {
+      managed_system_id: MS_B,
+      coverage: { 'voc-task': { value: 2, total: 8, percent: 25, status: 'bad' } },
+      action_queues: { 'bad-outcome-no-followup': 0 },
+    },
+  ],
 });
 
 function buildHarness(initialPath: string) {
@@ -97,7 +131,7 @@ function buildHarness(initialPath: string) {
   const route = createRoute({
     getParentRoute: () => rootRoute,
     path: '/integration/coverage',
-    validateSearch: (raw) => integrationCoverageSearchSchema.parse(raw),
+    validateSearch: validateIntegrationCoverageSearch,
     component: IntegrationCoverageRouteShell,
   });
   const router = createRouter({
@@ -162,10 +196,44 @@ function catalogResponse(url: string): Response | undefined {
   return undefined;
 }
 
-function stubFetch(capturedUrls: string[], summary: unknown = SUMMARY) {
+function stubFetch(
+  capturedUrls: string[],
+  summary: unknown = SUMMARY,
+  options: {
+    meRole?: 'admin' | 'developer' | 'user';
+    permissionCheck?: 'approved' | 'rejected' | 'pending';
+  } = {},
+) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     capturedUrls.push(url);
+    // ADR-0056: the band-editor link needs the workspace.admin check result,
+    // not just the role label; a pending check stays unresolved on purpose.
+    if (url.includes('/me/permissions/check')) {
+      if (options.permissionCheck === 'pending') return new Promise<Response>(() => {});
+      return new Response(
+        JSON.stringify({
+          state: options.permissionCheck === 'rejected' ? 'rejected' : 'approved',
+          decision: { allow: options.permissionCheck !== 'rejected' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    if (url.startsWith('/me')) {
+      return new Response(
+        JSON.stringify({
+          actor: {
+            id: '99999999-9999-4999-8999-999999999999',
+            external_id: 'actor',
+            email: 'actor@example.test',
+            display_name: '운영자',
+            role_level: options.meRole ?? 'user',
+          },
+          workspace_id: '11111111-1111-4111-8111-111111111111',
+        }),
+        { status: 200 },
+      );
+    }
     if (url.includes('/dashboard/summary')) {
       return new Response(JSON.stringify(summary), {
         status: 200,
@@ -176,9 +244,16 @@ function stubFetch(capturedUrls: string[], summary: unknown = SUMMARY) {
   }) as typeof globalThis.fetch;
 }
 
-async function renderCoverage(initialPath: string, summary: unknown = SUMMARY) {
+async function renderCoverage(
+  initialPath: string,
+  summary: unknown = SUMMARY,
+  options: {
+    meRole?: 'admin' | 'developer' | 'user';
+    permissionCheck?: 'approved' | 'rejected' | 'pending';
+  } = {},
+) {
   const capturedUrls: string[] = [];
-  stubFetch(capturedUrls, summary);
+  stubFetch(capturedUrls, summary, options);
   const { router, qc } = buildHarness(initialPath);
   render(
     <QueryClientProvider client={qc}>
@@ -391,5 +466,103 @@ describe('integration coverage route', () => {
     expect(screen.queryByTestId('coverage-queue-row-unassigned-voc')).toBeNull();
     expect(screen.queryByTestId('coverage-table')).toBeNull();
     expect(screen.queryByTestId('coverage-pending')).toBeNull();
+  });
+
+  test('renders total-zero coverage as the neutral no_data state at every grain', async () => {
+    await renderCoverage('/integration/coverage', NO_DATA_SUMMARY);
+
+    const percent = screen.getByTestId('coverage-percent-voc-task');
+    expect(percent.textContent).toBe('집계 대상 없음');
+    expect(percent.className).toContain('text-text-muted');
+    expect(percent.className).not.toContain('text-accent-danger');
+    expect(percent.className).not.toContain('text-accent-success');
+    // The zero-denominator row keeps its empty meter track; no red fill.
+    expect(screen.getByTestId('coverage-bar-fill-voc-task')).toBeInTheDocument();
+    // Per-system and Analytics Area cells use the same neutral label.
+    expect(screen.getByTestId(`coverage-cell-${MS_A}-voc-task`).textContent).toBe('집계 대상 없음');
+    expect(screen.getByTestId(`coverage-cell-${AREA_A}-voc-task`).textContent).toBe(
+      '집계 대상 없음',
+    );
+    // Measured cells and unavailable keys keep their existing presentation.
+    expect(screen.getByTestId(`coverage-cell-${MS_A}-finding-execution`).textContent).toContain(
+      '0 / 4',
+    );
+    expect(screen.getByTestId(`coverage-cell-${MS_B}-finding-execution`).textContent).toBe('—');
+  });
+
+  test('renders a zero Survey follow-up queue neutrally while keeping no_data explicit', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...NO_DATA_SUMMARY,
+      action_queues: [
+        {
+          id: 'bad-outcome-no-followup',
+          severity: 'urgent',
+          count: 0,
+          next_action: { label: 'Review', route: '/surveys?follow_up=needed', intent: 'review' },
+          secondary_action: null,
+        },
+      ],
+    });
+    await renderCoverage('/integration/coverage', summary);
+
+    const surveyQueue = screen.getByTestId('coverage-queue-row-bad-outcome-no-followup');
+    expect(within(surveyQueue).getByText('0', { exact: true })).toHaveClass('text-text-muted');
+    expect(within(surveyQueue).getByText('0', { exact: true })).not.toHaveClass(
+      'text-accent-danger',
+    );
+    expect(screen.getByTestId('coverage-percent-voc-task')).toHaveTextContent('집계 대상 없음');
+  });
+
+  // #1087 UX: the action list leads with rows that need action — no-data rows
+  // sort after rows with a denominator, ties keep the server order.
+  test('sorts no-data coverage signals after rows with a denominator', async () => {
+    await renderCoverage('/integration/coverage', NO_DATA_SUMMARY);
+
+    const rows = screen
+      .getByTestId('coverage-signals')
+      .querySelectorAll('[data-testid^="coverage-row-"]');
+    const ids = Array.from(rows).map((row) => row.getAttribute('data-testid'));
+    expect(ids).toEqual([
+      'coverage-row-finding-execution',
+      'coverage-row-high-followup',
+      'coverage-row-released-update',
+      'coverage-row-analytics-area',
+      'coverage-row-voc-task',
+    ]);
+  });
+
+  test('links an authorized Admin to the band editor and hides the link otherwise', async () => {
+    await renderCoverage('/integration/coverage', SUMMARY, {
+      meRole: 'admin',
+      permissionCheck: 'approved',
+    });
+    expect(screen.getByTestId('coverage-settings-link').getAttribute('href')).toBe(
+      '/admin/settings#coverage',
+    );
+    // Existing hops and URL behavior are untouched by the editor link.
+    expect(screen.getByTestId('coverage-row-voc-task').getAttribute('href')).toBe(
+      '/vocs?view=inbox&tab=no-task',
+    );
+
+    // An explicitly denied Admin keeps the role label but not the capability
+    // (ADR-0056); the display hint must not send them to a dead end.
+    cleanup();
+    await renderCoverage('/integration/coverage', SUMMARY, {
+      meRole: 'admin',
+      permissionCheck: 'rejected',
+    });
+    expect(screen.queryByTestId('coverage-settings-link')).toBeNull();
+
+    // While the workspace.admin check is in flight the link stays hidden.
+    cleanup();
+    await renderCoverage('/integration/coverage', SUMMARY, {
+      meRole: 'admin',
+      permissionCheck: 'pending',
+    });
+    expect(screen.queryByTestId('coverage-settings-link')).toBeNull();
+
+    cleanup();
+    await renderCoverage('/integration/coverage', SUMMARY, { meRole: 'developer' });
+    expect(screen.queryByTestId('coverage-settings-link')).toBeNull();
   });
 });

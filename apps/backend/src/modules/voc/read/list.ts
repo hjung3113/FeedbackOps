@@ -12,7 +12,25 @@ import type { CountVocsQuery, VocGroupedCountArgs } from '../read-contract.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
 import * as repoRead from '../repo-read.js';
 import { mapRowToListItem } from './mappers.js';
-import { resolveVocListScope } from './scope.js';
+import { msInScope, resolveVocListScope } from './scope.js';
+
+// Applied to list and count paths so My VOC never becomes a severity oracle.
+function assertMySeverityQuery(query: CountVocsQuery & { sort?: string | undefined }): void {
+  if (query.view !== 'my') return;
+  const field =
+    query['filter.severity'] !== undefined
+      ? 'filter.severity'
+      : query.sort?.startsWith('severity:')
+        ? 'sort'
+        : query.tab === 'high' || query.tab === 'high-no-link'
+          ? 'tab'
+          : undefined;
+  if (field !== undefined) {
+    throw new HttpError('validation.failed', 'severity queries are not valid for view=my', {
+      fields: [{ path: [field], code: 'invalid_for_view' }],
+    });
+  }
+}
 
 export function createVocListReaders(deps: VocReadServiceDeps) {
   async function countVocs(args: {
@@ -21,10 +39,13 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
   }): Promise<number> {
     const { actor, query } = args;
     const { view, tab } = query;
+    assertMySeverityQuery(query);
     const filterSeverity = query['filter.severity'];
     const filterReporterFacingStatus = query['filter.reporter_facing_status'];
     const filterOwner = query['filter.owner'];
-    const analyticsAreaId = query.analyticsAreaId;
+    const areaFilter = query['filter.analytics_area'];
+    const analyticsAreaId =
+      areaFilter === 'unset' ? undefined : (areaFilter ?? query.analyticsAreaId);
     if (tab === 'waiting' && view !== 'triage') {
       throw new HttpError('validation.failed', 'tab=waiting is only valid for view=triage', {
         fields: [{ path: ['tab'], code: 'invalid_for_view' }],
@@ -50,6 +71,7 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       ...(filterReporterFacingStatus !== undefined ? { filterReporterFacingStatus } : {}),
       ...(filterOwner !== undefined ? { filterOwner } : {}),
       ...(analyticsAreaId !== undefined ? { analyticsAreaId } : {}),
+      ...(areaFilter === 'unset' ? { filterAnalyticsAreaUnset: true } : {}),
     });
   }
 
@@ -80,6 +102,7 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
   }> {
     const { actor, query } = args;
     const { view, managed_system_id, tab, limit } = query;
+    assertMySeverityQuery(query);
     const filterSeverity = query['filter.severity'];
     const filterReporterFacingStatus = query['filter.reporter_facing_status'];
     const filterOwner = query['filter.owner'];
@@ -182,6 +205,8 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       repoArgs.filterReporterFacingStatus = filterReporterFacingStatus;
     if (filterOwner !== undefined) repoArgs.filterOwner = filterOwner;
     if (filterAnalyticsAreaUnset) repoArgs.filterAnalyticsAreaUnset = true;
+    else if (query['filter.analytics_area'] !== undefined)
+      repoArgs.analyticsAreaId = query['filter.analytics_area'];
     // #821: q only rides the list path — counts, nav counts, the pinned-row
     // select, and out_of_scope_summary deliberately never see it.
     if (q !== undefined) repoArgs.q = q;
@@ -230,7 +255,13 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
 
     // ── 9b. Map rows → VocListItem with attachment_count ─────────────────────
     const items = pinnedRows.map((r) =>
-      mapRowToListItem(r, attachmentCounts.get(r.id) ?? 0, similarCounts.get(r.id) ?? 0, view),
+      mapRowToListItem(
+        r,
+        attachmentCounts.get(r.id) ?? 0,
+        similarCounts.get(r.id) ?? 0,
+        view,
+        r.reporterId === actor.actor_id && !msInScope(effectiveScope, r.primaryManagedSystemId),
+      ),
     );
 
     // ── 10. Encode nextCursor ──────────────────────────────────────────────────

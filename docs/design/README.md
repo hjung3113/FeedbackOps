@@ -28,6 +28,9 @@
 - Release grouping and recommended success flow.
 - Not an execution queue; slice status is the GitHub milestones.
 
+14-post-mvp-backlog.md
+- What the owner decided not to ship before the MVP release, and when to reopen each item.
+
 15-data-contracts.md
 - Field and enum authority. Not a draft, and not replaced by migrations.
 ```

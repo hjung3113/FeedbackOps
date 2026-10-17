@@ -1,0 +1,33 @@
+export const MANAGED_SYSTEM_COPY = {
+  ownerOptional: '기본 담당자 (선택)',
+  reviewerOptional: '기본 검토자 (선택)',
+  reviewer: '기본 검토자',
+  reviewerHint: 'Task Request 검토에 자동 배정됩니다. 비우면 기본 담당자가 검토합니다.',
+  currentActor: '현재 배정 대상',
+  candidatesError: '배정 후보를 불러오지 못했습니다.',
+  candidatesErrorHint: '다시 시도해 후보를 확인하세요.',
+  diagnosticsHint:
+    '현재 설정 문제와 생성 시 기본 배정 실패 기록을 확인하고 필요하면 설정에서 기본 담당자/검토자를 다시 지정하세요.',
+  rowWarning: '자동 배정 경고',
+  diagnostics: '자동 배정 설정 경고',
+  diagnosticsLoading: '설정 경고를 불러오는 중…',
+  diagnosticsError: '설정 경고를 확인하지 못했습니다.',
+  retry: '다시 시도',
+  workflows: { voc: 'VOC', finding: 'Finding', task_request: 'Task Request', task: 'Task' },
+  currentConfiguration: '현재 설정',
+  creationFailure: (count: number) => `생성 시 기본 배정 실패 ${count}건`,
+  lastFailure: '마지막',
+  rules: {
+    managed_system_owner: 'Managed System 기본 담당자',
+    managed_system_reviewer: 'Managed System 기본 검토자',
+    analytics_area_owner: 'Analytics Area 담당 팀',
+  },
+  roles: { owner: '기본 담당자', reviewer: '기본 검토자' },
+  categories: {
+    missing: '기본 배정 대상이 없습니다.',
+    invalid_pair: '사람과 팀을 동시에 지정할 수 없습니다.',
+    foreign_workspace: '현재 워크스페이스의 배정 대상이 아닙니다.',
+    archived_team: '보관된 팀입니다.',
+    ineligible_actor: '배정에 필요한 권한이 없습니다.',
+  },
+} as const;

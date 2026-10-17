@@ -42,3 +42,36 @@ It does not own source object lifecycles or backend authorization truth.
 ## Verification
 
 - Test Finding action CTAs, evidence summaries, and deep-link action restore when touched.
+
+## Close-out contract (ADR-0067; VOC/Finding responsibility implemented by #1090)
+
+- ADR-0067 implements source-owned owner display/edit/filter across all creation
+  sources. Show Actor/team/null assignment from the server, never infer it from provenance
+  or grant permissions. Preserve personal Survey source visibility before target disclosure.
+
+## Survey evidence reuse (ADR-0064 / ADR-0065; #1110)
+
+Survey-derived Finding/source/default summaries remain metadata-only; render excerpt
+text only from freshly authorized active highlight DTOs, with safe unavailable state
+after revoke/source denial. Preserve Finding URL/detail context.
+
+`AddEvidenceModal` uses the Finding-local `SurveyEvidencePicker` and
+`useSurveyEvidence` hooks: unfiltered, separately authorized `GET /surveys`, then
+bounded `GET /surveys/:id/evidence-candidates` pages. Select a returned approval ID;
+never offer a response UUID or editable Survey quote, or read personal Results.
+Source and target Managed Systems may differ; show the source context without
+filtering discovery by the target scope. Source/Survey changes and close reset
+selection; retryable attachment errors retain selection/classification and attempt
+key, while changed payloads get a new UUIDv4 key. Ineligible selections clear and
+refresh safe candidates. Candidate reads returning 403/404/409/422 discard all loaded
+pages and cursors for that Survey and clear selection. Retry starts at page one;
+later transport failures cannot restore excerpts before a successful authorized read.
+Backend target manage and source/suppression checks remain
+authoritative.
+
+`useAttachSurveyEvidenceMutation` posts only the selection/classifications to
+`POST /findings/:id/survey-evidence`. Its hook-owned invalidation rereads Finding
+detail/evidence/list and all Evidence inventory prefix variants through neutral
+`lib/query/evidence-inventory-key.ts`, including inactive queries. Never import
+Integration internals or cache quote text from the metadata-only mutation response.
+VOC/note behavior and the existing VOC chooser remain unchanged.

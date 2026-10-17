@@ -1,5 +1,7 @@
 import { expect, test } from './support/visual-test';
 
+import { getCapabilityDisplayLabel } from '../../src/lib/copy/capabilities';
+import { shortId } from '../../src/lib/identity';
 import {
   PERMISSION_EXPIRATION_VISUAL_DATE,
   PERMISSION_IDS,
@@ -7,6 +9,8 @@ import {
 } from './fixtures/permissions';
 import { installMockApi, parsePermissionDecisionBody } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
+
+const label = getCapabilityDisplayLabel;
 
 test.describe('/admin/permissions/requests visual harness', () => {
   for (const scenario of permissionVisualScenarios) {
@@ -35,6 +39,66 @@ test.describe('/admin/permissions/requests visual harness', () => {
     });
   }
 
+  test('shows explained server risk signals with the selected review facts', async ({ page }) => {
+    await installMockApi(page, { permissionScenario: 'risk-signals' });
+    await page.goto('/admin/permissions/requests');
+
+    const detail = page.getByTestId('permission-request-detail-panel');
+    const review = detail.getByTestId('permission-request-risk-review');
+    await expect(review).toContainText('검토 시 확인할 사항');
+    await expect(review).toContainText('개발자');
+    await expect(review).toContainText('요청 범위의 현재 권한');
+    await expect(review).toContainText('검토 권한');
+    await expect(review).toContainText('민감한 권한 · 워크스페이스 관리자 권한');
+    await expect(review).toContainText('워크스페이스 전체 범위');
+    await expect(review).toContainText('요청 만료일 없음');
+    await expect(review).toContainText('겹치는 활성 차단 2건');
+    await expect(review).toContainText(
+      '겹치는 활성 차단 2건 · 워크스페이스 전체 · Managed System (99999999)',
+    );
+    await expect(detail).not.toContainText('99999999-9999-4999-8999-999999999999');
+    await expectVisual(page, detail, 'permission-request-risk-signals.png');
+  });
+
+  test('stale review refetches the selected request and requires a fresh decision', async ({
+    page,
+  }) => {
+    const mock = await installMockApi(page, { permissionScenario: 'stale-review' });
+    await page.goto('/admin/permissions/requests');
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await detail.getByRole('button', { name: '거절', exact: true }).click();
+    await detail.getByLabel('사유 · 필수').fill('오래된 요청 검토');
+    await detail.getByTestId('permission-decision-submit').click();
+    await expect(detail).toContainText('요청자가 검토 중에 사유를 수정했습니다.');
+    await expect(detail.getByLabel('사유 · 선택')).toHaveValue('');
+    await expect(detail.getByTestId('permission-decision-submit')).toBeDisabled();
+    await expectVisual(page, detail, 'permission-request-stale-fresh-review.png');
+    expect(mock.postedRequests).toHaveLength(1);
+  });
+
+  test('empty reject reason shows the inline error and focuses the reason field', async ({
+    page,
+  }) => {
+    const mock = await installMockApi(page, { permissionScenario: 'stale-review' });
+    await page.goto('/admin/permissions/requests');
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await detail.getByRole('button', { name: '거절', exact: true }).click();
+    await detail.getByTestId('permission-decision-submit').click();
+    await expect(detail.getByRole('alert')).toContainText('거절 사유를 입력해 주세요.');
+    await expect(detail.getByLabel('사유 · 필수')).toBeFocused();
+    await expectVisual(page, detail, 'permission-request-reject-reason-required.png');
+    expect(mock.postedRequests).toHaveLength(0);
+  });
+
+  test('cancelled history retains selection with no decision controls', async ({ page }) => {
+    await installMockApi(page, { permissionScenario: 'cancelled-history' });
+    await page.goto(`/admin/permissions/requests?tab=all&selected=${PERMISSION_IDS.rejected}`);
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await expect(detail).toContainText('철회');
+    await expect(detail.getByTestId('permission-decision-section')).toHaveCount(0);
+    await expectVisual(page, detail, 'permission-request-cancelled-history.png');
+  });
+
   test('renders the populated permission review console with its first pending request selected', async ({
     page,
   }) => {
@@ -48,9 +112,9 @@ test.describe('/admin/permissions/requests visual harness', () => {
       'aria-selected',
       'true',
     );
-    await expect(list.getByText('workspace.admin', { exact: true })).toBeVisible();
-    await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();
-    await expect(detail).toContainText('workspace.admin');
+    await expect(list.getByText(label('workspace.admin'))).toBeVisible();
+    await expect(list.getByText(label('workspace.read'))).toBeVisible();
+    await expect(detail).toContainText(label('workspace.admin'));
     await expect(detail.getByTestId('permission-decision-section')).toBeVisible();
     await expectVisual(page, detail, 'permission-requests-console-populated.png');
   });
@@ -67,7 +131,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     const requestedDate = PERMISSION_EXPIRATION_VISUAL_DATE.slice(0, 10);
     // #684: display uses the shared ko-KR date; the date input keeps the ISO value.
     const requestedDateLabel = '2026. 12. 31.';
-    await list.getByText('workspace.read', { exact: true }).click();
+    await list.getByText(label('workspace.read')).click();
     await expect(list.getByText(`만료 ${requestedDateLabel}`, { exact: true })).toBeVisible();
     await expect(detail.getByText(requestedDateLabel, { exact: true })).toBeVisible();
     // #589: an unknown Managed System scope shows a type label + short id, never the full UUID.
@@ -113,11 +177,8 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect(detail.getByLabel('사유 · 필수')).toBeVisible();
     await detail.getByTestId('permission-decision-submit').click();
     await expect.poll(() => mock.postedRequests).toHaveLength(0);
-    await page
-      .getByTestId('permission-requests-list')
-      .getByText('workspace.read', { exact: true })
-      .click();
-    await expect(detail).toContainText('workspace.read');
+    await page.getByTestId('permission-requests-list').getByText(label('workspace.read')).click();
+    await expect(detail).toContainText(label('workspace.read'));
     await expect(detail.getByLabel('사유 · 선택')).toBeVisible();
     await detail.getByRole('button', { name: '승인', exact: true }).click();
     await detail.getByTestId('permission-decision-submit').click();
@@ -126,7 +187,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
       .toEqual([
         {
           pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
-          body: {},
+          body: { expected_revision: 1 },
           idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
         },
       ]);
@@ -135,12 +196,14 @@ test.describe('/admin/permissions/requests visual harness', () => {
   test('AC-3 parses valid self-approval envelopes and rejects unknown approve keys through the mock API parser', () => {
     expect(
       parsePermissionDecisionBody('approve', {
+        expected_revision: 1,
         self_approval: {
           policy_citation: 'workspace policy §4.3',
           peer_reviewer_absence: 'all peer reviewers are unavailable',
         },
       }),
     ).toEqual({
+      expected_revision: 1,
       self_approval: {
         policy_citation: 'workspace policy §4.3',
         peer_reviewer_absence: 'all peer reviewers are unavailable',
@@ -148,6 +211,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     });
     expect(() =>
       parsePermissionDecisionBody('approve', {
+        expected_revision: 1,
         reason: 'approved',
         unexpected: true,
       }),
@@ -160,9 +224,11 @@ test.describe('/admin/permissions/requests visual harness', () => {
     const mock = await installMockApi(page);
 
     await page.goto('/admin/permissions/requests');
+    // The fixture key is not a known capability, so its label is the generic fallback;
+    // select the row by its unique short id instead.
     await page
       .getByTestId('permission-requests-list')
-      .getByText('task.self_approve_request', { exact: true })
+      .getByText(shortId(PERMISSION_IDS.selfApproval), { exact: true })
       .click();
 
     const detail = page.getByTestId('permission-request-detail-panel');
@@ -196,6 +262,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
         {
           pathname: `/permissions/requests/${PERMISSION_IDS.selfApproval}/approve`,
           body: {
+            expected_revision: 1,
             self_approval: {
               policy_citation: 'workspace policy §4.3',
               peer_reviewer_absence: '다른 reviewer 모두 PTO입니다.',
@@ -212,10 +279,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     const mock = await installMockApi(page);
 
     await page.goto('/admin/permissions/requests');
-    await page
-      .getByTestId('permission-requests-list')
-      .getByText('workspace.read', { exact: true })
-      .click();
+    await page.getByTestId('permission-requests-list').getByText(label('workspace.read')).click();
 
     const detail = page.getByTestId('permission-request-detail-panel');
     // #524: no decision is preselected; approve must be chosen explicitly.
@@ -228,12 +292,12 @@ test.describe('/admin/permissions/requests visual harness', () => {
       .toEqual([
         {
           pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
-          body: { reason: '읽기 권한을 승인합니다.' },
+          body: { expected_revision: 1, reason: '읽기 권한을 승인합니다.' },
           idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
         },
       ]);
     await expect(
-      page.getByTestId('permission-requests-list').getByText('workspace.read', { exact: true }),
+      page.getByTestId('permission-requests-list').getByText(label('workspace.read')),
     ).toHaveCount(0);
   });
 
@@ -246,10 +310,10 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await page.getByRole('tab', { name: /^승인됨\s*,\s*1$/ }).click();
 
     const list = page.getByTestId('permission-requests-list');
-    await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();
-    await expect(list.getByText('workspace.admin', { exact: true })).toHaveCount(0);
-    await expect(list.getByText('voc.triage', { exact: true })).toHaveCount(0);
-    await expect(list.getByText('finding.manage', { exact: true })).toHaveCount(0);
+    await expect(list.getByText(label('workspace.read'))).toBeVisible();
+    await expect(list.getByText(label('workspace.admin'))).toHaveCount(0);
+    await expect(list.getByText(label('voc.triage'))).toHaveCount(0);
+    await expect(list.getByText(label('finding.manage'))).toHaveCount(0);
     await expect(page.getByTestId('permission-request-detail-panel')).toContainText('승인됨');
     await expect(page.getByTestId('permission-decision-section')).toHaveCount(0);
   });

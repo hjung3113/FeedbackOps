@@ -1,31 +1,31 @@
 /**
- * VocList — composes VOC rows with loading / empty / error states, bulk
- * selection, and the bulk-action bar (mirrors docs/design-prototype/screen-voc.jsx
- * `VocList`).
+ * VocList — composes VOC rows with loading / empty / error states (mirrors
+ * docs/design-prototype/screen-voc.jsx `VocList`).
  *
  * LIFTED MAP HOOKS: per-row lookups (managed system, actor identity for
  * owner/reporter, analytics-area name) are resolved by single map queries at
  * the VocList level and passed to each VocRow via props. This avoids calling
  * hooks inside .map() and keeps fetch count constant regardless of row count.
  *
- * BULK ACTIONS (#89): selection state + the bar UI are wired here. The
- * individual mutations (담당자 지정 / 심각도 설정 / Cluster에 추가 / Finding 생성)
- * have no batch endpoint yet, so their buttons are present-but-disabled and the
- * action is deferred to a follow-up issue. "선택 해제" is fully wired.
+ * There is no bulk selection: no batch VOC endpoint exists (deferred, see
+ * docs/design/14-post-mvp-backlog.md Slice 62).
  */
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
-import { VOC_LIST_LOAD_ERROR_LABELS, VOC_SEARCH_EMPTY_LABEL } from '@/lib/copy/voc';
+import {
+  VOC_AREA_FILTER_EMPTY_COPY,
+  VOC_LIST_LOAD_ERROR_LABELS,
+  VOC_SEARCH_EMPTY_LABEL,
+} from '@/lib/copy/voc';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState, managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Flag, Layers, User } from 'lucide-react';
 import * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { VocRow } from './VocRow';
 import { VocRowSkeleton } from './VocRowSkeleton';
 
@@ -110,10 +110,14 @@ export interface VocListProps {
    * the search empty state instead of the queue/my-VOC copy.
    */
   searching?: boolean;
+  areaFiltered?: boolean;
+  areaLabel?: string;
   /** Retry handler for error variant. */
   onRetry?: () => void;
   /** Opens the route-owned VOC create flow from an empty list state. */
   onCreate?: () => void;
+  /** Neutralizes the unassigned cue for the Inbox unassigned tab. */
+  unassignedBadgeTone?: 'danger' | 'neutral';
 }
 
 const SKELETON_COUNT = 10;
@@ -149,40 +153,15 @@ function VocListContent({
   onSelect,
   view,
   searching,
+  areaFiltered,
+  areaLabel,
   onRetry,
   onCreate,
+  unassignedBadgeTone,
 }: VocListProps) {
   const msMap = useManagedSystemMap();
   const areaMap = useAnalyticsAreaMap();
   const actorMap = useActorMap();
-
-  const [checked, setChecked] = useState<Set<string>>(() => new Set());
-  const toggleCheck = (id: string) => {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const clearChecked = () => {
-    setChecked(new Set());
-  };
-
-  // Drop selections that no longer exist in the current list (tab/filter change).
-  React.useEffect(() => {
-    setChecked((prev) => {
-      if (prev.size === 0) return prev;
-      const present = new Set(items.map((v) => v.id));
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (present.has(id)) next.add(id);
-        else changed = true;
-      }
-      return changed ? next : prev;
-    });
-  }, [items]);
 
   // 1. Loading with no items → skeletons
   if (loading && items.length === 0) {
@@ -216,6 +195,15 @@ function VocListContent({
 
   // 3. Empty list
   if (!loading && items.length === 0) {
+    if (view === 'inbox' && areaFiltered && areaLabel !== undefined) {
+      return (
+        <ListStateMessage
+          variant="filtered"
+          title={VOC_AREA_FILTER_EMPTY_COPY.title}
+          body={VOC_AREA_FILTER_EMPTY_COPY.body(areaLabel)}
+        />
+      );
+    }
     // #821: an active server search owns the empty state — the queue/my-VOC
     // copy would wrongly imply there is nothing to find.
     if (searching) {
@@ -245,10 +233,9 @@ function VocListContent({
     );
   }
 
-  // 4. Rows (+ bulk-action bar)
+  // 4. Rows
   return (
     <div role="rowgroup" aria-label="VOC 목록">
-      {checked.size > 0 && <BulkActionBar count={checked.size} onClear={clearChecked} />}
       {items.map((voc) => {
         const rowProps = {
           voc,
@@ -261,10 +248,7 @@ function VocListContent({
           reporter: actorMap[voc.reporter_id] ?? null,
           areaName:
             voc.analytics_area_id !== null ? (areaMap[voc.analytics_area_id] ?? null) : null,
-          checked: checked.has(voc.id),
-          onToggleCheck: () => {
-            toggleCheck(voc.id);
-          },
+          ...(unassignedBadgeTone !== undefined ? { unassignedBadgeTone } : {}),
         };
 
         return view === 'my' ? (
@@ -294,53 +278,4 @@ function ReporterMyVocRow(props: ReporterMyVocRowProps): React.ReactElement {
     readCheck.data?.state === 'approved' || triageCheck.data?.state === 'approved';
 
   return <VocRow {...props} showOwnerMissing={showOwnerMissing} />;
-}
-
-// ---------------------------------------------------------------------------
-// BulkActionBar — appears when ≥1 row is checked. Korean adaptation of the
-// prototype copy: "N selected · Assign / Set severity / Add to cluster / Create finding · Clear".
-//
-// DEFERRED (#89): the four mutating actions have no batch endpoint yet, so they
-// are disabled with a tooltip-able title. "선택 해제" is wired.
-// ---------------------------------------------------------------------------
-
-interface BulkActionBarProps {
-  count: number;
-  onClear: () => void;
-}
-
-const BULK_DEFERRED_TITLE = '일괄 작업은 다음 슬라이스에서 제공됩니다';
-
-function BulkActionBar({ count, onClear }: BulkActionBarProps) {
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA toolbar pattern — there is no native HTML toolbar element; role="toolbar" groups the bulk actions for assistive tech.
-    <div
-      role="toolbar"
-      aria-label="일괄 작업"
-      className="flex items-center gap-2 border-b border-border-subtle bg-surface-raised px-4 py-2"
-    >
-      <span className="text-sm text-text-primary">{count}개 선택됨</span>
-      <span className="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
-      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
-        <User className="h-3.5 w-3.5" aria-hidden="true" />
-        담당자 지정
-      </Button>
-      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
-        <Flag className="h-3.5 w-3.5" aria-hidden="true" />
-        심각도 설정
-      </Button>
-      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
-        <Layers className="h-3.5 w-3.5" aria-hidden="true" />
-        Cluster에 추가
-      </Button>
-      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
-        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-        Finding 생성
-      </Button>
-      <div className="flex-1" />
-      <Button variant="subtle" size="sm" onClick={onClear} type="button">
-        선택 해제
-      </Button>
-    </div>
-  );
 }

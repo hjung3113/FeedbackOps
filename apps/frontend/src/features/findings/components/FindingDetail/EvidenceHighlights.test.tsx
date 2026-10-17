@@ -6,6 +6,7 @@ import {
   evidenceHighlightSourceTypeSchema,
 } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
+import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EvidenceHighlightsSection } from './EvidenceHighlights';
 
@@ -13,6 +14,27 @@ const useEvidenceHighlightsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/features/findings/hooks/useEvidenceHighlights', () => ({
   useEvidenceHighlights: useEvidenceHighlightsMock,
+}));
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    to,
+    search,
+    className,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    search?: Record<string, string>;
+    className?: string;
+  }) => (
+    <a
+      href={`${to}${search ? `?${new URLSearchParams(search).toString()}` : ''}`}
+      className={className}
+    >
+      {children}
+    </a>
+  ),
 }));
 
 const SOURCE_TYPE_LABELS: Record<EvidenceHighlightSourceType, string> = {
@@ -80,6 +102,25 @@ describe('EvidenceHighlightsSection labels', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the safe Survey reference beside its source chip', () => {
+    useEvidenceHighlightsMock.mockReturnValue({
+      data: [
+        {
+          ...makeHighlight('survey_response', null),
+          source_meta: 'outcome · SRV-1001 · Identity protected',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    render(<EvidenceHighlightsSection findingId="finding-id" evidenceCount={1} />);
+
+    expect(screen.getByTestId('evidence-highlight-row')).toHaveTextContent(
+      'outcome · SRV-1001 · Identity protected',
+    );
+    expect(screen.queryByTestId('evidence-source-id')).not.toBeInTheDocument();
+  });
+
   it.each(evidenceHighlightSourceTypeSchema.options)(
     'renders evidence source kind %s with its shared label',
     (sourceType) => {
@@ -103,4 +144,52 @@ describe('EvidenceHighlightsSection labels', () => {
       expect(badge).not.toHaveTextContent(/\b(?:Low|Medium|High)\b/);
     },
   );
+
+  // #1174b U2-6: a readable VOC source is named by its display id and links to the
+  // VOC; a UUID fragment is never shown.
+  it('links VOC evidence to its source VOC via the display id, never a UUID fragment', () => {
+    const sourceId = '55555555-5555-4555-8555-555555555555';
+    useEvidenceHighlightsMock.mockReturnValue({
+      data: [
+        {
+          ...makeHighlight('voc', null),
+          source_id: sourceId,
+          source_title: 'Export failures',
+          source_meta: 'VOC-1001',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    render(<EvidenceHighlightsSection findingId="finding-id" evidenceCount={1} />);
+
+    const vocLink = screen.getByRole('link', { name: 'VOC-1001' });
+    expect(vocLink.getAttribute('href')).toBe(`/vocs?view=inbox&selected=${sourceId}`);
+    expect(screen.queryByText(sourceId.slice(0, 8))).not.toBeInTheDocument();
+  });
+
+  // #1174b U2-6 / #1174 FIX1: the backend keeps the VOC `source_id` but
+  // withholds `source_meta` when the source is unreadable, so exercise that
+  // real shape — no identifier, no UUID fragment and no link may render.
+  it('shows the source type only for VOC evidence without a readable source meta', () => {
+    const sourceId = '55555555-5555-4555-8555-555555555555';
+    useEvidenceHighlightsMock.mockReturnValue({
+      data: [
+        {
+          ...makeHighlight('voc', null),
+          source_id: sourceId,
+          source_title: 'Export failures',
+          source_meta: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    render(<EvidenceHighlightsSection findingId="finding-id" evidenceCount={1} />);
+
+    expect(screen.getByTestId('evidence-source-type')).toHaveTextContent('VOC');
+    expect(screen.queryByTestId('evidence-source-id')).not.toBeInTheDocument();
+    expect(screen.queryByText(sourceId.slice(0, 8))).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
 });

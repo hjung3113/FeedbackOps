@@ -5,7 +5,7 @@ const STATUS_META: Record<
   EntityLinkStatus,
   { label: string; tone: 'success' | 'warning' | 'muted' | 'danger' }
 > = {
-  active: { label: '활성', tone: 'success' },
+  active: { label: '활성', tone: 'muted' },
   stale: { label: '오래됨', tone: 'warning' },
   detached: { label: '분리됨', tone: 'muted' },
   revoked: { label: '취소됨', tone: 'danger' },

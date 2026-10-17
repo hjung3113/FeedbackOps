@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 // apps/backend/src/modules/voc/conversation-service.ts
 //
 // Conversation application service for the VOC module.
@@ -19,6 +20,7 @@ import type {
   PublicUpdateRequest,
   ReporterReplyRequest,
   VocDetailEnvelope,
+  VocSummaryEnvelope,
 } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -74,7 +76,7 @@ export interface PublicUpdateEnvelope {
     skip_reason: string | null;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface ReporterReplyEnvelope {
@@ -85,7 +87,7 @@ export interface ReporterReplyEnvelope {
     body_rich_content: unknown;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface InternalCommentEnvelope {
@@ -96,12 +98,13 @@ export interface InternalCommentEnvelope {
     body_rich_content: unknown;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 // ── Service factory ───────────────────────────────────────────────────────────
 
 export function createConversationService(deps: {
+  recoveryRecorder?: RecoveryRecorder;
   /** #392 — required by the `*Command` entry points, which own the transaction. */
   db: Db;
   auditService: AuditService;
@@ -120,6 +123,9 @@ export function createConversationService(deps: {
     input: PublicUpdateRequest;
   }): Promise<PublicUpdateEnvelope> {
     const { tx, actor, vocId, input } = args;
+    const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+      { type: 'voc', id: vocId },
+    ]);
 
     const row = await lockVocForConversationCommand(tx, actor.workspace_id, vocId);
 
@@ -277,6 +283,8 @@ export function createConversationService(deps: {
       vocId,
     });
 
+    if (recovery)
+      await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'postPublicUpdate');
     return {
       public_update: {
         id: inserted.id,
@@ -567,6 +575,7 @@ export function createConversationService(deps: {
       actorId: actor.actor_id,
       idempotencyKey,
       requestHash,
+      recoveryWorkspaceId: actor.workspace_id,
       work: (tx) => postPublicUpdate({ tx, actor, vocId, input }),
     });
   }

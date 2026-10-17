@@ -6,17 +6,25 @@ import {
 } from '@fops/shared';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import {
   checkSurveyManage,
   checkSurveyPersonalResponseRead,
   checkSurveyRead,
 } from './authorization.js';
+import { resolveExcerptResultAudience } from './evidence-candidates.js';
 import {
+  type FindingHighlightEvidence,
   type SurveyResponseEvidenceSubject,
+  bindFindingResponse,
+  bindHighlightResponse,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
+  lockAttachmentResponse,
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
+  readFindingHighlightEvidence,
+  readInventoryHighlightEvidence,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
   revokeApprovedExcerpt,
@@ -302,4 +310,110 @@ export function createSurveyEvidenceAccess(deps: SurveysServiceDeps) {
     });
   }
   return { readEvidenceExcerptCandidate, approveEvidenceExcerpt, revokeEvidenceExcerpt };
+}
+
+/** Called only inside the authorized Finding command transaction. */
+export async function recordSurveyFindingBinding(
+  tx: Tx,
+  actor: SurveysActor,
+  findingId: string,
+  responseId: string,
+): Promise<void> {
+  await bindFindingResponse(tx, actor.workspace_id, findingId, responseId);
+}
+
+export async function recordSurveyHighlightBinding(
+  tx: Tx,
+  actor: SurveysActor,
+  highlightId: string,
+  responseId: string,
+  approvalId: string,
+): Promise<void> {
+  await bindHighlightResponse(tx, actor.workspace_id, highlightId, responseId, approvalId);
+}
+
+/** Target Finding read is checked by Findings in this same transaction. */
+export async function resolveFindingSurveyHighlights(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  findingId: string,
+  highlightIds: string[],
+): Promise<Map<string, FindingHighlightEvidence>> {
+  const rows = await readFindingHighlightEvidence(tx, actor.workspace_id, findingId, highlightIds);
+  const sourceDecisions = new Map<string, boolean>();
+  const permitted = new Map<string, FindingHighlightEvidence>();
+  for (const row of rows) {
+    let allowed = sourceDecisions.get(row.primary_managed_system_id);
+    if (allowed === undefined) {
+      allowed = (
+        await checkSurveyRead(deps.checkService, actor, row.primary_managed_system_id, { tx })
+      ).allow;
+      sourceDecisions.set(row.primary_managed_system_id, allowed);
+    }
+    if (allowed) permitted.set(row.highlight_id, row);
+  }
+  return permitted;
+}
+
+/** Every supplied parent is authorized by Findings in this bounded batch transaction. */
+export async function resolveInventorySurveyHighlights(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  highlightIds: string[],
+): Promise<Map<string, FindingHighlightEvidence>> {
+  const rows = await readInventoryHighlightEvidence(tx, actor.workspace_id, highlightIds);
+  const sourceDecisions = new Map<string, boolean>();
+  const permitted = new Map<string, FindingHighlightEvidence>();
+  for (const row of rows) {
+    let allowed = sourceDecisions.get(row.primary_managed_system_id);
+    if (allowed === undefined) {
+      allowed = (
+        await checkSurveyRead(deps.checkService, actor, row.primary_managed_system_id, { tx })
+      ).allow;
+      sourceDecisions.set(row.primary_managed_system_id, allowed);
+    }
+    if (allowed) permitted.set(row.highlight_id, row);
+  }
+  return permitted;
+}
+
+/** Finding has already locked/authorized its target. Selection is never authority. */
+export async function resolveSurveyAttachmentSelection(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  approvalId: string,
+): Promise<SurveyResponseEvidenceSubject> {
+  // Hold the existing settings singleton through commit, including its no-row
+  // default, so a threshold update cannot race a successful authorization.
+  const settings = await getResolvedWorkspaceSettingsForUpdate(tx, actor.workspace_id);
+  const responseId = await lockAttachmentResponse(tx, actor.workspace_id, approvalId);
+  if (!responseId) throw new HttpError('not_found.record', 'survey excerpt not found');
+  const { subject } = await resolveSurveyResponseEvidenceAccess(
+    deps,
+    tx,
+    actor,
+    responseId,
+    'read_highlight',
+  );
+  if (subject.survey_status === 'draft')
+    throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
+  const approved = await readApprovedResponseExcerpts(tx, actor.workspace_id, responseId, [
+    approvalId,
+  ]);
+  const audience = await resolveExcerptResultAudience(
+    tx,
+    deps.checkService,
+    actor,
+    subject.survey_id,
+    subject.primary_managed_system_id,
+    settings.survey_anonymity_threshold,
+  );
+  if (!approved[0] || !audience.questionIds.includes(approved[0].question_id))
+    throw new HttpError('validation.failed', 'approved excerpt is unavailable', {
+      fields: [{ path: ['approved_excerpt_id'], code: 'invalid' }],
+    });
+  return subject;
 }

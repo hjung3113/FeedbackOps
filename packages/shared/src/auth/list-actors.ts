@@ -12,13 +12,14 @@
 
 import { z } from 'zod';
 
-import { ROLE_LEVEL_VALUES } from '../enums/index.js';
+import { ACTOR_TYPE_VALUES, ROLE_LEVEL_VALUES } from '../enums/index.js';
 
 export const actorListItemSchema = z.object({
   id: z.string().uuid(),
   display_name: z.string().min(1),
   email: z.string().min(1),
   role_level: z.enum(ROLE_LEVEL_VALUES),
+  actor_type: z.enum(ACTOR_TYPE_VALUES),
 });
 export type ActorListItem = z.infer<typeof actorListItemSchema>;
 

@@ -1,4 +1,6 @@
 import { type DbHandle, createDb } from '../db/client.js';
+import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
+import { cleanupResponsibilityFailures } from './responsibility-fixtures.js';
 import { paragraphDoc } from './rich-content-fixtures.js';
 
 // ── VOC direct SQL insert (bypasses REST + rate limit) ───────────────────────
@@ -131,6 +133,7 @@ export async function cleanupReadTestTables(
   workspaceId: string,
   msSlugPrefix: string,
 ): Promise<void> {
+  await cleanupResponsibilityFailures(workspaceId, msSlugPrefix);
   // 1. Clean grants + denies for test dev actors before removing actors.
   await dbHandle.pool.query(
     `delete from permission.permission_grants
@@ -199,7 +202,8 @@ export async function cleanupReadTestTables(
       )`,
     [`${msSlugPrefix}%`, workspaceId],
   );
-  await dbHandle.pool.query(
+  await deleteRecoveryFixtureParents(
+    dbHandle,
     `delete from core.managed_systems where slug like $1 and workspace_id = $2`,
     [`${msSlugPrefix}%`, workspaceId],
   );

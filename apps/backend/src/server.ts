@@ -1,4 +1,8 @@
 import type { NotificationSubjectReference } from '@fops/shared';
+import { createOwnerRecoveryRecorder } from './modules/dashboard/truth.js';
+import { createOutcomeRecoveryRecorder } from './modules/surveys/recovery-presentation.js';
+import { vocClusterSuggestionsRoutes } from './modules/voc/cluster-suggestions/routes.js';
+import { createVocClusterSuggestionsService } from './modules/voc/cluster-suggestions/service.js';
 
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -10,15 +14,20 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod';
+import pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { buildEntityLinkProviders } from './entity-link-providers.js';
 import { registerHttpErrorHandler } from './lib/http-error-handler.js';
+import { toJobLog } from './lib/job-log.js';
 import { reqLogSerializer } from './lib/logger.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
-import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
+import {
+  createPgRateLimitStore,
+  createSensitiveActorRateLimit,
+} from './lib/rate-limit-pg-store.js';
 import { buildRateLimitTiers } from './lib/rate-limit-tiers.js';
 import { getStorage } from './lib/storage/factory.js';
 import type { StorageBackend } from './lib/storage/index.js';
@@ -40,7 +49,13 @@ import { healthRoutes } from './modules/core/health/routes.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
-import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
+import {
+  createFindingsService,
+  findingRecoveryProjection,
+  findingRecoveryRepairScope,
+  findingsRoutes,
+  reconcileFindingExecution,
+} from './modules/findings/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
@@ -66,14 +81,21 @@ import {
   createDecisionService,
   createGrantAdminService,
   createRequestService,
+  createSelectedReadService,
+  permissionRecoveryProjection,
   permissionsRoutes,
 } from './modules/permissions/index.js';
 import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
-import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
+import {
+  createSurveysService,
+  surveyRecoveryProjection,
+  surveysRoutes,
+} from './modules/surveys/index.js';
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
-import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
+import { createTasksService, taskRecoveryProjection, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
-import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import type { EmbeddingProvider } from './modules/voc/embedding/port.js';
 import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
@@ -81,13 +103,18 @@ import {
   createVocReadService,
   createVocRecommendationsService,
   createVocService,
+  readTaskRecoveryVocs,
   vocRecommendationsRoutes,
+  vocRecoveryProjection,
+  vocRecoveryRepairScope,
   vocRoutes,
 } from './modules/voc/index.js';
 import {
   createPreSubmitVocPeersService,
   preSubmitVocPeersRoutes,
 } from './modules/voc/pre-submit-peers/index.js';
+import { similarityPreviewRoutes } from './modules/voc/similarity-preview/routes.js';
+import { createSimilarityPreviewService } from './modules/voc/similarity-preview/service.js';
 import {
   createWorkspaceSettingsService,
   getResolvedWorkspaceSettings,
@@ -95,6 +122,12 @@ import {
 } from './modules/workspace-settings/index.js';
 
 export interface BuildServerOptions {
+  embeddingProvider?: EmbeddingProvider;
+  similarityPreviewDeadlineMs?: number;
+  suggestionPageSize?: number;
+  suggestionReadScanCeiling?: number;
+  similarityPreviewClock?: () => Date;
+  recoveryClock?: () => Date;
   config: AppConfig;
   dbHandle: DbHandle;
   /**
@@ -133,6 +166,7 @@ export interface BuildServerOptions {
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
+  const embeddingProvider = opts.embeddingProvider ?? createEmbeddingProvider(opts.config);
   const { config, dbHandle, boss } = opts;
 
   if (!config.WORKSPACE_ID) {
@@ -372,6 +406,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Permissions module — slice 1 issue #4 ───────────────────────────────
   // Registered AFTER auth so requireSession is available on its routes.
+  const recoveryRecorder = createOwnerRecoveryRecorder();
   const checkService = createCheckService({ db: dbHandle.db });
   const auditService = createAuditService();
   const idempotencyService = createIdempotencyService();
@@ -380,6 +415,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     (boss ? createPgBossNotificationDispatcher(boss) : createNoopNotificationDispatcher());
   const notify = createNotificationNotifier(notificationDispatcher);
   const requestService = createRequestService({
+    recoveryRecorder,
     db: dbHandle.db,
     checkService,
     auditService,
@@ -387,6 +423,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     notify,
   });
   const decisionService = createDecisionService({
+    recoveryRecorder,
     db: dbHandle.db,
     checkService,
     auditService,
@@ -405,6 +442,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     checkService,
     requestService,
+    selectedReadService: createSelectedReadService({ db: dbHandle.db, checkService }),
     decisionService,
     grantAdminService,
     workspaceId,
@@ -463,6 +501,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Entity Links module — Slice 4.1 issue #112 ────────────────────────────
   const entityLinksService = createEntityLinksService({
+    reconcileFindingExecution,
+    recoveryRecorder,
     db: dbHandle.db,
     checkService,
     auditService,
@@ -480,6 +520,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Findings module — Slice 5 issue #122 ─────────────────────────────────
   const findingsService = createFindingsService({
+    outcomeRecoveryRecorder: createOutcomeRecoveryRecorder(),
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -497,6 +539,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   const surveysService = createSurveysService({
+    ...(opts.recoveryClock ? { recoveryClock: opts.recoveryClock } : {}),
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -512,7 +556,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
+  // The independent increment runs while the command holds a transaction
+  // connection. A separate bounded pool prevents command-pool starvation.
+  const selfApprovalPool = new pg.Pool({
+    ...dbHandle.pool.options,
+    max: 2,
+    connectionTimeoutMillis: 5_000,
+  });
+  app.addHook('onClose', async () => selfApprovalPool.end());
   const taskRequestsService = createTaskRequestsService({
+    consumeSelfApprovalRateLimit: createSensitiveActorRateLimit(selfApprovalPool),
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -539,6 +593,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Tasks module — Slice 6 issue #134 ────────────────────────────────────
   const tasksService = createTasksService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -577,11 +632,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // VOC conversation command is constructed here so cluster candidate apply can
   // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
     idempotencyService,
     notify,
+    vocReadService,
     // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
     // key-less environment creates no embedding jobs at all.
     embeddingEnqueuer: createVocEmbeddingEnqueuer({
@@ -591,6 +648,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     }),
   });
   const conversationService = createConversationService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -676,6 +734,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
   const vocClustersService = createVocClustersService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -716,6 +775,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: { read: app.rateLimitConfig.read },
   });
   const dashboardService = createDashboardService({
+    ...(opts.recoveryClock ? { recoveryClock: opts.recoveryClock } : {}),
+    recoveryReaders: {
+      vocRecoveryProjection,
+      vocRecoveryRepairScope,
+      findingRecoveryProjection,
+      findingRecoveryRepairScope,
+      taskRecoveryProjection,
+      permissionRecoveryProjection,
+      surveyRecoveryProjection,
+      readTaskRecoveryVocs,
+    },
     db: dbHandle.db,
     checkService,
     requestService,
@@ -725,7 +795,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     dashboardService,
     workspaceId,
-    rateLimitConfig: { read: app.rateLimitConfig.read },
+    rateLimitConfig: { read: app.rateLimitConfig.read, mutation: app.rateLimitConfig.mutation },
   });
   await app.register(notificationRoutes, {
     sessionService,
@@ -755,6 +825,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     embeddingEnabled: isEmbeddingEnabled(config),
     createClustersService: (db) =>
       createVocClustersService({
+        recoveryRecorder,
         db,
         auditService,
         checkService,
@@ -768,7 +839,54 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     workspaceId,
     rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
+  const clusterSuggestionsService = createVocClusterSuggestionsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+    embeddingVersion: config.EMBEDDING_VERSION,
+    embeddingEnabled: isEmbeddingEnabled(config),
+    embeddingIdentity: embeddingProvider.identity(),
+    ...(opts.suggestionPageSize !== undefined
+      ? { suggestionPageSize: opts.suggestionPageSize }
+      : {}),
+    ...(opts.suggestionReadScanCeiling !== undefined
+      ? { suggestionReadScanCeiling: opts.suggestionReadScanCeiling }
+      : {}),
+    createClustersService: (db) =>
+      createVocClustersService({
+        db,
+        auditService,
+        checkService,
+        idempotencyService,
+        recoveryRecorder,
+        postPublicUpdate: conversationService.postPublicUpdate,
+      }),
+  });
+  await app.register(vocClusterSuggestionsRoutes, {
+    service: clusterSuggestionsService,
+    sessionService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
+  });
   const preSubmitVocPeersService = createPreSubmitVocPeersService({ db: dbHandle.db });
+  await app.register(similarityPreviewRoutes, {
+    sessionService,
+    workspaceId,
+    rateLimitConfig: app.rateLimitConfig.similarityPreview,
+    readRateLimitConfig: app.rateLimitConfig.read,
+    service: createSimilarityPreviewService({
+      db: dbHandle.db,
+      config,
+      provider: embeddingProvider,
+      log: toJobLog(app.log),
+      ...(opts.similarityPreviewDeadlineMs !== undefined
+        ? { deadlineMs: opts.similarityPreviewDeadlineMs }
+        : {}),
+      ...(opts.similarityPreviewClock ? { clock: opts.similarityPreviewClock } : {}),
+    }),
+  });
+
   await app.register(preSubmitVocPeersRoutes, {
     sessionService,
     preSubmitVocPeersService,

@@ -3,6 +3,12 @@
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID. The conductor runs
 // this outside the sandbox.
 
+import { randomUUID } from 'node:crypto';
+import type { TaskStatus } from '@fops/shared';
+import { insertActorRow } from '../../../test-support/actor-fixtures.js';
+import { createAa } from '../../../test-support/core-fixtures.js';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
+
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -404,5 +410,381 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
     } finally {
       await revokeDeny(dbHandle, denyId, adminActorId);
     }
+  });
+});
+
+function fixtureRow<T>(rows: T[]): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error('missing #1077 fixture row');
+  return row;
+}
+
+// Separate owned fixtures preserve every existing #395/#981 setup and assertion.
+describe.skipIf(!runIntegration)('Task Analytics Area report destinations (#1077)', () => {
+  let db: DbHandle;
+  let migrate: DbHandle;
+  let app: FastifyInstance;
+  let admin: { id: string; cookie: string };
+  let devA: { id: string; cookie: string };
+  let devB: { id: string; cookie: string };
+  let user: { id: string; cookie: string };
+  let msA: string;
+  let msB: string;
+  let areaA: string;
+  let areaB: string;
+  let archivedArea: string;
+  let foreignWorkspace: string;
+  let foreignArea: string;
+  const systems: string[] = [];
+  const actors: string[] = [];
+  const tasks: Array<{ id: string; status: TaskStatus; area: string | null; overdue: boolean }> =
+    [];
+  const reporterNeeded: string[] = [];
+
+  async function actor(roleLevel: 'admin' | 'developer' | 'user') {
+    const row = await insertActorRow(migrate, {
+      workspaceId: WORKSPACE_ID,
+      externalId: uid('task-area-1077'),
+      roleLevel,
+    });
+    actors.push(row.id);
+    const cookie = randomUUID();
+    await migrate.pool.query(
+      `insert into core.sessions (id, actor_id, workspace_id, expires_at, last_seen_at, created_at, created_user_agent_summary)
+       values ($1, $2, $3, now() + interval '1 hour', now(), now(), 'integration-test')`,
+      [cookie, row.id, WORKSPACE_ID],
+    );
+    return { id: row.id, cookie };
+  }
+  const get = (query: Record<string, string>, who = admin) =>
+    app.inject({
+      method: 'GET',
+      url: `/tasks?${new URLSearchParams(query)}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${who.cookie}` },
+    });
+  async function membership(query: Record<string, string>, expected: string[], who = admin) {
+    const full = await get(query, who);
+    expect(full.statusCode).toBe(200);
+    const ids = full.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id);
+    expect([...ids].sort()).toEqual([...expected].sort());
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const response = await get({ ...query, limit: '2', ...(cursor ? { cursor } : {}) }, who);
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page: { total?: number; cursor?: string; has_more: boolean };
+      }>();
+      expect(body.page.total).toBe(cursor === undefined ? expected.length : undefined);
+      walked.push(...body.items.map((row) => row.id));
+      expect(body.page.has_more).toBe(walked.length < expected.length);
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toEqual(ids);
+    expect(new Set(walked).size).toBe(expected.length);
+  }
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'test';
+    db = createDb(APP_URL);
+    migrate = createDb(MIGRATE_URL);
+    app = await buildServer({ config: loadConfig(), dbHandle: db });
+    await app.ready();
+    admin = await actor('admin');
+    devA = await actor('developer');
+    devB = await actor('developer');
+    user = await actor('user');
+    msA = await insertMsDirectly(migrate, WORKSPACE_ID, uid('task-area-1077'), 'A');
+    msB = await insertMsDirectly(migrate, WORKSPACE_ID, uid('task-area-1077'), 'B');
+    systems.push(msA, msB);
+    for (const [who, system] of [
+      [devA, msA],
+      [devB, msB],
+      [user, msA],
+    ] as const)
+      await grantCapability(migrate, WORKSPACE_ID, who.id, 'finding.manage', system, admin.id);
+    areaA = await createAa(app, admin.cookie, {
+      managed_system_id: msA,
+      slug: 'same',
+      name: 'Same',
+    });
+    areaB = await createAa(app, admin.cookie, {
+      managed_system_id: msB,
+      slug: 'same',
+      name: 'Same',
+    });
+    archivedArea = await createAa(app, admin.cookie, {
+      managed_system_id: msA,
+      slug: 'archived',
+      name: 'Archived',
+    });
+    const dates = fixtureRow(
+      (
+        await migrate.pool.query<{ yesterday: string; today: string }>(
+          `select ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 1)::text as yesterday,
+        (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text as today`,
+        )
+      ).rows,
+    );
+    for (const status of [
+      'backlog',
+      'todo',
+      'doing',
+      'review',
+      'done',
+      'released',
+      'reopened',
+    ] as const) {
+      for (const due of [dates.yesterday, dates.today, null]) {
+        const task = await insertTaskRow(migrate, {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: msA,
+          status,
+          analyticsAreaId: areaA,
+          dueDate: due,
+          createdBy: admin.id,
+        });
+        tasks.push({
+          id: task.id,
+          status,
+          area: areaA,
+          overdue: due === dates.yesterday && status !== 'done' && status !== 'released',
+        });
+      }
+    }
+    for (const [system, area] of [
+      [msA, null],
+      [msA, archivedArea],
+      [msB, areaB],
+    ] as const) {
+      const task = await insertTaskRow(migrate, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: system,
+        analyticsAreaId: area,
+        createdBy: admin.id,
+      });
+      tasks.push({ id: task.id, status: 'backlog', area, overdue: false });
+    }
+    await migrate.pool.query('update core.analytics_areas set archived_at = now() where id = $1', [
+      archivedArea,
+    ]);
+    // Two hidden unresolved VOCs still produce one Task-grain row without a voc.read grant.
+    const gap = fixtureRow(tasks.filter((row) => row.status === 'released'));
+    reporterNeeded.push(gap.id);
+    for (const [taskId, statuses] of [
+      [gap.id, ['received', 'received']],
+      [
+        fixtureRow(tasks.filter((row) => row.status === 'released').slice(1)).id,
+        ['resolved', 'closed'],
+      ],
+      [fixtureRow(tasks.filter((row) => row.status === 'todo')).id, ['received']],
+    ] as const) {
+      for (const status of statuses) {
+        const voc = await insertVocDirectly(db, WORKSPACE_ID, msA, admin.id, 'Reporter gap');
+        if (status !== 'received')
+          await migrate.pool.query(
+            'update voc.vocs set reporter_facing_status = $2 where id = $1',
+            [voc.id, status],
+          );
+        await migrate.pool.query(
+          `insert into core.entity_links (workspace_id, source_type, source_id, target_type,
+            target_id, relation_type, managed_system_id, created_by)
+           values ($1, 'voc', $2, 'task', $3, 'evidence_of', $4, $5)`,
+          [WORKSPACE_ID, voc.id, taskId, msA, admin.id],
+        );
+      }
+    }
+    foreignWorkspace = fixtureRow(
+      (
+        await migrate.pool.query<{ id: string }>(
+          'insert into core.workspaces (name) values ($1) returning id',
+          [uid('task-area-foreign')],
+        )
+      ).rows,
+    ).id;
+    const foreignMs = await insertMsDirectly(migrate, foreignWorkspace, 'foreign', 'Foreign');
+    systems.push(foreignMs);
+    foreignArea = fixtureRow(
+      (
+        await migrate.pool.query<{ id: string }>(
+          'insert into core.analytics_areas (workspace_id, managed_system_id, slug, name) values ($1, $2, $3, $4) returning id',
+          [foreignWorkspace, foreignMs, 'same', 'Same'],
+        )
+      ).rows,
+    ).id;
+    const foreignCreator = await insertActorRow(migrate, {
+      workspaceId: foreignWorkspace,
+      externalId: uid('task-area-foreign'),
+      roleLevel: 'admin',
+    });
+    actors.push(foreignCreator.id);
+    await insertTaskRow(migrate, {
+      workspaceId: foreignWorkspace,
+      primaryManagedSystemId: foreignMs,
+      analyticsAreaId: foreignArea,
+      createdBy: foreignCreator.id,
+    });
+  });
+
+  afterAll(async () => {
+    if (migrate) {
+      await migrate.pool.query('delete from core.audit_log where actor_id = any($1::uuid[])', [
+        actors,
+      ]);
+      await migrate.pool.query(
+        'delete from core.entity_links where managed_system_id = any($1::uuid[])',
+        [systems],
+      );
+      await migrate.pool.query(
+        'delete from task.tasks where primary_managed_system_id = any($1::uuid[])',
+        [systems],
+      );
+      await migrate.pool.query(
+        'delete from voc.vocs where primary_managed_system_id = any($1::uuid[])',
+        [systems],
+      );
+      await migrate.pool.query(
+        'delete from permission.permission_grants where actor_id = any($1::uuid[])',
+        [actors],
+      );
+      await migrate.pool.query(
+        'delete from core.analytics_areas where managed_system_id = any($1::uuid[])',
+        [systems],
+      );
+      await deleteRecoveryFixtureParents(
+        migrate,
+        'delete from core.managed_systems where id = any($1::uuid[])',
+        [systems],
+      );
+      await migrate.pool.query('delete from core.sessions where actor_id = any($1::uuid[])', [
+        actors,
+      ]);
+      await migrate.pool.query('delete from core.rate_limits where key = any($1::text[])', [
+        actors.map((id) => `${WORKSPACE_ID}:${id}`),
+      ]);
+      await migrate.pool.query('delete from core.actors where id = any($1::uuid[])', [actors]);
+      if (foreignWorkspace) {
+        await migrate.pool.query('delete from core.display_counters where workspace_id = $1', [
+          foreignWorkspace,
+        ]);
+        await deleteRecoveryFixtureParents(migrate, 'delete from core.workspaces where id = $1', [
+          foreignWorkspace,
+        ]);
+      }
+    }
+    await app?.close();
+    await db?.close();
+    await migrate?.close();
+  });
+
+  it.each(['uuid', 'unset', 'archived', 'same-name-other-system'] as const)(
+    'filters Area %s with exact total',
+    async (kind) => {
+      const area =
+        kind === 'unset'
+          ? 'unset'
+          : kind === 'archived'
+            ? archivedArea
+            : kind === 'uuid'
+              ? areaA
+              : areaB;
+      await membership(
+        { analytics_area_id: area, ...(kind === 'unset' ? { managed_system_id: msA } : {}) },
+        tasks.filter((row) => row.area === (area === 'unset' ? null : area)).map((row) => row.id),
+      );
+    },
+  );
+  it.each(['unknown', 'foreign', 'incompatible', 'developer-b'] as const)(
+    'Area %s fails closed without existence errors',
+    async (kind) => {
+      await membership(
+        {
+          analytics_area_id:
+            kind === 'unknown' ? randomUUID() : kind === 'foreign' ? foreignArea : areaA,
+          ...(kind === 'incompatible' ? { managed_system_id: msB } : {}),
+        },
+        [],
+        kind === 'developer-b' ? devB : admin,
+      );
+    },
+  );
+  it.each(['in-flight', 'overdue', 'reporter'] as const)(
+    'filters %s and reconciles walked total',
+    async (kind) => {
+      const query =
+        kind === 'in-flight'
+          ? { status_group: 'in-flight' }
+          : kind === 'overdue'
+            ? { overdue: 'true' }
+            : { reporter_update: 'needed' };
+      const expected =
+        kind === 'reporter'
+          ? reporterNeeded
+          : tasks
+              .filter((row) =>
+                kind === 'overdue' ? row.overdue : ['todo', 'doing', 'review'].includes(row.status),
+              )
+              .map((row) => row.id);
+      await membership({ ...query, managed_system_id: msA }, expected, devA);
+    },
+  );
+  it('intersects Area, status group, overdue, status, and the legacy public-update gap', async () => {
+    await membership(
+      {
+        analytics_area_id: areaA,
+        status_group: 'in-flight',
+        overdue: 'true',
+        status: 'todo',
+        managed_system_id: msA,
+      },
+      tasks.filter((row) => row.status === 'todo' && row.overdue).map((row) => row.id),
+    );
+    await membership({ status: 'backlog', status_group: 'in-flight', managed_system_id: msA }, []);
+    await membership(
+      {
+        analytics_area_id: areaA,
+        reporter_update: 'needed',
+        public_update: 'missing',
+        managed_system_id: msA,
+      },
+      reporterNeeded,
+    );
+    await membership({ reporter_update: 'needed', overdue: 'true', managed_system_id: msA }, []);
+  });
+  it('keeps User forbidden even with finding.manage and an Area filter', async () => {
+    const response = await get({ analytics_area_id: areaA }, user);
+    expect(response.statusCode).toBe(403);
+    expect(response.json().code).toBe('permission.denied');
+  });
+  it.each([
+    'analytics_area_id=bad',
+    'status_group=backlog',
+    'overdue=false',
+    'reporter_update=missing',
+    'unknown=true',
+  ])('rejects invalid query %s', async (query) => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tasks?${query}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${admin.cookie}` },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('validation.failed');
+  });
+  it('ordinary filtered read writes no Task, link, VOC, or audit rows', async () => {
+    const snapshot = async () =>
+      (
+        await migrate.pool.query(
+          `select (select count(*) from task.tasks where primary_managed_system_id = $1) tasks,
+        (select count(*) from voc.vocs where primary_managed_system_id = $1) vocs,
+        (select count(*) from core.entity_links where managed_system_id = $1) links,
+        (select count(*) from core.audit_log where actor_id = $2) audits`,
+          [msA, devA.id],
+        )
+      ).rows;
+    const before = await snapshot();
+    await membership({ analytics_area_id: areaA, reporter_update: 'needed' }, reporterNeeded, devA);
+    expect(await snapshot()).toEqual(before);
   });
 });

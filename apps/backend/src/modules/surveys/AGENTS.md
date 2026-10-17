@@ -19,3 +19,34 @@ Survey owns Survey, Survey Response, Survey Result, survey-specific summaries, a
 ## Verification
 
 - Test forbidden create-VOC paths, hidden response summaries, and survey-to-Finding evidence preservation when touched.
+
+## Close-out contract (ADR-0067; implemented)
+
+- ADR-0067 preserves the dedicated Survey operator resolver and ADR-0055 response classifier,
+  source-owned decisions/reopen and personal-read audits (no Admin bypass).
+- Response presentation/history adapter stays Survey-owned/personal-gated;
+  Dashboard gets aggregate count/safe Survey navigation, no non-holder response enumeration.
+- Response-derived Finding responsibility is resolved by Findings after the personal source gate.
+
+## Provenance and safe reuse (ADR-0064; #1109 backend/shared implemented)
+
+Backend/shared implementation is present; migration application and real-role
+integration verification remain conductor-owned. The frontend picker is separate.
+
+- Survey owns proposed/new protected Finding/highlight response/approval/text
+  extensions and authorized batch read/write seams; Finding owns parent lifecycle
+  and counters. No direct app SELECT/general DML on the extensions.
+- Safe highlight reads check source access and exact active approval in the same
+  transaction snapshot with target Finding read. Preserve their existing audience
+  separately from result-picker cohort/per-question suppression; omit denied/revoked quote.
+- The #1109 candidates allow result readers to reuse suppression-visible
+  approved excerpts without a personal grant. The Finding command requires target
+  `finding.manage`, rechecks source/result audience and approval on submit, and
+  resolves response UUIDs internally. Existing response-addressed creation keeps
+  explicit personal access and no Admin bypass.
+- Results derived-Finding lookup uses a proposed/new workspace+Survey-ID reader,
+  returning candidate Finding IDs/target scope, not a raw response-ID link join.
+  Source and target Managed Systems may differ under independent authorization
+  inside one workspace. No personal grant merely for safe derived discovery.
+- Generic summaries are metadata-only; preserve private UUIDs/history. Trusted
+  app authorization does not promise SQL unlinkability for stolen app credentials.

@@ -9,8 +9,14 @@ import type {
   EntityLinkTargetSummary,
   EntityLinkVisibilityState,
   TaskReporterSummary,
+  VocDetailEnvelope,
 } from '@fops/shared';
 import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
+import { actorFindingReadScope, isFindingInReadScope } from '../findings/authorization.js';
+import type { FindingExecutionReconciler } from '../findings/execution-projection.js';
+import { readVocClusterMemberships } from '../voc-clusters/read-projections.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -33,11 +39,14 @@ import {
   selectActiveLinksForEndpoint,
   selectEntityLinkById,
   selectLinksByWorkspace,
+  selectVocFollowUpRoots,
 } from './repo.js';
 
 export type { EntityLinksActor, ReporterSummaryResult } from './provider-types.js';
 
 export interface EntityLinksServiceDeps {
+  reconcileFindingExecution?: FindingExecutionReconciler;
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
@@ -543,6 +552,22 @@ async function getEndpointInternalSummaries(
 }
 
 export function createEntityLinksService(deps: EntityLinksServiceDeps) {
+  function readDependencies(tx?: Tx): EntityLinksServiceDeps {
+    if (!tx) return deps;
+    // Providers predate Tx in their interface. Bind both their queries and the
+    // permission service to the caller's transaction without changing policy.
+    return {
+      ...deps,
+      db: tx as Db,
+      checkService: {
+        capabilityScope: (actor, capability, subject, options) =>
+          deps.checkService.capabilityScope(actor, capability, subject, { ...options, tx }),
+        checkCapability: (actor, capability, subject, options) =>
+          deps.checkService.checkCapability(actor, capability, subject, { ...options, tx }),
+      },
+    };
+  }
+
   async function createLink(args: {
     actor: EntityLinksActor;
     source: EntityLinkRef;
@@ -611,6 +636,10 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     assertLinkManagedSystemCompatibility(sourceRow.managed_system_id, targetRow.managed_system_id);
 
     const persist = async (tx: Tx) => {
+      if (!args.tx) await lockRecoveryCommand(tx, actor.workspace_id);
+      const recovery = args.tx
+        ? undefined
+        : await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [source, target]);
       const inserted = await insertActiveEntityLink(tx, {
         workspaceId: actor.workspace_id,
         sourceType: source.type,
@@ -644,6 +673,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         });
       }
 
+      if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'createLink');
       return inserted;
     };
 
@@ -690,14 +720,17 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     side?: 'source' | 'target';
     /** Default 'not_found': GET /entity-links must not leak existence. */
     onUnreadableFocus?: 'not_found' | 'empty';
+    tx?: Tx;
   }): Promise<EntityLinkDto[]> {
     const { actor, endpoint, side } = args;
+    const db = args.tx ?? deps.db;
+    const readDeps = readDependencies(args.tx);
     const provider = providerFor(deps.providers, endpoint.type);
-    const focus = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
+    const focus = await provider.getPermissionSubject(db, actor.workspace_id, endpoint.id);
     if (!focus) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
-    const focusAllowed = await provider.canRead(deps, actor, focus);
+    const focusAllowed = await provider.canRead(readDeps, actor, focus);
     if (!focusAllowed) {
       if (args.onUnreadableFocus === 'empty') {
         return [];
@@ -711,7 +744,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       endpointId: endpoint.id,
     };
     const rows = await selectActiveLinksForEndpoint(
-      deps.db,
+      db,
       side === undefined ? listArgs : { ...listArgs, side },
     );
 
@@ -719,7 +752,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       [`${endpoint.type}:${endpoint.id}`, focus],
     ]);
     const { reporterSummaries, sourceReadabilityByEndpoint } = await preloadReporterSummaries(
-      deps,
+      readDeps,
       actor,
       rows,
       resolvedByEndpoint,
@@ -736,7 +769,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         continue;
       }
       const { decision, summary } = await evaluateRowVisibility(
-        deps,
+        readDeps,
         actor,
         row,
         resolvedByEndpoint,
@@ -745,11 +778,131 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       );
       const endpointSummaries =
         decision === 'allowed'
-          ? await getEndpointInternalSummaries(deps.providers, deps.db, actor, row)
+          ? await getEndpointInternalSummaries(deps.providers, db, actor, row)
           : undefined;
       items.push(toDtoForDecision(row, decision, summary, endpointSummaries));
     }
     return items;
+  }
+
+  /** VOC-only projection. Generic Entity Links APIs retain their non-transitive registry. */
+  async function readVocFollowUp(args: {
+    actor: EntityLinksActor;
+    vocId: string;
+    tx?: Tx;
+  }): Promise<VocDetailEnvelope['linked_execution']> {
+    const { actor, vocId } = args;
+    const db = args.tx ?? deps.db;
+    const readDeps = readDependencies(args.tx);
+    const empty = { findingRef: null, taskRef: null };
+    const focus = await deps.providers.voc.getPermissionSubject(
+      db as Db,
+      actor.workspace_id,
+      vocId,
+    );
+    if (!focus || !(await deps.providers.voc.canRead(readDeps, actor, focus))) return empty;
+    const roots = await selectVocFollowUpRoots(db, actor.workspace_id, vocId);
+    const resolved = new Map<string, LinkEndpointRow | null>([[`voc:${vocId}`, focus]]);
+    const readability = new Map<string, boolean>();
+    const trails: NonNullable<VocDetailEnvelope['linked_execution']['trails']> = [];
+    for (const root of roots) {
+      const links: EntityLinkDto[] = [];
+      // Directed graph is acyclic by registered types. Expand only disclosed edges,
+      // so a readable endpoint beyond a hidden intermediate cannot reveal provenance.
+      const pending = [root];
+      const seen = new Set<string>();
+      while (pending.length > 0) {
+        const row = pending.shift();
+        if (!row || seen.has(row.id)) continue;
+        seen.add(row.id);
+        const { reporterSummaries } = await preloadReporterSummaries(
+          readDeps,
+          actor,
+          [row],
+          resolved,
+        );
+        const { decision, summary } = await evaluateRowVisibility(
+          readDeps,
+          actor,
+          row,
+          resolved,
+          reporterSummaries,
+          readability,
+        );
+        if (decision === 'hidden') continue;
+        const summaries =
+          decision === 'allowed'
+            ? await getEndpointInternalSummaries(deps.providers, db, actor, row)
+            : undefined;
+        links.push(toDtoForDecision(row, decision, summary, summaries));
+        if (
+          decision !== 'allowed' ||
+          (row.target_type !== 'finding' && row.target_type !== 'task_request')
+        )
+          continue;
+        const children = await selectActiveLinksForEndpoint(db, {
+          workspaceId: actor.workspace_id,
+          endpointType: row.target_type,
+          endpointId: row.target_id,
+          side: 'source',
+        });
+        pending.push(
+          ...children.filter(
+            (child) =>
+              (child.source_type === 'finding' &&
+                child.relation_type === 'requested_task' &&
+                (child.target_type === 'task_request' || child.target_type === 'task')) ||
+              (child.source_type === 'task_request' &&
+                child.relation_type === 'converted_to' &&
+                child.target_type === 'task'),
+          ),
+        );
+      }
+      if (links.length === 0) continue;
+      const cluster =
+        root.source_type === 'voc_cluster' && links[0]?.visibility_state === 'allowed'
+          ? links[0].source_summary
+          : undefined;
+      trails.push({
+        origin: root.source_type === 'voc_cluster' ? 'cluster' : 'direct',
+        ...(cluster?.type === 'voc_cluster' ? { cluster } : {}),
+        links,
+      });
+    }
+    const representedClusters = new Set(trails.map((trail) => trail.cluster?.id));
+    for (const membership of await readVocClusterMemberships(db, actor.workspace_id, vocId)) {
+      if (representedClusters.has(membership.id)) continue;
+      const provider = deps.providers.voc_cluster;
+      const subject = await provider.getPermissionSubject(
+        db as Db,
+        actor.workspace_id,
+        membership.id,
+      );
+      if (
+        !subject ||
+        !isFindingInReadScope(
+          await actorFindingReadScope(db, actor, { requireElevatedRole: true }),
+          subject.managed_system_id,
+        )
+      )
+        continue;
+      const cluster = await provider.getInternalSummary(
+        db as Db,
+        actor.workspace_id,
+        membership.id,
+      );
+      if (cluster?.type === 'voc_cluster') trails.push({ origin: 'cluster', cluster, links: [] });
+    }
+    const allowed = trails
+      .flatMap((trail) => trail.links)
+      .filter((link) => link.visibility_state === 'allowed');
+    const finding = allowed.find((link) => link.target_type === 'finding');
+    const task = allowed.find((link) => link.target_type === 'task');
+    return {
+      findingRef: finding ? { type: 'finding', id: finding.target_id } : null,
+      taskRef: task ? { type: 'task', id: task.target_id } : null,
+      ...(trails.length > 0 ? { trails } : {}),
+    };
   }
 
   async function listInventoryLinks(args: {
@@ -869,11 +1022,22 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     if (!sourceAllowed || !targetAllowed) {
       throw new HttpError('not_found.record', 'entity link not found');
     }
+    if (
+      targetProvider.canCreateTarget !== undefined &&
+      !(await targetProvider.canCreateTarget(deps, actor, targetRow))
+    ) {
+      throw new HttpError('not_found.record', 'entity link not found');
+    }
     if (link.status !== 'active') {
       throw new HttpError('conflict.stale_write', 'entity link is no longer active');
     }
 
     const detached = await deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+        { type: link.source_type, id: link.source_id },
+        { type: link.target_type, id: link.target_id },
+      ]);
       const updated = await detachEntityLink(tx, {
         workspaceId: actor.workspace_id,
         linkId,
@@ -882,6 +1046,17 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       });
       if (!updated) {
         throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+      }
+
+      if (
+        updated.source_type === 'finding' &&
+        updated.target_type === 'task' &&
+        updated.relation_type === 'requested_task'
+      ) {
+        await deps.reconcileFindingExecution?.(tx, {
+          workspaceId: actor.workspace_id,
+          findingId: updated.source_id,
+        });
       }
 
       await deps.auditService.record(tx, {
@@ -900,6 +1075,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         },
       });
 
+      if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'detachLink');
       return updated;
     });
 
@@ -912,6 +1088,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     resolveReadableEndpointSummary,
     listLinks,
     listInventoryLinks,
+    readVocFollowUp,
     detachLink,
   };
 }

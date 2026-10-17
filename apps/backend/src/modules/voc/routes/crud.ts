@@ -20,7 +20,7 @@ import {
 } from '@fops/shared';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../../lib/errors.js';
-import { requireIdempotencyKey, requireIfMatch, UUID_REGEX } from '../../../lib/http-headers.js';
+import { UUID_REGEX, requireIdempotencyKey, requireIfMatch } from '../../../lib/http-headers.js';
 import { requireSession } from '../../../middleware/require-session.js';
 import { requireWorkspace } from '../../../middleware/require-workspace.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
@@ -49,9 +49,31 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
         });
       }
 
+      // Owner input keeps its forbidden-field slot ahead of display_id whenever the
+      // request would be rejected before the transactional owner check runs.
+      const ownerInputNeedsPreflight =
+        ('owner_user_id' in rawBody || 'owner_team_id' in rawBody) &&
+        (!createVocRequestSchema.safeParse(rawBody).success ||
+          FORBIDDEN_CREATE_FIELDS.some((f) => f !== 'severity' && f in rawBody));
+
       // 2. Other forbidden server-resolved fields → validation.unexpected_field.
       for (const f of FORBIDDEN_CREATE_FIELDS) {
         if (f === 'severity') continue;
+        if (f === 'display_id' && ownerInputNeedsPreflight) {
+          await vocService.assertCreateOwnerOverride({
+            actor: {
+              actor_id: sess.actor_id,
+              workspace_id: sess.workspace_id,
+              role_level: sess.role_level,
+            },
+            managedSystemId:
+              typeof rawBody.primary_managed_system_id === 'string' &&
+              UUID_REGEX.test(rawBody.primary_managed_system_id)
+                ? rawBody.primary_managed_system_id
+                : undefined,
+            field: 'owner_user_id' in rawBody ? 'owner_user_id' : 'owner_team_id',
+          });
+        }
         if (f in rawBody) {
           return sendError(reply, 'validation.unexpected_field', `${f} is server-resolved`, {
             fields: [{ path: [f], code: 'unexpected_field' }],
@@ -72,7 +94,11 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
       // idempotency frame are owned by the application command.
       const hash = hashRequestBody(rawBody);
       const result = await vocService.createVocCommand({
-        actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
         input,
         idempotencyKey,
         requestHash: hash,
@@ -232,6 +258,7 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
         actor: {
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
         },
         vocId,
         ifMatch,
@@ -275,6 +302,32 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
       };
 
       const result = await vocReadService.listVocs({ actor, query: parsed.data });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'GET',
+    url: '/vocs/:id/owner-candidates',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const { id: vocId } = req.params as { id: string };
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const result = await vocReadService.getOwnerCandidates({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+      });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
     },
   });

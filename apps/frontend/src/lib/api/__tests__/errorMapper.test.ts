@@ -45,6 +45,18 @@ function isSlice3OwnerCode(code: ErrorCode): boolean {
 }
 
 describe('errorMapper — ERROR_CODES coverage', () => {
+  it.each([
+    ['rate_limited.actor', 'day', '오늘 유사 VOC 조회 한도를 사용했습니다'],
+    ['rate_limited.workspace', 'day', '이 워크스페이스의 유사 VOC 조회 한도를 사용했습니다'],
+    ['rate_limited.actor', 'minute', '요청이 너무 많습니다. 30초 후 다시 시도해 주세요.'],
+    ['rate_limited.workspace', 'minute', '이 워크스페이스의 유사 VOC 조회 요청이 너무 많습니다. 30초 후 다시 시도해 주세요.'],
+    ['rate_limited.actor', undefined, '요청이 너무 많습니다. 30초 후 다시 시도해 주세요.'],
+  ] as const)('maps %s %s budgets', (code, period, message) => {
+    expect(errorMapper({ code: code as ErrorCode, message: '', detail: {
+      ...(period ? { budget_period: period } : {}), retry_after_seconds: 30,
+    } }).message).toBe(message);
+  });
+
   it('AC-2 classifies every shared code in the catalog or explicit server-only exclusions', () => {
     expect(findUnclassifiedCodes(ERROR_CODES)).toEqual([]);
   });
@@ -195,4 +207,18 @@ describe('errorMapper — unknown and missing errors', () => {
     expect(mapped.message).toBe(expected);
     if (expected === GENERIC_ERROR_MESSAGE) expect(mapped).not.toHaveProperty('action');
   });
+});
+
+it('maps authorized permission request revision conflicts while preserving generic stale copy', () => {
+  expect(
+    errorMapper({ code: 'conflict.stale_write', message: '', detail: { current_revision: 2 } })
+      .message,
+  ).toBe('요청 내용이 변경되었습니다. 최신 요청을 확인한 후 다시 시도해 주세요.');
+  expect(
+    errorMapper({
+      code: 'conflict.stale_write',
+      message: '',
+      detail: { current_updated_at: '2026-01-01T00:00:00Z' },
+    }).message,
+  ).toBe('다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?');
 });

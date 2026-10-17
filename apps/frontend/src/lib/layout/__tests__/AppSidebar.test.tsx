@@ -1,7 +1,7 @@
 import { NAV_TREE } from '@/routes/_authed';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Database, Inbox, Plus, Settings } from 'lucide-react';
+import { Database, Inbox, Plus } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
 
@@ -81,7 +81,7 @@ describe('AppSidebar', () => {
   });
 
   it('does not render a footer wrapper for a non-admin actor', () => {
-    render(<AppSidebar entries={entries} canAccessWorkspaceAdmin={false} />);
+    render(<AppSidebar entries={entries} />);
 
     expect(screen.queryByTestId('sidebar-footer')).not.toBeInTheDocument();
   });
@@ -147,6 +147,24 @@ describe('AppSidebar', () => {
       (el) => el.textContent === 'Inbox',
     );
     expect(labelSpan).toBeDefined();
+  });
+
+  // #1179: long queue labels truncate at 1440; the span itself keeps the full
+  // label discoverable on hover, the same guarantee as scope-name.
+  it('expanded nav label span carries the full label as its title', () => {
+    const label = '후속 조치 없는 부정 성과 Survey';
+    render(
+      <AppSidebar entries={[{ id: 'queue', label, href: '/integration', section: '연동' }]} />,
+    );
+    const navLink = screen.getByTestId('sidebar-nav-queue');
+    const labelSpan = Array.from(navLink.querySelectorAll('span')).find(
+      (el) => el.textContent === label,
+    );
+    expect(labelSpan).toBeDefined();
+    expect(labelSpan).toHaveClass('truncate');
+    expect(labelSpan).toHaveAttribute('title', label);
+    // The link itself stays title-free when expanded (label is visible).
+    expect(navLink.getAttribute('title')).toBeNull();
   });
 
   it('expanded state does not set title/aria-label (label is visible)', () => {
@@ -269,46 +287,6 @@ describe('AppSidebar', () => {
     expect(remove).toHaveBeenCalledWith('view-1');
   });
 
-  it('renders footer items and keeps collapsed icons accessible', () => {
-    render(
-      <AppSidebar
-        entries={entries}
-        defaultCollapsed={true}
-        canAccessWorkspaceAdmin={true}
-        footerItems={[
-          {
-            id: 'workspace-settings',
-            label: 'Workspace settings',
-            href: '/admin/placeholder',
-            icon: <Settings className="h-4 w-4" />,
-          },
-          {
-            id: 'invite-member',
-            label: 'Invite member',
-            icon: <Plus className="h-4 w-4" />,
-            disabled: true,
-          },
-        ]}
-      />,
-    );
-
-    const settings = screen.getByTestId('sidebar-footer-workspace-settings');
-    const invite = screen.getByTestId('sidebar-footer-invite-member');
-
-    expect(settings).toHaveAttribute('href', '/admin/placeholder');
-    expect(settings).toHaveAttribute('title', 'Workspace settings');
-    expect(settings).toHaveAttribute('aria-label', 'Workspace settings');
-    expect(settings.querySelector('svg')).not.toBeNull();
-    expect(settings.textContent).toBe('');
-
-    expect(invite).toHaveAttribute('type', 'button');
-    expect(invite).toBeDisabled();
-    expect(invite).toHaveAttribute('title', 'Invite member');
-    expect(invite).toHaveAttribute('aria-label', 'Invite member');
-    expect(invite.querySelector('svg')).not.toBeNull();
-    expect(invite.textContent).toBe('');
-  });
-
   it.each([true, false])('hides Invite member for isAdmin=%s', (isAdmin) => {
     render(<AppSidebar entries={entries} isAdmin={isAdmin} />);
 
@@ -340,6 +318,15 @@ describe('AppSidebar', () => {
     expect(milestonesLink).toHaveTextContent('Milestones');
     expect(screen.queryByTestId('sidebar-count-milestones')).not.toBeInTheDocument();
     expect(milestonesLink).not.toHaveTextContent('0');
+  });
+
+  it('keeps the Triage unassigned sidebar count neutral', () => {
+    render(<AppSidebar entries={NAV_TREE.voc} counts={{ 'voc.tab.unassigned': 3 }} />);
+
+    const badge = screen.getByTestId('sidebar-count-unassigned');
+    expect(badge).toHaveTextContent('3');
+    expect(badge.className).toContain('bg-surface-row-selected');
+    expect(badge.className).not.toContain('text-accent-danger');
   });
 
   it('distinguishes an absent count from an explicit zero count', () => {

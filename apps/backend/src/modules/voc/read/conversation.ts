@@ -9,15 +9,8 @@ import { mapConversationRowsWithAttachments } from './mappers.js';
 import { msInScope } from './scope.js';
 
 export function createVocConversationReader(deps: VocReadServiceDeps) {
-  // ── getConversation ───────────────────────────────────────────────────────
-
-  async function getConversation(args: {
-    actor: ReadActorContext;
-    vocId: string;
-    query: GetConversationQuery;
-  }): Promise<{ items: ConversationEntry[]; page: { cursor?: string; has_more: boolean } }> {
-    const { actor, vocId, query } = args;
-
+  // Shared access matrix for conversation pages and exact-entry entitlement.
+  async function resolveConversationAccess(actor: ReadActorContext, vocId: string) {
     // ── 1. Fetch VOC (access matrix check) ──────────────────────────────────
     const row = await repoRead.selectVocByIdForRead(deps.db, actor.workspace_id, vocId);
     if (!row) throw new HttpError('not_found.record', 'VOC not found');
@@ -46,6 +39,55 @@ export function createVocConversationReader(deps: VocReadServiceDeps) {
       // Summary-territory actors don't get conversation access.
       throw new HttpError('permission.denied', 'conversation not available without voc.read scope');
     }
+
+    return { canTriage, isReporter };
+  }
+
+  async function canReadConversationEntry(args: {
+    actor: ReadActorContext;
+    kind: string;
+    entryId: string;
+  }): Promise<boolean> {
+    const { actor, entryId } = args;
+    if (!['public_update', 'reporter_reply', 'internal_comment'].includes(args.kind)) return false;
+    const kind = args.kind as repoRead.ConversationKind;
+    const vocId = await repoRead.selectConversationEntryParent(deps.db, {
+      workspaceId: actor.workspace_id,
+      kind,
+      entryId,
+    });
+    if (!vocId) return false;
+    try {
+      const access = await resolveConversationAccess(actor, vocId);
+      // Use the conversation query itself, constrained to this exact entry.
+      // This retains the author restriction on non-triage Reporter replies.
+      const page = await repoRead.selectConversationPage(deps.db, {
+        workspaceId: actor.workspace_id,
+        vocId,
+        actorId: actor.actor_id,
+        ...access,
+        kind,
+        entryId,
+        limit: 1,
+      });
+      return page.entries.length === 1;
+    } catch (err) {
+      if (
+        err instanceof HttpError &&
+        (err.code === 'not_found.record' || err.code === 'permission.denied')
+      )
+        return false;
+      throw err;
+    }
+  }
+
+  async function getConversation(args: {
+    actor: ReadActorContext;
+    vocId: string;
+    query: GetConversationQuery;
+  }): Promise<{ items: ConversationEntry[]; page: { cursor?: string; has_more: boolean } }> {
+    const { actor, vocId, query } = args;
+    const { canTriage, isReporter } = await resolveConversationAccess(actor, vocId);
 
     // ── 5. Decode conversation cursor (optional — first-page call passes none) ─
     // PLAN-22 §Bug-2: cursor is optional at the schema layer. Treat undefined
@@ -88,5 +130,5 @@ export function createVocConversationReader(deps: VocReadServiceDeps) {
 
     return { items, page: convPage };
   }
-  return { getConversation };
+  return { getConversation, canReadConversationEntry };
 }

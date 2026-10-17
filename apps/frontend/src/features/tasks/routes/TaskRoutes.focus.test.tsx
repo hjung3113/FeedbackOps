@@ -1,7 +1,12 @@
 type ApiModule = typeof import('@/lib/api');
+import * as api from '@/lib/api';
+import * as areasApi from '@/lib/api/analytics-areas';
+import * as milestonesApi from '@/lib/api/milestones';
+import { ApiError } from '@/lib/api/types';
 import { AppFrame } from '@/lib/layout/AppFrame';
 import { parseAppSearch, stringifyAppSearch } from '@/lib/router/search-serialization';
 import { TasksRouteView, validateTasksSearch } from '@/routes/_authed/tasks';
+import { taskRequestPage } from '@/test/task-request-pages';
 import {
   type TaskDetailDto,
   type TaskRequestDto,
@@ -17,8 +22,10 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
+import { toast } from 'sonner';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const scope = '30000000-0000-0000-0000-000000000003';
@@ -35,6 +42,8 @@ const request: TaskRequestDto = {
   requested_outcome: 'Review the candidate task',
   requester_actor_id: requester,
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -57,6 +66,7 @@ const task: TaskDetailDto = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: requester,
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,
@@ -220,14 +230,11 @@ function listRow(displayId: string) {
   return row as HTMLElement;
 }
 afterEach(cleanup);
-it.each([
-  ['requests', 'click'],
-  ['requests', 'keyboard'],
-  ['backlog', 'click'],
-  ['backlog', 'keyboard'],
-] as const)(
-  'returns focus to the selected %s row after closing the panel via %s',
-  async (view, interaction) => {
+// Keyboard rows removed (owner decision 60-2): fireEvent.keyDown + click does not
+// prove native keyboard activation in jsdom.
+it.each(['requests', 'backlog'] as const)(
+  'returns focus to the selected %s row after closing the panel',
+  async (view) => {
     const mounted = mount(view);
     await screen.findByRole('heading', {
       name: view === 'requests' ? request.requested_outcome : task.title,
@@ -251,10 +258,6 @@ it.each([
         close.focus();
       });
       expect(document.activeElement).toBe(close);
-      if (interaction === 'keyboard') {
-        // jsdom does not synthesize button activation from keyDown.
-        fireEvent.keyDown(close, { key: 'Enter' });
-      }
       fireEvent.click(close);
       await waitFor(() => {
         expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
@@ -367,5 +370,389 @@ it('cancels the pending focus return when another row is selected before a frame
     expect(document.activeElement).not.toBe(firstRow);
   } finally {
     rafSpy.mockRestore();
+  }
+});
+
+it.each(['approved', 'rejected'] as const)(
+  'preserves %s focus through a delayed current-tab refetch in the real AppFrame',
+  async (status) => {
+    const user = userEvent.setup();
+    const result: TaskRequestDto = { ...request, status, decision_reason: '검토 완료' };
+    let resolvePage!: (value: Awaited<ReturnType<typeof api.fetchTaskRequests>>) => void;
+    const originalFetch = api.fetchTaskRequests;
+    const fetch = vi.spyOn(api, 'fetchTaskRequests').mockImplementation((query) =>
+      query?.status === 'pending_review' && mutation.mock.calls.length > 0
+        ? new Promise((resolve) => {
+            resolvePage = resolve;
+          })
+        : originalFetch(query),
+    );
+    const mutation = vi
+      .spyOn(api, status === 'approved' ? 'approveTaskRequest' : 'rejectTaskRequest')
+      .mockResolvedValue(result);
+    const areas = vi
+      .spyOn(areasApi, 'fetchAnalyticsAreas')
+      .mockResolvedValue({ items: [], total: 0 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { router } = createTasksRouter('requests', (children) => (
+      <AppFrame
+        activeDomain="tasks"
+        sidebarEntries={[{ id: 'requests', label: 'Task Requests', href: '/tasks?view=requests' }]}
+      >
+        {children}
+      </AppFrame>
+    ));
+    try {
+      render(
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await screen.findByRole('heading', { name: '검토 결정' });
+      const action = status === 'approved' ? '승인' : '반려';
+      await user.click(screen.getByRole('button', { name: action }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByRole('textbox'), '검토 완료');
+      await user.click(within(dialog).getByRole('button', { name: action }));
+      const nextRow = await screen.findByRole('button', { name: new RegExp(request2.display_id) });
+      await waitFor(() => expect(nextRow).toHaveFocus());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(document.activeElement).toBe(nextRow);
+      await act(async () => resolvePage(taskRequestPage([request2])));
+      expect(document.activeElement).toBe(nextRow);
+      expect(router.state.location.search.param).toBe(request2.id);
+    } finally {
+      cleanup();
+      client.clear();
+      fetch.mockRestore();
+      mutation.mockRestore();
+      areas.mockRestore();
+    }
+  },
+);
+
+it.each(
+  (['approved', 'rejected'] as const).flatMap((status) =>
+    [false, true].map((expanded) => ({ status, expanded })),
+  ),
+)(
+  'keeps the sole needs-more-evidence dialog connected until confirmed empty after $status expanded=$expanded',
+  async ({ status, expanded }) => {
+    const row = { ...request, status: 'needs_more_evidence' as const };
+    let release!: (value: Awaited<ReturnType<typeof api.fetchTaskRequests>>) => void;
+    let decided = false;
+    const fetch = vi.spyOn(api, 'fetchTaskRequests').mockImplementation(async (query) => {
+      if (query?.limit === 1) return taskRequestPage([row]);
+      if (decided)
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      return taskRequestPage(query?.status === row.status ? [row] : [], query);
+    });
+    const detail = vi.spyOn(api, 'getTaskRequest').mockResolvedValue(row);
+    const mutation = vi
+      .spyOn(api, status === 'approved' ? 'approveTaskRequest' : 'rejectTaskRequest')
+      .mockImplementation(async () => {
+        decided = true;
+        return { ...row, status };
+      });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { router } = createTasksRouter('requests', (children) => (
+      <AppFrame activeDomain="tasks" sidebarEntries={[]}>
+        {children}
+      </AppFrame>
+    ));
+    const disconnectedFocus: Element[] = [];
+    let dialog: HTMLElement | undefined;
+    let hiddenAtHeadingFocus: boolean | undefined;
+    const observer = new MutationObserver(() => {
+      if (dialog && !dialog.isConnected && document.activeElement)
+        disconnectedFocus.push(document.activeElement);
+    });
+    const recordFocus = (event: FocusEvent) => {
+      if ((event.target as HTMLElement).textContent === '현재 조건에 맞는 Task Request가 없습니다')
+        hiddenAtHeadingFocus = screen.getByTestId('app-main').hidden;
+    };
+    document.addEventListener('focusin', recordFocus);
+    observer.observe(document.body, { childList: true, subtree: true });
+    try {
+      render(
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await screen.findByRole('heading', { name: '검토 결정' });
+      await waitFor(() =>
+        expect(screen.getByRole('tab', { name: /^근거 추가 필요/ })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        ),
+      );
+      if (expanded) fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+      const action = status === 'approved' ? '승인' : '반려';
+      fireEvent.click(screen.getByRole('button', { name: action }));
+      dialog = await screen.findByRole('dialog');
+      fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '검토 완료' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: action }));
+      await waitFor(() => expect(router.state.location.search.param).toBeUndefined());
+      expect(dialog.isConnected).toBe(true);
+      expect(
+        screen.queryByRole('heading', { name: '현재 조건에 맞는 Task Request가 없습니다' }),
+      ).not.toBeInTheDocument();
+      await act(async () => release(taskRequestPage([], { status: row.status })));
+      const heading = await screen.findByRole('heading', {
+        name: '현재 조건에 맞는 Task Request가 없습니다',
+      });
+      await waitFor(() => expect(heading).toHaveFocus());
+      expect(heading).toHaveAttribute('tabindex', '-1');
+      expect(dialog.isConnected).toBe(false);
+      expect(hiddenAtHeadingFocus).toBe(false);
+      expect(disconnectedFocus).not.toContain(document.body);
+    } finally {
+      observer.disconnect();
+      document.removeEventListener('focusin', recordFocus);
+      cleanup();
+      client.clear();
+      fetch.mockRestore();
+      detail.mockRestore();
+      mutation.mockRestore();
+    }
+  },
+);
+
+it('collapses an expanded decision panel before the next row receives focus', async () => {
+  const mutation = vi
+    .spyOn(api, 'approveTaskRequest')
+    .mockResolvedValue({ ...request, status: 'approved' });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { router } = createTasksRouter('requests', (children) => (
+    <AppFrame activeDomain="tasks" sidebarEntries={[]}>
+      {children}
+    </AppFrame>
+  ));
+  let hiddenAtFocus: boolean | undefined;
+  const record = (event: FocusEvent) => {
+    if ((event.target as HTMLElement)?.dataset.requestId === request2.id)
+      hiddenAtFocus = screen.getByTestId('app-main').hidden;
+  };
+  document.addEventListener('focusin', record);
+  try {
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: '검토 결정' });
+    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    expect(screen.getByTestId('app-main')).toHaveProperty('hidden', true);
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '검토 완료' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await waitFor(() => expect(hiddenAtFocus).toBe(false));
+    expect(screen.getByRole('button', { name: /REQ-1072/ })).toHaveFocus();
+  } finally {
+    document.removeEventListener('focusin', record);
+    cleanup();
+    client.clear();
+    mutation.mockRestore();
+  }
+});
+
+it('keeps the sole URL-selected row connected through delayed refetch and remaining pages', async () => {
+  let decided = false;
+  let releasePage!: (value: Awaited<ReturnType<typeof api.fetchTaskRequests>>) => void;
+  let releaseNext!: (value: Awaited<ReturnType<typeof api.fetchTaskRequests>>) => void;
+  const fetch = vi.spyOn(api, 'fetchTaskRequests').mockImplementation(async (query) => {
+    if (query?.limit === 1) return taskRequestPage(requests);
+    if (query?.cursor)
+      return new Promise((resolve) => {
+        releaseNext = resolve;
+      });
+    if (decided)
+      return new Promise((resolve) => {
+        releasePage = resolve;
+      });
+    return { items: [request], page: { has_more: true, cursor: 'next-page', total: 2 } };
+  });
+  const mutation = vi.spyOn(api, 'approveTaskRequest').mockImplementation(async () => {
+    decided = true;
+    return { ...request, status: 'approved' };
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { router } = createTasksRouter('requests', (children) => (
+    <DetailPanelHost>{children}</DetailPanelHost>
+  ));
+  try {
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: '검토 결정' });
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '검토 완료' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await waitFor(() => expect(router.state.location.search.param).toBeUndefined());
+    expect(dialog.isConnected).toBe(true);
+    await act(async () =>
+      releasePage({ items: [], page: { has_more: true, cursor: 'next-page', total: 1 } }),
+    );
+    await waitFor(() => expect(releaseNext).toBeTypeOf('function'));
+    expect(dialog.isConnected).toBe(true);
+    expect(screen.queryByText('검토 대기 중인 Task Request가 없습니다')).not.toBeInTheDocument();
+    await act(async () => releaseNext(taskRequestPage([request2])));
+    await waitFor(() => expect(screen.getByRole('button', { name: /REQ-1072/ })).toHaveFocus());
+    expect(router.state.location.search.param).toBe(request2.id);
+    expect(dialog.isConnected).toBe(false);
+  } finally {
+    cleanup();
+    client.clear();
+    fetch.mockRestore();
+    mutation.mockRestore();
+  }
+});
+
+it.each(['refetch error', 'focus refusal'] as const)(
+  'bounds decision focus work after %s and retains connected content',
+  async (failure) => {
+    let decided = false;
+    let recovered = false;
+    let failPage!: (error: Error) => void;
+    const fetch = vi.spyOn(api, 'fetchTaskRequests').mockImplementation(async (query) => {
+      if (query?.limit === 1) return taskRequestPage(requests);
+      if (!decided)
+        return taskRequestPage(failure === 'refetch error' ? [request] : requests, query);
+      if (recovered || failure === 'focus refusal') return taskRequestPage([request2], query);
+      return new Promise((_resolve, reject) => {
+        failPage = reject;
+      });
+    });
+    const mutation = vi.spyOn(api, 'approveTaskRequest').mockImplementation(async () => {
+      decided = true;
+      return { ...request, status: 'approved' };
+    });
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    });
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id);
+    });
+    const { client } = mount('requests');
+    let focus: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      await screen.findByRole('heading', { name: '검토 결정' });
+      await settleQueries(client);
+      if (failure === 'focus refusal') {
+        const target = screen.getByRole('button', { name: /REQ-1072/ });
+        focus = vi.spyOn(target, 'focus').mockImplementation(() => {});
+      }
+      fireEvent.click(screen.getByRole('button', { name: '승인' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '검토 완료' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+      if (failure === 'refetch error') {
+        await waitFor(() => expect(failPage).toBeTypeOf('function'));
+        await act(async () =>
+          failPage(
+            new ApiError(500, { code: 'internal.unexpected', message: 'temporary failure' }),
+          ),
+        );
+        await within(dialog).findByRole('button', { name: '다시 시도' });
+      } else {
+        await waitFor(() => expect(focus).toHaveBeenCalled());
+      }
+      await settleQueries(client);
+      const attemptsBeforeFrames = focus?.mock.calls.length ?? 0;
+      for (let frame = 0; frame < 50; frame++) {
+        await act(async () => {
+          const pending = [...frames.values()];
+          frames.clear();
+          for (const callback of pending) callback(frame * 16);
+        });
+      }
+      expect(frames.size).toBe(0);
+      if (focus) {
+        expect(focus.mock.calls.length).toBeGreaterThan(0);
+        expect(focus.mock.calls.length - attemptsBeforeFrames).toBeLessThanOrEqual(10);
+      }
+      expect(dialog.isConnected).toBe(true);
+      expect(within(dialog).getByRole('textbox')).toHaveValue('검토 완료');
+      if (failure === 'refetch error') {
+        const retry = within(dialog).getByRole('button', { name: '다시 시도' });
+        expect(retry).toBeVisible();
+        recovered = true;
+        fireEvent.click(retry);
+        await waitFor(() => expect(screen.getByRole('button', { name: /REQ-1072/ })).toHaveFocus());
+        expect(dialog.isConnected).toBe(false);
+      }
+    } finally {
+      focus?.mockRestore();
+      cleanup();
+      client.clear();
+      raf.mockRestore();
+      cancel.mockRestore();
+      fetch.mockRestore();
+      mutation.mockRestore();
+    }
+  },
+);
+
+it('opens the converted Task from the persistent toast action through the real router', async () => {
+  const row = { ...request, status: 'approved' as const, source_type: 'voc' as const };
+  const fetch = vi
+    .spyOn(api, 'fetchTaskRequests')
+    .mockImplementation(async (query) => taskRequestPage([row], query));
+  const detail = vi.spyOn(api, 'getTaskRequest').mockResolvedValue(row);
+  const areas = vi
+    .spyOn(areasApi, 'fetchAnalyticsAreas')
+    .mockResolvedValue({ items: [], total: 0 });
+  const milestones = vi.spyOn(milestonesApi, 'listMilestones').mockResolvedValue({ items: [] });
+  const conversion = vi
+    .spyOn(api, 'convertTaskRequest')
+    .mockResolvedValue({ ...task, assignee_actor_id: null });
+  const success = vi.spyOn(toast, 'success');
+  const mounted = mount('requests');
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: 'Task로 전환' }));
+    const submit = await screen.findByTestId('task-request-convert-submit');
+    await waitFor(() => expect(submit).not.toBeDisabled());
+    fireEvent.click(submit);
+    await waitFor(() => expect(success).toHaveBeenCalled());
+    const options = success.mock.calls[0]?.[1];
+    expect(options).toMatchObject({
+      duration: Number.POSITIVE_INFINITY,
+      action: { label: 'Task 열기' },
+    });
+    const action = options?.action;
+    if (!action || typeof action !== 'object' || !('onClick' in action))
+      throw new Error('Expected a toast action');
+    const toastAction = render(
+      <button type="button" onClick={action.onClick}>
+        Task 열기
+      </button>,
+    );
+    fireEvent.click(toastAction.getByRole('button', { name: 'Task 열기' }));
+    await waitFor(() =>
+      expect(mounted.router.state.location.search).toMatchObject({
+        view: 'backlog',
+        param: task.id,
+      }),
+    );
+  } finally {
+    cleanup();
+    mounted.client.clear();
+    fetch.mockRestore();
+    detail.mockRestore();
+    areas.mockRestore();
+    milestones.mockRestore();
+    conversion.mockRestore();
+    success.mockRestore();
   }
 });

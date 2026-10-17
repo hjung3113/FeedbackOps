@@ -98,10 +98,12 @@ describe('SurveyList empty state', () => {
   it('renders request access for a requestable missing survey.manage permission', () => {
     renderEmptyList({ canCreate: false, permissionState: 'request_access' });
 
-    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
-    expect(
-      screen.getByText('Survey를 만들려면 Survey 관리 권한이 필요합니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('관리할 수 있는 Survey가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('참여할 Survey는 Survey 참여에서 확인하세요.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Survey 참여' })).toHaveAttribute(
+      'href',
+      '/surveys/participate',
+    );
     expect(screen.getByTestId('request-access-survey.manage')).toBeInTheDocument();
     expect(screen.queryByTestId('survey-empty-create-button')).not.toBeInTheDocument();
   });
@@ -109,10 +111,12 @@ describe('SurveyList empty state', () => {
   it('renders contact-admin recovery for a non-requestable missing survey.manage permission', () => {
     renderEmptyList({ canCreate: false, permissionState: 'blocked_non_requestable' });
 
-    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
-    expect(
-      screen.getByText('Survey를 만들려면 Survey 관리 권한이 필요합니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('관리할 수 있는 Survey가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('참여할 Survey는 Survey 참여에서 확인하세요.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Survey 참여' })).toHaveAttribute(
+      'href',
+      '/surveys/participate',
+    );
     expect(screen.getByTestId('survey-empty-contact-admin')).toHaveTextContent(
       '담당 관리자에게 문의하세요.',
     );
@@ -123,10 +127,12 @@ describe('SurveyList empty state', () => {
     // Omit the optional prop to preserve the unavailable-state fail-closed path.
     renderEmptyList({ canCreate: false });
 
-    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
-    expect(
-      screen.getByText('Survey를 만들려면 Survey 관리 권한이 필요합니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('관리할 수 있는 Survey가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('참여할 Survey는 Survey 참여에서 확인하세요.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Survey 참여' })).toHaveAttribute(
+      'href',
+      '/surveys/participate',
+    );
     expect(screen.getByTestId('survey-empty-contact-admin')).toHaveTextContent(
       '담당 관리자에게 문의하세요.',
     );

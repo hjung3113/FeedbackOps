@@ -7,6 +7,7 @@ import {
   respondentIdentityNotice,
 } from '@/lib/copy/survey-participation';
 import { formatDate } from '@/lib/format/datetime';
+import { useDocumentTitle } from '@/lib/router/document-title';
 import {
   type AnswerableSurveysResponse,
   type MySurveyResponsesResponse,
@@ -285,6 +286,11 @@ function ParticipationListLoading({ testId }: { testId: string }) {
 export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
   const form = useSurveyRespondentForm(surveyId);
   const submit = useSubmitSurveyResponse(surveyId);
+  useDocumentTitle(
+    form.isSuccess && !form.isFetching && form.data?.survey.id === surveyId
+      ? form.data.survey.title
+      : null,
+  );
   const [answers, setAnswers] = React.useState<Record<string, RespondentAnswer>>({});
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [validationSummary, setValidationSummary] = React.useState<string | null>(null);
@@ -314,7 +320,8 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
     if (
       form.error instanceof ApiError &&
       form.error.status === 409 &&
-      form.error.code === 'conflict.survey_not_open'
+      (form.error.code === 'conflict.survey_not_open' ||
+        form.error.code === 'conflict.survey_response_already_submitted')
     ) {
       return <RespondentPageMessage message={errorMapper(form.error.envelope).message} />;
     }
@@ -393,6 +400,9 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
             <h1 className="text-xl font-semibold tracking-tight text-text-primary">
               {form.data.survey.title}
             </h1>
+            {form.data.survey.description ? (
+              <p className="mt-2 text-sm text-text-muted">{form.data.survey.description}</p>
+            ) : null}
             <p className="mt-4 rounded bg-surface-detail p-3 text-sm text-text-secondary">
               {SURVEY_PARTICIPATION_COPY.anonymityNotice} ·{' '}
               {respondentIdentityNotice(form.data.survey.identity_protected)}

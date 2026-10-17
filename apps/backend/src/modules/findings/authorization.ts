@@ -85,3 +85,20 @@ export async function checkFindingManage(
     options,
   );
 }
+
+/** Inventory uses canonical point decisions, including archived scopes and the injected clock. */
+export async function readableEvidenceInventorySystems(
+  checkService: CheckService,
+  actor: FindingAuthorizationActor,
+  managedSystemIds: string[],
+  tx: Tx,
+): Promise<string[]> {
+  const allowed: string[] = [];
+  for (const id of managedSystemIds) {
+    if (
+      (await checkFindingRead(checkService, actor, id, { requireElevatedRole: true }, { tx })).allow
+    )
+      allowed.push(id);
+  }
+  return allowed;
+}

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { and, eq, sql } from 'drizzle-orm';
 
-import type { PatchVocRequest } from '@fops/shared';
+import type { PatchVocRequest, VocSummaryEnvelope } from '@fops/shared';
 import { vocs } from '../../../db/schema/voc.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
@@ -12,21 +12,35 @@ import { listWorkspaceAdminActorIds } from '../../auth/index.js';
 import type { RoleLevel } from '../../auth/session-service.js';
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
-import { isRequestableDenial } from '../../permissions/index.js';
+import { assertVocTriage } from '../authorization.js';
 import { selectVocForUpdate } from '../repo.js';
+import { validateOwner } from '../responsibility.js';
 import type { VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import { composeEnvelope } from './compose-envelope.js';
 
 export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
+  // #1187: a triage-only writer has no full read; its response follows the read matrix.
+  async function writeResponseSummary(
+    tx: Tx,
+    actor: { actor_id: string; workspace_id: string; role_level: RoleLevel },
+    vocId: string,
+  ): Promise<VocSummaryEnvelope | null> {
+    const access = await deps.vocReadService.resolveWriteResponseAccess({ tx, actor, vocId });
+    return access.kind === 'summary' ? access.envelope : null;
+  }
+
   async function updateVoc(args: {
     tx: Tx;
     actor: { actor_id: string; workspace_id: string; role_level: RoleLevel };
     vocId: string;
     ifMatch: string;
     input: PatchVocRequest;
-  }): Promise<VocEnvelope> {
+  }): Promise<VocEnvelope | VocSummaryEnvelope> {
     const { tx, actor, vocId, ifMatch, input } = args;
+    const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+      { type: 'voc', id: vocId },
+    ]);
     const workspaceId = actor.workspace_id;
 
     // 1. FOR UPDATE lock on the VOC row.
@@ -42,35 +56,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     // only needs `row.primaryManagedSystemId`, which is available after the
     // FOR UPDATE above. Moving it here ensures unauthorised actors receive
     // 403 regardless of the If-Match value they supply.
-    const decision = await deps.checkService.checkCapability(
-      { actor_id: actor.actor_id, workspace_id: workspaceId, role_level: actor.role_level },
-      'voc.triage',
-      { workspace_id: workspaceId, managed_system_id: row.primaryManagedSystemId },
-      { tx },
-    );
-    if (decision.allow !== true) {
-      // F1: `no_grant`, `grant_revoked`, and `grant_expired` map to
-      // `permission.scope_required` for developers (ADR-0061 §6).
-      // Explicit deny and workspace mismatch remain denied.
-      if (isRequestableDenial(decision.reason) && actor.role_level === 'developer') {
-        throw new HttpError(
-          'permission.scope_required',
-          'voc.triage capability required; developer needs MS-scoped grant',
-          {
-            requiredScope: [row.primaryManagedSystemId],
-            requestable_permission: {
-              permission: 'voc.triage',
-              managed_system_id: row.primaryManagedSystemId,
-              reason_required: false,
-            },
-          },
-        );
-      }
-      // Explicit deny, workspace mismatch, and non-developer denials stay generic.
-      throw new HttpError('permission.denied', `voc.triage denied: ${decision.reason}`, {
-        reason: decision.reason,
-      });
-    }
+    await assertVocTriage(tx, deps.checkService, actor, row.primaryManagedSystemId);
 
     // 3. Optimistic concurrency check (after permission — C3: no current_updated_at
     // leak to unauthorised actors; only authorised actors see 409 stale_write detail).
@@ -204,6 +190,12 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       );
     }
     if (newOwnerUser !== row.ownerUserId || newOwnerTeam !== row.ownerTeamId) {
+      const failure = await validateOwner(tx, deps, workspaceId, ms, newOwnerUser, newOwnerTeam);
+      if (failure) {
+        throw new HttpError('validation.failed', 'invalid owner', {
+          fields: [{ path: [newOwnerTeam ? 'owner_team_id' : 'owner_user_id'], code: failure }],
+        });
+      }
       patch.ownerUserId = newOwnerUser;
       patch.ownerTeamId = newOwnerTeam;
       ownerChanged = true;
@@ -264,7 +256,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
         row.reporterFacingStatus as ReporterFacingStatus,
         tx,
       );
-      return composeEnvelope(row, nextStates);
+      return (await writeResponseSummary(tx, actor, vocId)) ?? composeEnvelope(row, nextStates);
     }
 
     // 9. UPDATE the voc row.
@@ -276,7 +268,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     const updated = updatedRows[0];
     if (!updated) throw new HttpError('internal.unexpected', 'voc UPDATE returned no row');
 
-    const newSev = updated.severity as VocEnvelope['severity'];
+    const newSev = updated.severity as Exclude<VocEnvelope['severity'], undefined>;
     const newOwnerUser2 = updated.ownerUserId;
     const newOwnerTeam2 = updated.ownerTeamId;
     const newAa = updated.analyticsAreaId;
@@ -430,7 +422,11 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       updated.reporterFacingStatus as ReporterFacingStatus,
       tx,
     );
-    return composeEnvelope(updatedLockedVoc, nextStates);
+    if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'updateVoc');
+    return (
+      (await writeResponseSummary(tx, actor, vocId)) ??
+      composeEnvelope(updatedLockedVoc, nextStates)
+    );
   }
   async function updateVocCommand(args: {
     actor: { actor_id: string; workspace_id: string; role_level: RoleLevel };
@@ -439,7 +435,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     input: PatchVocRequest;
     idempotencyKey: string;
     requestHash: string;
-  }): Promise<{ status: number; body: VocEnvelope }> {
+  }): Promise<{ status: number; body: VocEnvelope | VocSummaryEnvelope }> {
     const { actor, vocId, ifMatch, input, idempotencyKey, requestHash } = args;
     return runIdempotentCommand({
       db: deps.db,
@@ -448,6 +444,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       idempotencyKey,
       requestHash,
       status: 200,
+      recoveryWorkspaceId: actor.workspace_id,
       work: (tx) => updateVoc({ tx, actor, vocId, ifMatch, input }),
     });
   }

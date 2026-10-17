@@ -1,32 +1,17 @@
 import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail';
-import { SurveyList } from '@/features/surveys/components/list/SurveyList';
-import { useCreateSurvey, useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
+import {
+  type SurveyListFilterKey,
+  SurveyListScreen,
+  surveyListContextFromSearch,
+  surveyListQueryArgs,
+} from '@/features/surveys/components/list/SurveyListScreen';
+import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
-import type { SurveyType } from '@/features/surveys/types';
-import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
-import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+export { CreateSurveyDialog } from '@/features/surveys/components/create/CreateSurveyDialog';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
-import { surveyTypeSchema } from '@fops/shared';
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Textarea,
-} from '@fops/ui';
-import { ListShell } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 import { z } from 'zod';
@@ -42,6 +27,9 @@ export const surveysSearchSchema = z
   .object({
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
+    'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    status: z.literal('open').optional(),
+    follow_up: z.literal('needed').optional(),
   })
   .strict();
 
@@ -64,9 +52,21 @@ export const Route = createFileRoute('/_authed/surveys/')({
 export function SurveysIndexRoute() {
   const search = useSearch({ strict: false }) as SurveysSearch;
   const navigate = useNavigate({ from: '/surveys/' });
-  const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
-  const query = useSurveys(managedSystemId);
-  const gate = useSurveyManageGate();
+  const context = surveyListContextFromSearch(search);
+  const { managedSystemId, filters } = surveyListQueryArgs(context);
+  // Same arguments as SurveyListScreen, so the stale-selection effect and the
+  // list share one query. Creation and filter chips live in the screen.
+  const query = useSurveys(managedSystemId, filters);
+  const removeFilters = (keys: readonly SurveyListFilterKey[]) => {
+    void navigate({
+      to: '/surveys',
+      search: (previous) => {
+        const next = { ...previous };
+        for (const key of keys) delete next[key];
+        return next;
+      },
+    });
+  };
   const managedSystemNames = useManagedSystemNamesResult();
   const managedSystemNamesById = managedSystemNames.isSuccess
     ? managedSystemNames.namesById
@@ -79,7 +79,6 @@ export function SurveysIndexRoute() {
         : undefined,
     [actors, actorsResolved],
   );
-  const [createOpen, setCreateOpen] = React.useState(false);
   const selectedId = search.selected ?? null;
   const selected = useSurvey(selectedId ?? '');
   const selectedGate = useSurveyManageGate(selected.data?.primary_managed_system_id);
@@ -122,250 +121,32 @@ export function SurveysIndexRoute() {
   }, [navigate, query.isSuccess, selectedId, surveys]);
 
   return (
-    <>
-      <ListShell
-        toolbar={{ title: 'Surveys' }}
-        list={
-          <SurveyList
-            surveys={query.data ?? []}
-            // #706 — isPending keeps the skeleton up through the whole
-            // no-data window (incl. the retry delay), so tabs never render
-            // unknown counts as 0.
-            isLoading={query.isPending}
-            error={query.error}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            canCreate={gate.canManage}
-            {...(gate.permissionState !== undefined
-              ? { permissionState: gate.permissionState }
-              : {})}
+    <SurveyListScreen
+      context={context}
+      selectedId={selectedId}
+      onSelect={handleSelect}
+      onClose={handleClose}
+      onRemoveFilters={removeFilters}
+      onCreated={(surveyId) =>
+        void navigate({
+          to: '/surveys/$surveyId',
+          params: { surveyId },
+          search: { builder: true },
+        })
+      }
+      managedSystemNamesById={managedSystemNamesById}
+      actorNamesById={actorNamesById}
+      renderDetail={(close) =>
+        selected.data ? (
+          <SurveyDetail
+            survey={selected.data}
+            canManage={selectedGate.canManage}
+            onClose={close}
             managedSystemNamesById={managedSystemNamesById}
             actorNamesById={actorNamesById}
-            onCreate={() => setCreateOpen(true)}
-            onRetry={() => void query.refetch()}
           />
-        }
-        detailPanel={
-          selected.data ? (
-            <SurveyDetail
-              survey={selected.data}
-              canManage={selectedGate.canManage}
-              onClose={handleClose}
-              managedSystemNamesById={managedSystemNamesById}
-              actorNamesById={actorNamesById}
-            />
-          ) : undefined
-        }
-      />
-      {gate.canManage && (
-        <CreateSurveyDialog
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={(surveyId) =>
-            void navigate({
-              to: '/surveys/$surveyId',
-              params: { surveyId },
-              search: { builder: true },
-            })
-          }
-        />
-      )}
-    </>
-  );
-}
-
-export function CreateSurveyDialog({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (surveyId: string) => void;
-}) {
-  const [title, setTitle] = React.useState('');
-  const [type, setType] = React.useState<SurveyType | ''>('');
-  const [system, setSystem] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [analyticsArea, setAnalyticsArea] = React.useState('');
-  const [identityProtected, setIdentityProtected] = React.useState<'true' | 'false' | ''>('');
-  const create = useCreateSurvey();
-  const systems = useQuery({
-    queryKey: ['managed-systems', { includeArchived: false }],
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
-    enabled: open,
-    retry: false,
-  });
-  const scope = useQuery({
-    queryKey: ['permission-scope', 'survey.manage'],
-    queryFn: ({ signal }) => fetchCapabilityScope('survey.manage', { signal }),
-    enabled: open,
-    retry: false,
-  });
-  const analyticsAreas = useQuery({
-    queryKey: ['analytics-areas', { managedSystemId: system, includeArchived: false }],
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({ managedSystemId: system, includeArchived: false, signal }),
-    enabled: open && Boolean(system),
-    retry: false,
-  });
-  const allowedSystems = (systems.data?.items ?? []).filter(
-    (candidate) =>
-      candidate.archived_at === null &&
-      (scope.data?.scope.kind === 'all' ||
-        (scope.data?.scope.kind === 'scoped' &&
-          scope.data.scope.managed_system_ids.includes(candidate.id))),
-  );
-  const reset = () => {
-    setTitle('');
-    setType('');
-    setSystem('');
-    setDescription('');
-    setAnalyticsArea('');
-    setIdentityProtected('');
-    create.reset();
-  };
-  const close = () => {
-    reset();
-    onClose();
-  };
-  return (
-    <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Survey 생성</DialogTitle>
-        </DialogHeader>
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!title.trim() || !type || !system || identityProtected === '') return;
-            create.mutate(
-              {
-                type,
-                title: title.trim(),
-                ...(description.trim() ? { description: description.trim() } : {}),
-                primary_managed_system_id: system,
-                ...(analyticsArea ? { analytics_area_id: analyticsArea } : {}),
-                responses_identity_protected: identityProtected === 'true',
-              },
-              {
-                onSuccess: (created) => {
-                  reset();
-                  onCreated(created.id);
-                },
-              },
-            );
-          }}
-        >
-          <label className="block text-sm" htmlFor="survey-title">
-            제목
-            <Input
-              id="survey-title"
-              aria-label="제목"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              required
-            />
-          </label>
-          <div className="block text-sm">
-            Survey 유형
-            <Select value={type} onValueChange={(value) => setType(value as SurveyType)}>
-              <SelectTrigger aria-label="Survey 유형">
-                <SelectValue placeholder="유형 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                {surveyTypeSchema.options.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {SURVEY_TYPE_LABELS[type]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="block text-sm">
-            Managed System
-            <Select
-              value={system}
-              onValueChange={(value) => {
-                setSystem(value);
-                setAnalyticsArea('');
-              }}
-            >
-              <SelectTrigger aria-label="Managed System">
-                <SelectValue placeholder="Managed System 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                {allowedSystems.map((candidate) => (
-                  <SelectItem key={candidate.id} value={candidate.id}>
-                    {candidate.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <label className="block text-sm" htmlFor="survey-description">
-            설명 (선택)
-            <Textarea
-              id="survey-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
-          <div className="block text-sm">
-            Analytics Area (선택)
-            <Select value={analyticsArea} onValueChange={setAnalyticsArea} disabled={!system}>
-              <SelectTrigger aria-label="Analytics Area">
-                <SelectValue placeholder="선택 안 함" />
-              </SelectTrigger>
-              <SelectContent>
-                {(analyticsAreas.data?.items ?? []).map((area) => (
-                  <SelectItem key={area.id} value={area.id}>
-                    {area.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="block text-sm">
-            응답 익명 보호
-            <Select
-              value={identityProtected}
-              onValueChange={(value) => setIdentityProtected(value as 'true' | 'false')}
-            >
-              <SelectTrigger aria-label="응답 익명 보호">
-                <SelectValue placeholder="보호 여부 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="true">보호함</SelectItem>
-                <SelectItem value="false">보호하지 않음</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {create.isError && (
-            <p className="text-sm text-text-danger">Survey를 만들지 못했습니다.</p>
-          )}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={close}
-              data-testid="survey-create-cancel"
-            >
-              취소
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                create.isPending || !title.trim() || !type || !system || identityProtected === ''
-              }
-              data-testid="survey-create-submit"
-            >
-              초안 만들기
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        ) : null
+      }
+    />
   );
 }

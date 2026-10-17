@@ -44,9 +44,9 @@ Applied migrations are the final database authority.
   `SELECT` on every column except `response_id`, and column-level `UPDATE ("revoked_at")`
   (0057; before 0057 the `SELECT` was table-wide). The **direct table join** on
   `survey_response_excerpt_approvals.response_id` is therefore denied to `fops_app`;
-  this is not SQL-level unlinkability: audit `detail` linkage, Finding / evidence-highlight
-  provenance, internal `survey_response` entity links, and the `fops_app`-executable
-  Survey definers remain composable paths, tracked as #569 follow-ups;
+  this is not SQL-level unlinkability: app-executable Survey definers remain
+  composable. The historical audit/Finding/highlight/link direct-read residuals
+  are superseded by ADR-0064 and must close in the coordinated #739/#740 cutover;
   every per-response binding read — highlight projections, the stored-highlight
   active check, and the revoke binding check — runs through the
   `survey.read_approved_response_excerpts` and `survey.read_response_excerpt_approval`
@@ -96,6 +96,8 @@ voc
 - voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
 - voc_recommendation_decisions
 - voc_cluster_autogen_shadow_candidates (non-domain pairwise measurements; ADR-0054)
+- voc_cluster_suggestions (retained suggestion lifecycle; ADR-0068, #1097)
+- voc_cluster_suggestion_counters / voc_cluster_suggestion_admissions / voc_cluster_suggestion_cursors (admission/scan state; ADR-0068, #1097)
 - voc_public_updates
 - public_update_review_candidates
 - voc_reporter_replies
@@ -129,7 +131,11 @@ survey
 - survey_response_answers
 - survey_response_excerpt_approvals
 - survey_results (computed read projection; not a table)
+- outcome_recovery_identities / outcome_recovery_history / outcome_recovery_presentations (56-H private response projections)
 - outcome_follow_up_decisions (ADR-0055 follow-up decision state; one current row per response, column-scoped UPDATE, no DELETE)
+
+dashboard
+- recovery_identities / recovery_history / recovery_presentations (56-H owner-derived projections)
 
 permission
 - permission_requests
@@ -393,7 +399,258 @@ The seed is a separate, idempotent command (`pnpm --filter @fops/backend db:seed
 - 5 analytics areas: Permission Management, Usage Analytics, and Dashboard Catalog under Tableau; Permission Management and Usage Analytics under Power BI
 - one fixture team, "[seed] VOC owner team", inserted through the fops_migrate URL because fops_app cannot insert core.teams (ADR-0019)
 - 12 deterministic VOC fixtures (display_id VOC-SEED-*) with three conversation rows each, and two permission-decision fixtures (apps/backend/src/seed/voc-fixtures.ts)
-- SEED_MODE=personas only: mock-admin-2, mock-user-2, mock-developer-1, mock-developer-2, and permission grants for the two developers
+- SEED_MODE=personas or scale: mock-admin-2, mock-user-2, mock-developer-1, mock-developer-2, and permission grants for the two developers
 ```
 
-It does not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.
+Core/personas modes do not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.
+
+- `SEED_MODE=scale pnpm --filter @fops/backend db:seed` is for throwaway preview DBs only. It includes personas and adds 40 reporters, 5,000 VOCs, 5,000 Tasks, 300 Findings, 250 Task Requests, 60 Clusters and 25 Milestones across Tableau/Power BI, with five years of history, evidence links and memberships. Existing baseline/preview rows survive. The cohort and reserved `fops-preview-scale-complete` actor marker commit atomically; stable IDs and per-group deduplication permit partial-cohort retries when the marker is absent. Scale creates no Survey data; it inserts one VOC Evidence Highlight per `evidence_of` VOC, so `evidence_count` equals both the link count and the highlight-row count.
+
+## Permission close-out migration contract (ADR-0066; proposed/new)
+
+Migration `0058_permission_request_revision.sql` adds the request revision and
+`cancelled` status without altering the open-request unique index. Apply it before
+writers and deploy required-revision API and #1083 clients together. Its SQL
+contains a history-preserving rollback note. Scratch-DB verification and the
+latest snapshot refresh must precede the migration drift gate; never adopt a
+TS-derived snapshot without comparing actual migrated SQL as described above.
+
+No migration is applied by the docs decision. Implementation adds positive integer
+permission.permission_requests.revision NOT NULL DEFAULT 1 and extends the existing
+text status CHECK with cancelled, retaining every old status. Every successful
+mutation advances revision/updated_at. Preserve permission_requests_active_uq over
+the full COALESCE requester/capability/scope/source tuple and open predicate
+pending/needs_more_info; cancelled falls outside it, preserving history.
+
+Migration `0063_permission_grant_reissue.sql` (#1085) adds nullable
+permission.permission_grants.superseded_at. Generated journal/snapshot accompany
+it; the SQL preserves the historical expression scope columns. Apply before the
+writers; migration numbering and combined metadata verification belong to the conductor. Atomic expired exact-tuple
+reissue sets only that predecessor marker and inserts a new ID. Preserve original
+expiry/grantor/time/revoke metadata. permission_grants_active_uq keeps every existing
+COALESCE scope column, changing only its predicate to revoked_at IS NULL AND
+superseded_at IS NULL. Never now(); expiry remains enforced at runtime. Checks,
+scope resolution, active lists, revoke validation and seed existence checks exclude
+superseded rows. Register generated SQL/journal/snapshot under the existing rules;
+verify SQL-only indexes against real applied SQL, not a shortened Drizzle definition.
+
+Inventory legacy non-null object scope requests and unsuperseded grants; retain
+historical fields, reject unsupported request writes/approval, and resolve legacy
+grant disposition explicitly before release without automatic widening/revocation.
+Schema precedes writers; API/shared/frontend expected_revision consumers roll out
+together with stale-client refresh. After cancelled/superseded rows exist, restoring
+the old CHECK/unique predicate blindly is unsafe. Rollback requires explicit data
+handling preserving history or a forward fix; document irreversible state in the
+implementation migration plan and test audit-failure rollback of reissue.
+
+## Close-out storage (ADR-0067; applied)
+
+The new responsibility fields/settings and logical Dashboard projection shapes are in
+`docs/design/15-data-contracts.md`. Shipped nullable Finding owner, Task Request assigned-reviewer,
+Task team-assignee, Managed System reviewer pairs and Coverage thresholds with registered
+SQL/generated metadata/grants in implementation chunks. Preserve existing null assignments,
+completed reviewer attribution and Survey operator behavior; no provenance/assignment backfill.
+XOR-or-both-null constraints and service workspace/active-team/Actor eligibility apply.
+
+56-H registered `dashboard.recovery_identities`, `dashboard.recovery_history` and
+`dashboard.recovery_presentations`, plus Survey-owned `survey.outcome_recovery_identities`,
+`survey.outcome_recovery_history` and `survey.outcome_recovery_presentations`. Runtime identity
+and presentation grants are SELECT/INSERT/UPDATE; histories are SELECT/INSERT only. The
+journaled migration precreates `dashboard.recovery_reconcile` (5 retries, 30 seconds, backoff)
+and adds narrow Survey definer readers using the existing protected owner column grants.
+No existing table grants widen. Owner source/Actor/System IDs in these projections are
+durable logical references, preserving evidence across owner lifecycle; only workspace
+references are physical FKs. The generated follow-up migration removes the initial owner
+reference FKs without deleting projection data. Index workspace/scope/category,
+history `(workspace_id, resolved_at, id)`, source/Actor identity. Exact transitions commit
+with source/link mutations via an injected recorder; pg-boss discovery/reconciliation is
+idempotent and marks observation-only evidence honestly. Seed current identities without
+inventing past repairs. Read history from the inclusive first instant of the current UTC month minus two calendar
+months, ordered by resolution time/UUID and filtered by current permission before count/LIMIT; pruning never deletes
+`core.audit_log` or stable/current-occurrence identity needed to prevent preference drift.
+Survey response presentation/history remains a personal-gated Survey-owned adapter and
+retains ADR-0055 state/definer/grant protections, not duplicated Dashboard resolution state.
+
+## Analytics Area report storage boundary (ADR-0069; implementation pending)
+
+No report tables, lifecycle storage, Area backfill, mandatory classification or Task Request Area
+column are introduced. Grouped owner reads and metadata batching produce the proposed/new API projection.
+Survey classification remains behind protected owner readers; `fops_app` gains no direct response/answer
+read grant. If batching requires a new protected reader, its name/migration is proposed/new until
+implemented: register it in `apps/backend/migrations/meta/_journal.json`, narrowly grant the owner's
+needed columns, fix `search_path = pg_catalog`, revoke PUBLIC and preserve existing capability gates.
+Measure grouped query plans around 5k VOCs/5k Tasks before proposing an index; no preemptive materialized cache.
+
+## Survey provenance cutover — ADR-0064 (coordinated delivery pending)
+
+#739 adds generated/journaled migration `0059_survey_finding_provenance.sql`,
+protected `survey.finding_response_bindings` and `survey.highlight_response_bindings`,
+and scoped reader/mutator seams. Existing-DB owner prerequisites, constraints,
+function signatures, cache inventory, standalone legacy-upgrade procedure and #740
+coordination are in [the #739 cutover contract](survey-provenance-cutover-739.md).
+Execution and combined #739/#740 verification are still required.
+
+- Proposed/new Survey-owned protected Finding and highlight extensions retain
+  workspace-qualified response/approval bindings and historical generated text.
+  Fields, NULL conditions and consistency rules are in `docs/design/15-data-contracts.md`.
+  `fops_app` has no SELECT/INSERT/UPDATE/DELETE on these extensions; use scoped
+  functions with least-privileged NOLOGIN reader/separate mutator owners,
+  `search_path=pg_catalog`, qualified tables, no dynamic SQL, PUBLIC EXECUTE
+  revoked and explicit app EXECUTE only. Do not widen existing owner writes.
+- Public Survey Finding `source_id` is NULL; title/summary contain deterministic
+  allowlisted metadata only. Public Survey highlight `source_id`,
+  `approved_excerpt_id` and `quote_or_summary` are NULL. Ordinary provenance/text
+  remains readable under existing rules; conditional constraints enforce the split.
+- Proposed/new owner-backed, explicitly column-listed `security_barrier` updatable
+  link view excludes either `survey_response` endpoint in every status, with
+  `WITH CHECK OPTION`. App SELECT/INSERT/UPDATE use this view, no DELETE; revoke
+  raw `core.entity_links` SELECT/INSERT/UPDATE and surviving column/inherited grants.
+  Survey link mutations use an Entity Links-owned narrow definer. Verify real
+  conflict/RETURNING/UPDATE paths rather than assuming table SQL works on the view.
+- `core.audit_log`: revoke raw app SELECT, retain INSERT/no UPDATE/DELETE. Preserve
+  Actor/subject/detail identifiers and history; controlled migrate/operator reads
+  supply verification. No broad app audit reader. Inventory consumers before cutover.
+- Backfill/reconcile active and archived Findings, zero-highlight creations, revoked
+  approvals and all link statuses; reject orphan/workspace/approval-response mismatches.
+  Preserve original UUIDs, timestamps, counters and detach metadata. Sanitize only
+  confirmed Survey-derived legacy mutation cache copies under ADR-0015's dated
+  exception, preserving keys/hashes/status and exactly-once effects.
+- Update application/repositories/DTOs with schema and grants in one coordinated
+  release; old binaries are incompatible. Generate/review SQL, journal and snapshots
+  through existing migration discipline. Neither #739 nor #740 alone proves delivery.
+  Index private workspace+parent/response/approval paths and batch hydration; no audit
+  JSON scan in request paths. Verify actual app ACL denial and operator history.
+- This closes direct-table paths, not SQL-level unlinkability against stolen app
+  credentials: permitted definers remain trusted application tools.
+
+## Close-out assistance storage (ADR-0068; suggestions shipped #1096/#1097, preview shipped #1099)
+
+Generated migration `0062_cluster_suggestion_storage.sql` (journal + snapshot) adds
+`voc.voc_cluster_suggestions`, the three VOC-owned counter/cursor tables in
+`docs/design/15-data-contracts.md`, and the default-off workspace policy. No Cluster
+schema or Admin editor is added by storage #1096. Item 2 (#1097) adds the
+bounded hourly queue and human review commands.
+Shadow measurements and saved recommendations stay separate and unchanged.
+
+DB checks enforce sorted/distinct pairs, positive revision/version/dimensions,
+required nonempty scoring/hash metadata and exact lifecycle field combinations.
+The pair unique key excludes version/state, so retained terminal identities suppress
+recreation across model changes. NO ACTION FKs retain VOC/Actor/Cluster references;
+write guards check workspace/MS integrity without adding domain Cluster columns or
+keys, freeze initial identity/timestamp and make confirmed rows immutable. Source
+archive/text/MS changes require application current-eligibility checks. Freshness,
+disjoint/cap admission, revision advancement, legal review transitions and five-minute
+restore belong to item 2's shipped commands, not the storage guards.
+
+`fops_app` has SELECT/INSERT/UPDATE on suggestions, occupancy and cursors, and
+SELECT/INSERT/UPDATE/DELETE on hourly admissions. An invoker guard permits app DELETE
+only after the hour ends. No app TRUNCATE or durable suggestion DELETE is granted;
+`fops_migrate` retains operator teardown privileges. Policy changes serialize under
+the existing settings singleton, preserve Coverage/other settings, audit boolean
+effective diffs only and never spend counters or advance cursors. The conductor
+owns migration numbering/reconciliation and actual app/migrate throwaway-DB checks.
+
+Paid preview requests/budgets ship in `0070_voc_similarity_preview.sql` (#1099):
+no raw prose or cached candidate IDs/titles, vectors at most ten minutes,
+tombstones 24h, budget buckets until UTC window expiry. Non-null scope keys
+make workspace bucket conflicts atomic. The precreated VOC cleanup queue runs
+every ten minutes unconditionally; UPDATE nulls expired vectors without changing
+vector expiry, and invoker retention triggers restrict app DELETE to expired
+24h tombstones/ended counters. SELECT/INSERT/UPDATE/DELETE is granted only on
+these two operational tables, never Cluster, member or audit tables. Provider
+I/O remains outside short reservation/completion transactions.
+
+Migration `0071_voc_cluster_suggestion_generation.sql` (Drizzle journal/snapshot)
+adds `(workspace_id, embedding_version, updated_at, voc_id)` on embeddings and
+precreates `voc.cluster_suggestions` with the existing pg-boss retry policy.
+No grants change.
+
+Generation uses watermark freshness as a SQL prefilter and TypeScript derived
+hash checks before admitting/refreshing. Pair provider/model/dimensions/version
+must match the active provider identity and embedding version; dimensions are
+filtered before `<=>`. The independent
+`VOC_CLUSTER_SUGGESTION_CUT = 0.85` does not alter saved recommendation cuts.
+Each workspace/MS transaction scans up to 200 incremental embedding sources
+ordered by `(updated_at, voc_id)` and 200 reconciliation sources ordered by UUID.
+The active version resets both cursor positions; initial watermark is year 0001
+with the zero UUID and reconciliation starts before the first UUID. Empty
+incremental pages retain their last position. A short/empty reconciliation page
+wraps to the start and stamps `reconciled_at`; late old-watermark embeddings are
+therefore recovered on a later sweep. Timestamp cursor strings preserve database
+microseconds. Sorted pairs are deduplicated before score DESC/UUID greedy admission.
+
+Neighbour queries apply SQL scope/archive/watermark/metadata/membership/dismissal/
+terminal-pair/other-eligible-pair vetoes before distance ordering and LIMIT 10.
+TypeScript hashes are checked before retaining at most ten neighbours per source;
+up to ten bounded candidate pages recover peers behind stale hashes. Thus at most
+400 sources, 40,000 candidate rows and 4,000 retained pairs are considered per MS
+transaction. Statement timeout starts at 30s, shrinking with remaining transaction
+time at scan/admission boundaries; lock timeout is at most 5s. Workspace occupancy
+is recomputed over all pending rows, in pages, without actor visibility/read-ceiling
+truncation. Read and occupancy keysets order by score DESC, sorted VOC UUIDs ASC,
+then suggestion ID ASC, preserving ties across Managed Systems. The read ceiling
+counts only rows passing elevated Finding scope and both canonical VOC visibility
+predicates in SQL. Timeout rollback leaves cursors/counters/admissions unchanged.
+New admission caps are five/MS/UTC hour and twenty eligible pending/workspace;
+pending metadata refresh and identical retries spend no slot. Generation writes
+no domain audit, Cluster/member, saved decision or Entity Link.
+
+
+## Responsibility storage (#1089 / ADR-0067 56-D)
+
+Migration `0060_responsibility_defaults.sql` adds nullable Finding owner, Task Request
+assigned-reviewer, Task team-assignee and Managed System reviewer columns with FKs and
+XOR-or-both-null checks. It performs no source UPDATE/backfill and leaves actual decision
+Actor/provenance and Survey operator fields intact. Existing table grants already cover
+these columns; no table-wide privilege widening or bootstrap-role change is needed.
+The new Core diagnostic input table has runtime SELECT/INSERT only; `core.teams` stays
+SELECT-only and `core.audit_log` immutable. Generated SQL/journal/snapshot ship together.
+Workspace/active-team and Actor eligibility checks apply to explicit registry defaults;
+Task Request creation and Task conversion/edit validation/routing are implemented by #1091;
+VOC/Finding creation remains #1090. No additional migration or grant widening is required. The failure-input/read contract is
+`docs/implementation/api/core.md`.
+
+## ADR-0064 #740 canonical read cutover
+
+`core.entity_links` remains canonical and supplies FK/history identity. Runtime ordinary
+SQL uses `core.entity_links_app`, an explicitly column-listed owner-backed simple
+updatable security-barrier view with cascaded CHECK OPTION. Both Survey-response
+endpoints are excluded in all statuses. App SELECT/INSERT/UPDATE are granted only on
+the view; no DELETE. Raw table and column ACLs are revoked, including PUBLIC; the
+migration fails closed on inherited raw grants rather than changing memberships.
+App audit INSERT stays without RETURNING; raw audit SELECT is revoked, while controlled
+migrate/operator history retains Actor, subject and detail. The narrow scoped Core
+question/configuration projections replace the two existing audit readers.
+
+The coordinated rollout, new owner-role prerequisite, consumer inventory and conductor
+verification are recorded in `survey-link-audit-cutover-740.md`. Neither 0059 nor #740
+alone closes Slice 53. Trusted permitted-definer composition is the accepted limit;
+stolen-app-credential unlinkability is not claimed.
+
+### #1109 approved Survey attachment extension (0066)
+
+`apps/backend/migrations/0066_survey_evidence_attachment.sql` and its generated
+`meta/0066_snapshot.json`/journal extend the existing Survey provenance and Entity
+Links mutator functions. No storage table changes, new owners, app table grants or
+reader-owner widening are introduced. Exact column privileges and their purposes
+are recorded in [the #1109 cutover section](survey-link-audit-cutover-740.md#1109-approved-attachment-extension-0066-runtime-verification-pending).
+The new approval-addressed response lock has PUBLIC EXECUTE revoked and app EXECUTE
+only. Ownership-transfer schema CREATE is temporary and revoked before commit.
+Deferred 0059 checks allow another response on a target only with its same-transaction
+active internal-only `evidence_of`; generated lineage and original history stay intact.
+
+Generation is completed; application and real-role verification are conductor-owned.
+Apply after 0065, verify owner/membership/function/column ACLs, and execute the new
+route rollback/replay/revoke/threshold race tests together with existing provenance
+and canonical-read suites on a throwaway database before deployment acceptance.
+
+
+## Issue #1226: VOC no-follow-up decisions
+
+Migration `0072_normal_captain_marvel.sql` adds VOC-owned
+`voc.no_follow_up_decisions` with composite workspace/VOC primary key, required
+bounded reason, deciding Actor/time, creation/update timestamps and nullable
+`withdrawn_at`. The row is re-used for subsequent decisions; source audit is
+append-only history. `fops_app` has SELECT/INSERT and UPDATE only on decision,
+reason, actor and transition timestamps, with no DELETE or key updates. Existing
+table grants are unchanged. Drizzle-generated journal/snapshot accompany the SQL.

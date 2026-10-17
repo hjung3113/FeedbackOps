@@ -98,6 +98,21 @@ describe('migrations directory', () => {
     );
   });
 
+  it('expired reissue migration retains the complete unique scope tuple', () => {
+    const file = readdirSync(MIGRATIONS_DIR).find((name) =>
+      name.endsWith('_permission_grant_reissue.sql'),
+    );
+    expect(file).toBeDefined();
+    const sql = readFileSync(join(MIGRATIONS_DIR, file ?? ''), 'utf8');
+    expect(sql).toMatch(/ADD COLUMN "superseded_at" timestamp with time zone/);
+    const index = sql.match(/CREATE UNIQUE INDEX "permission_grants_active_uq"[\s\S]*?;/)?.[0];
+    expect(index).toMatch(/coalesce\("managed_system_id"/);
+    expect(index).toMatch(/coalesce\("object_type"/);
+    expect(index).toMatch(/coalesce\("object_id"/);
+    expect(index).toMatch(/WHERE "revoked_at" is null AND "superseded_at" is null/i);
+    expect(index).not.toMatch(/expires_at|now\(\)/i);
+    expect(sql).not.toMatch(/^GRANT\s/im);
+  });
   it('Slice 1 #6 migration installs pg-boss schema with fops_app DML grant only', () => {
     // ADR-0009 + spec choice (A): the running app role must never DDL the
     // pgboss schema. Migration 0002 owns the install; fops_app gets DML +

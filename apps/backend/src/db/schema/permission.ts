@@ -12,11 +12,11 @@
 // - Grill Q5 followup: the original partial unique predicate referenced
 //   `now()` against `expires_at`. now() is not IMMUTABLE so Postgres rejects
 //   it inside a partial index predicate. Decision: drop the expires_at
-//   condition from the predicate; uniqueness is enforced over non-revoked
+//   condition from the predicate; uniqueness is enforced over non-revoked, non-superseded
 //   rows and expiry is enforced at write time in the permission service.
 
 import { sql } from 'drizzle-orm';
-import { index, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 // NOTE: Drizzle-kit's CJS loader cannot resolve the `.js` re-write that
 // NodeNext requires at runtime for cross-file `.ts` imports, so we declare
@@ -45,6 +45,7 @@ export const permissionGrants = permissionSchema.table(
     grantedByActorId: uuid('granted_by_actor_id').notNull(),
     grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     revokedByActorId: uuid('revoked_by_actor_id'),
     revokedReason: text('revoked_reason'),
@@ -55,14 +56,14 @@ export const permissionGrants = permissionSchema.table(
       t.workspaceId,
       t.capability,
     ),
-    // Partial unique on the effective scope of a non-revoked grant.
+    // Partial unique on the effective scope of a non-revoked, non-superseded grant.
     // Predicate cannot reference now() (not IMMUTABLE) — expiry filtered at
     // write time in the permission service.
     // NOTE: Drizzle 0.38 does not encode COALESCE expressions on partial
     // indexes; this index is replaced/normalised by hand in the generated SQL.
     activeUniq: uniqueIndex('permission_grants_active_uq')
       .on(t.workspaceId, t.actorId, t.capability)
-      .where(sql`${t.revokedAt} is null`),
+      .where(sql`${t.revokedAt} is null AND ${t.supersededAt} is null`),
   }),
 );
 
@@ -115,16 +116,20 @@ export const permissionRequests = permissionSchema.table(
     sourceObjectId: uuid('source_object_id'),
     sourceActionId: text('source_action_id'),
     returnRouteIntent: text('return_route_intent'),
-    // status: pending | needs_more_info | approved | rejected | expired | revoked
+    // status: pending | needs_more_info | approved | rejected | cancelled | expired | revoked
     // (docs/implementation/05-permission-policy.md). Enforced as text + CHECK
     // in hand-edited migration SQL; constraint kept out of Drizzle to avoid
     // duplicating the enum list in two places before the capability vocab
     // file lands in S1.3.
+    revision: integer('revision').notNull().default(1),
     status: text('status').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    recoveryOpenIdx: index('permission_requests_recovery_open_idx')
+      .on(t.workspaceId, t.id)
+      .where(sql`${t.status} IN ('pending', 'needs_more_info')`),
     workspaceRequesterIdx: index('permission_requests_workspace_requester_idx').on(
       t.workspaceId,
       t.requesterActorId,

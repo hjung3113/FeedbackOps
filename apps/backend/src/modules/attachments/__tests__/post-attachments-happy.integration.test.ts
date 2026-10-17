@@ -18,17 +18,17 @@
 
 import { randomUUID } from 'node:crypto';
 
-import FormData from 'form-data';
 import type { FastifyInstance } from 'fastify';
+import FormData from 'form-data';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import {
-  StorageUnavailableError,
   type StorageBackend,
-  type StoragePutInput,
   type StorageGetResult,
+  type StoragePutInput,
+  StorageUnavailableError,
 } from '../../../lib/storage/index.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
@@ -156,7 +156,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     await dbHandle.pool.query('delete from core.rate_limits');
     await dbHandle.pool.query('delete from core.idempotency_keys');
     // attachment rows + audit rows from prior tests in this file.
-    await dbHandle.pool.query(`delete from voc.voc_attachments`);
+    await dbHandle.pool.query('delete from voc.voc_attachments');
     await migrateHandle.pool.query(
       `delete from core.audit_log where event_type = 'attachment_uploaded'`,
     );
@@ -223,10 +223,9 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     const body = res.json() as { id: string };
     // The put happened (mock recorded it) AND the row exists (DB confirms).
     expect(storage.calls.some((c) => c.op === 'put')).toBe(true);
-    const rows = await dbHandle.pool.query(
-      `select id from voc.voc_attachments where id = $1`,
-      [body.id],
-    );
+    const rows = await dbHandle.pool.query('select id from voc.voc_attachments where id = $1', [
+      body.id,
+    ]);
     expect(rows.rowCount).toBe(1);
     // Operation-ordering proof: when storage.put throws BEFORE the INSERT
     // (separate test below), no row exists. The presence of the row here
@@ -263,8 +262,10 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
   it('storage.put failure → 502 storage.unavailable, no row inserted, no audit emitted', async () => {
     const cookie = await loginAs(app, 'mock-user-1');
     storage.putBehavior = 'throw-unavailable';
-    const beforeRows = await dbHandle.pool.query(`select count(*)::int as n from voc.voc_attachments`);
-    const beforeAudit = await dbHandle.pool.query(
+    const beforeRows = await dbHandle.pool.query(
+      'select count(*)::int as n from voc.voc_attachments',
+    );
+    const beforeAudit = await migrateHandle.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'attachment_uploaded'`,
     );
     const res = await postAttachment(app, {
@@ -276,8 +277,10 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     });
     expect(res.statusCode).toBe(502);
     expect(res.json().code).toBe('storage.unavailable');
-    const afterRows = await dbHandle.pool.query(`select count(*)::int as n from voc.voc_attachments`);
-    const afterAudit = await dbHandle.pool.query(
+    const afterRows = await dbHandle.pool.query(
+      'select count(*)::int as n from voc.voc_attachments',
+    );
+    const afterAudit = await migrateHandle.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'attachment_uploaded'`,
     );
     expect(afterRows.rows[0].n).toBe(beforeRows.rows[0].n);
@@ -293,7 +296,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     const originalPut = storage.put.bind(storage);
     storage.put = async (input: StoragePutInput) => {
       const actorRow = await dbHandle.pool.query<{ id: string }>(
-        `select id from core.actors limit 1`,
+        'select id from core.actors limit 1',
       );
       const actorId = actorRow.rows[0]?.id;
       if (!actorId) throw new Error('no seeded actor for collision setup');
@@ -334,7 +337,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     });
     expect(res.statusCode).toBe(201);
     const body = res.json() as { id: string };
-    const audits = await dbHandle.pool.query<{
+    const audits = await migrateHandle.pool.query<{
       event_type: string;
       subject_id: string;
       detail: Record<string, unknown>;
@@ -369,9 +372,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     const put = storage.calls.find((c) => c.op === 'put');
     expect(put).toBeTruthy();
     // {workspace_uuid}/{uuid}/photo.png
-    expect(put!.key).toMatch(
-      /^[0-9a-fA-F-]{36}\/[0-9a-fA-F-]{36}\/photo\.png$/,
-    );
-    expect(put!.key.startsWith(`${WORKSPACE_ID}/`)).toBe(true);
+    expect(put?.key).toMatch(/^[0-9a-fA-F-]{36}\/[0-9a-fA-F-]{36}\/photo\.png$/);
+    expect(put?.key.startsWith(`${WORKSPACE_ID}/`)).toBe(true);
   });
 });

@@ -1,9 +1,9 @@
 // VOC list predicate, list/count queries, and out-of-scope summary.
 import { sql } from 'drizzle-orm';
+import { escapeLikePattern } from '../../../lib/sql-like.js';
 
 import type { Db } from '../../../db/client.js';
-import { entityLinks } from '../../../db/schema/core.js';
-import { vocClusterMembers } from '../../../db/schema/voc-cluster.js';
+import { entityLinksApp } from '../../../db/schema/core.js';
 import { vocs } from '../../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
@@ -14,7 +14,14 @@ import {
 import type { Scope } from '../authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from '../cursor.js';
 import type { VocGroupedCountRow } from '../read-contract.js';
+import { vocFollowUpRootsSql } from '../read-projections.js';
 import { type VocReadRow, mapVocRow } from './repository-shared.js';
+
+export function vocHasCurrentNoFollowUpDecision(workspaceId: string) {
+  return sql`EXISTS (SELECT 1 FROM voc.no_follow_up_decisions nfd
+    WHERE nfd.workspace_id = ${workspaceId}::uuid AND nfd.voc_id = ${vocs.id}
+      AND nfd.withdrawn_at IS NULL)`;
+}
 
 // ── listVocsForRead ──────────────────────────────────────────────────────────
 
@@ -55,14 +62,6 @@ export interface ListVocsRepoArgs {
 }
 
 type VocListPredicateArgs = Omit<ListVocsRepoArgs, 'sort' | 'cursor' | 'limit'>;
-
-/**
- * #821: escape the LIKE wildcards so `%` and `_` in the user text match
- * literally. The escape character itself (`\`) is escaped first.
- */
-function escapeLikePattern(text: string): string {
-  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
 
 /**
  * The canonical list/count predicate.  Keep navigation counts on this path so
@@ -120,36 +119,17 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
   else if (tab === 'no-task') {
     wheres.push(sql`NOT EXISTS (
-      SELECT 1 FROM ${entityLinks} el
+      SELECT 1 FROM ${entityLinksApp} el
       WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
         AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
         AND el.target_type = 'task'
     )`);
   } else if (tab === 'no-link' || tab === 'high-no-link') {
     if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
-    // #513 N1: "no link" means "no direct follow-up link" — an active
-    // entity_links row with this VOC as source and a follow-up target
-    // (finding / task / task_request). voc ↔ voc related_to and rows that
-    // only target this VOC do not count.
-    // #513 N2: a follow-up also exists when one of the VOC's clusters has
-    // an active voc_cluster → finding/task_request link. No cluster status
-    // filter (the create path links from draft clusters) and no membership
-    // soft-delete column exists; a detached link simply is not active.
-    wheres.push(sql`NOT EXISTS (
-      SELECT 1 FROM ${entityLinks} el
-      WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
-        AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
-        AND el.target_type IN ('finding', 'task', 'task_request')
-    ) AND NOT EXISTS (
-      SELECT 1 FROM ${vocClusterMembers} vcm
-      WHERE vcm.voc_id = ${vocs.id}
-        AND EXISTS (
-          SELECT 1 FROM ${entityLinks} el
-          WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
-            AND el.source_type = 'voc_cluster' AND el.source_id = vcm.cluster_id
-            AND el.target_type IN ('finding', 'task_request')
-        )
-    )`);
+    // Preserve one clause here: grouped counts append clauses by base-array length.
+    // #1226: a current (not withdrawn) no-follow-up decision also takes the VOC out.
+    wheres.push(sql`NOT EXISTS (${vocFollowUpRootsSql(workspaceId, sql`${vocs.id}`)})
+      AND NOT (${vocHasCurrentNoFollowUpDecision(workspaceId)})`);
   }
   if (filterSeverity && filterSeverity.length > 0)
     wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
@@ -204,12 +184,12 @@ export async function countGroupedVocsForRead(
     return sql.join(wheres.slice(baseWheres.length), sql` AND `);
   };
   const hasTaskLink = sql`EXISTS (
-    SELECT 1 FROM ${entityLinks}
-    WHERE ${entityLinks.workspaceId} = ${vocs.workspaceId}
-      AND ${entityLinks.status} = 'active'
-      AND ${entityLinks.sourceType} = 'voc'
-      AND ${entityLinks.sourceId} = ${vocs.id}
-      AND ${entityLinks.targetType} = 'task'
+    SELECT 1 FROM ${entityLinksApp}
+    WHERE ${entityLinksApp.workspaceId} = ${vocs.workspaceId}
+      AND ${entityLinksApp.status} = 'active'
+      AND ${entityLinksApp.sourceType} = 'voc'
+      AND ${entityLinksApp.sourceId} = ${vocs.id}
+      AND ${entityLinksApp.targetType} = 'task'
   )`;
   const result = await (db as Db).execute<{
     managed_system_id: string;

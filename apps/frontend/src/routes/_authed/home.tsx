@@ -1,12 +1,17 @@
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import type { RenderRecoveryAccess } from '@/features/integration/public';
+import { useRecoveryQueue } from '@/features/integration/public';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import type * as React from 'react';
 import { z } from 'zod';
 
 import { HomeScreen, type HomeTab } from '@/features/home/HomeScreen';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 
 const homeSearchSchema = z
   .object({
+    ...recoverySearchFields,
     managedSystem: z.string().uuid().optional(),
     tab: z.enum(['dashboard', 'inbox']).optional(),
   })
@@ -26,11 +31,20 @@ export const Route = createFileRoute('/_authed/home')({
   component: HomeRouteSplit,
 });
 
+const renderRequestAccess: RenderRecoveryAccess = (permission, returnTo) => (
+  <RequestAccessButton
+    capability={permission.permission}
+    managedSystemId={permission.managed_system_id}
+    returnRouteIntent={returnTo}
+  />
+);
+
 export function HomeRoute(): React.ReactElement {
   const { managedSystem, tab } = useSearch({ strict: false }) as {
     managedSystem?: string;
     tab?: HomeTab;
   };
+  const recovery = useRecoveryQueue('actionable', tab !== 'inbox', renderRequestAccess);
   const navigate = useNavigate({ from: '/home' });
   const onTabChange = (nextTab: HomeTab): void => {
     void navigate({
@@ -43,6 +57,7 @@ export function HomeRoute(): React.ReactElement {
   return (
     <HomeScreen
       {...(managedSystem !== undefined ? { managedSystemId: managedSystem } : {})}
+      recovery={recovery}
       activeTab={tab ?? 'dashboard'}
       onTabChange={onTabChange}
     />

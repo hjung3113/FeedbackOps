@@ -14,7 +14,8 @@ Owns:
 - Survey
 - Survey Response
 - Survey Result
-- Survey templates (deferred, ADR-0059 D2)
+- Server-owned starting templates (ADR-0070; backend contract #1073)
+- Existing definition reuse (ADR-0070; backend/shared contract #1074)
 ```
 
 Does not own:
@@ -93,9 +94,21 @@ Acceptance Criteria:
 - Survey Operator can create Discovery, Validation, or Outcome Survey.
 - Survey requires exactly one Primary Managed System.
 - Survey can link Analytics Area under that Managed System.
-- Survey can be created from template. (Deferred, ADR-0059 D2.)
-- Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links are ADR-0035/0036, unscheduled per ADR-0059 D4.)
+- Survey can be created atomically from one of three built-in starters through the backend contract (#1073, ADR-0070).
+- The creation dialog starts blank and offers built-in templates or saved questions from a same-Managed-System Survey (#1075). Sources are searched and paginated, with a read-only definition preview. Type follows the selected starting point and is locked until it is cleared; title remains editable and privacy is chosen independently (#1183, ADR-0070 amendment).
+- Managed System and respondent privacy remain explicit choices, and builder navigation uses only the persisted server ID (ADR-0039, amended by ADR-0070).
+- Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links (ADR-0035/0036) were rejected on 2026-10-13, ADR-0059 D4.)
 ```
+
+Built-in IDs are `discovery-basic`, `validation-basic`, and `outcome-basic`,
+version 1. The server owns definitions; shared previews use symbolic question
+keys without persisted IDs. Creation submits an editable title and independent
+description, resolves the operator anew, and writes the full question graph
+in the creation transaction. Blank creation remains available. Outcome uses a
+positive 1–5 usefulness rating, retaining ADR-0055's low-band classification.
+The exact Korean content and endpoint envelope live in
+[the Survey API contract](../implementation/api/surveys.md#built-in-definitions-version-1).
+No saved-template library or response/history copying is part of this scope.
 
 ### FR-SURVEY-002: Basic Builder
 
@@ -284,3 +297,30 @@ response viewing permission.
 - Advanced statistical analysis
 - Branding-heavy form editor
 ```
+
+## Provenance boundary and safe reuse (ADR-0064)
+
+Accepted close-out contract, pending #739/#740/#816: trusted application
+authorization plus closure of direct Finding/highlight/link/audit copies.
+SQL-level unlinkability against stolen `fops_app` credentials is not guaranteed;
+permitted Survey readers remain composable trusted internal tools. Original
+response identity and approval snapshots stay in Survey-owned protected extensions.
+Audit Actor/subject/detail history is retained with controlled operator access;
+raw app audit reads are revoked. Public Survey-derived Finding summary is source
+metadata only; approved text requires fresh source/target checks and exact active
+approval. Withdrawal suppresses future evidence reads, not independently authored prose.
+
+For #816, a Survey result reader selects only active approved safe excerpts their
+cohort/per-question suppression permits and attaches with target `finding.manage`.
+Personal-response permission is unnecessary for safe reuse; existing holders keep
+below-threshold result exceptions, but the picker never exposes response IDs.
+Existing response-addressed create-Finding retains its personal gate and no Admin
+bypass. Existing linked-highlight audience remains distinct from picker suppression.
+Count response subjects/answers, not approvals; add no free-text/dimension filters.
+The proposed/new candidate and attachment APIs live in `api/surveys.md` and
+`api/findings.md` under `docs/implementation/`.
+
+Integration's proposed/new Evidence surface consumes the same safe projection.
+No response UUID entry, raw quote entry, response URL reconstruction, public Survey
+link or response→VOC conversion. Generic Survey Link Finding remains deferred
+(ADR-0037); #816 approval-selected evidence attachment is a distinct action.

@@ -42,6 +42,7 @@ const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 const PRODUCT_SCHEMAS = [
   'core',
+  'dashboard',
   'finding',
   'permission',
   'survey',
@@ -72,9 +73,13 @@ const SURVEY_AGGREGATE_FUNCTIONS = [
 // silence: the entry is the design record, and adding one is a decision, not
 // paperwork (#207).
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
+  'survey.finding_response_bindings': [],
+  'survey.highlight_response_bindings': [],
   // Migration 0000 makes the audit log append-only so application writes retain
   // an immutable history.
-  'core.audit_log': ['SELECT', 'INSERT'],
+  'core.audit_log': ['INSERT'],
+  // 0058: safe routing failures are append-only runtime diagnostic inputs.
+  'core.responsibility_default_failures': ['SELECT', 'INSERT'],
   // Migration 0054 keeps inbox rows durable; only read/archive/email claim
   // state has column-scoped UPDATE grants.
   'core.notifications': ['SELECT', 'INSERT'],
@@ -83,7 +88,7 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'core.display_counters': ['SELECT'],
   // Migrations 0018 and 0019 record canonical link history by inserting and
   // soft-detaching links (status='detached'), never hard-deleting them.
-  'core.entity_links': ['SELECT', 'INSERT', 'UPDATE'],
+  'core.entity_links': [],
   // Migration 0009 revokes writes per ADR-0019 Section C: teams remain a
   // read-only placeholder until a team-management service ships.
   'core.teams': ['SELECT'],
@@ -129,6 +134,8 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // UPDATE is deliberately column-scoped and asserted below. role_table_grants
   // must remain without table-wide UPDATE.
   'voc.public_update_review_candidates': ['SELECT', 'INSERT'],
+  // 0072: UPDATE is column-scoped (asserted below); no table-wide UPDATE or DELETE.
+  'voc.no_follow_up_decisions': ['SELECT', 'INSERT'],
   'voc.reporter_facing_status_transitions': ['SELECT'],
   // No DELETE by design (migration 0044): a dismissal the application can
   // erase is not a dismissal that survives recomputation. UPDATE is granted
@@ -138,9 +145,23 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Issue #512 measurements are durable, but application code cannot erase
   // an observation; migration 0051 grants only the shadow worker's DML needs.
   'voc.voc_cluster_autogen_shadow_candidates': ['SELECT', 'INSERT', 'UPDATE'],
+  // ADR-0068: durable pair history; only ended hourly admission buckets can be reclaimed.
+  'voc.voc_cluster_suggestions': ['SELECT', 'INSERT', 'UPDATE'],
+  'voc.voc_cluster_suggestion_counters': ['SELECT', 'INSERT', 'UPDATE'],
+  'voc.voc_cluster_suggestion_admissions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'voc.voc_similarity_preview_requests': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'voc.voc_similarity_preview_budgets': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'voc.voc_cluster_suggestion_cursors': ['SELECT', 'INSERT', 'UPDATE'],
   // Migration 0052 (ADR-0055): the current follow-up decision is updated in
   // place, never deleted. UPDATE is column-scoped and asserted below.
   'survey.outcome_follow_up_decisions': ['SELECT', 'INSERT'],
+  // Migration 0068: mutable identity/preferences, append-only immutable history.
+  'dashboard.recovery_identities': ['SELECT', 'INSERT', 'UPDATE'],
+  'dashboard.recovery_presentations': ['SELECT', 'INSERT', 'UPDATE'],
+  'dashboard.recovery_history': ['SELECT', 'INSERT'],
+  'survey.outcome_recovery_identities': ['SELECT', 'INSERT', 'UPDATE'],
+  'survey.outcome_recovery_presentations': ['SELECT', 'INSERT', 'UPDATE'],
+  'survey.outcome_recovery_history': ['SELECT', 'INSERT'],
 };
 
 describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
@@ -177,6 +198,21 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
       `product schemas without discovered base tables: ${schemasWithoutTables.join(', ')}`,
     ).toEqual([]);
     expect(tables.length, 'should discover at least 38 product tables').toBeGreaterThanOrEqual(38);
+    expect(
+      tables
+        .filter(
+          (t) =>
+            t.table_name.startsWith('recovery_') || t.table_name.startsWith('outcome_recovery_'),
+        )
+        .map((t) => `${t.table_schema}.${t.table_name}`),
+    ).toEqual([
+      'dashboard.recovery_history',
+      'dashboard.recovery_identities',
+      'dashboard.recovery_presentations',
+      'survey.outcome_recovery_history',
+      'survey.outcome_recovery_identities',
+      'survey.outcome_recovery_presentations',
+    ]);
 
     const failures: string[] = [];
     for (const t of tables) {
@@ -260,6 +296,41 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'UPDATE') as has_table_update,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'DELETE') as has_delete,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'TRUNCATE') as has_truncate`,
+    );
+    expect(tablePrivileges[0]).toEqual({
+      has_table_update: false,
+      has_delete: false,
+      has_truncate: false,
+    });
+  });
+
+  it('fops_app UPDATE on VOC no-follow-up decisions is limited to decision columns', async () => {
+    const { rows } = await migrateHandle.pool.query<{ column_name: string }>(
+      `select column_name
+           from information_schema.column_privileges
+          where grantee = 'fops_app'
+            and table_schema = 'voc'
+            and table_name = 'no_follow_up_decisions'
+            and privilege_type = 'UPDATE'
+          order by column_name`,
+    );
+    expect(rows.map((row) => row.column_name)).toEqual([
+      'decided_at',
+      'decided_by_actor_id',
+      'decision',
+      'reason',
+      'updated_at',
+      'withdrawn_at',
+    ]);
+    const { rows: tablePrivileges } = await migrateHandle.pool.query<{
+      has_table_update: boolean;
+      has_delete: boolean;
+      has_truncate: boolean;
+    }>(
+      `select
+           has_table_privilege('fops_app', 'voc.no_follow_up_decisions', 'UPDATE') as has_table_update,
+           has_table_privilege('fops_app', 'voc.no_follow_up_decisions', 'DELETE') as has_delete,
+           has_table_privilege('fops_app', 'voc.no_follow_up_decisions', 'TRUNCATE') as has_truncate`,
     );
     expect(tablePrivileges[0]).toEqual({
       has_table_update: false,
@@ -431,5 +502,24 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
       surveyId,
     ]);
     await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
+  });
+
+  it('#1109 mutator witness extensions confer no raw-answer or owner-role access to app', async () => {
+    for (const role of [
+      'fops_survey_provenance_mutator_owner',
+      'fops_entity_links_survey_mutator_owner',
+    ]) {
+      const result = await migrateHandle.pool.query(
+        `
+        select pg_has_role('fops_app',$1::name,'MEMBER') as app_member,
+          has_any_column_privilege($1::name,'survey.survey_response_answers','SELECT,INSERT,UPDATE') as answers,
+          has_schema_privilege($1::name,'survey','CREATE') as survey_create,
+          has_schema_privilege($1::name,'core','CREATE') as core_create`,
+        [role],
+      );
+      expect(result.rows).toEqual([
+        { app_member: false, answers: false, survey_create: false, core_create: false },
+      ]);
+    }
   });
 });

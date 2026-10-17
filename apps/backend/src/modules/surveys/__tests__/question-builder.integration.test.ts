@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -74,7 +75,8 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -187,10 +189,10 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     expect(response.statusCode).toBe(201);
     const created = response.json<{ id: string; kind: string }>();
     expect(created.kind).toBe('single_choice');
-    const audit = await appHandle.pool.query<{ event_type: string; detail: { survey_id: string } }>(
-      'select event_type, detail from core.audit_log where subject_id = $1',
-      [created.id],
-    );
+    const audit = await migrateHandle.pool.query<{
+      event_type: string;
+      detail: { survey_id: string };
+    }>('select event_type, detail from core.audit_log where subject_id = $1', [created.id]);
     expect(audit.rows).toEqual([
       expect.objectContaining({
         event_type: 'survey_question_created',
@@ -422,7 +424,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       branch_depth: 0,
     });
 
-    const audit = await appHandle.pool.query<{ detail: { changed_fields: string[] } }>(
+    const audit = await migrateHandle.pool.query<{ detail: { changed_fields: string[] } }>(
       `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_question_updated' order by created_at desc limit 1`,
       [childId],
     );
@@ -527,7 +529,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     );
 
     expect(updated.statusCode).toBe(200);
-    const audit = await appHandle.pool.query<{
+    const audit = await migrateHandle.pool.query<{
       detail: { changed_fields: string[]; ordering_changed: boolean };
     }>(
       `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_question_updated'`,
@@ -568,10 +570,10 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     });
 
     expect(deleted.statusCode).toBe(200);
-    const audit = await appHandle.pool.query<{ event_type: string; detail: { survey_id: string } }>(
-      'select event_type, detail from core.audit_log where subject_id = $1',
-      [questionId],
-    );
+    const audit = await migrateHandle.pool.query<{
+      event_type: string;
+      detail: { survey_id: string };
+    }>('select event_type, detail from core.audit_log where subject_id = $1', [questionId]);
     expect(audit.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

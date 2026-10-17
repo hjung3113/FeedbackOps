@@ -1,20 +1,27 @@
-import { randomUUID } from 'node:crypto';
-import type { SurveyType } from '@fops/shared';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  type ListSurveysQuery,
+  type SurveyStartingPoint,
+  type SurveyType,
+  surveyCopySourceQuestionSchema,
+} from '@fops/shared';
 import { sql } from 'drizzle-orm';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import { actorSurveyReadScope, checkSurveyManage, checkSurveyRead } from './authorization.js';
 import {
-  actorSurveyReadScope,
-  checkSurveyManage,
-  checkSurveyRead,
-  isSurveyInReadScope,
-} from './authorization.js';
+  type CopySourcesQuery,
+  decodeCopySourceCursor,
+  listCopySources,
+} from './repo-copy-sources.js';
 import {
   type QuestionKind,
   type QuestionRow,
   type SurveyRow,
+  actorCanAnswerSurvey,
   findSurvey,
   listQuestions,
   listSurveys,
@@ -33,6 +40,7 @@ import {
   updateSurvey,
 } from './repo.js';
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
+import { builtinSurveyTemplates, findBuiltinSurveyTemplate } from './templates.js';
 
 export type CreateSurveyInput = {
   type: SurveyType;
@@ -42,6 +50,7 @@ export type CreateSurveyInput = {
   analytics_area_id?: string;
   operator_actor_id?: string;
   responses_identity_protected: boolean;
+  starting_point?: SurveyStartingPoint;
 };
 export type QuestionInput = {
   kind: QuestionKind;
@@ -176,6 +185,31 @@ function validateQuestions(rows: QuestionRow[]) {
         });
     }
   }
+}
+function copyDefinitionQuestions(rows: QuestionRow[]) {
+  if (!rows.length) validation('source definition is empty', ['starting_point']);
+  const definitions = rows.map((q, index) => {
+    if (q.sort_order !== index)
+      validation('source question order must be dense', ['starting_point']);
+    const { survey_id: _surveyId, ...definition } = questionDto(q);
+    const parsed = surveyCopySourceQuestionSchema.safeParse(definition);
+    if (!parsed.success) validation('invalid source definition', ['starting_point']);
+    return definition;
+  });
+  // Validate shapes before graph rules touch persisted JSON option arrays.
+  validateQuestions(rows);
+  return definitions;
+}
+function definitionToken(survey: SurveyRow, rows: QuestionRow[]) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        type: survey.type,
+        primary_managed_system_id: survey.primary_managed_system_id,
+        questions: copyDefinitionQuestions(rows),
+      }),
+    )
+    .digest('hex');
 }
 async function requireReadable(
   deps: SurveysServiceDeps,
@@ -318,6 +352,11 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
         a.idempotencyKey,
         a.requestHash,
         async () => {
+          // Match the source-authoring lock order (Survey before Managed System).
+          const lockedSource =
+            a.input.starting_point?.kind === 'existing_survey'
+              ? await lockSurvey(tx, a.actor.workspace_id, a.input.starting_point.survey_id)
+              : null;
           const m = await lockManagedSystem(
             tx,
             a.actor.workspace_id,
@@ -373,6 +412,29 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
             throw new HttpError('validation.failed', 'operator requires survey.manage', {
               fields: [{ path: ['operator_actor_id'], code: 'permission_denied' }],
             });
+          const startingPoint = a.input.starting_point;
+          const template =
+            startingPoint?.kind === 'builtin'
+              ? findBuiltinSurveyTemplate(startingPoint.template_id, startingPoint.version)
+              : undefined;
+          if (startingPoint?.kind === 'builtin' && !template)
+            validation('unknown built-in template or version', ['starting_point']);
+          if (template && template.type !== a.input.type)
+            validation('type must match starting template', ['type']);
+          let sourceQuestions: QuestionRow[] = [];
+          if (startingPoint?.kind === 'existing_survey') {
+            const source = lockedSource;
+            if (!source) throw new HttpError('not_found.record', 'survey not found');
+            await requireManage(deps, tx, a.actor, source);
+            if (source.primary_managed_system_id !== m.id || source.type !== a.input.type)
+              validation('source system and type must match target', ['starting_point']);
+            if (!['draft', 'open', 'closed'].includes(source.status))
+              validation('source status is not eligible', ['starting_point']);
+            sourceQuestions = await lockQuestions(tx, a.actor.workspace_id, source.id);
+            const token = definitionToken(source, sourceQuestions);
+            if (token !== startingPoint.definition_token)
+              throw new HttpError('conflict.stale_write', 'source definition changed');
+          }
           const s = await insertSurvey(tx, {
             workspaceId: a.actor.workspace_id,
             type: a.input.type,
@@ -384,6 +446,69 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
             responsesIdentityProtected: a.input.responses_identity_protected,
             createdBy: a.actor.actor_id,
           });
+          const questions: QuestionRow[] = [];
+          const parentIds = new Map<string, string>();
+          const definitions = sourceQuestions.length
+            ? [...sourceQuestions].sort(
+                (a, b) => a.branch_depth - b.branch_depth || a.sort_order - b.sort_order,
+              )
+            : (template?.questions ?? []);
+          for (const definition of definitions) {
+            const input: QuestionInput =
+              'id' in definition
+                ? {
+                    kind: definition.kind,
+                    prompt: definition.prompt,
+                    is_required: definition.is_required,
+                    sort_order: definition.sort_order,
+                    ...(definition.options !== null ? { options: definition.options } : {}),
+                    ...(definition.rating_min !== null
+                      ? { rating_min: definition.rating_min }
+                      : {}),
+                    ...(definition.rating_max !== null
+                      ? { rating_max: definition.rating_max }
+                      : {}),
+                    rating_low_label: definition.rating_low_label,
+                    rating_high_label: definition.rating_high_label,
+                    branch_parent_question_id: definition.branch_parent_question_id
+                      ? (parentIds.get(definition.branch_parent_question_id) ?? null)
+                      : null,
+                    branch_trigger_option_key: definition.branch_trigger_option_key,
+                  }
+                : definition;
+            if (
+              'id' in definition &&
+              definition.branch_parent_question_id &&
+              !input.branch_parent_question_id
+            )
+              validation('source branch parent is missing', ['starting_point']);
+            const q = await insertQuestion(tx, {
+              workspaceId: a.actor.workspace_id,
+              surveyId: s.id,
+              ...normalized(input),
+            });
+            questions.push(q);
+            if ('id' in definition) parentIds.set(definition.id, q.id);
+            await deps.auditService.record(tx, {
+              workspace_id: a.actor.workspace_id,
+              actor_id: a.actor.actor_id,
+              event_type: 'survey_question_created',
+              subject_type: 'survey_question',
+              subject_id: q.id,
+              summary: 'Survey question created',
+              detail: {
+                survey_id: s.id,
+                question_id: q.id,
+                kind: q.kind,
+                branch_depth: q.branch_depth,
+                sort_order: q.sort_order,
+                ...(q.branch_parent_question_id
+                  ? { branch_parent_question_id: q.branch_parent_question_id }
+                  : {}),
+              },
+            });
+          }
+          validateQuestions(questions);
           await deps.auditService.record(tx, {
             workspace_id: a.actor.workspace_id,
             actor_id: a.actor.actor_id,
@@ -400,11 +525,75 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
               operator_actor_id: operator,
               operator_resolution: resolution,
               responses_identity_protected: s.responses_identity_protected,
+              ...(startingPoint
+                ? {
+                    starting_point:
+                      startingPoint.kind === 'existing_survey'
+                        ? { kind: startingPoint.kind, survey_id: startingPoint.survey_id }
+                        : startingPoint,
+                    question_count: questions.length,
+                  }
+                : {}),
             },
           });
           return { status: 201, body: dto(s) };
         },
       ),
+    );
+  }
+  async function getSurveyTemplates(actor: SurveysActor, managedSystemId: string) {
+    return deps.db.transaction(async (tx) => {
+      const system = await lockManagedSystem(tx, actor.workspace_id, managedSystemId);
+      if (!system) throw new HttpError('not_found.record', 'managed system not found');
+      if (system.archived_at)
+        throw new HttpError('conflict.parent_archived', 'managed system archived');
+      const manage = await checkSurveyManage(deps.checkService, actor, system.id, { tx });
+      if (!manage.allow)
+        throw new HttpError('permission.denied', 'survey.manage capability required');
+      return builtinSurveyTemplates();
+    });
+  }
+  async function getSurveyCopySources(actor: SurveysActor, query: CopySourcesQuery) {
+    // Parse even for denied/empty scopes; malformed cursors are never accepted.
+    if (query.cursor) decodeCopySourceCursor(query.cursor);
+    return deps.db.transaction(async (tx) => {
+      const system = await lockManagedSystem(tx, actor.workspace_id, query.managed_system_id);
+      if (!system) throw new HttpError('not_found.record', 'managed system not found');
+      if (system.archived_at)
+        throw new HttpError('conflict.parent_archived', 'managed system archived');
+      const read = await checkSurveyRead(deps.checkService, actor, system.id, { tx });
+      if (!read.allow) throw new HttpError('not_found.record', 'survey not found');
+      const manage = await checkSurveyManage(deps.checkService, actor, system.id, { tx });
+      if (!manage.allow)
+        throw new HttpError('permission.denied', 'survey.manage capability required');
+      return listCopySources(tx, actor.workspace_id, query);
+    });
+  }
+  async function getSurveyCopySource(actor: SurveysActor, surveyId: string) {
+    return deps.db.transaction(
+      async (tx) => {
+        const source = await findSurvey(tx, actor.workspace_id, surveyId);
+        if (!source) throw new HttpError('not_found.record', 'survey not found');
+        await requireManage(deps, tx, actor, source);
+        const system = await lockManagedSystem(
+          tx,
+          actor.workspace_id,
+          source.primary_managed_system_id,
+        );
+        if (!system) throw new HttpError('not_found.record', 'managed system not found');
+        if (system.archived_at)
+          throw new HttpError('conflict.parent_archived', 'managed system archived');
+        const rows = await listQuestions(tx, actor.workspace_id, source.id);
+        return {
+          survey_id: source.id,
+          display_id: source.display_id,
+          title: source.title,
+          type: source.type,
+          definition_token: definitionToken(source, rows),
+          questions: copyDefinitionQuestions(rows),
+        };
+      },
+      { isolationLevel: 'repeatable read' },
     );
   }
   async function mutateQuestion(
@@ -735,13 +924,17 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
     idempotencyKey: string;
     requestHash: string;
   }) {
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, a.actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         a.actor.actor_id,
         a.idempotencyKey,
         a.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, a.actor.workspace_id, [
+            { type: 'survey', id: a.surveyId },
+          ]);
           const s = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
           if (!s) throw new HttpError('not_found.record', 'survey not found');
           await requireManage(deps, tx, a.actor, s);
@@ -774,10 +967,12 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
                 ? { survey_id: s.id, display_id: s.display_id, question_count: qs.length }
                 : { survey_id: s.id, display_id: s.display_id },
           });
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, a.actor.actor_id, 'transitionSurvey');
           return { status: 200, body: dto(updated) };
         },
-      ),
-    );
+      );
+    });
   }
   async function getSurvey(actor: SurveysActor, id: string) {
     const s = await findSurvey(deps.db, actor.workspace_id, id);
@@ -791,6 +986,17 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
     if (!survey) throw new HttpError('not_found.record', 'survey not found');
     if (survey.status !== 'open')
       throw new HttpError('conflict.survey_not_open', 'survey is not open');
+    if (
+      !(await actorCanAnswerSurvey(deps.db, {
+        workspaceId: actor.workspace_id,
+        actorId: actor.actor_id,
+        surveyId: survey.id,
+      }))
+    )
+      throw new HttpError(
+        'conflict.survey_response_already_submitted',
+        'survey response already submitted',
+      );
     const questions = await listQuestions(deps.db, actor.workspace_id, id);
     return {
       survey: {
@@ -798,6 +1004,7 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
         title: survey.title,
         type: survey.type,
         identity_protected: survey.responses_identity_protected,
+        description: survey.description,
       },
       questions: questions.map((question) => ({
         id: question.id,
@@ -884,14 +1091,22 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
       ),
     );
   }
-  async function listSurvey(actor: SurveysActor, managedSystemId?: string) {
+  async function listSurvey(
+    actor: SurveysActor,
+    managedSystemId?: string,
+    filters: ListSurveysQuery = {},
+  ) {
     const scope = await actorSurveyReadScope(deps.db, deps.checkService, actor);
-    return (await listSurveys(deps.db, actor.workspace_id, managedSystemId))
-      .filter((s) => isSurveyInReadScope(scope, s.primary_managed_system_id))
-      .map((s) => dto(s));
+    return (await listSurveys(deps.db, actor.workspace_id, scope, managedSystemId, filters)).map(
+      (s) => dto(s),
+    );
   }
+
   return {
     createSurvey,
+    getSurveyTemplates,
+    getSurveyCopySources,
+    getSurveyCopySource,
     updateSurveyFields,
     reorderQuestions,
     createQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('create', a),

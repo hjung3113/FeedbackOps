@@ -10,10 +10,19 @@ import { type DbHandle, createDb } from '../../../../db/client.js';
 import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
 import {
+  VOC_SIMILARITY_PREVIEW_CLEANUP_CRON,
+  VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE,
+} from '../../similarity-preview/cleanup.js';
+import {
   VOC_CLUSTER_AUTOGEN_SHADOW_CRON,
   VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
   registerVocClusterAutogenShadow,
 } from '../cluster-autogen-shadow.js';
+import {
+  VOC_CLUSTER_SUGGESTIONS_CRON,
+  VOC_CLUSTER_SUGGESTIONS_QUEUE,
+  registerVocClusterSuggestions,
+} from '../cluster-suggestions.js';
 import { VOC_EMBED_QUEUE } from '../embed-voc.js';
 import {
   VOC_EMBEDDING_BACKFILL_CRON,
@@ -40,6 +49,8 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     // would make this suite pass even if registration stopped scheduling
     // anything. Clear it first so the assertion is about *this* boot.
     await boss.unschedule(VOC_EMBEDDING_BACKFILL_QUEUE).catch(() => {});
+    await boss.unschedule(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
+    await boss.unschedule(VOC_CLUSTER_SUGGESTIONS_QUEUE).catch(() => {});
     await registerVocJobs(boss, {
       db: dbHandle.db,
       provider: createFakeEmbeddingProvider({ dimensions: 8, embeddingVersion: 1 }),
@@ -59,6 +70,15 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     await dbHandle?.close();
   });
 
+  it('registers preview cleanup even while embeddings are disabled', async () => {
+    const schedules = await boss.getSchedules(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
+    expect(schedules.find((s) => s.name === VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE)?.cron).toBe(
+      VOC_SIMILARITY_PREVIEW_CLEANUP_CRON,
+    );
+    const queues = await boss.getQueues([VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE]);
+    expect(queues.map((q) => q.name)).toContain(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
+  });
+
   it('registers the backfill cron in pgboss.schedule', async () => {
     const schedules = await boss.getSchedules(VOC_EMBEDDING_BACKFILL_QUEUE);
     const ours = schedules.find((s: { name: string }) => s.name === VOC_EMBEDDING_BACKFILL_QUEUE);
@@ -66,7 +86,11 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     expect(ours?.cron).toBe(VOC_EMBEDDING_BACKFILL_CRON);
   });
 
-  for (const queue of [VOC_EMBED_QUEUE, VOC_EMBEDDING_BACKFILL_QUEUE]) {
+  for (const queue of [
+    VOC_EMBED_QUEUE,
+    VOC_EMBEDDING_BACKFILL_QUEUE,
+    VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE,
+  ]) {
     it(`records ${queue} in pgboss.queue with ADR-0009 retry config`, async () => {
       const row = await dbHandle.pool.query<{
         retry_limit: number;
@@ -118,5 +142,27 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
         log: { info: () => {}, warn: () => {}, error: () => {} },
       }),
     ).rejects.toThrow(`pg-boss queue '${VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE}' is not pre-created`);
+  });
+  it('precreates and registers the hourly suggestion queue even when provider is disabled', async () => {
+    const schedules = await boss.getSchedules(VOC_CLUSTER_SUGGESTIONS_QUEUE);
+    expect(schedules.find((s) => s.name === VOC_CLUSTER_SUGGESTIONS_QUEUE)?.cron).toBe(
+      VOC_CLUSTER_SUGGESTIONS_CRON,
+    );
+    const row = await dbHandle.pool.query(
+      'select retry_limit,retry_delay,retry_backoff from pgboss.queue where name=$1',
+      [VOC_CLUSTER_SUGGESTIONS_QUEUE],
+    );
+    expect(row.rows).toEqual([{ retry_limit: 5, retry_delay: 30, retry_backoff: true }]);
+  });
+  it('refuses to register without a migration-precreated suggestion queue', async () => {
+    await expect(
+      registerVocClusterSuggestions({ getQueues: async () => [] } as unknown as PgBoss, {
+        db: dbHandle.db,
+        embeddingVersion: 1,
+        embeddingEnabled: false,
+        embeddingIdentity: { provider: 'fake', model: 'fake-hash-v1', dimensions: 1024 },
+        log: { info: () => {}, warn: () => {}, error: () => {} },
+      }),
+    ).rejects.toThrow(`pg-boss queue '${VOC_CLUSTER_SUGGESTIONS_QUEUE}' is not pre-created`);
   });
 });

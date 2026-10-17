@@ -1,6 +1,11 @@
 import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
+import type { CheckService } from '../permissions/check-service.js';
 import type { FindingReadRow } from './repo-read.js';
 import { insertFinding, lockFindingById, updateFindingLinkedTask } from './repo.js';
+import { resolveOwner } from './responsibility.js';
 
 /**
  * Application seam for cross-module Finding commands (#391). Findings owns the
@@ -9,6 +14,8 @@ import { insertFinding, lockFindingById, updateFindingLinkedTask } from './repo.
  */
 
 export interface CreateFindingFromVocClusterInput {
+  owner_actor_id?: string | null | undefined;
+  owner_team_id?: string | null | undefined;
   workspaceId: string;
   primaryManagedSystemId: string;
   title: string;
@@ -23,8 +30,34 @@ export interface CreateFindingFromVocClusterInput {
 export async function createFindingFromVocCluster(
   tx: Tx,
   input: CreateFindingFromVocClusterInput,
-): Promise<FindingReadRow> {
-  return insertFinding(tx, { ...input, sourceType: 'voc_cluster' });
+  deps: { checkService: CheckService },
+) {
+  const ms = await lockManagedSystem(tx, input.workspaceId, input.primaryManagedSystemId);
+  if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+  if (ms.archived_at) throw new HttpError('conflict.parent_archived', 'managed system archived');
+  const area = input.analyticsAreaId
+    ? await assertActiveAnalyticsAreaForManagedSystem(
+        tx,
+        input.workspaceId,
+        ms.id,
+        input.analyticsAreaId,
+      )
+    : null;
+  const owner = await resolveOwner(
+    tx,
+    deps,
+    input.workspaceId,
+    ms,
+    area?.owner_team_id ?? null,
+    input,
+  );
+  const finding = await insertFinding(tx, {
+    ...input,
+    sourceType: 'voc_cluster',
+    ownerActorId: owner.owner_actor_id,
+    ownerTeamId: owner.owner_team_id,
+  });
+  return { ...finding, ...owner };
 }
 
 export async function lockFindingForUpdate(

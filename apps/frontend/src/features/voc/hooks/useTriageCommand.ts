@@ -1,3 +1,4 @@
+import { invalidateRecovery } from '@/lib/query/recovery';
 // useTriageCommand.ts — command hook for the triage panel (issue #481).
 // Owns the undo state machine: composes useUndoableMutation with the triage
 // transport, compensation policy, and error policy. TriagePanel calls only
@@ -30,7 +31,12 @@ import {
 } from '../lib/triage-error-policy';
 import { buildTriageSnapshot } from '../lib/triage-payload';
 import { patchVocTriage } from '../lib/triage-transport';
-import type { TriageInput, TriageOutput, TriageSnapshot } from '../lib/triage-types';
+import {
+  type TriageInput,
+  type TriageOutput,
+  type TriageSnapshot,
+  isTriageFullOutput,
+} from '../lib/triage-types';
 import type { TriageQueueOutcome } from './useTriageQueue';
 import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 
@@ -106,6 +112,13 @@ export function useTriageCommand({
           countedRef.current.add(input);
           onProcessedRef.current?.(1);
         }
+        if (output && !isTriageFullOutput(output)) {
+          void queryClient.invalidateQueries({
+            queryKey: ['voc', input.vocId],
+            refetchType: 'active',
+          });
+        }
+        void invalidateRecovery(queryClient);
         invalidateNavCounts(queryClient);
         invalidateTriageLists();
         return output;
@@ -131,7 +144,7 @@ export function useTriageCommand({
       ...buildTriageSnapshot(input, {
         triageState: voc.triage_state,
         reviewPostponedAt: serverReviewPostponedAt,
-        severity: voc.severity,
+        severity: voc.severity ?? null,
         ownerUserId: voc.owner_user_id,
         ownerTeamId: voc.owner_team_id,
         analyticsAreaId: voc.analytics_area_id,
@@ -155,6 +168,7 @@ export function useTriageCommand({
             }
           },
         });
+        void invalidateRecovery(queryClient);
         invalidateNavCounts(queryClient);
         invalidateTriageLists();
       } catch (err) {

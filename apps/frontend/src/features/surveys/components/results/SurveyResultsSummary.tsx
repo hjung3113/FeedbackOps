@@ -203,7 +203,7 @@ function NextActions({
                   disabled={unavailable}
                   onClick={() => setDraftOpen(true)}
                   type="button"
-                  variant="primary"
+                  variant={unavailable ? 'secondary' : 'primary'}
                 >
                   <FilePlus aria-hidden className="h-4 w-4" />
                   {label}

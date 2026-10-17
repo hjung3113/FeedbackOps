@@ -8,7 +8,9 @@ import type { Db } from '../../../db/client.js';
 import type { JobLog } from '../../../lib/job-log.js';
 import type { EmbeddingProvider } from '../embedding/port.js';
 import type { PublicUpdateReviewCandidatesService } from '../public-update-review-candidates/service.js';
+import { registerSimilarityPreviewCleanup } from '../similarity-preview/cleanup.js';
 import { registerVocClusterAutogenShadow } from './cluster-autogen-shadow.js';
+import { registerVocClusterSuggestions } from './cluster-suggestions.js';
 import { registerEmbedVoc } from './embed-voc.js';
 import { registerVocEmbeddingBackfill } from './embedding-backfill.js';
 import { registerReleasedReviewCandidates } from './released-review-candidates.js';
@@ -24,6 +26,7 @@ export interface VocJobDeps {
 }
 
 export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<void> {
+  await registerSimilarityPreviewCleanup(boss, { db: deps.db, log: deps.log });
   await registerEmbedVoc(boss, {
     db: deps.db,
     provider: deps.provider,
@@ -41,6 +44,13 @@ export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<v
     db: deps.db,
     embeddingVersion: deps.embeddingVersion,
     embeddingEnabled: deps.embeddingEnabled,
+    log: deps.log,
+  });
+  await registerVocClusterSuggestions(boss, {
+    db: deps.db,
+    embeddingVersion: deps.embeddingVersion,
+    embeddingEnabled: deps.embeddingEnabled,
+    embeddingIdentity: deps.provider.identity(),
     log: deps.log,
   });
   await registerReleasedReviewCandidates(boss, {
@@ -76,3 +86,10 @@ export {
   registerVocEmbeddingBackfill,
   type VocEmbeddingBackfillResult,
 } from './embedding-backfill.js';
+
+export {
+  VOC_CLUSTER_SUGGESTIONS_QUEUE,
+  VOC_CLUSTER_SUGGESTIONS_CRON,
+  runVocClusterSuggestions,
+  registerVocClusterSuggestions,
+} from './cluster-suggestions.js';

@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 // apps/backend/src/modules/voc/service.ts
 // VOC application service. Owns transactions, sanitization,
 // FOR-UPDATE-guarded parent checks, INSERT, and audit emission per
@@ -12,16 +13,26 @@ import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { createVocCreateCommands } from './commands/create.js';
 import { createVocEditDescriptionCommands } from './commands/edit-description.js';
+import { createVocNoFollowUpCommands } from './commands/no-follow-up.js';
 import { createVocUpdateTriageCommands } from './commands/update-triage.js';
 import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
+import type { VocReadService } from './read-service.js';
 import type { ReporterFacingStatus } from './transitions.js';
 
 export interface CreateVocActor {
+  role_level?: 'admin' | 'developer' | 'user';
   actor_id: string;
   workspace_id: string;
 }
 
 export interface VocEnvelope {
+  default_resolved?: boolean;
+  source_rule?:
+    | 'explicit'
+    | 'managed_system_owner'
+    | 'analytics_area_owner'
+    | 'workspace_fallback_queue';
+  managed_system_id?: string;
   id: string;
   display_id: string;
   workspace_id: string;
@@ -30,7 +41,7 @@ export interface VocEnvelope {
   reporter_id: string;
   title: string;
   description_rich_content: unknown;
-  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  severity?: 'low' | 'medium' | 'high' | 'critical' | null;
   reporter_facing_status: ReporterFacingStatus;
   triage_state: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
   owner_user_id: string | null;
@@ -47,6 +58,7 @@ export interface VocEnvelope {
 }
 
 export interface VocServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -57,6 +69,8 @@ export interface VocServiceDeps {
    */
   idempotencyService: IdempotencyService;
   notify: NotificationNotifier;
+  /** #1187 — decides whether the PATCH response is the full or the summary VOC projection. */
+  vocReadService: Pick<VocReadService, 'resolveWriteResponseAccess' | 'composeDetailEnvelope'>;
   /**
    * #168 (ADR-0034 D6) — enqueue-on-write for VOC embeddings. Optional so
    * callers booted without pg-boss stay wired; absent means no enqueue, and
@@ -72,7 +86,9 @@ export function createVocService(deps: VocServiceDeps) {
   const editDescriptionCommands = createVocEditDescriptionCommands(deps);
 
   return {
+    ...createVocNoFollowUpCommands(deps),
     createVoc: createCommands.createVoc,
+    assertCreateOwnerOverride: createCommands.assertCreateOwnerOverride,
     updateVoc: updateCommands.updateVoc,
     editVocDescription: editDescriptionCommands.editVocDescription,
     createVocCommand: createCommands.createVocCommand,

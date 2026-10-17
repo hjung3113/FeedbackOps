@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 // #168 step 5 — the evaluation fixture driven through the REAL read model
 // (ADR-0034 D5), against Postgres and pgvector.
 //
@@ -174,7 +175,8 @@ describe.skipIf(!runIntegration)('voc recommendation threshold evaluation (#168)
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in ${systems}`,
       args,
     );
-    await ops.pool.query(
+    await deleteRecoveryFixtureParents(
+      ops,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       args,
     );

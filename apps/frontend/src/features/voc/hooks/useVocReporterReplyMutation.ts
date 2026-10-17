@@ -12,11 +12,11 @@
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
 // On 201: caller should invalidate ['voc', vocId] and clear draft.
-// Toast copy: 제출자에게 답장이 전송되었습니다.
+// Toast copy: 답장이 등록되었습니다.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
+import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
@@ -45,7 +45,8 @@ export interface ReporterReplySuccess {
     body_rich_content: unknown;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  /** #1187: the read-matrix summary when the writer has no full read. */
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface UseVocReporterReplyMutationArgs {

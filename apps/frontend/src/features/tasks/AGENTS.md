@@ -36,8 +36,16 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 - `apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx` — Task board columns and grouping state.
 - `apps/frontend/src/features/tasks/components/task-board/` — Task board cards, columns, and grouping
   control; the route retains URL state and DnD sensors.
-- `apps/frontend/src/features/tasks/hooks/useTaskStatusTransition.ts` — scoped optimistic Task status
-  writes, rollback, and stale-write handling.
+- `apps/frontend/src/features/tasks/hooks/useTaskBoardData.ts` — board reads: one paged query per
+  status column (`['tasks','board',{…,status}]`), the open-set read for other groupings, and the
+  three summary totals.
+- `apps/frontend/src/features/tasks/hooks/useTaskStatusTransition.ts` — per-column optimistic Task
+  status writes (source/target pages and totals), per-invocation rollback, and stale-write handling.
+- `apps/frontend/src/features/tasks/hooks/useTaskPanelSelection.ts` — shared Task list and Task Request
+  selection reconciliation, panel close, auto-selection, and missing-link state; callers own detail queries,
+  scope/filter checks, and focus return.
+- `apps/frontend/src/features/tasks/hooks/useTaskBoardKeyboardFocus.ts` — route-lifetime keyboard
+  focus recovery and generation invalidation; status cache writes stay in `useTaskStatusTransition`.
 - `apps/frontend/src/features/tasks/adapters/taskDisplayAdapters.ts` — shared Managed System name
   lookup, assignment resolution, and priority-to-severity projection.
 - `apps/frontend/src/features/tasks/routes/TaskRequestsRoute.tsx` — Task Request queue and selected detail.
@@ -65,3 +73,19 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 ## Verification
 
 - Test Task Request review flows, backlog/board selected detail restore, Managed System filters, linked evidence summaries, and reporter-facing status review candidates when touched.
+
+## Close-out contract (ADR-0067; implemented)
+
+- ADR-0067 accepts assigned-reviewer Actor/team display/edit/filter distinct from
+  actual decision Actor, and Task team assignee. Personal Home requests use reviewer=me;
+  full authorized review remains available and assignment grants no self-approval.
+- Explicit null opts out, omission requests defaults; preserve Backlog, source links and
+  server validation/audit. Do not infer member assignment from a team label.
+
+## Survey source defaults (ADR-0064; #739/#740 pending)
+
+Survey-derived Finding/source summaries and Task Request draft defaults contain
+metadata only after cutover. Approved text requires a fresh authorized highlight
+projection, never a cached summary or private response/link/audit reconstruction.
+Preserve ordinary source permissions and authored Task/Task Request prose; no
+bulk history rewrite is authorized. Consume the existing owning-module seams.

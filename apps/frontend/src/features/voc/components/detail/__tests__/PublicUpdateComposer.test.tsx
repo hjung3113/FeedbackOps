@@ -10,7 +10,7 @@
 
 import type { PublicUpdateSuccess } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -58,7 +58,7 @@ vi.mock('@fops/ui', async (importActual) => {
 });
 
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, vocSummaryEnvelopeSchema } from '@fops/shared';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
 async function chooseReporterStatus(label: string): Promise<void> {
@@ -106,6 +106,24 @@ const UPDATED_VOC: VocDetailEnvelope = {
   next_reporter_states: { allowed: ['assigned'], forbidden: {} },
 };
 
+const SUMMARY_VOC = vocSummaryEnvelopeSchema.parse({
+  id: BASE_VOC.id,
+  display_id: BASE_VOC.display_id,
+  primary_managed_system_id: BASE_VOC.primary_managed_system_id,
+  reporter_facing_status: 'reviewing',
+  created_at: BASE_VOC.created_at,
+  permission_decisions: {
+    _self: {
+      state: 'request_access',
+      requestable_permission: {
+        permission: 'voc.read',
+        managed_system_id: BASE_VOC.primary_managed_system_id,
+        reason_required: true,
+      },
+    },
+  },
+});
+
 const PUBLIC_UPDATE_ENVELOPE: PublicUpdateSuccess = {
   public_update: {
     id: '00000000-0000-0000-0000-000000000333',
@@ -148,6 +166,20 @@ describe('<PublicUpdateComposer>', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mutationMock.onSuccess = undefined;
+  });
+
+  it('signals public only after a successful Public Update', () => {
+    const onPosted = vi.fn();
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} onPosted={onPosted} />, {
+      wrapper: makeWrapper(),
+    });
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
+    expect(onPosted).not.toHaveBeenCalled();
+
+    act(() => mutationMock.onSuccess?.(PUBLIC_UPDATE_ENVELOPE));
+
+    expect(onPosted).toHaveBeenCalledWith('public');
   });
 
   it('renders ReporterStatusChangeBlock for body+status path (status change)', () => {
@@ -280,6 +312,33 @@ describe('<PublicUpdateComposer>', () => {
     await React.act(async () => {
       resolveDetailRefetch(UPDATED_VOC);
     });
+  });
+
+  it('stores a summary success response without crashing', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    fireEvent.click(screen.getByRole('textbox'));
+    await chooseReporterStatus('검토 중');
+    fireEvent.click(screen.getByRole('button', { name: /^공개 업데이트 게시$/ }));
+
+    expect(mutationMock.mutate).toHaveBeenCalledTimes(1);
+    await React.act(async () => {
+      mutationMock.onSuccess?.({ ...PUBLIC_UPDATE_ENVELOPE, voc: SUMMARY_VOC });
+    });
+
+    const cached = queryClient.getQueryData(['voc', BASE_VOC.id]);
+    expect(vocSummaryEnvelopeSchema.parse(cached)).toEqual(SUMMARY_VOC);
+    expect(cached).toEqual(SUMMARY_VOC);
+    expect(cached).not.toHaveProperty('title');
+    expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
   });
 
   // ── #356: staged status goes stale when another actor moves the VOC ──────────

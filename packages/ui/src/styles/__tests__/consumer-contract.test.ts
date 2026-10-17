@@ -164,18 +164,16 @@ it(
     const css = await compileConsumerCss(POPPER_CONTENT_MOTION.split(' '));
 
     expect(css).toContain('@keyframes enter');
-    expect(css).toContain('@keyframes exit');
     expect(css).toContain('animation: enter');
-    expect(css).toContain('animation: exit');
+    expect(css).not.toContain('animation: exit');
+    expect(css).not.toContain('[data-state="closed"]');
+    expect(css).toContain('zoom-in-95');
+    expect(css).toContain('--tw-enter-scale:');
     expect(css).toContain('--tw-enter-opacity: 0;');
-    expect(css).toContain('zoom-out-95');
-    expect(css).toContain('--tw-exit-scale:');
     expect(css).toContain('slide-in-from-top-2');
     expect(css).toContain('--tw-enter-translate-y:');
     expect(css).toContain('--tw-animation-duration: var(--motion-duration-base);');
-    expect(css).toContain('--tw-animation-duration: var(--motion-duration-fast);');
     expect(css).toContain('--tw-ease: var(--motion-ease-enter);');
-    expect(css).toContain('--tw-ease: var(--motion-ease-exit);');
     expect(css).toContain('[data-state="delayed-open"]');
     expect(css).toContain('[data-state="instant-open"]');
     expect(css).toContain('--motion-duration-fast: 150ms;');

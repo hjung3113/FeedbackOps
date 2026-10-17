@@ -1,4 +1,5 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { vocDetailEnvelopeSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,15 +32,28 @@ describe('<IdentitySection>', () => {
     expect(screen.getByText('접수됨')).toBeInTheDocument();
   });
 
-  it('does NOT render SeverityBadge in the title group (relocated to IdentityMetadataStrip)', () => {
+  it('does NOT render SeverityBadge in the title group', () => {
     render(<IdentitySection voc={{ ...DETAIL_ENVELOPE, severity: 'high' }} />);
     // Severity must not appear in the title block per .review/title-reference.png.
     expect(screen.queryByText('높음')).not.toBeInTheDocument();
   });
 
-  it('IdentityMetadataStrip renders SeverityBadge when severity is non-null', () => {
-    render(<IdentityMetadataStrip voc={{ ...DETAIL_ENVELOPE, severity: 'high' }} />);
-    expect(screen.getByText('높음')).toBeInTheDocument();
+  it('keeps Managed System and source chips while omitting severity and Analytics Area', () => {
+    vi.mocked(useManagedSystem).mockReturnValue({
+      id: DETAIL_ENVELOPE.primary_managed_system_id,
+      name: '운영 시스템',
+      mark: 'bg-entity-icon-task',
+      archived: false,
+    });
+    render(
+      <IdentityMetadataStrip
+        voc={{ ...DETAIL_ENVELOPE, severity: 'high', analytics_area_id: 'area-1' }}
+      />,
+    );
+    expect(screen.getByText('운영 시스템')).toBeInTheDocument();
+    expect(screen.getByText('직접 사용')).toBeInTheDocument();
+    expect(screen.queryByText('높음')).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics Area')).not.toBeInTheDocument();
   });
 
   it('renders the shared PanelTitleBlock at prototype lg typography', () => {
@@ -89,15 +103,24 @@ describe('<IdentitySection>', () => {
     expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
   });
 
-  it('IdentityMetadataStrip renders analytics area name when provided', () => {
-    const areaId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  it('omits Analytics Area from the metadata strip', () => {
     render(
       <IdentityMetadataStrip
-        voc={{ ...DETAIL_ENVELOPE, analytics_area_id: areaId }}
-        analyticsAreaName="결제 경험"
+        voc={{ ...DETAIL_ENVELOPE, analytics_area_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }}
       />,
     );
-    expect(screen.getByText('결제 경험')).toBeInTheDocument();
-    expect(screen.queryByText(areaId.slice(0, 8))).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics Area')).not.toBeInTheDocument();
   });
+});
+
+it('omits severity metadata for a schema-parsed reporter detail', () => {
+  const { severity: _hidden, ...wire } = DETAIL_ENVELOPE;
+  const voc = vocDetailEnvelopeSchema.parse({
+    ...wire,
+    id: OTHER_ACTOR_ID,
+    primary_managed_system_id: OTHER_ACTOR_ID,
+  });
+  const { container } = render(<IdentityMetadataStrip voc={voc} />);
+  expect(container.querySelector('[data-severity]')).toBeNull();
+  expect(screen.queryByText('높음')).not.toBeInTheDocument();
 });

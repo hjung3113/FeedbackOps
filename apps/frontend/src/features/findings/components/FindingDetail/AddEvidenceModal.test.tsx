@@ -10,7 +10,8 @@ const evidenceMutation = vi.hoisted(() => ({
   isPending: false,
 }));
 
-vi.mock('../../hooks/useEvidenceMutations', () => ({
+vi.mock('../../hooks/useEvidenceMutations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../hooks/useEvidenceMutations')>()),
   useAddEvidenceHighlightMutation: () => evidenceMutation,
 }));
 
@@ -90,10 +91,7 @@ describe('AddEvidenceModal source kind options', () => {
     expect(screen.queryByRole('option', { name: 'Note (manual)' })).not.toBeInTheDocument();
   });
 
-  it.each([
-    ['VOC', 'VOC를 선택하세요.'],
-    ['Survey', 'VOC 또는 Survey 출처를 선택하면 ID가 필요합니다.'],
-  ])(
+  it.each([['VOC', 'VOC를 선택하세요.']])(
     'shows Korean validation when %s has no source ID and prevents submission',
     async (sourceLabel, expectedMessage) => {
       const user = userEvent.setup();
@@ -123,7 +121,7 @@ describe('AddEvidenceModal source kind options', () => {
     },
   );
 
-  it('uses the VOC picker for VOC and keeps the UUID input for Survey responses', async () => {
+  it('uses the VOC picker and replaces Survey UUID and editable quote with selection', async () => {
     const user = userEvent.setup();
     installVocList();
     render(
@@ -154,12 +152,10 @@ describe('AddEvidenceModal source kind options', () => {
     fireEvent.click(screen.getByTestId('evidence-source-type-select'));
     fireEvent.click(await screen.findByRole('option', { name: 'Survey' }));
 
-    expect(screen.getByText('소스 ID (UUID)')).toBeInTheDocument();
-    expect(screen.getByTestId('evidence-source-id-input')).toHaveAttribute(
-      'placeholder',
-      'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-    );
-    expect(screen.getByTestId('evidence-source-id-input')).toHaveValue('');
+    expect(screen.queryByTestId('evidence-source-id-input')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('evidence-quote-input')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Survey 선택' })).toBeInTheDocument();
+    expect(screen.getByTestId('add-evidence-submit')).toBeDisabled();
   });
 
   it('submits the selected VOC id as source_id', async () => {
@@ -188,6 +184,29 @@ describe('AddEvidenceModal source kind options', () => {
         source_type: 'voc',
         source_id: VOC_ID,
         quote_or_summary: '로그인 실패 요약',
+      }),
+      expect.any(Object),
+    );
+  });
+  it('keeps manual note submission on the existing generic evidence command', async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AddEvidenceModal
+          findingId="10000000-0000-0000-0000-000000000001"
+          managedSystemId="30000000-0000-0000-0000-000000000003"
+          open
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    await user.type(screen.getByTestId('evidence-quote-input'), '수동 관찰 메모');
+    await user.click(screen.getByTestId('add-evidence-submit'));
+    expect(evidenceMutation.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_type: 'note',
+        source_id: null,
+        quote_or_summary: '수동 관찰 메모',
       }),
       expect.any(Object),
     );

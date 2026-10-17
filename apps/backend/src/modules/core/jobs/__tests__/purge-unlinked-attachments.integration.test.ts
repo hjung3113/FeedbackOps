@@ -17,8 +17,20 @@ import { Readable } from 'node:stream';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type { FastifyInstance } from 'fastify';
+import { loadConfig } from '../../../../config.js';
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import type { StorageBackend, StorageGetResult } from '../../../../lib/storage/index.js';
+import { buildServer } from '../../../../server.js';
+import { insertActorRow } from '../../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
+import { paragraphDoc } from '../../../../test-support/rich-content-fixtures.js';
+import {
+  cleanupTestActorsByExternalIdPrefix,
+  insertVocDirectly,
+} from '../../../../test-support/voc-fixtures.js';
 import { purgeUnlinkedAttachments } from '../purge-unlinked-attachments.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -240,5 +252,246 @@ describe.skipIf(!runIntegration)('core.attachments_purge registration', () => {
     expect(mod.ATTACHMENTS_PURGE_QUEUE).toBe('core.attachments_purge');
     // Stagger 30 min from idempotency_purge (0 * * * *) and rate_limits_purge (15 * * * *).
     expect(mod.ATTACHMENTS_PURGE_CRON).toBe('30 * * * *');
+  });
+});
+
+// Hooks stop the real handler after its candidate SELECT and before row locking.
+// The HTTP command uses another pool session and commits before the hook resumes.
+// Storage.delete is the purge-wins barrier: the claim must already be committed.
+function barrier() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+async function bounded<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('attachment race barrier timed out')), 3000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+describe.skipIf(!runIntegration)('attachment purge/link serialization (#1171)', () => {
+  const prefix = `it-1171-purge-${randomUUID()}`;
+  let handle: DbHandle;
+  let app: FastifyInstance;
+  let actor: string;
+  let cookie: string;
+  let ms: string;
+  let voc: string;
+  const keys: string[] = [];
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = 'test';
+    handle = createDb(APP_URL);
+    actor = (
+      await insertActorRow(handle, {
+        workspaceId: WORKSPACE_ID,
+        externalId: prefix,
+        roleLevel: 'admin',
+      })
+    ).id;
+    ms = await insertMsDirectly(handle, WORKSPACE_ID, prefix, 'Purge race');
+    voc = (await insertVocDirectly(handle, WORKSPACE_ID, ms, actor, prefix)).id;
+    app = await buildServer({ config: loadConfig(), dbHandle: handle });
+    await app.ready();
+    cookie = await loginAs(app, prefix);
+  });
+  afterAll(async () => {
+    await handle.pool.query('delete from voc.voc_attachments where storage_key = any($1::text[])', [
+      keys,
+    ]);
+    await handle.pool.query('delete from voc.vocs where primary_managed_system_id = $1', [ms]);
+    await deleteRecoveryFixtureParents(handle, 'delete from core.managed_systems where id = $1', [
+      ms,
+    ]);
+    await cleanupTestActorsByExternalIdPrefix(handle, WORKSPACE_ID, prefix);
+    await app.close();
+    await handle.close();
+  });
+
+  async function upload(age = '25 hours') {
+    const id = randomUUID();
+    const key = `${WORKSPACE_ID}/${id}/race.txt`;
+    keys.push(key);
+    await handle.pool.query(
+      `insert into voc.voc_attachments
+      (id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id, created_at)
+      values ($1,'race.txt',5,'text/plain',$2,$3,now() - $4::interval)`,
+      [id, key, actor, age],
+    );
+    return { id, key };
+  }
+  const parentRows = (kind: 'voc' | 'internal_comment', title: string) =>
+    kind === 'voc'
+      ? handle.pool.query('select id from voc.vocs where title = $1', [title])
+      : handle.pool.query('select id from voc.voc_internal_comments where voc_id = $1', [voc]);
+  function link(kind: 'voc' | 'internal_comment', id: string, title: string) {
+    return app.inject({
+      method: 'POST',
+      url: kind === 'voc' ? '/vocs' : `/vocs/${voc}/internal-comments`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'idempotency-key': randomUUID() },
+      payload:
+        kind === 'voc'
+          ? {
+              primary_managed_system_id: ms,
+              title,
+              description_rich_content: paragraphDoc('race'),
+              source_context: 'direct_use',
+              attachment_ids: [id],
+            }
+          : { body_rich_content: paragraphDoc('race'), mentions: [], attachment_ids: [id] },
+    });
+  }
+
+  it.each(['voc', 'internal_comment'] as const)(
+    '%s link commits after candidate selection: bytes and parent survive',
+    async (kind) => {
+      const { id, key } = await upload();
+      const selected = barrier();
+      const resume = barrier();
+      const stored = new Set([key]);
+      const storage = makeStubStorage({
+        async delete(k) {
+          stored.delete(k);
+        },
+      });
+      const pending = purgeUnlinkedAttachments({
+        pool: handle.pool,
+        storage,
+        beforeClaim: async (candidateId) => {
+          if (candidateId === id) {
+            selected.release();
+            await bounded(resume.promise);
+          }
+        },
+      });
+      let parentId: string | undefined;
+      try {
+        await bounded(selected.promise);
+        const response = await bounded(link(kind, id, `${prefix}-${id}`));
+        expect(response.statusCode).toBe(201);
+        parentId = kind === 'voc' ? response.json().id : response.json().internal_comment.id;
+      } finally {
+        resume.release();
+        await bounded(pending);
+      }
+      const row = await handle.pool.query(
+        'select voc_id, comment_id, linked_at, archived_at from voc.voc_attachments where id = $1',
+        [id],
+      );
+      expect(row.rows[0]).toMatchObject({
+        [kind === 'voc' ? 'voc_id' : 'comment_id']: parentId,
+        archived_at: null,
+      });
+      expect(row.rows[0].linked_at).not.toBeNull();
+      const parents = await parentRows(kind, `${prefix}-${id}`);
+      expect(parents.rows.map((r) => r.id)).toContain(parentId);
+      expect(stored.has(key)).toBe(true);
+    },
+  );
+
+  it.each(['voc', 'internal_comment'] as const)(
+    'purge claims first: %s parent rolls back before bytes and row are deleted',
+    async (kind) => {
+      const { id, key } = await upload();
+      const claimed = barrier();
+      const resume = barrier();
+      const title = `${prefix}-${id}`;
+      const before = await parentRows(kind, title);
+      const stored = new Set([key]);
+      const pending = purgeUnlinkedAttachments({
+        pool: handle.pool,
+        storage: makeStubStorage({
+          async delete(k) {
+            if (k === key) {
+              claimed.release();
+              await bounded(resume.promise);
+            }
+            stored.delete(k);
+          },
+        }),
+      });
+      try {
+        await bounded(claimed.promise);
+        const claim = await handle.pool.query(
+          'select archived_at from voc.voc_attachments where id = $1',
+          [id],
+        );
+        expect(claim.rows[0].archived_at).not.toBeNull();
+        const response = await bounded(link(kind, id, title));
+        expect(response.statusCode).toBe(422);
+        expect(response.json()).toMatchObject({
+          code: 'validation.failed',
+          detail: {
+            fields: [{ path: ['attachment_ids', 0], code: 'invalid' }],
+            reason: 'archived',
+          },
+        });
+        expect((await parentRows(kind, title)).rows).toEqual(before.rows);
+      } finally {
+        resume.release();
+        await bounded(pending);
+      }
+      expect(
+        (await handle.pool.query('select id from voc.voc_attachments where id = $1', [id]))
+          .rowCount,
+      ).toBe(0);
+      expect(stored.has(key)).toBe(false);
+    },
+  );
+
+  it('storage failure keeps the claim and retries it on the next run', async () => {
+    const old = await upload();
+    let fail = true;
+    const stored = new Set([old.key]);
+    const storage = makeStubStorage({
+      async delete(k) {
+        if (k === old.key && fail) {
+          fail = false;
+          throw new Error('temporary storage failure');
+        }
+        stored.delete(k);
+      },
+    });
+    const first = await purgeUnlinkedAttachments({ pool: handle.pool, storage });
+    expect(first.storage_delete_failures).toBeGreaterThanOrEqual(1);
+    const claim = await handle.pool.query(
+      'select archived_at from voc.voc_attachments where id = $1',
+      [old.id],
+    );
+    expect(claim.rows[0].archived_at).not.toBeNull();
+    expect(stored.has(old.key)).toBe(true);
+    await purgeUnlinkedAttachments({ pool: handle.pool, storage });
+    expect(
+      (await handle.pool.query('select id from voc.voc_attachments where id = $1', [old.id]))
+        .rowCount,
+    ).toBe(0);
+    expect(stored.has(old.key)).toBe(false);
+  });
+
+  it('fresh uploads are never claimed or deleted', async () => {
+    const fresh = await upload('1 hour');
+    const stored = new Set([fresh.key]);
+    const storage = makeStubStorage({
+      async delete(key) {
+        stored.delete(key);
+      },
+    });
+    await purgeUnlinkedAttachments({ pool: handle.pool, storage });
+    const recent = await handle.pool.query(
+      'select archived_at from voc.voc_attachments where id = $1',
+      [fresh.id],
+    );
+    expect(recent.rows).toEqual([{ archived_at: null }]);
+    expect(stored.has(fresh.key)).toBe(true);
   });
 });

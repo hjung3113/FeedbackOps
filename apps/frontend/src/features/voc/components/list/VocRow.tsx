@@ -1,8 +1,8 @@
 /**
  * VocRow — single-select row for the VOC inbox list.
  *
- * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a checkbox + severity
- * indicator lead, a title line (id · title), a meta line
+ * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a severity-colored
+ * left stripe, a title line (id · title), a meta line
  * (reporter-status badge · severity badge · managed system · area/"No area" ·
  * time · linked finding), and a trailing identity column (owner avatar /
  * shared unassigned badge + reporter avatar).
@@ -10,9 +10,8 @@
  * SELECTED STATE: prototype uses a 2px left accent bar (`.object-row.selected::before`,
  * `--color-neon-lime`) plus a tinted row background — NOT a full ring. Mirrored here.
  *
- * SEVERITY NULL CHOICE: when severity is null we render a dimmed SeverityIndicator
- * ('low' fallback at reduced opacity) and omit the SeverityBadge chip — there is
- * no badge variant for "unset". aria reads "low" for the indicator.
+ * Absent severity is reporter-hidden; null is operator-visible but unassigned.
+ * The badge names severity while the left stripe supplies the row color.
  *
  * HOOK-IN-MAP NOTE: VocRow calls no data hooks. VocList lifts the managed-system,
  * actor (owner/reporter), and analytics-area lookups to single map queries and
@@ -25,11 +24,9 @@
 import type { VocListItem } from '@fops/shared';
 import {
   type AvatarUser,
-  Checkbox,
   ManagedSystemPill,
   ReporterStatusBadge,
   SeverityBadge,
-  SeverityIndicator,
   UnassignedBadge,
   UserAvatar,
 } from '@fops/ui';
@@ -68,6 +65,8 @@ export interface VocRowProps {
   permissionLimited?: boolean;
   /** Hides the internal unassigned-ownership cue in a reporter-only My VOCs row. */
   showOwnerMissing?: boolean;
+  /** Neutralizes the unassigned cue in the Inbox unassigned tab only. */
+  unassignedBadgeTone?: 'danger' | 'neutral';
   /**
    * Optional resolver for the MS pill — caller (VocList) calls useManagedSystem
    * per row and passes the result in. Decouples primitive from the hook.
@@ -79,9 +78,6 @@ export interface VocRowProps {
   reporter?: AvatarUser | null;
   /** Resolved analytics-area display name. Null = no area linked (amber "No area"). */
   areaName?: string | null;
-  /** Bulk-selection checkbox state. When `onToggleCheck` is omitted the checkbox is hidden. */
-  checked?: boolean;
-  onToggleCheck?: () => void;
   className?: string;
 }
 
@@ -95,17 +91,15 @@ export function VocRow({
   onSelect,
   permissionLimited,
   showOwnerMissing = true,
+  unassignedBadgeTone,
   managedSystem,
   owner,
   reporter,
   areaName,
-  checked,
-  onToggleCheck,
   className,
 }: VocRowProps) {
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
   const relTime = formatRelativeTime(voc.created_at);
-  const showCheckbox = onToggleCheck !== undefined;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === ' ' || e.key === 'Enter') {
@@ -117,7 +111,7 @@ export function VocRow({
   // Determine left-bar color: accent when selected, severity color otherwise.
   const severityBarClass = selected
     ? 'bg-accent-primary'
-    : voc.severity !== null
+    : voc.severity != null
       ? SEVERITY_BAR_CLASS[voc.severity]
       : 'bg-border-strong';
 
@@ -151,28 +145,6 @@ export function VocRow({
         className={cn('absolute left-0 top-0 bottom-0 w-row-accent rounded-r-sm', severityBarClass)}
       />
 
-      {/* LEAD: checkbox (bulk select) + severity indicator. Click here must not
-          open the detail panel. */}
-      <div
-        className="flex items-center gap-3 shrink-0"
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-        }}
-        role="presentation"
-      >
-        {showCheckbox && permissionLimited !== true && (
-          <Checkbox
-            checked={checked === true}
-            onCheckedChange={() => onToggleCheck?.()}
-            aria-label={`${voc.display_id} 선택`}
-          />
-        )}
-        <SeverityIndicator severity={voc.severity ?? 'low'} />
-      </div>
-
       {/* TITLE + META column */}
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
         {permissionLimited === true ? (
@@ -200,7 +172,7 @@ export function VocRow({
             </div>
             <div className="flex items-center gap-2 text-xs text-text-muted overflow-hidden">
               <ReporterStatusBadge status={voc.reporter_facing_status} />
-              {voc.severity !== null && <SeverityBadge severity={voc.severity} />}
+              {voc.severity != null && <SeverityBadge severity={voc.severity} />}
               {managedSystem !== null && managedSystem !== undefined && (
                 <ManagedSystemPill
                   name={managedSystem.name}
@@ -230,7 +202,7 @@ export function VocRow({
       {permissionLimited !== true && (
         <div className="flex items-center gap-2 shrink-0">
           {showOwnerMissing && ownerMissing ? (
-            <UnassignedBadge />
+            <UnassignedBadge tone={unassignedBadgeTone ?? 'danger'} />
           ) : owner !== null && owner !== undefined ? (
             <UserAvatar user={owner} size="sm" />
           ) : null}

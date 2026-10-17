@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Slice 8 exit criteria: evidence derived from a protected Survey Response
 // keeps its internal provenance while exposing only the approved safe contract.
 
@@ -136,10 +137,15 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       'delete from core.actors where workspace_id=$1 and external_id like $2',
       [WORKSPACE_ID, `${SLUG}-%`],
     );
-    await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
-      WORKSPACE_ID,
-      `${SLUG}%`,
-    ]);
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      `delete from core.managed_systems where id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query("delete from core.rate_limits where key like $1 || '%'", [
       WORKSPACE_ID,
     ]);
@@ -250,15 +256,15 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       highlight_type: string;
       highlight_id: string;
     }>(
-      `select f.source_type,f.source_id,h.source_type as highlight_type,h.source_id as highlight_id from finding.findings f join finding.evidence_highlights h on h.finding_id=f.id where f.id=$1`,
+      'select f.source_type,f.source_id,h.source_type as highlight_type,h.source_id as highlight_id from finding.findings f join finding.evidence_highlights h on h.finding_id=f.id where f.id=$1',
       [findingId],
     );
     expect(persisted.rows).toEqual([
       {
         source_type: 'survey_response',
-        source_id: source.responseId,
+        source_id: null,
         highlight_type: 'survey_response',
-        highlight_id: source.responseId,
+        highlight_id: null,
       },
     ]);
     const audit = await migrateHandle.pool.query<{
@@ -318,6 +324,8 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         'id',
         'linked_milestone_id',
         'linked_task_id',
+        'owner_actor_id',
+        'owner_team_id',
         'primary_managed_system_id',
         'severity',
         'source_type',
@@ -343,6 +351,8 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         'workspace_id',
       ],
       taskRequest: [
+        'assigned_reviewer_actor_id',
+        'assigned_reviewer_team_id',
         'created_at',
         'decision_reason',
         'decided_at',
@@ -363,6 +373,7 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       task: [
         'analytics_area_id',
         'assignee_actor_id',
+        'assignee_team_id',
         'created_at',
         'created_by',
         'display_id',
@@ -435,9 +446,15 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
       [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
     );
+    // 56-F creation responses add the safe responsibility resolution (api/tasks.md).
     expect(Object.keys(taskRequest).sort()).toEqual(
       [
+        'assigned_reviewer_actor_id',
+        'assigned_reviewer_team_id',
         'created_at',
+        'default_resolved',
+        'managed_system_id',
+        'source_rule',
         'decision_reason',
         'decided_at',
         'display_id',
@@ -530,7 +547,7 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       expectNoPrivacyPayload(`${actorLabel} task`, linkedTask.json());
       const parsedFinding = findingDtoSchema.parse(linkedFinding.json());
       expectExactKeys('finding', actorLabel, parsedFinding);
-      expect(linkedFinding.body, actorLabel).toContain(APPROVED);
+      expect(linkedFinding.body, actorLabel).not.toContain(APPROVED);
       const evidenceItems = linkedEvidence.json<{ items: unknown[] }>().items;
       expect(evidenceItems).toHaveLength(1);
       for (const item of evidenceItems) {
@@ -747,6 +764,14 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         (visibility === 'hidden' ? hiddenKeys : allowedKeys).sort(),
       );
       expectNoPrivacyPayload(label, linked);
+      if (visibility === 'allowed') {
+        expect(linked?.source_summary, label).toMatchObject({
+          type: 'finding',
+          id: findingId,
+          summary: expect.stringMatching(/^Survey response from outcome · /),
+        });
+        expect(JSON.stringify(linked?.source_summary), label).not.toContain(APPROVED);
+      }
     }
   });
 });

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -225,9 +226,11 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
         'delete from permission.permission_grants where managed_system_id=any($1::uuid[])',
         [[msId, scopedMsId]],
       );
-      await ops.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [
-        [msId, scopedMsId],
-      ]);
+      await deleteRecoveryFixtureParents(
+        ops,
+        'delete from core.managed_systems where id=any($1::uuid[])',
+        [[msId, scopedMsId]],
+      );
       await ops.pool.query(
         'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
         [WORKSPACE_ID, 'cluster-member-%'],
@@ -290,6 +293,76 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
     const cluster = response.json().items.find((item: { id: string }) => item.id === clusterId);
     expect(cluster).toMatchObject({ id: clusterId, member_count: 1 });
   });
+
+  it.each([
+    ['workspace', false, 0],
+    ['workspace', true, 1],
+    ['MS-A', false, 0],
+    ['MS-A', true, 1],
+    ['none', false, 2],
+  ] as const)(
+    'keeps Admin list/detail member parity with %s deny, reporter-own=%s',
+    async (denyScope, ownsMember, expectedCount) => {
+      const externalId = `cluster-member-admin-${randomUUID()}`;
+      const actor = await insertActorRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        externalId,
+        roleLevel: 'admin',
+      });
+      try {
+        const cookie = await loginAs(app, externalId);
+        if (denyScope !== 'none') {
+          await appDb.pool.query(
+            `insert into permission.permission_denies
+             (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+             values ($1,$2,'voc.read',$3,'1170 cluster regression',$2)`,
+            [WORKSPACE_ID, actor.id, denyScope === 'workspace' ? null : scopedMsId],
+          );
+        }
+        if (ownsMember) {
+          await ops.pool.query('update voc.vocs set reporter_id=$1 where id=$2', [
+            actor.id,
+            scopedVocIds[0],
+          ]);
+        }
+        const [list, detail] = await Promise.all([
+          app.inject({
+            method: 'GET',
+            url: `/voc-clusters?managed_system_id=${scopedMsId}`,
+            headers: headers(cookie),
+          }),
+          app.inject({
+            method: 'GET',
+            url: `/voc-clusters/${scopedClusterId}`,
+            headers: headers(cookie),
+          }),
+        ]);
+        expect(list.statusCode).toBe(200);
+        expect(detail.statusCode).toBe(200);
+        expect(
+          list.json().items.find((item: { id: string }) => item.id === scopedClusterId),
+        ).toMatchObject({ id: scopedClusterId, member_count: expectedCount });
+        expect(detail.json().member_count).toBe(expectedCount);
+        expect(detail.json().members).toHaveLength(expectedCount);
+        if (ownsMember) {
+          expect(detail.json().members).toEqual([
+            expect.objectContaining({ voc_id: scopedVocIds[0] }),
+          ]);
+        }
+      } finally {
+        await ops.pool.query('update voc.vocs set reporter_id=$1 where id=any($2::uuid[])', [
+          adminId,
+          scopedVocIds,
+        ]);
+        await ops.pool.query('delete from core.audit_log where actor_id=$1', [actor.id]);
+        await ops.pool.query('delete from permission.permission_denies where actor_id=$1', [
+          actor.id,
+        ]);
+        await ops.pool.query('delete from core.sessions where actor_id=$1', [actor.id]);
+        await ops.pool.query('delete from core.actors where id=$1', [actor.id]);
+      }
+    },
+  );
 
   it('applies voc.read scope to included and excluded Managed Systems', async () => {
     const [inScope, outOfScope] = await Promise.all([

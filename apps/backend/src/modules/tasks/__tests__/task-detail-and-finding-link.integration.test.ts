@@ -19,8 +19,10 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { cleanupSystemRecoveryFixtures } from '../../../test-support/recovery-fixtures.js';
 import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -72,6 +74,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    await cleanupSystemRecoveryFixtures(migrateHandle, WORKSPACE_ID, `${SLUG_PREFIX}%`);
     await migrateHandle.pool.query(
       `delete from core.audit_log
         where workspace_id = $1
@@ -134,6 +137,11 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
         where key like $1 || ':%'
            or key like '127.0.0.%'`,
       [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures where workspace_id = $1
+        and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
@@ -398,7 +406,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
     );
     expect(linked.rows[0]?.linked_task_id).toBe(taskId);
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1
@@ -413,7 +421,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       primary_managed_system_id: msId,
     });
 
-    const link = await dbHandle.pool.query<{ n: number }>(
+    const link = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
          from core.entity_links
         where workspace_id = $1
@@ -426,6 +434,11 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       [WORKSPACE_ID, findingId, taskId],
     );
     expect(link.rows[0]?.n).toBe(1);
+    const history = await dbHandle.pool.query(
+      'SELECT occurrence,outcome,evidence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('actionable-finding-no-execution', findingId)],
+    );
+    expect(history.rows).toEqual([{ occurrence: 1, outcome: 'resolved', evidence: 'command' }]);
   });
 
   it('POST /findings/:id/link-task denies a task from another Managed System', async () => {
@@ -460,7 +473,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       detail: { fields: [{ path: ['linked_task_id'], code: 'already_linked' }] },
     });
 
-    const audits = await dbHandle.pool.query<{ n: number }>(
+    const audits = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
          from core.audit_log
         where workspace_id = $1

@@ -335,3 +335,55 @@ describe('CAPABILITY_META', () => {
     expect(Object.keys(CAPABILITY_META).sort()).toEqual([...CAPABILITIES].sort());
   });
 });
+
+describe('Survey starting-point audit provenance (#1073)', () => {
+  const starting_point = { kind: 'builtin', template_id: 'discovery-basic', version: 1 };
+
+  it('round-trips built-in provenance through the registered strict schema', () => {
+    const detail = { ...surveyCreated, starting_point, question_count: 2 };
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS.survey_created.parse(detail)).toEqual(detail);
+  });
+
+  it.each(['prompt', 'label', 'questions', 'title'])(
+    'rejects %s inside starting-point provenance',
+    (field) => {
+      expect(() =>
+        AUDIT_EVENT_DETAIL_SCHEMAS.survey_created.parse({
+          ...surveyCreated,
+          starting_point: { ...starting_point, [field]: 'private copy' },
+          question_count: 2,
+        }),
+      ).toThrow();
+    },
+  );
+
+  it.each([-1, 1.5])('rejects invalid created question count %s', (question_count) => {
+    expect(() => surveyCreatedDetailSchema.parse({ ...surveyCreated, question_count })).toThrow();
+  });
+
+  it('allows zero questions for blank creation', () => {
+    expect(surveyCreatedDetailSchema.parse({ ...surveyCreated, question_count: 0 })).toEqual({
+      ...surveyCreated,
+      question_count: 0,
+    });
+  });
+});
+
+describe('Existing Survey provenance (#1074)', () => {
+  const starting_point = { kind: 'existing_survey', survey_id: U };
+  it('accepts ID-only provenance through the registered schema', () => {
+    const detail = { ...surveyCreated, starting_point, question_count: 4 };
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS.survey_created.parse(detail)).toEqual(detail);
+  });
+  it.each(['definition_token', 'questions', 'prompt', 'title', 'options'])(
+    'rejects %s in provenance',
+    (field) => {
+      expect(() =>
+        AUDIT_EVENT_DETAIL_SCHEMAS.survey_created.parse({
+          ...surveyCreated,
+          starting_point: { ...starting_point, [field]: 'private' },
+        }),
+      ).toThrow();
+    },
+  );
+});

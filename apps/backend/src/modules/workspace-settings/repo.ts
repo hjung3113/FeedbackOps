@@ -1,3 +1,4 @@
+import type { CoverageThresholds } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
@@ -10,12 +11,16 @@ export interface WorkspaceSettingsRow extends Record<string, unknown> {
   workspace_id: string;
   permission_self_approval: PermissionSelfApproval;
   survey_anonymity_threshold: number;
+  coverage_thresholds: Partial<CoverageThresholds>;
+  voc_cluster_suggestions_enabled: boolean;
 }
 
 const WORKSPACE_SETTINGS_SELECT = sql`
   workspace_id,
   permission_self_approval,
-  survey_anonymity_threshold
+  survey_anonymity_threshold,
+  coverage_thresholds,
+  voc_cluster_suggestions_enabled
 `;
 
 function mapRow(row: WorkspaceSettingsRow): WorkspaceSettingsRow {
@@ -23,6 +28,8 @@ function mapRow(row: WorkspaceSettingsRow): WorkspaceSettingsRow {
     workspace_id: row.workspace_id,
     permission_self_approval: row.permission_self_approval,
     survey_anonymity_threshold: row.survey_anonymity_threshold,
+    coverage_thresholds: row.coverage_thresholds,
+    voc_cluster_suggestions_enabled: row.voc_cluster_suggestions_enabled,
   };
 }
 
@@ -64,6 +71,8 @@ export async function updateWorkspaceSettings(
   tx: Tx,
   workspaceId: string,
   fields: {
+    voc_cluster_suggestions_enabled?: boolean | undefined;
+    coverage_thresholds?: CoverageThresholds | undefined;
     permission_self_approval?: PermissionSelfApproval | undefined;
     survey_anonymity_threshold?: number | undefined;
   },
@@ -72,6 +81,8 @@ export async function updateWorkspaceSettings(
     UPDATE ${workspaceSettings}
        SET permission_self_approval = COALESCE(${fields.permission_self_approval ?? null}, permission_self_approval),
            survey_anonymity_threshold = COALESCE(${fields.survey_anonymity_threshold ?? null}, survey_anonymity_threshold),
+           coverage_thresholds = COALESCE(${fields.coverage_thresholds ? JSON.stringify(fields.coverage_thresholds) : null}::jsonb, coverage_thresholds),
+           voc_cluster_suggestions_enabled = COALESCE(${fields.voc_cluster_suggestions_enabled ?? null}::boolean, voc_cluster_suggestions_enabled),
            updated_at = now()
      WHERE workspace_id = ${workspaceId}
      RETURNING ${WORKSPACE_SETTINGS_SELECT}

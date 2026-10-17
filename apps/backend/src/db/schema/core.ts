@@ -11,9 +11,11 @@
 //
 // No application code reads these tables yet (Slice 1 foundation only).
 
+import type { CoverageThresholds } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   index,
   integer,
@@ -63,8 +65,15 @@ export const workspaceSettings = coreSchema.table(
     workspaceId: uuid('workspace_id')
       .primaryKey()
       .references(() => workspaces.id),
+    vocClusterSuggestionsEnabled: boolean('voc_cluster_suggestions_enabled')
+      .notNull()
+      .default(false),
     permissionSelfApproval: text('permission_self_approval').notNull().default('allowed'),
     surveyAnonymityThreshold: integer('survey_anonymity_threshold').notNull().default(5),
+    coverageThresholds: jsonb('coverage_thresholds')
+      .$type<Partial<CoverageThresholds>>()
+      .notNull()
+      .default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -356,6 +365,8 @@ export const managedSystems = coreSchema.table(
     externalKey: text('external_key'),
     defaultOwnerActorId: uuid('default_owner_actor_id').references(() => actors.id),
     defaultOwnerTeamId: uuid('default_owner_team_id').references(() => teams.id),
+    defaultReviewerActorId: uuid('default_reviewer_actor_id').references(() => actors.id),
+    defaultReviewerTeamId: uuid('default_reviewer_team_id').references(() => teams.id),
     defaultSurveyOperatorActorId: uuid('default_survey_operator_actor_id').references(
       () => actors.id,
     ),
@@ -372,6 +383,11 @@ export const managedSystems = coreSchema.table(
     defaultOwnerXorCheck: check(
       'managed_systems_default_owner_xor_check',
       sql`${t.defaultOwnerActorId} is null or ${t.defaultOwnerTeamId} is null`,
+    ),
+
+    defaultReviewerXorCheck: check(
+      'managed_systems_default_reviewer_xor_check',
+      sql`${t.defaultReviewerActorId} IS NULL OR ${t.defaultReviewerTeamId} IS NULL`,
     ),
   }),
 );
@@ -480,6 +496,36 @@ export const entityLinks = coreSchema.table(
   }),
 );
 
+// ADR-0064: keep the table mapping canonical for FKs/operator history.
+// Application SQL uses this separately owned, simple updatable projection.
+export const entityLinksApp = coreSchema
+  .view('entity_links_app')
+  .with({ securityBarrier: true, checkOption: 'cascaded' })
+  .as((qb) =>
+    qb
+      .select({
+        id: entityLinks.id,
+        workspaceId: entityLinks.workspaceId,
+        sourceType: entityLinks.sourceType,
+        sourceId: entityLinks.sourceId,
+        targetType: entityLinks.targetType,
+        targetId: entityLinks.targetId,
+        relationType: entityLinks.relationType,
+        visibility: entityLinks.visibility,
+        status: entityLinks.status,
+        managedSystemId: entityLinks.managedSystemId,
+        createdBy: entityLinks.createdBy,
+        createdAt: entityLinks.createdAt,
+        updatedAt: entityLinks.updatedAt,
+        detachedBy: entityLinks.detachedBy,
+        detachReason: entityLinks.detachReason,
+        detachedAt: entityLinks.detachedAt,
+      })
+      .from(entityLinks)
+      .where(sql`${entityLinks.sourceType} <> 'survey_response'
+    AND ${entityLinks.targetType} <> 'survey_response'`),
+  );
+
 export const idempotencyKeys = coreSchema.table(
   'idempotency_keys',
   {
@@ -495,5 +541,45 @@ export const idempotencyKeys = coreSchema.table(
   (t) => ({
     pk: primaryKey({ columns: [t.actorId, t.key] }),
     createdAtIdx: index('idempotency_keys_created_at_idx').on(t.createdAt),
+  }),
+);
+
+// Safe, transaction-owned diagnostic inputs; never candidate or private source IDs.
+export const responsibilityDefaultFailures = coreSchema.table(
+  'responsibility_default_failures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    managedSystemId: uuid('managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    workflow: text('workflow').notNull(),
+    responsibility: text('responsibility').notNull(),
+    rule: text('rule').notNull(),
+    category: text('category').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceSystemCreatedIdx: index(
+      'responsibility_default_failures_workspace_system_created_idx',
+    ).on(t.workspaceId, t.managedSystemId, t.createdAt),
+    workflowCheck: check(
+      'responsibility_default_failures_workflow_check',
+      sql`${t.workflow} IN ('voc','finding','task_request','task')`,
+    ),
+    responsibilityCheck: check(
+      'responsibility_default_failures_responsibility_check',
+      sql`${t.responsibility} IN ('owner','reviewer')`,
+    ),
+    ruleCheck: check(
+      'responsibility_default_failures_rule_check',
+      sql`${t.rule} IN ('managed_system_owner','managed_system_reviewer','analytics_area_owner')`,
+    ),
+    categoryCheck: check(
+      'responsibility_default_failures_category_check',
+      sql`${t.category} IN ('missing','invalid_pair','foreign_workspace','archived_team','ineligible_actor')`,
+    ),
   }),
 );

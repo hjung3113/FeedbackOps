@@ -6,11 +6,11 @@ import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
-import { PermissionRequestDetail } from './permission-request-detail.js';
 import {
   permissionRequestStatusLabel,
   permissionRequestTabs,
 } from './permission-requests-search.js';
+import { SelectedPermissionRequestDetail } from './selected-permission-request-detail';
 import { usePermissionRequestsConsole } from './use-permission-requests-console.js';
 
 const PERMISSION_REQUESTS_PANEL_ID = 'permission-requests-list-panel';
@@ -97,14 +97,11 @@ export function PermissionRequestsScreen() {
       }
       detailPanel={
         selected ? (
-          <PermissionRequestDetail
-            request={selected}
-            actorName={actorNames[selected.requester_actor_id]}
-            managedSystemName={
-              selected.requested_managed_system_id
-                ? managedSystemNames[selected.requested_managed_system_id]
-                : undefined
-            }
+          <SelectedPermissionRequestDetail
+            key={selected.id}
+            id={selected.id}
+            actorNames={actorNames}
+            managedSystemNames={managedSystemNames}
             onClose={handleClose}
           />
         ) : undefined
@@ -135,8 +132,6 @@ function PermissionRequestRow({
       badges={<OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>}
       meta={
         <>
-          <span className="font-mono text-text-muted">{request.requested_capability}</span>
-          <span>·</span>
           <span>
             {request.requested_managed_system_id
               ? (managedSystemName ?? 'Managed System')

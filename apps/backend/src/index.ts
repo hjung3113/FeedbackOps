@@ -20,18 +20,20 @@ import { createRootLogger } from './lib/logger.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
+import { registerDashboardJobs } from './modules/dashboard/jobs/index.js';
 import {
   createNotificationEmailChannel,
   createNotificationNotifier,
   createPgBossNotificationDispatcher,
   registerNotificationJobs,
 } from './modules/notifications/index.js';
-import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 import { registerVocJobs } from './modules/voc/index.js';
+import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
+if (!config.WORKSPACE_ID) throw new Error('WORKSPACE_ID is required for recovery reconciliation');
 if (!config.DATABASE_URL) {
   console.error('DATABASE_URL is required to start the backend (fops_app role).');
   process.exit(1);
@@ -64,6 +66,11 @@ const logger = createRootLogger(config);
 const jobLog = toJobLog(logger);
 
 const boss = await initBoss({ connectionString: config.DATABASE_URL, log: jobLog });
+await registerDashboardJobs(boss, {
+  db: dbHandle.db,
+  workspaceId: config.WORKSPACE_ID,
+  log: jobLog,
+});
 const notificationDispatcher = createPgBossNotificationDispatcher(boss);
 const notify = createNotificationNotifier(notificationDispatcher);
 await registerCoreJobs(boss, {
@@ -78,9 +85,10 @@ await registerCoreJobs(boss, {
 // #168 (ADR-0034 D6). Registered even when the provider is disabled: the
 // backfill cron row must exist so enabling a provider is a config change, not
 // a queue-registration change. Both handlers no-op while disabled.
+const embeddingProvider = createEmbeddingProvider(config);
 await registerVocJobs(boss, {
   db: dbHandle.db,
-  provider: createEmbeddingProvider(config),
+  provider: embeddingProvider,
   embeddingVersion: config.EMBEDDING_VERSION,
   embeddingEnabled: isEmbeddingEnabled(config),
   publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
@@ -96,7 +104,14 @@ await registerNotificationJobs(boss, {
   log: jobLog,
 });
 
-const app = await buildServer({ config, dbHandle, boss, logger, notificationDispatcher });
+const app = await buildServer({
+  config,
+  dbHandle,
+  boss,
+  logger,
+  notificationDispatcher,
+  embeddingProvider,
+});
 
 // Single-shot shutdown handler. Multiple signals (e.g. SIGTERM then SIGINT)
 // short-circuit through the `shuttingDown` flag so we don't try to close pools

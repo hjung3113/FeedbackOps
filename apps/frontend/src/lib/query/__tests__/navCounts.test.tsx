@@ -4,12 +4,18 @@ import type { FormEvent, PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
+// Parsed calls share the apiClient outcome; parsing is not under test here.
+const apiRequestMock = vi.hoisted(
+  () => (method: string, path: string, _parser: unknown, opts?: unknown) =>
+    apiClientMock(method, path, opts),
+);
 const triageMutationMock = vi.hoisted(() => vi.fn());
 const taskRequestMutationMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   apiClient: apiClientMock,
+  apiRequest: apiRequestMock,
   approveTaskRequest: taskRequestMutationMock,
   convertTaskRequest: taskRequestMutationMock,
   linkExistingTask: taskRequestMutationMock,
@@ -20,6 +26,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/client')>()),
   apiClient: apiClientMock,
+  apiRequest: apiRequestMock,
 }));
 
 vi.mock('@/features/voc/lib/triage-transport', async (importOriginal) => ({

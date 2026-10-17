@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { ListTaskRequestsResponse } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
+import { resolveTaskResponsibility } from '../tasks/responsibility.js';
 
 import {
   type ApproveTaskRequestRequest,
+  type AssignTaskRequestReviewerRequest,
   type CreateTaskRequestFromFindingRequest,
   type CreateTaskRequestFromVocClusterRequest,
   type CreateTaskRequestFromVocRequest,
@@ -42,6 +46,7 @@ import {
   listPrimaryManagedSystemIds,
   listTaskRequestsByWorkspace,
   lockTaskRequestById,
+  updateAssignedReviewer,
   updateTaskRequestDecision,
 } from './repo.js';
 
@@ -52,6 +57,8 @@ export interface TaskRequestsActor {
 }
 
 export interface TaskRequestsServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
+  consumeSelfApprovalRateLimit?: (actor: TaskRequestsActor) => Promise<void>;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -114,6 +121,8 @@ function taskRequestToDto(row: TaskRequestRow, source?: TaskRequestSourceLink): 
     requested_outcome: row.requested_outcome,
     requester_actor_id: row.requester_actor_id,
     status: row.status,
+    assigned_reviewer_actor_id: row.assigned_reviewer_actor_id,
+    assigned_reviewer_team_id: row.assigned_reviewer_team_id,
     reviewer_actor_id: row.reviewer_actor_id,
     decision_reason: row.decision_reason,
     decided_at: row.decided_at?.toISOString() ?? null,
@@ -144,7 +153,6 @@ async function canReadSourceVoc(
   reporterId: string,
   options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
   if (actor.actor_id === reporterId) return true;
   const decision = await deps.checkService.checkCapability(
     actor,
@@ -251,12 +259,27 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     actor: TaskRequestsActor;
     sourceType: TaskRequestSourceType;
     sourceId: string;
+    analyticsAreaId?: string | null;
     primaryManagedSystemId: string;
     input:
       | CreateTaskRequestFromFindingRequest
       | CreateTaskRequestFromVocRequest
       | CreateTaskRequestFromVocClusterRequest;
   }): Promise<TaskRequestDto> {
+    const responsibility = await resolveTaskResponsibility({
+      tx: args.tx,
+      checkService: deps.checkService,
+      workspaceId: args.actor.workspace_id,
+      managedSystemId: args.primaryManagedSystemId,
+      workflow: 'task_request',
+      analyticsAreaId: args.analyticsAreaId ?? null,
+      ...(args.input.assigned_reviewer_actor_id === undefined
+        ? {}
+        : { actorId: args.input.assigned_reviewer_actor_id }),
+      ...(args.input.assigned_reviewer_team_id === undefined
+        ? {}
+        : { teamId: args.input.assigned_reviewer_team_id }),
+    });
     const taskRequest = await insertTaskRequest(args.tx, {
       workspaceId: args.actor.workspace_id,
       sourceType: args.sourceType,
@@ -265,6 +288,8 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       evidenceSummary: args.input.evidence_summary,
       requestedOutcome: args.input.requested_outcome,
       requesterActorId: args.actor.actor_id,
+      assignedReviewerActorId: responsibility.actorId,
+      assignedReviewerTeamId: responsibility.teamId,
     });
 
     const requestedTaskTuple = registeredEntityLinkPairSchema.parse({
@@ -312,6 +337,11 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
         [sourceIdDetailKey]: args.sourceId,
         primary_managed_system_id: args.primaryManagedSystemId,
         source_type: args.sourceType,
+        default_resolved: responsibility.default_resolved,
+        source_rule: responsibility.source_rule,
+        managed_system_id: responsibility.managed_system_id,
+        assigned_reviewer_actor_id: taskRequest.assigned_reviewer_actor_id,
+        assigned_reviewer_team_id: taskRequest.assigned_reviewer_team_id,
       },
     });
 
@@ -333,11 +363,16 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       });
     }
 
-    return taskRequestToDto(taskRequest, {
-      link_id: link.row.id,
-      source_id: args.sourceId,
-      source_type: args.sourceType,
-    });
+    return {
+      ...taskRequestToDto(taskRequest, {
+        link_id: link.row.id,
+        source_id: args.sourceId,
+        source_type: args.sourceType,
+      }),
+      default_resolved: responsibility.default_resolved,
+      source_rule: responsibility.source_rule,
+      managed_system_id: responsibility.managed_system_id,
+    };
   }
 
   async function createFromFinding(args: {
@@ -348,12 +383,16 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskRequestDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'finding', id: args.findingId },
+          ]);
           const finding = await lockFindingById(tx, {
             workspaceId: args.actor.workspace_id,
             findingId: args.findingId,
@@ -373,17 +412,23 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
-          return {
-            status: 201,
-            body: await createFromSource({
+          const body = await createFromSource({
+            tx,
+            actor: args.actor,
+            sourceType: 'finding',
+            sourceId: finding.id,
+            analyticsAreaId: finding.analytics_area_id,
+            primaryManagedSystemId: finding.primary_managed_system_id,
+            input: args.input,
+          });
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
               tx,
-              actor: args.actor,
-              sourceType: 'finding',
-              sourceId: finding.id,
-              primaryManagedSystemId: finding.primary_managed_system_id,
-              input: args.input,
-            }),
-          };
+              recovery,
+              args.actor.actor_id,
+              'createFromFinding',
+            );
+          return { status: 201, body };
         },
       );
     });
@@ -397,12 +442,16 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskRequestDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc', id: args.vocId },
+          ]);
           const voc = await selectVocForUpdate(tx, args.actor.workspace_id, args.vocId);
           if (!voc || voc.archivedAt !== null) {
             throw new HttpError('not_found.record', 'voc not found');
@@ -434,17 +483,18 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
-          return {
-            status: 201,
-            body: await createFromSource({
-              tx,
-              actor: args.actor,
-              sourceType: 'voc',
-              sourceId: voc.id,
-              primaryManagedSystemId: voc.primaryManagedSystemId,
-              input: args.input,
-            }),
-          };
+          const body = await createFromSource({
+            tx,
+            actor: args.actor,
+            sourceType: 'voc',
+            sourceId: voc.id,
+            analyticsAreaId: voc.analyticsAreaId,
+            primaryManagedSystemId: voc.primaryManagedSystemId,
+            input: args.input,
+          });
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromVoc');
+          return { status: 201, body };
         },
       );
     });
@@ -458,12 +508,16 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskRequestDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc_cluster', id: args.clusterId },
+          ]);
           const cluster = await lockVocClusterById(tx, {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
@@ -483,17 +537,22 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
-          return {
-            status: 201,
-            body: await createFromSource({
+          const body = await createFromSource({
+            tx,
+            actor: args.actor,
+            sourceType: 'voc_cluster',
+            sourceId: cluster.id,
+            primaryManagedSystemId: cluster.primary_managed_system_id,
+            input: args.input,
+          });
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
               tx,
-              actor: args.actor,
-              sourceType: 'voc_cluster',
-              sourceId: cluster.id,
-              primaryManagedSystemId: cluster.primary_managed_system_id,
-              input: args.input,
-            }),
-          };
+              recovery,
+              args.actor.actor_id,
+              'createFromVocCluster',
+            );
+          return { status: 201, body };
         },
       );
     });
@@ -567,6 +626,8 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
 
   async function listTaskRequests(args: {
     actor: TaskRequestsActor;
+    reviewer?: string;
+    reviewer_team_id?: string;
     status?: TaskRequestStatus;
     managed_system_id?: string;
     cursor?: string;
@@ -602,11 +663,18 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
       ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),
     };
+    const filteredInput = {
+      ...input,
+      ...(args.reviewer === undefined
+        ? {}
+        : { reviewerActorId: args.reviewer === 'me' ? args.actor.actor_id : args.reviewer }),
+      ...(args.reviewer_team_id === undefined ? {} : { reviewerTeamId: args.reviewer_team_id }),
+    };
     const empty = allowedSystemIds?.length === 0;
     const rows = empty
       ? []
       : await listTaskRequestsByWorkspace(deps.db, {
-          ...input,
+          ...filteredInput,
           ...(args.limit === undefined
             ? {}
             : { limit: args.limit, ...(cursor === undefined ? {} : { cursor }) }),
@@ -627,7 +695,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             }
           : {}),
         ...(args.cursor === undefined
-          ? { total: empty ? 0 : await countListRows(deps.db, input) }
+          ? { total: empty ? 0 : await countListRows(deps.db, filteredInput) }
           : {}),
         ...(args.cursor === undefined && args.status === undefined
           ? {
@@ -739,6 +807,10 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
           const reasonPresent = (reasonOrNote?.trim().length ?? 0) > 0;
 
           if (args.action === 'approve' && taskRequest.requester_actor_id === args.actor.actor_id) {
+            // Trusted locked row, before even the denied-approval audit. The limiter
+            // uses its own store transaction; throwing rolls back this command and
+            // skips runIdempotent's response record, while preserving the counter.
+            await deps.consumeSelfApprovalRateLimit?.(args.actor);
             const capabilityPresent = await hasSelfApprovalCapability(
               deps,
               args.actor,
@@ -823,7 +895,77 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     });
   }
 
+  async function assignReviewer(args: {
+    actor: TaskRequestsActor;
+    taskRequestId: string;
+    input: AssignTaskRequestReviewerRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskRequestDto }> {
+    return deps.db.transaction(async (tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const row = await lockTaskRequestById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: args.taskRequestId,
+          });
+          if (!row) throw new HttpError('not_found.record', 'task_request not found');
+          const allowed = await checkFindingManage(
+            deps.checkService,
+            args.actor,
+            row.primary_managed_system_id,
+            { requireElevatedRole: true },
+            { tx },
+          );
+          if (!allowed.allow)
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          const responsibility = await resolveTaskResponsibility({
+            tx,
+            checkService: deps.checkService,
+            workspaceId: args.actor.workspace_id,
+            managedSystemId: row.primary_managed_system_id,
+            workflow: 'task_request',
+            actorId: args.input.assigned_reviewer_actor_id,
+            teamId: args.input.assigned_reviewer_team_id,
+          });
+          if (
+            row.assigned_reviewer_actor_id === responsibility.actorId &&
+            row.assigned_reviewer_team_id === responsibility.teamId
+          ) {
+            return { status: 200, body: taskRequestToDto(row) };
+          }
+          const updated = await updateAssignedReviewer(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: row.id,
+            actorId: responsibility.actorId,
+            teamId: responsibility.teamId,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_request_reviewer_assigned',
+            subject_type: 'task_request',
+            subject_id: row.id,
+            summary: 'Responsibility assigned',
+            detail: {
+              from_actor_id: row.assigned_reviewer_actor_id,
+              from_team_id: row.assigned_reviewer_team_id,
+              to_actor_id: updated.assigned_reviewer_actor_id,
+              to_team_id: updated.assigned_reviewer_team_id,
+            },
+          });
+          return { status: 200, body: taskRequestToDto(updated) };
+        },
+      ),
+    );
+  }
+
   return {
+    assignReviewer,
     createFromFinding,
     createFromVoc,
     createFromVocCluster,

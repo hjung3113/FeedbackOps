@@ -42,8 +42,8 @@ Evidence or Source Record
 
 ```text
 VOC
-→ Similar VOC Recommendation optional
-→ VOC Cluster optional
+→ Similar VOC Recommendation / VOC Cluster Suggestion optional
+→ authorized human confirmation creates VOC Cluster optional
 → optional Finding
 → optional Task Request
 → approved Task starts in Backlog
@@ -175,3 +175,52 @@ If it does, implement:
 - audit log event when needed
 - dashboard recovery signal when the next step is missing
 ```
+
+## Close-out routing and recovery (ADR-0067; backend G/H and UI I implemented)
+
+VOC, every Finding source, all three Task Request sources, and approved-request Task
+conversion resolve source-owned responsibility atomically with links/audit/idempotency.
+Automatic routing failure preserves intake in the existing scoped unassigned queue;
+assignment does not complete triage/review or grant access.
+
+Source/link repairs notify the injected Dashboard transition recorder in the same
+transaction; shared identity/history remains a projection of source predicates. Personal
+hiding cannot repair a gap. Outcome response decisions/presentation/history remain
+Survey-owned under ADR-0055's personal seam. Home uses only currently actionable items,
+Integration owns the compact shared UI, and source actions retain their owning routes.
+
+## Analytics Area operational report (ADR-0069; implementation pending)
+
+Coverage's accepted `Analytics Area별 현황` tab opens exact source lists for operational attention;
+FR-DASH-002 in `08-dashboard-system.md` defines the metrics. Optional classification and links stay
+optional. Attribute each object to its own current Area; cross-Area links do not duplicate counts.
+Task Request review stays Managed System-wide. Survey report follow-up counts each qualifying closed
+Outcome Survey once via the Survey-owned safe signal, while individual response decisions and personal
+review stay governed by ADR-0055. All source jumps recheck permissions; source actions update the same
+canonical gap resolution consumed by Home/Integration, without report-specific lifecycle state.
+
+## Survey evidence continuity (ADR-0064)
+
+WF-X-002 preserves response identity privately and canonical internal-only links;
+ordinary link Managed System equality has an explicit Survey command exception
+with independent source/target authorization inside one workspace. Survey-derived
+Finding/generated Task Request source defaults contain metadata only. Approved
+text flows through fresh exact-active-approval/source/target reads, so withdrawal
+works across the system-generated surfaces. Authored downstream text is not erased.
+
+Proposed/new #816 attaches result-visible approved excerpts to an existing Finding
+without a personal grant, requiring source Survey read/suppression and target
+`finding.manage`; it writes `evidence_of`, never `generated_finding`. Consequently
+attachment does not resolve an Outcome follow-up gap (ADR-0055). Existing personal
+create-Finding and no-direct-response→Task Request rules remain unchanged.
+Integration Evidence consumes safe DTOs, never raw link/audit/private binding joins.
+Implementation is pending the coordinated #739/#740 cutover and Slice 54.
+
+## Close-out assistance boundary (ADR-0068; proposed/new)
+
+Cluster suggestions and source-less draft preview are optional assistance, not
+required workflow steps or execution evidence. Suggestions are not Entity Link
+endpoints or inputs to Finding, Task Request, bulk Public Update, coverage or
+recovery. Only a human-created Cluster can use the existing downstream commands.
+Preview permits navigation only and creates no VOC/relationship/decision; VOC
+submission and saved embedding enqueue remain independent of preview availability.

@@ -376,8 +376,8 @@ in `ui-design-system.md` for surface behavior and reduced motion.
 
 | Token | Value | Utility / role |
 | --- | --- | --- |
-| `--motion-duration-fast` | `150ms` | `animation-duration-fast`; popper/dialog/scrim exit, default transitions |
-| `--motion-duration-base` | `200ms` | `animation-duration-base`; popper/dialog/scrim enter, sheet exit |
+| `--motion-duration-fast` | `150ms` | `animation-duration-fast`; default transitions |
+| `--motion-duration-base` | `200ms` | `animation-duration-base`; popper/dialog/scrim enter |
 | `--motion-duration-slow` | `300ms` | `animation-duration-slow`; sheet enter |
 | `--motion-ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | `ease-standard`; default transition easing |
 | `--motion-ease-enter` | `cubic-bezier(0, 0, 0.2, 1)` | `ease-enter` |

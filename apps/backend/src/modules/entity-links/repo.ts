@@ -10,6 +10,7 @@ import type { Db } from '../../db/client.js';
 import { vocs } from '../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
+import { vocFollowUpRootsSql } from '../voc/read-projections.js';
 
 export interface LinkEndpointRow {
   workspace_id: string;
@@ -52,7 +53,7 @@ export async function selectEligibleVocLinksForReleasedTask(
 ): Promise<ReleasedTaskVocLink[]> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT link.source_id AS voc_id, link.id AS entity_link_id
-    FROM core.entity_links AS link
+    FROM core.entity_links_app AS link
     JOIN voc.vocs AS voc
       ON voc.id = link.source_id
      AND voc.workspace_id = link.workspace_id
@@ -154,8 +155,24 @@ export async function insertActiveEntityLink(
     throw new Error('summary_visible requires the task-request conversion write path');
   }
 
+  // Views have no unique indexes for ON CONFLICT inference. Serialize the
+  // owning seam's tuple before lookup/INSERT; raw-table access stays revoked.
+  await tx.execute(sql`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    ${JSON.stringify(
+      [
+        input.workspaceId,
+        input.sourceType,
+        input.sourceId,
+        input.targetType,
+        input.targetId,
+        input.relationType,
+      ].map((value) => value.toLowerCase()),
+    )}::text, 740))`);
+  const existing = await selectActiveEntityLink(tx, input);
+  if (existing) return { row: existing, inserted: false };
+
   const inserted = await (tx as Db).execute<Record<string, unknown>>(sql`
-    INSERT INTO core.entity_links (
+    INSERT INTO core.entity_links_app (
       workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by
     )
@@ -163,10 +180,6 @@ export async function insertActiveEntityLink(
       ${input.workspaceId}, ${input.sourceType}, ${input.sourceId}, ${input.targetType}, ${input.targetId},
       ${input.relationType}, ${input.visibility}, 'active', ${input.managedSystemId}, ${input.createdBy}
     )
-    ON CONFLICT (
-      workspace_id, source_type, source_id, target_type, target_id, relation_type
-    ) WHERE status = 'active'
-    DO NOTHING
     RETURNING
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
@@ -175,18 +188,7 @@ export async function insertActiveEntityLink(
   const insertedRow = inserted.rows[0];
   if (insertedRow) return { row: mapEntityLinkRow(insertedRow), inserted: true };
 
-  const existing = await selectActiveEntityLink(tx, {
-    workspaceId: input.workspaceId,
-    sourceType: input.sourceType,
-    sourceId: input.sourceId,
-    targetType: input.targetType,
-    targetId: input.targetId,
-    relationType: input.relationType,
-  });
-  if (!existing) {
-    throw new Error('entity link conflict did not return existing active row');
-  }
-  return { row: existing, inserted: false };
+  throw new Error('entity link insert did not return a row');
 }
 
 export async function selectActiveEntityLink(
@@ -205,7 +207,7 @@ export async function selectActiveEntityLink(
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
       created_at, updated_at, detached_by, detach_reason, detached_at
-    FROM core.entity_links
+    FROM core.entity_links_app
     WHERE workspace_id = ${input.workspaceId}
       AND source_type = ${input.sourceType}
       AND source_id = ${input.sourceId}
@@ -243,7 +245,7 @@ export async function selectActiveLinksForEndpoint(
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
       created_at, updated_at, detached_by, detach_reason, detached_at
-    FROM core.entity_links
+    FROM core.entity_links_app
     WHERE workspace_id = ${input.workspaceId}
       AND status = 'active'
       AND ${sidePredicate}
@@ -267,7 +269,7 @@ export async function selectActiveLinksForEndpoints(
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
       created_at, updated_at, detached_by, detach_reason, detached_at
-    FROM core.entity_links
+    FROM core.entity_links_app
     WHERE workspace_id = ${input.workspaceId}
       AND status = 'active'
       AND target_type = ${input.endpointType}
@@ -325,7 +327,7 @@ export async function selectLinksByWorkspace(
       relation_type, visibility, status, managed_system_id, created_by,
       created_at, created_at::text AS cursor_created_at,
       updated_at, detached_by, detach_reason, detached_at
-    FROM core.entity_links
+    FROM core.entity_links_app
     WHERE ${sql.join(predicates, sql` AND `)}
     ORDER BY created_at DESC, id DESC
     LIMIT ${input.limit + 1}
@@ -339,7 +341,7 @@ export async function selectLinksByWorkspace(
             COUNT(*) FILTER (WHERE status = 'stale') AS stale,
             COUNT(*) FILTER (WHERE status = 'detached') AS detached,
             COUNT(*) FILTER (WHERE status = 'revoked') AS revoked
-          FROM core.entity_links
+          FROM core.entity_links_app
           WHERE ${sql.join(statusCountPredicates, sql` AND `)}
         `)
       : undefined;
@@ -380,7 +382,7 @@ export async function selectEntityLinkById(
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
       created_at, updated_at, detached_by, detach_reason, detached_at
-    FROM core.entity_links
+    FROM core.entity_links_app
     WHERE workspace_id = ${input.workspaceId}
       AND id = ${input.linkId}
     LIMIT 1
@@ -399,7 +401,7 @@ export async function detachEntityLink(
   },
 ): Promise<EntityLinkRow | null> {
   const updated = await (tx as Db).execute<Record<string, unknown>>(sql`
-    UPDATE core.entity_links
+    UPDATE core.entity_links_app
     SET
       status = 'detached',
       detached_by = ${input.actorId},
@@ -416,4 +418,16 @@ export async function detachEntityLink(
   `);
   const row = updated.rows[0];
   return row ? mapEntityLinkRow(row) : null;
+}
+
+/** Owner-backed roots for VOC detail; includes command-only Cluster evidence_of. */
+export async function selectVocFollowUpRoots(
+  db: Tx,
+  workspaceId: string,
+  vocId: string,
+): Promise<EntityLinkRow[]> {
+  const result = await db.execute<Record<string, unknown>>(sql`
+    ${vocFollowUpRootsSql(workspaceId, vocId)} ORDER BY el.created_at, el.id
+  `);
+  return result.rows.map(mapEntityLinkRow);
 }

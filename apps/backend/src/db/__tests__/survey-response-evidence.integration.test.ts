@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
+import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -139,6 +141,13 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
     );
     expect(Number(seeded?.rows[0]?.count ?? 0)).toBeGreaterThan(0);
     await migrateHandle?.pool.query(
+      'delete from finding.evidence_highlights where workspace_id=$1',
+      [workspaceId],
+    );
+    await migrateHandle?.pool.query('delete from finding.findings where workspace_id=$1', [
+      workspaceId,
+    ]);
+    await migrateHandle?.pool.query(
       'delete from survey.survey_response_excerpt_approvals where workspace_id = $1',
       [workspaceId],
     );
@@ -158,13 +167,21 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
     await migrateHandle?.pool.query('delete from core.display_counters where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle?.pool.query('delete from core.managed_systems where workspace_id = $1', [
-      workspaceId,
-    ]);
+    if (migrateHandle)
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id = $1',
+        [workspaceId],
+      );
     await migrateHandle?.pool.query('delete from core.actors where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle?.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+    if (migrateHandle)
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     const remaining = await migrateHandle?.pool.query<{ count: string }>(
       'select count(*)::text as count from survey.survey_response_excerpt_approvals where workspace_id = $1',
       [workspaceId],
@@ -265,6 +282,11 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
         order by table_name, column_name, privilege_type`,
     );
     expect(ownerColumnPrivileges.map((row) => row.privilege)).toEqual([
+      'highlight_response_bindings.approved_excerpt_id.SELECT',
+      'highlight_response_bindings.approved_excerpt_snapshot.SELECT',
+      'highlight_response_bindings.highlight_id.SELECT',
+      'highlight_response_bindings.response_id.SELECT',
+      'highlight_response_bindings.workspace_id.SELECT',
       'survey_questions.id.SELECT',
       'survey_questions.kind.SELECT',
       'survey_questions.prompt.SELECT',
@@ -391,6 +413,101 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
     ]);
   });
 
+  it('pins #739 owners, callable ACLs, and denied private table access', async () => {
+    const functions = await migrateHandle.pool.query(
+      `select p.proname,r.rolname as owner,p.prosecdef,p.proconfig,
+          has_function_privilege('fops_app',p.oid,'EXECUTE') as app_execute,
+          exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+                 where a.grantee=0 and a.privilege_type='EXECUTE') as public_execute
+         from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+         join pg_roles r on r.oid=p.proowner
+         where n.nspname='survey' and p.proname in
+           ('bind_finding_response','bind_highlight_response','read_finding_highlight_evidence')
+         order by p.proname`,
+    );
+    expect(functions.rows).toEqual([
+      {
+        proname: 'bind_finding_response',
+        owner: 'fops_survey_provenance_mutator_owner',
+        prosecdef: true,
+        proconfig: ['search_path=pg_catalog'],
+        app_execute: true,
+        public_execute: false,
+      },
+      {
+        proname: 'bind_highlight_response',
+        owner: 'fops_survey_provenance_mutator_owner',
+        prosecdef: true,
+        proconfig: ['search_path=pg_catalog'],
+        app_execute: true,
+        public_execute: false,
+      },
+      {
+        proname: 'read_finding_highlight_evidence',
+        owner: 'fops_survey_evidence_reader_owner',
+        prosecdef: true,
+        proconfig: ['search_path=pg_catalog'],
+        app_execute: true,
+        public_execute: false,
+      },
+    ]);
+    for (const owner of [
+      'fops_survey_evidence_reader_owner',
+      'fops_survey_provenance_mutator_owner',
+    ]) {
+      const role = await migrateHandle.pool.query(
+        `select rolcanlogin,rolinherit,pg_has_role('fops_app',rolname,'MEMBER') as app_member,
+            pg_has_role(rolname,'fops_migrate','MEMBER') as reverse_member,
+            pg_has_role('fops_migrate',rolname,'MEMBER') as migrate_member
+           from pg_roles where rolname=$1`,
+        [owner],
+      );
+      expect(role.rows).toEqual([
+        {
+          rolcanlogin: false,
+          rolinherit: false,
+          app_member: false,
+          reverse_member: false,
+          migrate_member: true,
+        },
+      ]);
+    }
+    for (const table of ['finding_response_bindings', 'highlight_response_bindings']) {
+      await expect(appHandle.pool.query(`select * from survey.${table}`)).rejects.toMatchObject({
+        code: '42501',
+      });
+      const writes = await migrateHandle.pool.query(
+        `select has_table_privilege('fops_survey_evidence_reader_owner',$1,'INSERT,UPDATE,DELETE') as reader_write,
+            has_table_privilege('fops_survey_aggregate_owner',$1,'INSERT,UPDATE,DELETE') as aggregate_write`,
+        [`survey.${table}`],
+      );
+      expect(writes.rows).toEqual([{ reader_write: false, aggregate_write: false }]);
+    }
+  });
+
+  it('accepts a public NULL Survey parent only with its workspace-qualified private binding (#739)', async () => {
+    const finding = await insertSurveyFindingFixture<{ id: string }>(
+      migrateHandle,
+      responseId,
+      `insert into finding.findings(workspace_id,display_id,primary_managed_system_id,title,summary,
+          source_type,source_id,severity,created_by)
+         values($1,$2,$3,'Survey response · validation','Survey response from validation',
+          'survey_response',null,'low',$4) returning id`,
+      [workspaceId, `FND-private-${randomUUID()}`, managedSystemId, actorId],
+    );
+    const id = finding.rows[0]?.id;
+    expect(
+      (await appHandle.pool.query('select source_id from finding.findings where id=$1', [id])).rows,
+    ).toEqual([{ source_id: null }]);
+    expect(
+      (
+        await migrateHandle.pool.query(
+          'select workspace_id,response_id from survey.finding_response_bindings where finding_id=$1',
+          [id],
+        )
+      ).rows,
+    ).toEqual([{ workspace_id: workspaceId, response_id: responseId }]);
+  });
   it('allows only the registered findings and entity-link provenance tuples', async () => {
     await expect(
       migrateHandle.pool.query(
@@ -399,7 +516,7 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
          ) values ($1, $2, $3, 'Evidence finding', 'From a response', 'survey_response', $4, 'low', $5)`,
         [workspaceId, `FND-evidence-${randomUUID()}`, managedSystemId, responseId, actorId],
       ),
-    ).resolves.toBeDefined();
+    ).rejects.toMatchObject({ code: '23514' });
     await expect(
       migrateHandle.pool.query(
         `insert into finding.findings (
@@ -628,5 +745,34 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
       [otherWorkspaceId, responseId, [activeApprovalId]],
     );
     expect(crossWorkspace.rows).toEqual([]);
+  });
+
+  it('#1109 selection resolver has only explicit app EXECUTE and the existing mutator owner', async () => {
+    const result = await migrateHandle.pool.query(`
+      select pg_get_userbyid(p.proowner) as owner, p.prosecdef, p.proconfig,
+        has_function_privilege('fops_app',p.oid,'EXECUTE') as app_execute,
+        exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          where a.grantee=0 and a.privilege_type='EXECUTE') as public_execute
+      from pg_proc p where p.oid='survey.lock_attachment_response(uuid,uuid)'::regprocedure
+    `);
+    expect(result.rows).toEqual([
+      {
+        owner: 'fops_survey_provenance_mutator_owner',
+        prosecdef: true,
+        proconfig: ['search_path=pg_catalog'],
+        app_execute: true,
+        public_execute: false,
+      },
+    ]);
+    const selected = await appHandle.pool.query(
+      'select * from survey.lock_attachment_response($1::uuid,$2::uuid)',
+      [workspaceId, activeApprovalId],
+    );
+    expect(selected.rows).toEqual([{ response_id: responseId }]);
+    const foreign = await appHandle.pool.query(
+      'select * from survey.lock_attachment_response($1::uuid,$2::uuid)',
+      [otherWorkspaceId, activeApprovalId],
+    );
+    expect(foreign.rows).toEqual([]);
   });
 });

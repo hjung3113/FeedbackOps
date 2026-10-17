@@ -1,5 +1,5 @@
 import type { VocDetailEnvelope } from '@fops/shared';
-import { PanelSectionTitle, ReporterStatusBadge, SeverityBadge } from '@fops/ui';
+import { OutlineBadge, PanelSectionTitle, ReporterStatusBadge, SeverityBadge } from '@fops/ui';
 import { Layers } from 'lucide-react';
 import type * as React from 'react';
 
@@ -43,10 +43,10 @@ export function SimilarVocSection({
     <section className="mb-8" aria-label={formatSameManagedSystemVocCount(similarCount)}>
       <div className="flex items-start justify-between gap-3">
         <PanelSectionTitle className="mb-3.5">{SAME_MANAGED_SYSTEM_VOC_LABEL}</PanelSectionTitle>
-        <span className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-2 py-0.5 text-xs font-medium text-accent-primary">
+        <OutlineBadge>
           <Layers className="h-3 w-3" aria-hidden="true" />
           {similarCount}건
-        </span>
+        </OutlineBadge>
       </div>
       <div className="overflow-hidden rounded-md bg-surface-canvas">
         {similar.items.slice(0, 3).map((item, index) => (

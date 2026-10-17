@@ -1,25 +1,47 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, desc, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 
-import type {
-  AuditEventType,
-  PermissionDenyAdminItem,
-  PermissionGrantAdminItem,
-  RevokePermissionBody,
-  RevokePermissionResult,
+import {
+  type AuditEventType,
+  CAPABILITIES,
+  type Capability,
+  type DirectPermissionGrant,
+  type PermissionDenyAdminItem,
+  type PermissionGrantAdminItem,
+  type PermissionGrantOptions,
+  type PermissionGrantPreflight,
+  type RevokePermissionBody,
+  type RevokePermissionResult,
+  directPermissionGrantSchema,
+  permissionGrantOptionsSchema,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
+import {
+  permissionDenies,
+  permissionGrants,
+  permissionRequests,
+} from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { findWorkspaceActorDisplay, lockWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { NotificationNotifier } from '../notifications/index.js';
-import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
-import type { ActorContext, CheckService } from './check-service.js';
+import {
+  getResolvedWorkspaceSettings,
+  getResolvedWorkspaceSettingsForUpdate,
+} from '../workspace-settings/index.js';
+import { resolveCapabilityScope } from './check-service.js';
+import type { ActorContext, CapabilityScope, CheckService } from './check-service.js';
+import { writePermissionGrant } from './grant-command.js';
+import {
+  supportedScopeCandidates,
+  validateRequestExpiration,
+  validateSupportedScope,
+} from './supported-scope-policy.js';
 
 export interface GrantAdminServiceDeps {
   db: Db;
@@ -35,6 +57,24 @@ export interface GrantAdminServiceOptions {
 
 export type GrantAdminService = ReturnType<typeof createGrantAdminService>;
 
+/** Deny wins before coverage. Scope alone cannot tell a deny from a missing grant. */
+export function vocReadPrerequisiteState(
+  managedSystemId: string | null,
+  scope: CapabilityScope,
+  denies: readonly { managedSystemId: string | null }[],
+): 'held' | 'missing' | 'denied' {
+  const denied =
+    managedSystemId === null
+      ? denies.length > 0
+      : denies.some(
+          (deny) => deny.managedSystemId === null || deny.managedSystemId === managedSystemId,
+        );
+  if (denied) return 'denied';
+  if (managedSystemId === null) return scope.kind === 'all' ? 'held' : 'missing';
+  if (scope.kind === 'all' || scope.managed_system_ids.includes(managedSystemId)) return 'held';
+  return 'missing';
+}
+
 export function createGrantAdminService(deps: GrantAdminServiceDeps) {
   async function assertAdmin(actor: ActorContext, tx?: Tx): Promise<void> {
     const options = tx !== undefined ? { tx } : {};
@@ -49,6 +89,259 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
     }
   }
 
+  async function preflight(
+    tx: Tx,
+    workspaceId: string,
+    actorId: string,
+    capability: Capability,
+    managedSystemId: string | null,
+  ): Promise<PermissionGrantPreflight> {
+    const [request] = await tx
+      .select({ id: permissionRequests.id })
+      .from(permissionRequests)
+      .where(
+        and(
+          eq(permissionRequests.workspaceId, workspaceId),
+          eq(permissionRequests.requesterActorId, actorId),
+          eq(permissionRequests.requestedCapability, capability),
+          managedSystemId === null
+            ? isNull(permissionRequests.requestedManagedSystemId)
+            : eq(permissionRequests.requestedManagedSystemId, managedSystemId),
+          isNull(permissionRequests.requestedObjectType),
+          isNull(permissionRequests.requestedObjectId),
+          inArray(permissionRequests.status, ['pending', 'needs_more_info']),
+        ),
+      )
+      .orderBy(asc(permissionRequests.createdAt), asc(permissionRequests.id))
+      .limit(1);
+    if (request)
+      return {
+        state: 'request_review',
+        request_id: request.id,
+        review_route: `/admin/permissions/requests?selected=${request.id}`,
+      };
+    const denies = await tx
+      .select({ id: permissionDenies.id })
+      .from(permissionDenies)
+      .where(
+        and(
+          eq(permissionDenies.workspaceId, workspaceId),
+          eq(permissionDenies.actorId, actorId),
+          eq(permissionDenies.capability, capability),
+          isNull(permissionDenies.revokedAt),
+          managedSystemId === null
+            ? undefined
+            : or(
+                isNull(permissionDenies.managedSystemId),
+                eq(permissionDenies.managedSystemId, managedSystemId),
+              ),
+        ),
+      )
+      .orderBy(asc(permissionDenies.id));
+    if (denies.length > 0)
+      return {
+        state: 'deny_lift',
+        deny_ids: denies.map((deny) => deny.id),
+        lift_route: `/admin/permissions/grants?tab=denies&selected=${denies[0]?.id}`,
+      };
+    return { state: 'available' };
+  }
+
+  async function grantOptions(
+    actor: ActorContext,
+    actorId: string,
+  ): Promise<PermissionGrantOptions> {
+    return deps.db.transaction(
+      async (tx) => {
+        await assertAdmin(actor, tx);
+        const recipient = await findWorkspaceActorDisplay(tx, {
+          workspaceId: actor.workspace_id,
+          actorId,
+        });
+        if (!recipient) throw new HttpError('not_found.record', 'recipient not found');
+        const settings = await getResolvedWorkspaceSettings(tx, actor.workspace_id);
+        // resolveCapabilityScope subtracts denies, so a deny-only gap looks like
+        // `missing` unless the active voc.read deny rows are read as well.
+        let vocRead: Promise<{
+          scope: CapabilityScope;
+          denies: { managedSystemId: string | null }[];
+        }> | null = null;
+        const loadVocRead = () => {
+          vocRead ??= Promise.all([
+            resolveCapabilityScope(
+              tx,
+              {
+                actor_id: actorId,
+                workspace_id: actor.workspace_id,
+                role_level: recipient.role_level,
+              },
+              'voc.read',
+            ),
+            tx
+              .select({ managedSystemId: permissionDenies.managedSystemId })
+              .from(permissionDenies)
+              .where(
+                and(
+                  eq(permissionDenies.workspaceId, actor.workspace_id),
+                  eq(permissionDenies.actorId, actorId),
+                  eq(permissionDenies.capability, 'voc.read'),
+                  isNull(permissionDenies.revokedAt),
+                ),
+              ),
+          ]).then(([scope, denies]) => ({ scope, denies }));
+          return vocRead;
+        };
+        const candidates: PermissionGrantOptions['candidates'] = [];
+        for (const capability of CAPABILITIES) {
+          const scopes = await supportedScopeCandidates(tx, actor.workspace_id, capability);
+          for (const scope of scopes) {
+            const candidate = {
+              capability,
+              ...scope,
+              governance_required: capability === 'workspace.admin',
+              preflight: await preflight(
+                tx,
+                actor.workspace_id,
+                actorId,
+                capability,
+                scope.managed_system_id,
+              ),
+            };
+            if (capability !== 'voc.triage') {
+              candidates.push(candidate);
+              continue;
+            }
+            const read = await loadVocRead();
+            candidates.push({
+              ...candidate,
+              prerequisites: [
+                {
+                  capability: 'voc.read',
+                  managed_system_id: scope.managed_system_id,
+                  state: vocReadPrerequisiteState(scope.managed_system_id, read.scope, read.denies),
+                },
+              ],
+            });
+          }
+        }
+        return permissionGrantOptionsSchema.parse({
+          recipient,
+          self_policy: settings.permission_self_approval,
+          self_approval_required:
+            actorId === actor.actor_id && settings.permission_self_approval === 'allowed',
+          candidates,
+        });
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
+  }
+
+  async function grant(
+    actor: ActorContext,
+    body: DirectPermissionGrant,
+    options: GrantAdminServiceOptions = {},
+  ): Promise<{ status: number; body: PermissionGrantAdminItem }> {
+    return deps.db.transaction(async (tx) => {
+      await assertAdmin(actor, tx);
+      const parsed = directPermissionGrantSchema.safeParse(body);
+      if (!parsed.success)
+        throw new HttpError('validation.failed', 'invalid direct grant', {
+          fields: parsed.error.issues.map((issue) => ({ path: issue.path, code: issue.code })),
+        });
+      const input = parsed.data;
+      const recipient = await lockWorkspaceActor(tx, {
+        workspaceId: actor.workspace_id,
+        actorId: input.actor_id,
+      });
+      if (!recipient) throw new HttpError('not_found.record', 'recipient not found');
+      const requestHash = hashRequestBody({ action: 'direct_grant', ...input });
+      const run = async (): Promise<{ status: number; body: PermissionGrantAdminItem }> => {
+        const managedSystemId = input.managed_system_id ?? null;
+        await validateSupportedScope(
+          tx,
+          actor.workspace_id,
+          input.capability,
+          managedSystemId,
+          null,
+          null,
+          { approval: true, field: 'managed_system_id' },
+        );
+        const expiresAt = input.expires_at ? new Date(input.expires_at) : null;
+        validateRequestExpiration(expiresAt, 'expires_at');
+        const state = await preflight(
+          tx,
+          actor.workspace_id,
+          input.actor_id,
+          input.capability,
+          managedSystemId,
+        );
+        if (state.state === 'request_review')
+          throw new HttpError(
+            'conflict.permission_request_duplicate',
+            'matching open request requires review',
+            { request_id: state.request_id, review_route: state.review_route },
+          );
+        if (state.state === 'deny_lift')
+          throw new HttpError(
+            'conflict.capability_already_denied',
+            'overlapping deny requires explicit lift',
+            { deny_ids: state.deny_ids, lift_route: state.lift_route },
+          );
+        const settings = await getResolvedWorkspaceSettingsForUpdate(tx, actor.workspace_id);
+        const self = input.actor_id === actor.actor_id;
+        if (self && settings.permission_self_approval === 'forbidden') {
+          throw new HttpError('permission.denied', 'self grant forbidden by workspace policy');
+        }
+        if (self !== (input.self_approval !== undefined)) {
+          throw new HttpError(
+            'validation.failed',
+            'self envelope must accompany only a self grant',
+            {
+              fields: [{ path: ['self_approval'], code: 'custom' }],
+            },
+          );
+        }
+        validateRequestExpiration(expiresAt, 'expires_at');
+        const result = await writePermissionGrant(tx, {
+          workspaceId: actor.workspace_id,
+          actorId: input.actor_id,
+          capability: input.capability,
+          managedSystemId,
+          grantedByActorId: actor.actor_id,
+          expiresAt,
+          reason: input.reason,
+        });
+        await deps.auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: 'permission_granted',
+          subject_type: 'permission_grant',
+          subject_id: result.item.id,
+          summary: 'Permission granted',
+          detail: {
+            grant_id: result.item.id,
+            grantee_actor_id: input.actor_id,
+            capability: input.capability,
+            managed_system_id: managedSystemId,
+            reason: input.reason,
+            expires_at: result.item.expires_at,
+            mode: result.previousGrantId ? 'reissue' : 'create',
+            ...(result.previousGrantId ? { previous_grant_id: result.previousGrantId } : {}),
+            ...(self ? { self_grant: true, self_approval: input.self_approval } : {}),
+          },
+        });
+        return { status: 201, body: result.item };
+      };
+      if (!options.idempotencyKey) return run();
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        options.idempotencyKey,
+        requestHash,
+        run,
+      );
+    });
+  }
   async function listGrants(actor: ActorContext): Promise<{ items: PermissionGrantAdminItem[] }> {
     await assertAdmin(actor);
     const now = new Date();
@@ -67,6 +360,7 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
         and(
           eq(permissionGrants.workspaceId, actor.workspace_id),
           isNull(permissionGrants.revokedAt),
+          isNull(permissionGrants.supersededAt),
           or(isNull(permissionGrants.expiresAt), gt(permissionGrants.expiresAt, now)),
         ),
       )
@@ -145,7 +439,11 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
         if (!grant) throw new HttpError('not_found.record', 'permission grant not found');
 
         const now = new Date();
-        if (grant.revokedAt !== null || (grant.expiresAt !== null && grant.expiresAt <= now)) {
+        if (
+          grant.revokedAt !== null ||
+          grant.supersededAt !== null ||
+          (grant.expiresAt !== null && grant.expiresAt <= now)
+        ) {
           throw new HttpError('conflict.permission_not_active', 'permission grant is not active');
         }
 
@@ -317,7 +615,15 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
     return { id: grant.id, capability: grant.capability };
   }
 
-  return { listGrants, listDenies, revokeGrant, revokeDeny, resolveNotificationReference };
+  return {
+    grantOptions,
+    grant,
+    listGrants,
+    listDenies,
+    revokeGrant,
+    revokeDeny,
+    resolveNotificationReference,
+  };
 }
 
 function requireReason(value: string): string {

@@ -44,6 +44,8 @@ const request: TaskRequestDto = {
   requested_outcome: '로그인 오류를 수정합니다.',
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -68,6 +70,7 @@ const resultingTask: TaskDto = {
   status: 'backlog',
   priority: 'medium',
   assignee_actor_id: null,
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,
@@ -468,6 +471,8 @@ describe('TaskRequestPanel next actions', () => {
           item={{
             ...request,
             status,
+            assigned_reviewer_actor_id: null,
+            assigned_reviewer_team_id: null,
             reviewer_actor_id: reviewerId,
             decision_reason: reason,
             decided_at: decidedAt,
@@ -554,4 +559,21 @@ describe('TaskRequestPanel next actions', () => {
     expect(taskDisplayId).toHaveClass('whitespace-nowrap', 'shrink-0');
     expect(findingDisplayId).toHaveClass('whitespace-nowrap', 'shrink-0');
   });
+});
+
+// Regression for #1243: the panel itself must mount the source section for VOC /
+// VOC Cluster origins; the old Finding-only guard hid these sources in the panel
+// while section-level tests still passed.
+describe('TaskRequestPanel source section mounting', () => {
+  it.each(['voc', 'voc_cluster'] as const)(
+    'mounts the payload source section for %s requests',
+    async (sourceType) => {
+      renderInRouter({ ...request, source_type: sourceType });
+
+      const heading = await screen.findByRole('heading', {
+        name: `출처 ${sourceType === 'voc' ? 'VOC' : 'VOC Cluster'}`,
+      });
+      expect(heading.closest('section')).toHaveAttribute('data-anchor', 'source');
+    },
+  );
 });

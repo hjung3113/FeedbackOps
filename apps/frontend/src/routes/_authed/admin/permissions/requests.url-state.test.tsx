@@ -1,3 +1,4 @@
+import { adminDetailFixture } from '@/test/permission-details';
 // /admin/permissions/requests URL-state tests (issue #397).
 //
 // Tab + selection are URL state (docs/frontend/routes-and-layout.md §URL State
@@ -10,6 +11,7 @@
 // Harness: createRoute + memory history with the route's own search schema
 // (same pattern as __tests__/vocs.test.tsx and ./requests.test.tsx).
 
+import type { PermissionRiskIndicator } from '@fops/shared';
 import type * as FopsUi from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -57,36 +59,44 @@ import { PermissionRequestsConsolePage, permissionRequestsSearchSchema } from '.
 const REQUESTS = [
   {
     id: '11111111-1111-4111-8111-111111111111',
-    requester_actor_id: 'actor-pending',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
     requested_capability: 'workspace.read',
     requested_managed_system_id: null,
+    revision: 7,
+    requested_expiration: null,
     reason: 'need access',
     status: 'pending',
     created_at: '2026-07-17T00:00:00.000Z',
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
-    requester_actor_id: 'actor-info',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
     requested_capability: 'workspace.write',
-    requested_managed_system_id: 'system-1',
+    requested_managed_system_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    revision: 7,
+    requested_expiration: null,
     reason: 'need detail',
     status: 'needs_more_info',
     created_at: '2026-07-16T00:00:00.000Z',
   },
   {
     id: '33333333-3333-4333-8333-333333333333',
-    requester_actor_id: 'actor-approved',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
     requested_capability: 'workspace.admin',
     requested_managed_system_id: null,
+    revision: 7,
+    requested_expiration: null,
     reason: 'done',
     status: 'approved',
     created_at: '2026-07-15T00:00:00.000Z',
   },
   {
     id: '44444444-4444-4444-8444-444444444444',
-    requester_actor_id: 'actor-rejected',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
     requested_capability: 'workspace.delete',
     requested_managed_system_id: null,
+    revision: 7,
+    requested_expiration: null,
     reason: 'no',
     status: 'rejected',
     created_at: '2026-07-14T00:00:00.000Z',
@@ -145,6 +155,10 @@ function installFetch() {
     if (url === '/permissions/requests?status=all' && (!init?.method || init.method === 'GET')) {
       return response({ requests: REQUESTS, count: REQUESTS.length });
     }
+    if (/^\/permissions\/requests\/[^/]+$/.test(url)) {
+      const row = REQUESTS.find((candidate) => url.endsWith(candidate.id));
+      if (row) return response(adminDetailFixture(row));
+    }
     return response({ code: 'internal.unexpected', message: 'unmocked' }, 500);
   }) as typeof globalThis.fetch;
 }
@@ -180,15 +194,19 @@ describe('/admin/permissions/requests URL state', () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.admin',
+        '워크스페이스 관리자 권한',
       ),
     );
     // The active tab's list rendered — restore is not detail-only.
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 관리자 권한', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId('permission-requests-list')).queryByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).queryByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).not.toBeInTheDocument();
     expect(router.state.location.search).toEqual({
       tab: 'approved',
@@ -212,8 +230,10 @@ describe('/admin/permissions/requests URL state', () => {
         selected: APPROVED_ID,
       });
     });
-    expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.admin',
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        '워크스페이스 관리자 권한',
+      ),
     );
     expect(router.history.length).toBe(lengthBefore + 1);
   });
@@ -222,7 +242,7 @@ describe('/admin/permissions/requests URL state', () => {
     const router = renderUrlState('/admin/permissions/requests');
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.read',
+        '워크스페이스 전체 읽기',
       ),
     );
     const lengthBefore = router.history.length;
@@ -236,7 +256,7 @@ describe('/admin/permissions/requests URL state', () => {
       });
     });
     expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.read',
+      '워크스페이스 전체 읽기',
     );
     expect(router.history.length).toBe(lengthBefore + 1);
   });
@@ -258,7 +278,9 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.history.length).toBe(lengthBefore + 1);
     // Rows still rendered → the closed-panel assertion is not vacuous.
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -286,11 +308,13 @@ describe('/admin/permissions/requests URL state', () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.read',
+        '워크스페이스 전체 읽기',
       ),
     );
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -309,11 +333,15 @@ describe('/admin/permissions/requests URL state', () => {
     });
     // Replaced, not pushed: history did not grow.
     expect(router.history.length).toBe(1);
-    expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.admin',
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        '워크스페이스 관리자 권한',
+      ),
     );
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 관리자 권한', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -321,7 +349,7 @@ describe('/admin/permissions/requests URL state', () => {
     const router = renderUrlState(`/admin/permissions/requests?tab=all&selected=${APPROVED_ID}`);
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.admin',
+        '워크스페이스 관리자 권한',
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
@@ -333,7 +361,9 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.state.location.search).toEqual({ tab: 'all' });
     expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument();
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -356,8 +386,205 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.state.location.search).toEqual({});
     expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument();
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
+  });
+
+  test('a deferred old selected read never replaces the new URL selection or its draft', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let resolveOld: ((response: Response) => void) | undefined;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === `/permissions/requests/${PENDING_ID}`
+        ? new Promise<Response>((resolve) => {
+            resolveOld = resolve;
+          })
+        : base(input, init),
+    ) as typeof fetch;
+    const { router, queryClient } = buildHarness({ initialPath: '/admin/permissions/requests' });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('요청 상세를 불러오는 중입니다.');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+    await screen.findByText('need detail');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'new selected draft' } });
+    await act(async () => {
+      resolveOld?.(response(adminDetailFixture(REQUESTS[0])));
+      await Promise.resolve();
+    });
+    expect(router.state.location.search).toEqual({
+      tab: 'needs_more_info',
+      selected: REQUESTS[1].id,
+    });
+    expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent('need detail');
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('new selected draft');
+  });
+
+  test('another selection clears prior risk and decision draft', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    const oldRisk: PermissionRiskIndicator = {
+      code: 'sensitive_capability',
+      evidence: { capability: 'workspace.read' },
+    };
+    const selectedRisk: PermissionRiskIndicator = {
+      code: 'no_expiration',
+      evidence: { requested_expiration: null },
+    };
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/permissions/requests/${PENDING_ID}`)
+        return Promise.resolve(
+          response(
+            adminDetailFixture(REQUESTS[0], false, 'allowed', { risk_indicators: [oldRisk] }),
+          ),
+        );
+      if (url === `/permissions/requests/${REQUESTS[1].id}`)
+        return Promise.resolve(
+          response(
+            adminDetailFixture(REQUESTS[1], false, 'allowed', { risk_indicators: [selectedRisk] }),
+          ),
+        );
+      return base(input, init);
+    }) as typeof fetch;
+    const { router, queryClient } = buildHarness({ initialPath: '/admin/permissions/requests' });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('민감한 권한 · 워크스페이스 전체 읽기');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), {
+      target: { value: 'previous request draft' },
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+
+    await screen.findByText('요청 만료일 없음');
+    expect(screen.queryByText('민감한 권한 · 워크스페이스 전체 읽기')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('');
+  });
+
+  test('a delayed old risk read cannot replace the new selection or its draft', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let resolveOld: ((value: Response) => void) | undefined;
+    const oldRisk: PermissionRiskIndicator = {
+      code: 'sensitive_capability',
+      evidence: { capability: 'workspace.read' },
+    };
+    const selectedRisk: PermissionRiskIndicator = {
+      code: 'no_expiration',
+      evidence: { requested_expiration: null },
+    };
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/permissions/requests/${PENDING_ID}`)
+        return new Promise<Response>((resolve) => {
+          resolveOld = resolve;
+        });
+      if (url === `/permissions/requests/${REQUESTS[1].id}`)
+        return Promise.resolve(
+          response(
+            adminDetailFixture(REQUESTS[1], false, 'allowed', { risk_indicators: [selectedRisk] }),
+          ),
+        );
+      return base(input, init);
+    }) as typeof fetch;
+    const { router, queryClient } = buildHarness({ initialPath: '/admin/permissions/requests' });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('요청 상세를 불러오는 중입니다.');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+    await screen.findByText('요청 만료일 없음');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), {
+      target: { value: 'new selected draft' },
+    });
+
+    await act(async () => {
+      resolveOld?.(
+        response(adminDetailFixture(REQUESTS[0], false, 'allowed', { risk_indicators: [oldRisk] })),
+      );
+      await Promise.resolve();
+    });
+
+    expect(router.state.location.search).toEqual({
+      tab: 'needs_more_info',
+      selected: REQUESTS[1].id,
+    });
+    expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
+      '요청 만료일 없음',
+    );
+    expect(screen.queryByText('민감한 권한 · 워크스페이스 전체 읽기')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('new selected draft');
+  });
+
+  test('a parser failure stays unavailable until retry returns a successful empty result', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let detailReads = 0;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === `/permissions/requests/${PENDING_ID}` && ++detailReads === 1)
+        return Promise.resolve(
+          response({
+            ...adminDetailFixture(REQUESTS[0]),
+            risk_indicators: [{ code: 'unknown_flag', evidence: {} }],
+          }),
+        );
+      return base(input, init);
+    }) as typeof fetch;
+    const { router, queryClient } = buildHarness({
+      initialPath: `/admin/permissions/requests?selected=${PENDING_ID}`,
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('요청 상세를 불러오지 못했습니다. 다시 확인해 주세요.');
+    expect(screen.queryByText('추가 확인 사항 없음')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permission-decision-section')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+
+    await screen.findByText('추가 확인 사항 없음');
+    expect(detailReads).toBe(2);
+    expect(router.state.location.search).toEqual({ selected: PENDING_ID });
+  });
+
+  test('failed selected detail retains URL selection and offers a retry without decisions', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === `/permissions/requests/${PENDING_ID}`
+        ? Promise.resolve(response({ code: 'internal.unexpected', message: 'failed read' }, 500))
+        : base(input, init),
+    ) as typeof fetch;
+    const { router, queryClient } = buildHarness({
+      initialPath: `/admin/permissions/requests?selected=${PENDING_ID}`,
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('요청 상세를 불러오지 못했습니다. 다시 확인해 주세요.');
+    expect(router.state.location.search).toEqual({ selected: PENDING_ID });
+    expect(screen.getByRole('button', { name: '다시 확인' })).toBeEnabled();
+    expect(screen.queryByTestId('permission-decision-section')).not.toBeInTheDocument();
   });
 
   test('a failed list fetch does not clear a deep-linked selection', async () => {

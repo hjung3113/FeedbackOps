@@ -279,6 +279,7 @@ export function TriagePanel({
             baselineAnalyticsAreaName={baselineAreaName}
             analyticsAreaName={stagedAreaName}
             currentReporterStatus={voc.reporter_facing_status}
+            triageState={voc.triage_state}
           />
         </div>
       </div>
@@ -292,7 +293,7 @@ export function TriagePanel({
               ? VOC_ALREADY_POSTPONED_LABEL
               : undefined
         }
-        dirty={dirty && !panelLocked}
+        canConfirm={(dirty || voc.triage_state !== 'triaged') && !panelLocked}
         submitting={isSubmitting}
         onConfirm={() => {
           handleConfirmOrFinding('confirm');

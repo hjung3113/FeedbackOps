@@ -199,6 +199,7 @@ function installFetch(
     postVocsResponse,
   } = options;
   const postBodies: unknown[] = [];
+  const previewBodies: unknown[] = [];
   let managedSystemsRequestCount = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
@@ -212,6 +213,13 @@ function installFetch(
     if (url.includes('/analytics-areas') && (!init?.method || init.method === 'GET')) {
       return jsonResponse({ items: aaItems, total: aaItems.length });
     }
+    if (
+      new URL(url, 'http://localhost').pathname === '/vocs/similarity-preview' &&
+      init?.method === 'POST'
+    ) {
+      previewBodies.push(JSON.parse(String(init.body)));
+      return jsonResponse({ available: true, items: [] });
+    }
     if (url.includes('/vocs') && init?.method === 'POST') {
       postBodies.push(JSON.parse(String(init.body)));
       if (!postVocsResponse) return jsonResponse({}, 500);
@@ -219,7 +227,7 @@ function installFetch(
     }
     return new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
-  return { postBodies };
+  return { postBodies, previewBodies };
 }
 
 // ── Test suite ────────────────────────────────────────────────────────────────

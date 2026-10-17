@@ -22,6 +22,11 @@ workspace before enqueueing jobs.
 | `permission_request.decided` | `permissions/decision-service.ts` `decide` | The requester, for `approve` (`approved`), and `reject` or the explicit `deny` (both `rejected`); `need_more_info` does not notify. |
 | `permission_grant.revoked` (ADR-0061) | `permissions/grant-admin-service.ts` `revokeGrant` | The grant's Actor; in-app and email, summary `권한이 취소되었습니다.` |
 
+ADR-0066 proposed requester edit/withdrawal/supplementation and requestless direct
+grants add no notification catalogue entries; direct grants must not fabricate
+`permission_request.decided`. Existing approval/reject/deny and grant-revocation
+notifications remain.
+
 No notification is created for Permission Request `need_more_info`, Task Request `self_approval_denied`, idempotent
 replays, no-op Task Request decisions that already have the target status,
 no-op VOC owner or severity updates, `low`/`medium`/null VOC severity changes,

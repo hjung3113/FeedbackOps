@@ -128,6 +128,32 @@ const routeCases: Array<{
   },
 ];
 
+it('keeps Survey detail list context, builder, and returnTo', () => {
+  expect(
+    validateSurveyDetailSearch({
+      builder: true,
+      returnTo: '/home',
+      managedSystem: ID,
+      'filter.analytics_area': 'unset',
+      status: 'open',
+      follow_up: 'needed',
+      selected: ID,
+    }),
+  ).toEqual({
+    builder: true,
+    returnTo: '/home',
+    managedSystem: ID,
+    'filter.analytics_area': 'unset',
+    status: 'open',
+    follow_up: 'needed',
+    selected: undefined,
+  });
+  expect(validateSurveyDetailSearch({ builder: false, returnTo: '/home?tab=dashboard' })).toEqual({
+    builder: false,
+    returnTo: '/home?tab=dashboard',
+  });
+});
+
 describe('route search validation', () => {
   it.each(routeCases)('$name drops invalid values and keeps valid search state', (routeCase) => {
     expect(routeCase.validateSearch(routeCase.raw)).toEqual(routeCase.expected);
@@ -169,4 +195,94 @@ describe('nav resolve task intents survive the tasks search schema', () => {
       expect(validateTasksSearch(intent.search)).toEqual(intent.search);
     },
   );
+});
+
+describe('ADR-0069 exact Area destinations', () => {
+  it.each([ID, 'unset'])('preserves %s on both strict list routes', (area) => {
+    expect(validateVocSearch({ view: 'inbox', 'filter.analytics_area': area })).toEqual({
+      view: 'inbox',
+      'filter.analytics_area': area,
+    });
+    expect(validateFindingsSearch({ 'filter.analytics_area': area, status: 'active' })).toEqual({
+      'filter.analytics_area': area,
+      status: 'active',
+    });
+  });
+  it('drops invalid Area and status without losing valid list context', () => {
+    expect(validateVocSearch({ view: 'inbox', 'filter.analytics_area': 'garbage' })).toEqual({
+      view: 'inbox',
+    });
+    expect(
+      validateFindingsSearch({
+        managedSystem: ID,
+        'filter.analytics_area': 'garbage',
+        status: 'draft',
+      }),
+    ).toEqual({ managedSystem: ID });
+  });
+});
+
+describe('Task and Survey report destination validation', () => {
+  it.each([ID, 'unset'])('keeps intersecting Task and Survey filters for %s', (area) => {
+    const task = {
+      view: 'backlog',
+      managedSystem: ID,
+      param: ID,
+      'filter.analytics_area': area,
+      status: 'doing',
+      status_group: 'in-flight',
+      overdue: true,
+      public_update: 'missing',
+      reporter_update: 'needed',
+    };
+    expect(validateTasksSearch(task)).toEqual(task);
+    const survey = {
+      managedSystem: ID,
+      selected: ID,
+      'filter.analytics_area': area,
+      status: 'open',
+      follow_up: 'needed',
+    };
+    expect(validateSurveysSearch(survey)).toEqual(survey);
+  });
+  it.each(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened'])(
+    'keeps Task status %s',
+    (status) => {
+      expect(validateTasksSearch({ status })).toEqual({ status });
+    },
+  );
+  it('drops invalid report filters while keeping scope and selection', () => {
+    expect(
+      validateTasksSearch({
+        view: 'my',
+        param: ID,
+        'filter.analytics_area': 'bad',
+        status: 'open',
+        status_group: 'all',
+        overdue: 'false',
+        public_update: 'yes',
+        reporter_update: 'all',
+      }),
+    ).toEqual({ view: 'my', param: ID });
+    expect(
+      validateSurveysSearch({
+        selected: ID,
+        'filter.analytics_area': 'bad',
+        status: 'closed',
+        follow_up: 'all',
+      }),
+    ).toEqual({ selected: ID });
+  });
+  it('accepts a hand-written overdue=true link after browser decoding', () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    expect(validateTasksSearch(router.options.parseSearch('?view=backlog&overdue=true'))).toEqual({
+      view: 'backlog',
+      overdue: true,
+    });
+    expect(
+      router.options.stringifySearch(
+        validateTasksSearch(router.options.parseSearch('?view=backlog&overdue=true')),
+      ),
+    ).toBe('?view=backlog&overdue=true');
+  });
 });

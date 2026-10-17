@@ -66,6 +66,12 @@ export const Route = createFileRoute('/_authed/voc-clusters/')({
 
 export function VocClusterListPage(): React.ReactElement {
   const [createOpen, setCreateOpen] = useState(false);
+  const [suggestionMode, setSuggestionMode] = useState(false);
+  const [preserveSuggestionSelection, setPreserveSuggestionSelection] = useState(false);
+  const changeSuggestionMode = React.useCallback((active: boolean, options?: { preserveSelection: boolean }) => {
+    setSuggestionMode(active);
+    setPreserveSuggestionSelection(options?.preserveSelection === true);
+  }, []);
   const search = useSearch({ strict: false }) as VocClustersSearch;
   const navigate = useNavigate({ from: '/voc-clusters/' });
   const selectedId = search.selected ?? null;
@@ -101,7 +107,7 @@ export function VocClusterListPage(): React.ReactElement {
   // deep link / Back is never overridden and closing does not re-open.
   const appliedDefaultRef = React.useRef(false);
   React.useEffect(() => {
-    if (!listQuery.isSuccess || appliedDefaultRef.current) return;
+    if (suggestionMode || preserveSuggestionSelection || !listQuery.isSuccess || appliedDefaultRef.current) return;
     appliedDefaultRef.current = true;
     if (selectedId === null) {
       const first = listQuery.data?.items[0];
@@ -113,7 +119,7 @@ export function VocClusterListPage(): React.ReactElement {
         });
       }
     }
-  }, [listQuery.data, listQuery.isSuccess, navigate, selectedId]);
+  }, [suggestionMode, preserveSuggestionSelection, listQuery.data, listQuery.isSuccess, navigate, selectedId]);
 
   return (
     <>
@@ -122,6 +128,7 @@ export function VocClusterListPage(): React.ReactElement {
         onSelect={selectCluster}
         onCloseDetail={closeDetail}
         defaultToFirst={false}
+        onSuggestionModeChange={changeSuggestionMode}
         managedSystemId={managedSystemId}
         toolbarActions={
           canCreate ? (

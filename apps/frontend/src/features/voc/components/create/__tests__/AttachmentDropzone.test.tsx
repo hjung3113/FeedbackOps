@@ -17,6 +17,7 @@ vi.mock('sonner', () => ({
 
 import { toast } from 'sonner';
 import { AttachmentDropzone } from '../AttachmentDropzone';
+import { ComposerAttachmentDropzone } from '../../detail/ComposerAttachmentDropzone';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
 
@@ -54,6 +55,18 @@ describe('<AttachmentDropzone> (C6 active upload)', () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it.each(['create', 'composer'] as const)('%s dropzone keeps Korean words together', (surface) => {
+    render(
+      surface === 'create' ? (
+        <AttachmentDropzone />
+      ) : (
+        <ComposerAttachmentDropzone testId="composer-dropzone" />
+      ),
+    );
+    expect(screen.getByText('파일을 드래그하거나 클릭해서 추가')).toHaveClass('break-keep');
+    expect(screen.getByText('최대 25MB · 다중 선택')).toHaveClass('break-keep');
   });
 
   it('renders dropzone with verbatim prototype copy', () => {

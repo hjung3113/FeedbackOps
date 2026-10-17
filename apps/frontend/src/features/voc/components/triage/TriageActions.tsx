@@ -3,7 +3,7 @@
  *
  * Prototype ref: screen-voc-create.jsx:572-584
  * Three buttons:
- *   1. "Triage 확정 & 다음 VOC" — primary, disabled when !dirty. Block-width.
+ *   1. "Triage 확정 & 다음 VOC" — primary, disabled when !canConfirm. Block-width.
  *   2. "Finding 만들기" — secondary, always enabled.
  *   3. "보류" — subtle, enabled only when postponement can apply.
  *
@@ -25,7 +25,8 @@ import { BookOpen, Check, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 
 export interface TriageActionsProps {
-  dirty: boolean;
+  /** A field changed, or the VOC is not triaged yet; the panel also folds in its lock. */
+  canConfirm: boolean;
   submitting: boolean;
   skipDisabledReason?: string | undefined;
   onConfirm: () => void;
@@ -34,14 +35,14 @@ export interface TriageActionsProps {
 }
 
 export function TriageActions({
-  dirty,
+  canConfirm,
   submitting,
   skipDisabledReason,
   onConfirm,
   onFinding,
   onSkip,
 }: TriageActionsProps): React.ReactElement {
-  const confirmDisabled = !dirty || submitting;
+  const confirmDisabled = !canConfirm || submitting;
 
   return (
     <div className="border-t border-border-subtle px-5 py-4 flex flex-col gap-2 bg-surface-detail shrink-0">

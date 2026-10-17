@@ -52,3 +52,22 @@ test.describe('/admin/settings visual harness', () => {
     });
   }
 });
+
+test('renders the available suggestion opt-in in the viewport', async ({ page }) => {
+  await installMockApi(page, { adminSettingsScenario: 'default', clusterSuggestions: 'empty' });
+  await page.goto('/admin/settings');
+  const section = page.getByTestId('cluster-suggestions-setting');
+  await expect(section).toBeVisible();
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    const section = document.querySelector('[data-testid="cluster-suggestions-setting"]');
+    // This lookup depends on PageShell's direct scroll-region child.
+    const scrollRoot = section
+      ?.closest('[data-shell="page"]')
+      ?.querySelector<HTMLElement>(':scope > .overflow-y-auto');
+    if (!scrollRoot) throw new Error('Settings scroll region missing');
+    scrollRoot.scrollTop = scrollRoot.scrollHeight;
+  });
+  await expect(section.getByText('사용 안 함', { exact: true })).toBeInViewport();
+  await expectVisual(page, section, 'admin-settings-cluster-suggestions.png');
+});

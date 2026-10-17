@@ -29,8 +29,9 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 
 ## Key files
 
-- `apps/frontend/src/routes/_authed/surveys/index.tsx` — Survey list and selected-detail composition.
-- `apps/frontend/src/routes/_authed/surveys/$surveyId.tsx` — Survey builder and detail route.
+- `apps/frontend/src/routes/_authed/surveys/index.tsx` — Survey list route adapter (search, selection, document title) over `SurveyListScreen`.
+- `apps/frontend/src/routes/_authed/surveys/$surveyId.tsx` — Survey builder and detail route; the non-builder branch uses `SurveyListScreen`.
+- `apps/frontend/src/features/surveys/components/list/SurveyListScreen.tsx` — shared Survey list composition (toolbar, filters, create, detail slot) for the index and detail routes.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.results.tsx` — Survey results presentation and outer metadata states.
 - `apps/frontend/src/features/surveys/hooks/useSurveyResultsController.ts` — metadata/results/Follow-up reads, capability readiness, denial persistence, safe content selection, and document title.
 - `apps/frontend/src/features/surveys/policy/resultsReadDenial.ts` — sticky denial key/default registration, denial merge, and results-read projection.
@@ -52,3 +53,20 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 ## Verification
 
 - Test builder route state, result summary CTAs, forbidden create-VOC affordances, hidden response summaries, and linked action pending/error states when touched.
+
+## Close-out contract (ADR-0067; implemented)
+
+- ADR-0067 preserves Survey-owned follow-up and personal disclosure boundaries (ADR-0055).
+  Per-response hiding/history is Survey-owned/personal-gated; non-holders get
+  safe Survey-level navigation/booleans, no opaque response-derived identity enumeration.
+  Derived Finding ownership comes from the destination command after source authorization.
+
+## Safe evidence projection (ADR-0064; Slice 53/54 implementation pending)
+
+Survey-derived Finding summaries contain metadata only; approved text comes from
+fresh authorized active highlight DTOs. Proposed/new #816 candidates expose
+approval selections under result cohort/per-question suppression without personal
+access or response IDs. No response URL reconstruction or new filters. Existing
+response-addressed Create Finding retains its personal gate; existing linked
+highlights keep their distinct source-read audience. Preserve result state and
+selected-Finding orchestration; backend owns permission truth and attachment writes.

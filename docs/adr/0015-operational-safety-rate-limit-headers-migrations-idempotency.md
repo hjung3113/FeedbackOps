@@ -4,6 +4,9 @@
 
 Accepted.
 
+Amended by [ADR-0064](0064-survey-provenance-read-boundary.md) (2026-10-13) on the decisions
+recorded in the dated amendment below; affected historical text is superseded.
+
 Four small but load-bearing decisions that the engineering skills and reviewers need a stable answer to. None of them is large enough to deserve a separate ADR; they share one document and one reopening discipline.
 
 ## Rate limit
@@ -33,6 +36,17 @@ Limit responses use the ADR-0012 envelope: `{ code: 'rate_limited.actor', messag
 Rate-limit decisions are **not** audited (volume; would drown the audit log). They are logged at `warn` level so spikes are still visible in the company log collector (per ADR-0013).
 
 Named per-route tiers are the `rateLimitConfig` object decorated on the app in `apps/backend/src/server.ts`. Pass the tier a plugin needs into that plugin's options, then set it on the one route with `config: { rateLimit: rateLimitConfig.<tier> }` (`apps/backend/src/modules/permissions/routes.ts` uses `sensitive`; `apps/backend/src/modules/attachments/routes.ts` uses `attachmentMutation`). The per-actor and per-IP defaults in the list above are the global plugin `max` in that same file, not keys on `rateLimitConfig`.
+
+### Self-approval enforcement consequence (#1180)
+
+The approve route retains its mutation tier. After loading and locking the stored
+Task Request on an idempotency miss, self-approval increments the same Postgres
+`(workspace_id:actor_id, sensitive)` bucket independently (60,000 ms, max 5).
+A second `app.rateLimit()` handler cannot enforce both tiers: the plugin marks a
+request as already checked. The independent increment persists across command
+rollback; a 429 precedes even denied-approval audit, propagates the standard
+envelope and Retry-After, and leaves no decision/notification/idempotency record.
+Successful idempotent replays do not execute or charge the sensitive command again.
 
 ## Security headers
 
@@ -154,3 +168,46 @@ lock pattern that closes it. Applies to `registerManagedSystem` (managed-systems
 ## Reopening
 
 Each section is independently reopenable. Tightening or relaxing rate limits, switching off CSP, adopting a different migration tool, or removing the idempotency table each warrants a new ADR. Adding new index types or new rate-limit tiers within the established structure is *not* a reopen.
+
+## Amended 2026-10-13 — Survey-derived legacy response caches (ADR-0064)
+
+ADR-0064 authorizes one targeted exception to verbatim historical replay during
+#739/#740 cutover: inventory cached Finding create/status/link responses and
+include nested Task source Finding summaries, and sanitize only confirmed
+Survey-derived generated copies to metadata-only
+summaries. Preserve Actor/key/request hash/response status, retention and exactly-once
+side effects; do not reset unrelated caches. New cached mutations contain safe
+metadata only; active excerpt text requires a fresh authorized read. This cache
+exception does not authorize rewriting independently authored Task/Task Request
+text or altering the Drizzle-generated migration/journal/snapshot discipline.
+
+## Amended 2026-10-13 — bounded paid preview (proposed/new)
+
+ADR-0068 requires a separate preview request-abuse bucket (10/minute/actor),
+not the read or VOC-submit mutation bucket. It additionally reserves actor
+2/minute·20/UTC day and workspace 10/minute·100/UTC day atomically in Postgres
+across all pods/roles. Budget storage failure fails closed before paid egress.
+These ceilings apply only to draft preview; rate-limit events remain logs, not
+domain audits.
+
+For `POST /vocs/similarity-preview`, a VOC-owned workspace/actor/UUIDv4-key
+ledger replaces verbatim response caching: claim and four budgets commit before
+one bounded provider call, then completion commits separately. No raw input or
+candidate IDs/titles are cached. Identical replay reauthorizes/requeries from a
+compatible vector retained at most ten minutes; tombstones last 24h. Unknown
+outcome/expiry never redispatches automatically. Changed text/MS conflicts;
+there is no exactly-once external-billing claim. This narrow exception leaves
+existing mutation idempotency contracts intact.
+
+## Amended 2026-10-16 — VOC replay after access loss (accepted MVP limit, #1196)
+
+Verbatim replay can return a cached VOC write envelope that carries fields the
+actor may no longer read: an operator writes, then loses `voc.read` and
+`voc.triage`, then resends the same request with the same key within the 24h
+TTL. The cache hit returns before the command re-authorizes. ADR-0004 (severity
+is not Reporter-visible) and the read-access matrix therefore hold only for
+fresh executions. The owner accepted this window for the MVP (2026-10-16). The
+post-MVP fix: on a cache hit, recheck current entitlement and redact or reject
+the cached VOC envelope without re-running writes or audits
+(`docs/design/14-post-mvp-backlog.md`).
+

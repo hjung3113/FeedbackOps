@@ -1,0 +1,1 @@
+ALTER TABLE "core"."workspace_settings" ADD COLUMN "coverage_thresholds" jsonb DEFAULT '{}'::jsonb NOT NULL;

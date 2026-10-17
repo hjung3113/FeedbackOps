@@ -9,6 +9,7 @@ export type {
   CountVocsQuery,
   VocCountReader,
   VocDetailReader,
+  VocAttachmentReader,
   VocDisplayIdReader,
   VocGroupedCountArgs,
   VocGroupedCountReader,
@@ -38,3 +39,13 @@ export {
 } from './embedding/enqueue.js';
 export { registerVocJobs, type VocJobDeps } from './jobs/index.js';
 export { selectVocForUpdate } from './repo.js';
+export { permissionVocSourceSummary } from './permission-source-projection.js';
+
+export { readVocEvidenceSources } from './evidence-projection.js';
+export {
+  vocRecoveryProjection,
+  vocRecoveryRepairScope,
+  releasedTaskVocRecoverySql,
+  releasedTaskUnresolvedVocPredicate,
+  readTaskRecoveryVocs,
+} from './recovery-read.js';

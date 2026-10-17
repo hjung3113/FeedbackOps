@@ -15,6 +15,7 @@ import {
 import { useRef, useState } from 'react';
 
 import type { AnalyticsAreaDto, UpdateAnalyticsAreaBody } from '../../../lib/api';
+import { ArchiveConfirmButton } from '../lib/ArchiveConfirmButton';
 import {
   useArchiveAnalyticsAreaMutation,
   useRegisterAnalyticsAreaMutation,
@@ -275,15 +276,12 @@ function EditForm({
         )}
         <DialogFooter className="justify-between">
           {target.archived_at === null ? (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => archiveMutation.mutate()}
+            <ArchiveConfirmButton
+              name={target.name}
               disabled={archiveMutation.isPending}
-              data-testid={`aa-archive-${target.slug}`}
-            >
-              보관
-            </Button>
+              onConfirm={() => archiveMutation.mutate()}
+              testId={`aa-archive-${target.slug}`}
+            />
           ) : (
             <span className="text-sm text-text-muted">이미 보관됨</span>
           )}

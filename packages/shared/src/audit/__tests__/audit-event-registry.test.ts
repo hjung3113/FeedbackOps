@@ -21,14 +21,19 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'permission_needs_more_info',
   'permission_denied',
   'permission_more_info_submitted',
+  'permission_request_updated',
+  'permission_request_cancelled',
   'permission_revoked',
   'permission_deny_revoked',
+  'permission_granted',
   'managed_system_registered',
   'managed_system_updated',
   'managed_system_archived',
   'analytics_area_registered',
   'analytics_area_updated',
   'analytics_area_archived',
+  'voc_no_follow_up_recorded',
+  'voc_no_follow_up_withdrawn',
   'voc_created',
   'voc_triage_committed',
   'voc_severity_set',
@@ -56,6 +61,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'evidence_highlight_added',
   'finding_status_changed',
   'finding_comment_created',
+  'finding_owner_assigned',
   'task_request_created_from_finding',
   'task_request_created_from_voc',
   'task_request_created_from_voc_cluster',
@@ -65,10 +71,12 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'task_request_self_approval_denied',
   'task_created_from_request',
   'task_linked_to_request',
+  'task_request_reviewer_assigned',
   'finding_task_linked',
   'task_status_changed',
   'task_comment_created',
   'task_milestone_assigned',
+  'task_responsibility_assigned',
   'milestone_created',
   'milestone_updated',
   'public_update_review_candidate_created',
@@ -91,12 +99,15 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'workspace_settings_updated',
   'voc_recommendation_dismissed',
   'voc_recommendation_confirmed',
+  'voc_cluster_suggestion_confirmed',
+  'voc_cluster_suggestion_discarded',
+  'voc_cluster_suggestion_restored',
 ] as const;
 
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(76);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(87);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

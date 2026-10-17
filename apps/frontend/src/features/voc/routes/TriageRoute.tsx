@@ -1,3 +1,4 @@
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 // TriageRoute — mounts <VocTriageScreen> inside the existing WorkbenchShell slot.
 //
 // Reads URL state (tab, managedSystem, selected) from the route search.
@@ -10,24 +11,22 @@
 // Decision D-1.2: Triage view does NOT read sort= from URL (server-pinned per #15).
 // Decision D-1.3: useVocList reused (not forked) — backend differentiates shape.
 //
-// REV-2 #9 + NEW-3: capability gate is now driven by the authoritative
-// /me/permissions/check?capability=voc.triage decision (via usePermissionCheck),
-// NOT by the role_level display label. Per docs/design/09-permission-access.md
-// ("frontend must not derive authorization from display labels"), a Developer
-// without scoped voc.triage capability must be blocked even though their
-// role_level is not 'user'. The gate also runs BEFORE the triage queue fetch
-// (enabled:false on the useVocList query) so a blocked actor never triggers
-// a queue query.
+// The point check gates a selected Managed System. At the default scope,
+// capability scope can admit scoped actors; the queue enforces read ∩ triage.
 
 import { fetchNavCounts } from '@/lib/api/nav';
+import { fetchCapabilityScope } from '@/lib/api/permissions';
+import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
+import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { NavCounts } from '@/lib/layout/AppSidebar';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
-import { PermissionBlockedPanel } from '@fops/ui';
+import { Button, PermissionBlockedPanel } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { ArrowRight, Plus } from 'lucide-react';
 import type * as React from 'react';
 import { useCallback, useState } from 'react';
 import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
@@ -39,6 +38,7 @@ interface TriageSearch {
   tab?: TriageTab;
   managedSystem?: string;
   selected?: string;
+  'filter.analytics_area'?: string;
 }
 
 const TRIAGE_TAB_COUNT_KEYS = {
@@ -73,15 +73,29 @@ export function TriageRoute(): React.ReactElement {
 
   // Active tab defaults to 'unassigned' when not set in URL
   const activeTab: TriageTab = (search.tab as TriageTab | undefined) ?? 'unassigned';
+  const area = search['filter.analytics_area'];
 
-  // REV-2 #9: authoritative capability check (server-decided). Runs in
-  // parallel with /me; the queue query stays disabled until the decision
-  // is 'approved'.
+  // A selected Managed System keeps its point-check gate.
   const capCheck = usePermissionCheck({
     capability: 'voc.triage',
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
-  const isApproved = capCheck.data?.state === 'approved';
+  const needsScope =
+    search.managedSystem === undefined &&
+    !capCheck.isPending &&
+    capCheck.data?.state !== 'approved';
+  const capabilityScope = useQuery({
+    queryKey: ['permission-scope', 'voc.triage'],
+    queryFn: ({ signal }) => fetchCapabilityScope('voc.triage', { signal }),
+    enabled: needsScope,
+    retry: false,
+  });
+  const scope = capabilityScope.data?.scope;
+  const isApproved =
+    capCheck.data?.state === 'approved' ||
+    (needsScope &&
+      !capabilityScope.isError &&
+      (scope?.kind === 'all' || (scope?.kind === 'scoped' && scope.managed_system_ids.length > 0)));
   const navCountsQuery = useQuery({
     queryKey: [...NAV_COUNTS_QUERY_KEY, search.managedSystem] as const,
     queryFn: ({ signal }) =>
@@ -100,27 +114,44 @@ export function TriageRoute(): React.ReactElement {
   // target as `selected`. Already-triaged VOCs are excluded by the queue
   // predicate, so the target must be pinned explicitly or the queue cannot show
   // it. Out-of-scope / unknown ids are dropped server-side.
-  const { data, isLoading, isSuccess, isFetching, isPlaceholderData, isError, refetch } =
+  const { data, isLoading, isSuccess, isFetching, isPlaceholderData, isError, error, refetch } =
     useVocList({
       view: 'triage',
       ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
       tab: activeTab,
+      ...(area !== undefined ? { filters: { 'filter.analytics_area': [area] } } : {}),
       ...(search.selected !== undefined ? { pinVocId: search.selected } : {}),
       enabled: isApproved,
     });
 
+  const queueDenied = isPermissionDenied(error);
   const items = data?.items ?? [];
   // #935: a failed queue read shows the load-error state only when there are
   // no rows to show — a failed background refetch over cached rows keeps
   // showing them (same rule as VocList).
   const queueError = isError && items.length === 0;
   const outOfScopeSummary = data?.out_of_scope_summary;
-  const navCounts = navCountsQuery.data?.counts;
+  // The nav-count endpoint ignores Analytics Area, so its numbers would not match a
+  // filtered queue: omit them (unknown-total presentation) until the filter is cleared.
+  const areaFiltered = area !== undefined;
+  const navCounts = areaFiltered ? undefined : navCountsQuery.data?.counts;
   const queueTotal = navCounts?.['voc.triage'];
   const tabCounts = triageTabCounts(navCounts);
-  const queueTotalUnavailableState = navCountsQuery.isPending ? 'loading' : 'unavailable';
+  const queueTotalUnavailableState =
+    navCountsQuery.isPending && !areaFiltered ? 'loading' : 'unavailable';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
+
+  function handleAreaChange(next: string | undefined): void {
+    // Selection and the #383 pin stay: only the queue's Area scope changes.
+    void navigate({
+      to: '/vocs',
+      search: (prev) => {
+        const { 'filter.analytics_area': _area, ...rest } = prev as Record<string, unknown>;
+        return next === undefined ? rest : { ...rest, 'filter.analytics_area': next };
+      },
+    });
+  }
 
   function handleTabChange(tab: TriageTab): void {
     // #922: changing tabs drops the #383 deep-link pin (selected) — a pinned
@@ -150,7 +181,7 @@ export function TriageRoute(): React.ReactElement {
 
   // ── Loading state ────────────────────────────────────────────────────────────
 
-  if (meLoading || capCheck.isPending) {
+  if (meLoading || capCheck.isPending || (needsScope && capabilityScope.isPending)) {
     return (
       <div className="flex items-center justify-center h-full">
         <span className="text-sm text-text-muted">불러오는 중…</span>
@@ -158,18 +189,63 @@ export function TriageRoute(): React.ReactElement {
     );
   }
 
-  // REV-2 #9: capability-driven gate. Any non-approved state (incl. blocked,
-  // request_access, pending, denied) renders PermissionBlockedPanel.
-  // capCheck.isError is also treated as blocked to avoid flashing the queue
-  // when the check failed.
-  if (!isApproved) {
+  // An authoritative queue denial wins over cached/retained rows and selection.
+  if (!isApproved || queueDenied) {
+    const state = queueDenied ? 'request_access' : mapToPanelState(capCheck.data?.state);
+    const requestable = queueDenied ? error.envelope.requestable_permission : undefined;
+    const capability = queueDenied ? requestable?.permission : 'voc.triage';
+    const managedSystemId = queueDenied ? requestable?.managed_system_id : search.managedSystem;
+    const missingRead = queueDenied && requestable?.permission === 'voc.read';
+    // #1170: `voc.read` is requestable only per Managed System. A queue denial
+    // without one means the actor holds triage across several Systems — the
+    // request dialog would submit a workspace-wide request the API rejects, so
+    // the panel stays non-requestable until a System is selected.
+    const readNeedsSystemSelection = missingRead && typeof managedSystemId !== 'string';
+    const panelState = readNeedsSystemSelection ? 'blocked_not_requestable' : state;
+    const reason = readNeedsSystemSelection
+      ? PERMISSION_BLOCKED_REASONS.vocTriageMissingReadSelectSystem
+      : missingRead
+        ? typeof requestable?.managed_system_id === 'string'
+          ? PERMISSION_BLOCKED_REASONS.vocTriageMissingReadManagedSystem
+          : PERMISSION_BLOCKED_REASONS.vocTriageMissingRead
+        : search.managedSystem !== undefined
+          ? PERMISSION_BLOCKED_REASONS.vocTriageManagedSystem
+          : PERMISSION_BLOCKED_REASONS.vocTriage;
     return (
-      <div className="flex items-center justify-center h-full p-6">
-        <PermissionBlockedPanel
-          state={mapToPanelState(capCheck.data?.state)}
-          category="Triage"
-          reason={PERMISSION_BLOCKED_REASONS.vocTriage}
-        />
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
+        <div className="flex items-center gap-2">
+          <Button asChild variant="secondary" size="sm" spacing="compact">
+            <Link to="/vocs" search={{ action: 'create' }}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {createLabel('VOC')}
+            </Link>
+          </Button>
+          {panelState === 'blocked_not_requestable' && (
+            <Button asChild variant="secondary" size="sm" spacing="compact">
+              <Link to="/vocs" search={{ view: 'my' }}>
+                {GLOSSARY.myVocs}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          )}
+        </div>
+        {panelState === 'request_access' && capability !== undefined ? (
+          <RequestAccessButton
+            capability={capability}
+            returnRouteIntent="/vocs?view=triage"
+            {...(typeof managedSystemId === 'string' ? { managedSystemId } : {})}
+            renderTrigger={(onRequestAccess) => (
+              <PermissionBlockedPanel
+                state={panelState}
+                category="Triage"
+                reason={reason}
+                onRequestAccess={onRequestAccess}
+              />
+            )}
+          />
+        ) : (
+          <PermissionBlockedPanel state={panelState} category="Triage" reason={reason} />
+        )}
       </div>
     );
   }
@@ -186,7 +262,10 @@ export function TriageRoute(): React.ReactElement {
       queuePending={isLoading}
       {...(queueError ? { queueError } : {})}
       onRetryQueue={handleRetryQueue}
-      queueContext={JSON.stringify([activeTab, search.managedSystem ?? null])}
+      queueContext={JSON.stringify([activeTab, search.managedSystem ?? null, area ?? null])}
+      {...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {})}
+      {...(area !== undefined ? { areaFilter: area } : {})}
+      onAreaChange={handleAreaChange}
       queueSettled={isSuccess && !isFetching && !isPlaceholderData}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}

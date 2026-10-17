@@ -1,3 +1,5 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
+import { cleanupResponsibilityFailures } from '../../../test-support/responsibility-fixtures.js';
 // POST /vocs blank required-field contract (#327).
 
 import { randomUUID } from 'node:crypto';
@@ -13,7 +15,7 @@ import { buildServer } from '../../../server.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
   if (!setCookie) return null;
@@ -80,12 +82,14 @@ describe.skipIf(!runIntegration)('POST /vocs blank required fields (#327)', () =
   let managedSystemId: string;
 
   async function cleanupProductTables(): Promise<void> {
+    await cleanupResponsibilityFailures(WORKSPACE_ID, 'it-voc-blank-fields');
     await dbHandle.pool.query(
       `delete from voc.vocs where primary_managed_system_id in (
         select id from core.managed_systems where slug = 'it-voc-blank-fields'
       )`,
     );
-    await dbHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      dbHandle,
       `delete from core.managed_systems where slug = 'it-voc-blank-fields'`,
     );
     await dbHandle.pool.query('delete from core.idempotency_keys');

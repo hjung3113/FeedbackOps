@@ -17,6 +17,7 @@ const {
   useSurveyResults,
   useSurveyReadGate,
   useSurveyManageGate,
+  useSurveyManageAnySystemGate,
   useSurveys,
   useOutcomeFollowUp,
 } = vi.hoisted(() => ({
@@ -31,6 +32,7 @@ const {
   useSurveyResults: vi.fn(),
   useSurveyReadGate: vi.fn(),
   useSurveyManageGate: vi.fn(),
+  useSurveyManageAnySystemGate: vi.fn(() => ({ canManage: false })),
   useSurveys: vi.fn(),
   useOutcomeFollowUp: vi.fn(
     (): {
@@ -60,6 +62,7 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => ({
 vi.mock('@/features/surveys/hooks/useOutcomeFollowUp', () => ({ useOutcomeFollowUp }));
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
   useSurveyManageGate,
+  useSurveyManageAnySystemGate,
   useSurveyReadGate,
 }));
 vi.mock('@/lib/api', async (importOriginal) => ({
@@ -134,6 +137,7 @@ describe('/surveys/:surveyId/results route', () => {
 
   function mockParentRoute() {
     useSurveyManageGate.mockReturnValue({ canManage: false, gateState: 'absent' });
+    useSurveyManageAnySystemGate.mockReturnValue({ canManage: false });
     useSurveys.mockReturnValue({ data: [survey], isLoading: false, error: null });
   }
 

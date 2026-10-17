@@ -5,6 +5,12 @@
 This file owns permission check order, audit event verbs, sensitive-capability rules, and permission-request decision mechanics.
 What the default user can do, and the capability matrix, live in docs/design/09-permission-access.md. Do not copy that matrix here.
 
+ADR-0066 (accepted 2026-10-13) adds proposed/new revision, withdrawal/edit,
+supported narrowing, selected risk detail, direct-grant and superseded-row behavior.
+#1080/#1081 implement requester revisions and selected reads; #1085 implements
+governed direct grants and superseded-row behavior. Runtime integration and release
+checks remain conductor-owned.
+
 ## Role Level And Capability
 
 Role Level controls authority; backend capability checks are authoritative.
@@ -36,8 +42,9 @@ Admin or Developer with `finding.manage` on the relevant Primary Managed
 System; User is denied.
 Slice 6 issue #136 extends Task Request creation to VOC and VOC Cluster sources
 without adding a new capability. `POST /vocs/:id/request-task` mirrors
-`POST /vocs/:id/create-finding`: source VOC readability plus `finding.manage`
-on the source Primary Managed System, with Admin bypass. `POST
+`POST /vocs/:id/create-finding`: source VOC read is permitted to its Reporter,
+otherwise requires a deny-first `voc.read` check for every role including Admin,
+plus the unchanged `finding.manage` gate on the source Primary Managed System. `POST
 /voc-clusters/:id/request-task` mirrors cluster create-finding authority:
 Admin or Developer with `finding.manage` on the cluster Primary Managed System.
 
@@ -92,6 +99,27 @@ returns `kind: all` only when there are no active Managed-System-scoped denies.
 When such denies exist, the scope is the workspace Managed System list minus
 the denied ids so its membership remains identical to point checks.
 
+VOC list/count/detail/conversation scope resolution uses the same capability rule
+as `GET /me/permissions/scope` and point checks, including explicit denies for
+Admin. `voc.read` and `voc.triage` are independent: Triage lists/counts use their
+intersection; effective summary visibility uses their union. A `voc.read` deny
+can leave summary visibility through `voc.triage`, but grants no conversation
+read. A `voc.triage` deny removes Internal Comments from both inline detail and
+conversation pages. Denying both scopes hides non-own detail/conversation with
+404; reporter-own read arms remain unchanged. Survey read scope honours denies
+(`unless_denied`); Finding read/manage keeps its intentional `always` bypass.
+
+At All Systems (전체 Managed System), Triage eligibility may come from a non-empty
+`voc.triage` capability scope when the workspace point check is not approved.
+The queue remains authoritative for `voc.read` ∩ `voc.triage`; an authorization
+failure replaces even cached rows/detail with the request-access blocked panel.
+Selecting a Managed System keeps the point-check gate; navigation counts follow
+the same eligibility gate. The frontend does not compute the intersection. When
+that intersection is empty, or a selected System is inside triage but outside
+read, the queue's requestable permission is `voc.read` (that System, or null
+with no selection) rather than another `voc.triage` grant. A selection that
+lacks triage still requests `voc.triage`.
+
 Managed System is the MVP authorization boundary below workspace Admin. Sibling
 Managed Systems and Analytics Area are not grant sources. See the 09 Capability
 Matrix notes.
@@ -101,7 +129,7 @@ Permission scope shape:
 ```text
 workspace_id required
 managed_system_id optional for Admin, required for Developer-scoped grants
-object_type/object_id optional
+object_type/object_id are historical storage fields; single-object authorization is post-MVP (ADR-0066)
 ```
 
 Admin grants may omit managed_system_id when the capability is workspace-level.
@@ -109,10 +137,14 @@ Developer grants must include managed_system_id for scoped VOC triage,
 Findings, Task Requests, Tasks, Surveys, Dashboard queues, Public Updates, and
 Internal Comments. Analytics Area filters may narrow a list query but must not be
 used as the source of authorization.
-Assignment to an owner or reviewer that lacks the
-required Managed System permission must fail validation or enter the permission
-request flow. Resolution order: docs/design/09-permission-access.md,
-Default Owner / Reviewer Resolution.
+ADR-0067 supersedes the earlier unconditional assignment-failure rule. An invalid
+explicit responsibility target returns `validation.failed`; an absent/invalid automatic
+candidate falls through to the next rule and ultimately the existing scoped queue with
+null fields and an Admin warning. Concrete Actors must pass the destination gate with
+its current Admin-bypass/explicit-deny semantics inside the transaction. Active same-workspace
+team responsibility grants no permission or self-approval and chooses no member.
+Resolution order: docs/design/09-permission-access.md, Default Owner / Reviewer Resolution.
+Survey operator validation remains separate and unchanged.
 
 For list filters, managed_system_id=all means the actor's effective Managed
 System scope union. Workspace Admin can receive true workspace-wide results.
@@ -137,9 +169,10 @@ survey.export
 
 Every other capability is non-sensitive and needs no reason beyond the route's `min(1)`.
 
-Scoped Developer permission requests should include a requested expiration. If
-the requester omits one, the API applies a default expiration such as 30 days.
-Admins may approve a longer or permanent grant when policy allows. Workspace
+Requester expiration is optional, with no automatic default (ADR-0044, confirmed
+by ADR-0066). Any supplied/resolved non-null expiry must be future in create,
+edit, supplement, approve, and direct grant. Admins may override grant expiration
+without overwriting requested expiration. Workspace
 Admin-level grants should not be offered through ordinary blocked-action request
 flows in MVP; they require an explicit Admin governance path.
 
@@ -159,12 +192,16 @@ review request must include a reason and the approval audit event records
 ```text
 pending
 -> needs_more_info -> pending
--> approved | rejected | expired | revoked
+-> approved | rejected | expired | revoked | cancelled
 ```
 
 `needs_more_info` keeps the same Permission Request identity. Requester
 supplementation moves the same request back to `pending`; it must not create a
 new request for the same source object, source action, and requested scope.
+ADR-0066 adds requester-only same-ID pending edit and withdrawal from either open
+status to cancelled. Each successful mutation advances proposed revision/updated_at;
+wrong status or revision returns conflict.stale_write after authorization. Withdrawal
+retains history, frees open uniqueness, and writes no grant/deny/domain action.
 
 Permission requests may originate from blocked linked objects, blocked
 `next_actions`, or explicit Admin request flows. Requests created from blocked
@@ -194,7 +231,7 @@ decision actions.
 The admin review queue is read via `GET /permissions/requests` (the legacy
 `GET /permission-requests` remains compatible), which returns the workspace's
 open (`pending` | `needs_more_info`) requests and a `count` by default. Admins
-may request `?status=pending|needs_more_info|approved|rejected|all` to review
+may request `?status=pending|needs_more_info|approved|rejected|cancelled|all` to review
 decided rows. The endpoint is gated by `workspace.admin`; a non-admin caller
 receives `permission.denied` (`403`). The caller-scoped variant
 `GET /permission-requests/mine` requires only a session (an Actor may always
@@ -222,14 +259,19 @@ administrator endpoints all require `workspace.admin`, lock the request row,
 and write the request change plus its audit row in one transaction:
 
 ```text
-POST /permissions/requests/:id/approve         { reason?: string, expiration?: string | null }
-POST /permissions/requests/:id/reject          { reason: string }
-POST /permissions/requests/:id/need-more-info  { note: string }
-POST /permissions/requests/:id/deny            { reason: string }
+POST /permissions/requests/:id/approve         { expected_revision, reason?, expiration?, granted_managed_system_id?, self_approval? }
+POST /permissions/requests/:id/reject          { expected_revision, reason: string }
+POST /permissions/requests/:id/need-more-info  { expected_revision, note: string }
+POST /permissions/requests/:id/deny            { expected_revision, reason: string }
 ```
 
-- Approve copies the requested capability and Managed System scope into a real
-  `permission_grants` row, then sets the request to `approved`. It never
+- Approve grants the requested capability with the same or a supported narrower
+  scope through the shared Permission grant command, then sets the request to
+  `approved`. ADR-0066 reopens and supersedes the earlier copy-scope-only rule:
+  workspace may narrow to one server-valid Managed System; system cannot widen
+  or move to a sibling, and workspace-only authority cannot become system scope.
+  The response/audit distinguish requested and granted scope/expiry without
+  overwriting requested fields. Unsupported legacy object approval is 422. It never
   auto-runs the blocked action. The grant's expiration is the requested
   expiration unless the approver changes it (`expiration`: a future datetime
   overrides it, `null` clears it, omitted keeps it; a past datetime is
@@ -245,13 +287,19 @@ POST /permissions/requests/:id/deny            { reason: string }
   Approve requires one only for `isSensitiveCapability`; it is optional for a
   non-sensitive capability. Missing decision reason/note is a `validation.*`
   response (`422`), including `validation.sensitive_reason_required` for a
-  sensitive approval. Reviewers cannot alter requested scope or expiry.
+  sensitive approval. Reviewers may alter granted scope/expiry within ADR-0066,
+  but never overwrite the requested values. All resolved non-null expirations
+  must be future, including an unchanged requested expiry.
 - Unknown request IDs are `not_found.record` (`404`); non-decidable requests
   are `conflict.stale_write` (`409`). Duplicate active grants/denies are
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
+  All decisions require proposed expected_revision and advance revision. Compare
+  inside the idempotent run after row lock; authorization precedes replay, and
+  replay precedes revision/status checks. Return current_revision only after
+  authorization; no request data on owner/workspace lookup failure.
 
-### Self-approval policy (Permission Requests and self deny lifts)
+### Self-approval policy (Permission Requests, self deny lifts, and direct self grants)
 
 An Admin deciding their own Permission Request is a self-approval. The resolved
 workspace `permission_self_approval` setting defaults to `allowed`; in that
@@ -268,7 +316,10 @@ An Admin lifting an active deny on themself follows the same setting:
 `forbidden` returns `permission.denied` without changing the deny or writing an
 audit row, while `allowed` permits the lift and records `self_lift: true` in the
 audit detail. An Admin may revoke their own grant because that action only
-lowers privilege.
+lowers privilege. ADR-0066 extends the setting to direct self grants: forbidden
+returns permission.denied; allowed requires the same strict self_approval envelope
+and records self_grant: true plus the envelope. Another-Actor grant rejects that
+envelope. This is capability authority, not a Role Level promotion.
 
 The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) are aggregated in `packages/shared/src/enums/audit-events.ts`. The event literals and detail schemas are owned per domain in `packages/shared/src/audit/*.ts`.
 
@@ -313,7 +364,12 @@ role-derived capabilities.
 The permission check treats a revoked grant or an expired grant as requestable
 using the same workspace scope as `no_grant`. The state mapper returns
 `pending_request` when the Actor has an open request for that capability and
-otherwise returns `revoked` or `expired`, respectively. A revoke notification
+otherwise returns `revoked` or `expired`, respectively. `workspace.admin` is
+not ordinarily requestable (`isOrdinarilyRequestable`, the rule
+`validateSupportedScope` enforces), so its `no_grant`, `grant_expired` and
+`grant_revoked` denies carry `requestable: null` and, with no open request, the
+state is `blocked_non_requestable` instead of `request_access` / `expired` /
+`revoked`. A revoke notification
 goes to the grant's Actor; deny lift sends no notification. There is no migration
 or grant change for these commands.
 Domain responses treat `grant_revoked` and `grant_expired` like `no_grant`
@@ -386,3 +442,103 @@ revoked
 ```
 
 The backend decides which state applies.
+
+## Accepted close-out extensions (ADR-0066; implemented)
+
+The rules above incorporating revision, withdrawal and narrowing replace older
+scope-copy/default-expiration text. #1080 implements versioned requester
+mutations, supported-scope validation and narrowed Admin decisions; #1081 adds
+selected owner/Admin reads and explained risk; #1085 adds the governed direct
+grant and audited expired reissue; #1086 adds the direct-grant UI. The complete
+close-out implementation shipped in #1080–#1086.
+`api/permissions.md` owns exact bodies, reads, responses and errors.
+
+One Permission capability/scope policy supplies server candidates and validates
+create/edit/supplement/approval/direct grants inside transactions. Developer-scoped
+capabilities require an active Managed System; honor workspace Survey export per
+ADR-0033. No ordinary workspace.admin request; use explicit direct-grant governance.
+Reject non-null requested object scopes, preserve historical rows/source provenance,
+and inventory legacy object grants before release (ADR-0066 / post-MVP backlog).
+
+Recipient serialization uses an Auth-owned lock extension. Shared grant writer lock
+order is recipient Actor, request if relevant, workspace policy row, grant row.
+Request creation and scope-changing requester commands participate; the policy row
+is obtained through Workspace Settings' approved seam. Admin capability is checked
+before replay; a changed body under the same key conflicts. Audits and idempotency
+rows share the mutation transaction.
+
+Direct grant requires a reason for all capabilities and explicit workspace.admin
+form governance. Match open asks by recipient/capability/supported scope regardless
+of source, and refuse with a safe review destination; overlapping active denies
+require explicit lift, never silent removal. Workspace grants overlap any deny for
+that capability; system grants overlap workspace/same-system denies, not siblings.
+Preflight is advisory and all checks run again transactionally on submission.
+No Role Level change, automatic action, entity link, fake ask or decided notification.
+
+New expired reissue sets superseded_at on an expired exact-tuple predecessor and
+inserts a fresh ID. Preserve expiry/grantor/time/revoke fields. Keep the full COALESCE
+unique scope tuple and change only the predicate to revoked_at IS NULL AND
+superseded_at IS NULL; never now(). Checks, scope reads, active lists, revoke and
+seed existence checks exclude superseded grants. Audit failure restores both rows;
+expired/old-ID revoke stays conflict.permission_not_active.
+
+Permission computes four explained codes only for selected Admin detail:
+sensitive_capability, workspace_scope, no_expiration, active_deny (#1081).
+Effective access and Role Level are facts, not a role-jump score. Unknown/failure
+is retryable, not zero risk. Owner detail/mine omit risk and deny internals. Core
+owns the latest-question audit projection; source-owner gates/allowlists control
+safe summaries, including personal Survey data without an Admin bypass.
+
+Proposed strict audits (register in shared permission audit schemas and aggregator):
+- permission_request_cancelled: request subject; previous status, requester,
+  capability/scope, optional trimmed reason, previous/resulting revisions.
+- permission_request_updated: request subject; complete previous/resulting editable
+  reason/scope/expiry and revisions, capability/requester identity.
+- permission_granted: grant subject; actual recipient/capability/scope/reason/expiry,
+  grant ID, create/reissue mode, predecessor ID on reissue, self_grant/envelope when self.
+- Existing request mutation audits gain revisions; supplementation keeps pre/post
+  values. permission_approved keeps the request subject and gains requested/granted
+  scope, revisions, and predecessor ID when reissuing. Requestless grants do not
+  reuse request-decided notifications. Withdrawal emits no decided notification.
+
+## Safe Survey evidence reuse (ADR-0064; proposed/new #816 routes)
+
+A Survey result reader may browse approved safe excerpt candidates with
+`survey.read` and attach with `finding.manage` on the target Finding, without
+`survey.read_personal_responses`. Non-holders obey existing response cohort,
+per-question answer and low-bucket suppression on every page and on submit;
+personal holders retain their existing result exceptions, but the picker still
+omits response IDs. Source Survey and target Finding Managed Systems may differ
+inside one workspace; each gate is independent. Existing module-specific role,
+explicit-deny and non-disclosing source 404 rules remain in force; no new User
+Finding-read grant or Admin personal bypass is introduced.
+
+The response-addressed create-Finding command retains explicit personal access.
+Existing attached highlights retain their source-read audience, separately from
+result-picker suppression, and require exact active approval plus fresh target
+read/source access in one snapshot. Safe reads do not fabricate personal-read
+audits; actual personal-data reads keep existing per-row audits. Raw audit SELECT
+is revoked at #740 cutover without deleting Actor/detail history (ADR-0008).
+Endpoint authority: `api/surveys.md` and `api/findings.md`.
+
+## Cluster suggestions and paid preview (ADR-0068; BE shipped #1097/#1099)
+
+Suggestion list/read: elevated `finding.read` on the pair's MS **and both VOCs**
+readable through VOC's canonical scope-or-reporter rule. Suggestion mutations:
+elevated `finding.manage` and both VOC reads; evaluate permission before replay.
+No new capability or role bypass, and no partial pair/count leakage. Restore
+additionally requires the original discard actor within five server minutes.
+Owner settings remain `workspace.admin`. Paid preview needs only VOC create's
+session/workspace authority, grants no candidate authority, and includes Admin
+in paid budgets. Fresh candidate visibility is checked after egress/on replay.
+
+Shared human event schemas registered by #1096 are `voc_cluster_suggestion_confirmed`,
+`voc_cluster_suggestion_discarded`, `voc_cluster_suggestion_restored`, subject
+`voc_cluster_suggestion/<UUID>`. The shared event registry/barrel exports all three
+strict detail schemas; audit subjects remain strings (no new Core subject enum).
+Human command producers ship in ADR item 2 (#1097). Confirm also emits
+existing human Cluster create/member/update events in the same transaction;
+no-op/replay writes no second event. Details contain pair/MS/revision/version/
+hashes/score/cut and resulting Cluster reference, never prose/titles. Automatic
+suggestion generation and read-only paid preview emit operational logs, no
+`system.` event or domain audit. No new system actor is needed.

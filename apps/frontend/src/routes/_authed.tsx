@@ -113,7 +113,6 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       parentId: 'triage',
       icon: <User className="h-4 w-4" />,
       countKey: 'voc.tab.unassigned',
-      urgent: true,
     },
     {
       id: 'no-link',
@@ -174,6 +173,13 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       icon: <Activity className="h-4 w-4" />,
     },
     { id: 'integration-findings', label: 'Findings', href: '/findings', section: '연동', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
+    {
+      id: 'integration-evidence',
+      label: 'Evidence',
+      href: '/integration/evidence',
+      section: '연동',
+      icon: <FileBarChart className="h-4 w-4" />,
+    },
     { id: 'integration-links', label: GLOSSARY.entityLinks, href: '/integration/links', section: '연동', icon: <Link2 className="h-4 w-4" /> },
     { id: 'integration-coverage', label: GLOSSARY.coverage, href: '/integration/coverage', section: '연동', icon: <Layers className="h-4 w-4" /> },
   ],
@@ -247,6 +253,13 @@ export function isSidebarEntryActive(
   if (entry.id === 'surveys-participate') return participationPath;
   if (entry.id === 'surveys') {
     return (pathname === '/surveys' || pathname.startsWith('/surveys/')) && !participationPath;
+  }
+  // #1179: the backlog list highlights the same Tasks entry as the board view.
+  if (entry.id === 'tasks-board') {
+    return (
+      pathname === '/tasks' &&
+      ['board', 'backlog'].includes(new URLSearchParams(searchStr).get('view') ?? '')
+    );
   }
 
   const [entryPath = '', entrySearch] = entry.href.split('?');
@@ -385,9 +398,21 @@ function AuthedShell() {
   const entries = React.useMemo(
     () =>
       activeDomain === 'home'
-        ? homeSidebarEntries(homeSummary.data, location.pathname === '/home', openCommandPalette)
+        ? homeSidebarEntries(
+            homeSummary.data,
+            location.pathname === '/home',
+            openCommandPalette,
+            managedSystemId,
+          )
         : getSidebarEntryStates(NAV_TREE[activeDomain], location.pathname, location.searchStr),
-    [activeDomain, homeSummary.data, location.pathname, location.searchStr, openCommandPalette],
+    [
+      activeDomain,
+      homeSummary.data,
+      location.pathname,
+      location.searchStr,
+      openCommandPalette,
+      managedSystemId,
+    ],
   );
   const changeManagedSystem = React.useCallback(
     (managedSystemId: string | undefined) => {
@@ -396,9 +421,22 @@ function AuthedShell() {
         to: location.pathname as never,
         search: (previous: Record<string, unknown>) => {
           const { managedSystem: _managedSystem, ...remaining } = previous;
+          const { 'filter.analytics_area': area, ...withoutArea } = remaining;
+          const areaSearch =
+            managedSystemId !== undefined && area !== 'unset' ? withoutArea : remaining;
+          // Evidence/recovery/report cursors are bound to scope; retain readable selection.
+          const { cursor: _cursor, ...withoutCursor } = areaSearch;
+          const scopedSearch = [
+            '/integration/evidence',
+            '/integration/coverage',
+            '/integration',
+            '/home',
+          ].includes(location.pathname)
+            ? withoutCursor
+            : areaSearch;
           return managedSystemId === undefined
-            ? remaining
-            : { ...remaining, managedSystem: managedSystemId };
+            ? scopedSearch
+            : { ...scopedSearch, managedSystem: managedSystemId };
         },
       } as never);
     },

@@ -1,5 +1,6 @@
 import { type ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { CreateTaskRequestFromVocRequest, TaskRequestDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -25,6 +26,7 @@ export function useRequestTaskFromVoc(
       return res.data;
     },
     onSuccess: (data) => {
+      void invalidateRecovery(queryClient);
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['voc', vocId] });
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });

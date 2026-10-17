@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Integration tests for Slice 1 #3. Same skip-pattern as
 // `db/__tests__/role-grants.integration.test.ts` — the suite runs only when
 // the dev Postgres is up with both roles, the workspace seed in place, and
@@ -180,7 +181,9 @@ describe.skipIf(!runIntegration)('Slice 1 #3 auth integration', () => {
     // Cleanup: revoke the planted session and drop the foreign workspace so
     // FK constraints stay clean for the next test run.
     await dbHandle.pool.query('delete from core.sessions where id = $1', [cookie]);
-    await dbHandle.pool.query('delete from core.workspaces where id = $1', [foreignWorkspace]);
+    await deleteRecoveryFixtureParents(dbHandle, 'delete from core.workspaces where id = $1', [
+      foreignWorkspace,
+    ]);
   });
 
   // F-007: loadAndTouch must be atomic so a concurrent revoke wins over a

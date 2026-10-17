@@ -17,17 +17,16 @@ export interface RevokePermissionArgs {
   idempotencyKey: string;
 }
 
-export function useRevokePermission(): UseMutationResult<
-  RevokePermissionResult,
-  ApiError,
-  RevokePermissionArgs
-> {
+export function useRevokePermission(
+  onGrantRevoked?: (id: string) => void,
+): UseMutationResult<RevokePermissionResult, ApiError, RevokePermissionArgs> {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ kind, id, reason, idempotencyKey }: RevokePermissionArgs) =>
       revokePermission(kind, id, reason, idempotencyKey),
     onSuccess: async (_result, args) => {
+      if (args.kind === 'grants') onGrantRevoked?.(args.id);
       toast.success(
         args.kind === 'grants'
           ? ADMIN_PERMISSIONS_COPY.revokeSuccess
@@ -38,9 +37,10 @@ export function useRevokePermission(): UseMutationResult<
         queryClient.invalidateQueries({ queryKey: permissionDeniesListKey }),
       ]);
     },
-    onError: async (error: ApiError) => {
+    onError: async (error: ApiError, args) => {
       toast.error(errorMapper(error.envelope).message);
       if (error.code === 'conflict.permission_not_active' || error.code === 'not_found.record') {
+        if (args.kind === 'grants') onGrantRevoked?.(args.id);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: permissionGrantsListKey }),
           queryClient.invalidateQueries({ queryKey: permissionDeniesListKey }),

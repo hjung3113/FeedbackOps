@@ -53,6 +53,8 @@ describe('AppFrame managed-system scope', () => {
           items: [managedSystem(MS_ONE, 'Identity'), managedSystem(MS_TWO, 'Finance')],
           total: 2,
         });
+      if (url === '/me/permissions/scope?capability=voc.read')
+        return json({ scope: { kind: 'all' } });
       if (url.startsWith('/nav/counts')) return json({ counts: { 'voc.inbox': 0 } });
       throw new Error(`unexpected request ${url}`);
     });
@@ -95,6 +97,8 @@ describe('AppFrame managed-system scope', () => {
         });
       if (url === '/managed-systems')
         return json({ items: [managedSystem(MS_ONE, 'Identity')], total: 1 });
+      if (url === '/me/permissions/scope?capability=voc.read')
+        return json({ scope: { kind: 'all' } });
       if (url.startsWith('/nav/counts')) return json({ counts: {} });
       throw new Error(`unexpected request ${url}`);
     });
@@ -279,6 +283,72 @@ describe('AppFrame managed-system scope', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it.each([
+    ['scoped', { kind: 'scoped', managed_system_ids: [MS_TWO] }, 2, '내 담당 1 / 3'],
+    ['all', { kind: 'all' }, 0, '워크스페이스 전체'],
+  ] as const)(
+    'uses the returned voc.read scope for Admins: %s',
+    async (_name, scope, deniedCount, expectedAllScopeLabel) => {
+      const requestedUrls: string[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === '/me')
+          return json({
+            actor: {
+              id: 'admin',
+              external_id: 'admin',
+              email: 'admin@test',
+              display_name: 'Admin',
+              role_level: 'admin',
+            },
+            workspace_id: 'workspace',
+          });
+        if (url === '/me/permissions/check?capability=workspace.admin')
+          return json({ state: 'approved', decision: { allow: true } });
+        if (url === '/me/permissions/scope?capability=voc.read') return json({ scope });
+        if (url === '/managed-systems')
+          return json({
+            items: [
+              managedSystem(MS_ONE, 'Identity'),
+              managedSystem(MS_TWO, 'Finance'),
+              managedSystem(MS_THREE, 'Sales'),
+            ],
+            total: 3,
+          });
+        if (url.startsWith('/nav/counts')) return json({ counts: {} });
+        if (url === '/saved-views?surface=voc') return json({ items: [] });
+        throw new Error(`unexpected request ${url}`);
+      });
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      try {
+        render(
+          <QueryClientProvider client={client}>
+            <AppFrame activeDomain="voc" sidebarEntries={[]}>
+              content
+            </AppFrame>
+          </QueryClientProvider>,
+        );
+
+        await waitFor(() =>
+          expect(
+            requestedUrls.filter((url) => url === '/me/permissions/scope?capability=voc.read'),
+          ).toHaveLength(1),
+        );
+        fireEvent.click(screen.getByTestId('scope-selector'));
+        expect(await screen.findByTestId('scope-option-all')).toHaveTextContent(
+          expectedAllScopeLabel,
+        );
+        expect(screen.queryAllByLabelText('범위 밖')).toHaveLength(deniedCount);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 });
 
 describe('AppFrame capability navigation', () => {
@@ -363,7 +433,9 @@ describe('AppFrame capability navigation', () => {
           ]) {
             expect(screen.getByTestId(`sidebar-nav-${id}`)).toBeInTheDocument();
           }
-          expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
+          const settingsLinks = screen.getAllByRole('link', { name: '워크스페이스 설정' });
+          expect(settingsLinks).toHaveLength(1);
+          expect(settingsLinks[0]).toHaveAttribute('href', '/admin/settings');
         } else {
           expect(screen.queryByRole('link', { name: '관리자' })).not.toBeInTheDocument();
           expect(screen.queryByTestId('sidebar-section-admin')).not.toBeInTheDocument();
@@ -376,7 +448,7 @@ describe('AppFrame capability navigation', () => {
           ]) {
             expect(screen.queryByTestId(`sidebar-nav-${id}`)).not.toBeInTheDocument();
           }
-          expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();
+          expect(screen.queryByRole('link', { name: '워크스페이스 설정' })).not.toBeInTheDocument();
         }
       } finally {
         unmount();
@@ -404,6 +476,8 @@ describe('AppFrame capability navigation', () => {
         return new Promise<Response>((resolve) => {
           resolveAdminCheck = resolve;
         });
+      if (url === '/me/permissions/scope?capability=voc.read')
+        return json({ scope: { kind: 'all' } });
       if (url === '/managed-systems') return json({ items: [], total: 0 });
       if (url.startsWith('/nav/counts')) return json({ counts: {} });
       if (url.startsWith('/saved-views')) return json({ items: [] });
@@ -426,7 +500,7 @@ describe('AppFrame capability navigation', () => {
       await waitFor(() => expect(resolveAdminCheck).toBeTypeOf('function'));
       expect(screen.queryByTestId('rail-admin')).not.toBeInTheDocument();
       expect(screen.queryByTestId('sidebar-nav-admin-ms')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('sidebar-nav-admin-settings')).not.toBeInTheDocument();
 
       await act(async () => {
         resolveAdminCheck?.(json({ state: 'approved', decision: { allow: true } }));
@@ -434,7 +508,8 @@ describe('AppFrame capability navigation', () => {
 
       expect(await screen.findByTestId('rail-admin')).toBeInTheDocument();
       expect(screen.getByTestId('sidebar-nav-admin-ms')).toBeInTheDocument();
-      expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-nav-admin-settings')).toBeInTheDocument();
+      expect(screen.getAllByRole('link', { name: '워크스페이스 설정' })).toHaveLength(1);
     } finally {
       unmount();
       globalThis.fetch = originalFetch;
@@ -462,6 +537,8 @@ describe('AppFrame saved-view surface scoping (#870)', () => {
             workspace_id: 'workspace',
           });
         if (url === '/managed-systems') return json({ items: [], total: 0 });
+        if (url === '/me/permissions/scope?capability=voc.read')
+          return json({ scope: { kind: 'all' } });
         if (url.startsWith('/nav/counts')) return json({ counts: {} });
         // A VOC view exists server-side; only the surface-scoped request may see it.
         if (url === '/saved-views?surface=voc')

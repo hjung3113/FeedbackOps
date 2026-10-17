@@ -1,3 +1,4 @@
+import type { ManagedSystemDefaultDiagnostics } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -57,7 +58,20 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function installFetch() {
+function installFetch(
+  options: {
+    diagnosticsError?: boolean;
+    diagnostics?: ManagedSystemDefaultDiagnostics['items'];
+    mutationError?: boolean;
+    reviewerTeam?: boolean;
+    fieldError?: 'owner' | 'reviewer';
+    revokedActor?: boolean;
+    candidateError?: boolean;
+    ownerOnly?: boolean;
+    sameName?: boolean;
+  } = {},
+) {
+  let saved = false;
   const captured: CapturedRequest[] = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost');
@@ -68,14 +82,72 @@ function installFetch() {
         pathname: url.pathname,
         body: init?.body ? JSON.parse(String(init.body)) : {},
       });
+      if (options.fieldError)
+        return response(
+          {
+            code: 'validation.failed',
+            message: 'invalid',
+            detail: {
+              fields: [
+                { path: [`default_${options.fieldError}_actor_id`], code: 'ineligible_actor' },
+              ],
+            },
+          },
+          422,
+        );
+      if (options.mutationError)
+        return response(
+          { code: 'validation.failed', message: '검토자 배정에 필요한 권한이 없습니다.' },
+          422,
+        );
+      saved = true;
       return response({});
     }
     if (url.pathname === '/me/permissions/check') {
       return response({ state: 'approved', decision: { allow: true } });
     }
-    if (url.pathname === '/managed-systems') return response({ items: systems, total: 2 });
+    if (url.pathname === '/managed-systems/default-diagnostics') {
+      if (options.diagnosticsError)
+        return response({ code: 'permission.denied', message: 'denied' }, 403);
+      return response({
+        items: saved
+          ? []
+          : (options.diagnostics ?? [
+              {
+                managed_system_id: TEAM_OWNER_SYSTEM_ID,
+                workflow: 'task_request',
+                responsibility: 'reviewer',
+                rule: 'managed_system_reviewer',
+                category: 'ineligible_actor',
+                origin: 'creation_failure',
+                count: 2,
+                last_failed_at: '2026-10-13T00:00:00.000Z',
+              },
+            ]),
+      });
+    }
+    if (url.pathname === '/managed-systems')
+      return response({
+        items: systems.map((system) => ({
+          ...system,
+          ...(options.sameName ? { name: 'Team Owned System' } : {}),
+          default_reviewer_actor_id: options.revokedActor ? ACTOR_ID : null,
+          default_reviewer_team_id: options.reviewerTeam ? TEAM_ID : null,
+        })),
+        total: 2,
+      });
     if (url.pathname === '/analytics-areas') return response({ items: [], total: 0 });
     if (url.pathname === '/permissions/requests') return response({ requests: [], count: 0 });
+    if (url.pathname === '/managed-systems/default-candidates') {
+      if (options.candidateError)
+        return response({ code: 'permission.denied', message: 'denied' }, 403);
+      return response({
+        owners: [{ id: ACTOR_ID, display_name: ACTOR_NAME, eligible: true }],
+        reviewers: options.ownerOnly
+          ? []
+          : [{ id: ACTOR_ID, display_name: ACTOR_NAME, eligible: !options.revokedActor }],
+      });
+    }
     if (url.pathname === '/actors') {
       return response({
         actors: [
@@ -223,5 +295,269 @@ describe('Managed System default owner', () => {
       await Promise.resolve();
     });
     expect(document.body).not.toHaveTextContent(ACTOR_EMAIL);
+  });
+
+  test('56-D reviewer registration is independent of owner and preserves email privacy', async () => {
+    const captured = installFetch();
+    renderPage();
+    await openRegister();
+    expect(screen.getByLabelText('기본 검토자 (선택)')).toHaveTextContent('(미지정)');
+    await chooseActor('create-default-reviewer');
+    expect(document.body).not.toHaveTextContent(ACTOR_EMAIL);
+    fireEvent.submit(screen.getByTestId('create-managed-system-form'));
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]?.body).toEqual({
+      slug: 'owner-fixture',
+      name: 'Owner Fixture System',
+      default_reviewer_actor_id: ACTOR_ID,
+    });
+  });
+
+  test('56-D omitted reviewer registration sends neither reviewer key', async () => {
+    const captured = installFetch();
+    renderPage();
+    await openRegister();
+    fireEvent.submit(screen.getByTestId('create-managed-system-form'));
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]?.body).not.toHaveProperty('default_reviewer_actor_id');
+    expect(captured[0]?.body).not.toHaveProperty('default_reviewer_team_id');
+  });
+
+  test('56-D reviewer PATCH clears the other target while preserving owner', async () => {
+    const captured = installFetch();
+    renderPage();
+    fireEvent.click(await screen.findByTestId('ms-configure-team-owned'));
+    await chooseActor('edit-default-reviewer-team-owned');
+    fireEvent.submit(screen.getByTestId('edit-managed-system-form-team-owned'));
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]?.body).toEqual({
+      default_reviewer_actor_id: ACTOR_ID,
+      default_reviewer_team_id: null,
+    });
+  });
+
+  test('56-D known reviewer team can be cleared without changing owner', async () => {
+    const captured = installFetch({ reviewerTeam: true });
+    renderPage();
+    fireEvent.click(await screen.findByTestId('ms-configure-team-owned'));
+    const selector = screen.getByTestId('edit-default-reviewer-team-owned');
+    await waitFor(() => expect(selector).toHaveTextContent('Platform Team Fixture'));
+    fireEvent.click(selector);
+    fireEvent.click(await screen.findByRole('option', { name: '(미지정)' }));
+    fireEvent.submit(screen.getByTestId('edit-managed-system-form-team-owned'));
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]?.body).toEqual({
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
+    });
+  });
+
+  test('56-D warnings refetch after reviewer edit instead of retaining stale failure', async () => {
+    installFetch();
+    renderPage();
+    expect(await screen.findByText('배정에 필요한 권한이 없습니다.')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ms-configure-team-owned'));
+    await chooseActor('edit-default-reviewer-team-owned');
+    fireEvent.submit(screen.getByTestId('edit-managed-system-form-team-owned'));
+    await waitFor(() =>
+      expect(screen.queryByText('배정에 필요한 권한이 없습니다.')).not.toBeInTheDocument(),
+    );
+  });
+
+  test('56-D diagnostics denial is visible and retryable, never shown as healthy', async () => {
+    installFetch({ diagnosticsError: true });
+    renderPage();
+    expect(await screen.findByText('설정 경고를 확인하지 못했습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+  });
+
+  test('56-D reviewer rejection preserves selection and shows server error', async () => {
+    installFetch({ mutationError: true });
+    renderPage();
+    await openRegister();
+    await chooseActor('create-default-reviewer');
+    fireEvent.submit(screen.getByTestId('create-managed-system-form'));
+    expect(await screen.findByTestId('create-error')).toHaveTextContent(
+      '입력값이 올바르지 않습니다.',
+    );
+    expect(screen.getByTestId('create-default-reviewer')).toHaveTextContent(ACTOR_NAME);
+  });
+  test.each([
+    { kind: 'owner', edit: false },
+    { kind: 'reviewer', edit: false },
+    { kind: 'owner', edit: true },
+    { kind: 'reviewer', edit: true },
+  ] as const)(
+    'FIX1 $kind server field error is associated with the picker (edit=$edit)',
+    async ({ kind, edit }) => {
+      installFetch({ fieldError: kind });
+      renderPage();
+      if (edit) fireEvent.click(await screen.findByTestId('ms-configure-team-owned'));
+      else await openRegister();
+      const testId = edit ? `edit-default-${kind}-team-owned` : `create-default-${kind}`;
+      await chooseActor(testId);
+      fireEvent.submit(
+        screen.getByTestId(
+          edit ? 'edit-managed-system-form-team-owned' : 'create-managed-system-form',
+        ),
+      );
+      const picker = screen.getByTestId(testId);
+      await waitFor(() => expect(picker).toHaveAttribute('aria-invalid', 'true'));
+      expect(picker).toHaveAccessibleDescription('배정에 필요한 권한이 없습니다.');
+      expect(picker).toHaveTextContent(ACTOR_NAME);
+    },
+  );
+
+  test('FIX1 revoked current reviewer remains visible and marked, but cannot be chosen', async () => {
+    installFetch({ revokedActor: true });
+    renderPage();
+    fireEvent.click(await screen.findByTestId('ms-configure-team-owned'));
+    const picker = screen.getByTestId('edit-default-reviewer-team-owned');
+    await waitFor(() =>
+      expect(picker).toHaveTextContent(`${ACTOR_NAME} · 배정에 필요한 권한이 없습니다.`),
+    );
+    fireEvent.click(picker);
+    expect(
+      await screen.findByRole('option', { name: `${ACTOR_NAME} · 배정에 필요한 권한이 없습니다.` }),
+    ).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('diagnostics distinguish current configuration and skipped rules without claiming unassignment', async () => {
+    const common = {
+      managed_system_id: TEAM_OWNER_SYSTEM_ID,
+      workflow: 'task_request' as const,
+      responsibility: 'reviewer' as const,
+      category: 'ineligible_actor' as const,
+    };
+    installFetch({
+      diagnostics: [
+        {
+          ...common,
+          rule: 'managed_system_reviewer',
+          origin: 'configuration',
+          count: 1,
+          last_failed_at: null,
+        },
+        {
+          ...common,
+          rule: 'managed_system_reviewer',
+          origin: 'creation_failure',
+          count: 2,
+          last_failed_at: '2026-10-13T00:00:00.000Z',
+        },
+        {
+          ...common,
+          rule: 'managed_system_owner',
+          origin: 'creation_failure',
+          count: 2,
+          last_failed_at: '2026-10-13T00:00:00.000Z',
+        },
+      ],
+    });
+    renderPage();
+    const current = await screen.findByText('현재 설정');
+    const row = current.closest('li');
+    if (!row) throw new Error('Configuration row missing');
+    expect(row).toHaveTextContent(
+      'Team Owned System · 기본 검토자 · 배정에 필요한 권한이 없습니다. · 현재 설정',
+    );
+    expect(row).not.toHaveTextContent('Task Request');
+    const failures = screen.getAllByText(
+      '생성 시 기본 배정 실패 2건 · 마지막 2026. 10. 13. 오전 9:00',
+    );
+    expect(failures).toHaveLength(2);
+    const lines = [row.textContent, ...failures.map((item) => item.closest('li')?.textContent)];
+    expect(new Set(lines).size).toBe(3);
+    expect(failures[0]?.closest('li')).toHaveTextContent(
+      'Task Request · Managed System 기본 검토자',
+    );
+    expect(failures[1]?.closest('li')).toHaveTextContent(
+      'Task Request · Managed System 기본 담당자',
+    );
+    expect(screen.queryByText(/생성 시 미배정/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Team Owned System 설정 열기' })).toHaveLength(3);
+  });
+
+  test('diagnostics tell same-name systems apart by slug', async () => {
+    const warning = {
+      workflow: 'voc' as const,
+      responsibility: 'owner' as const,
+      rule: 'managed_system_owner' as const,
+      category: 'missing' as const,
+      origin: 'configuration' as const,
+      count: 1,
+      last_failed_at: null,
+    };
+    installFetch({
+      sameName: true,
+      diagnostics: [
+        { ...warning, managed_system_id: UNKNOWN_OWNER_SYSTEM_ID },
+        { ...warning, managed_system_id: TEAM_OWNER_SYSTEM_ID },
+      ],
+    });
+    renderPage();
+    expect(
+      await screen.findByRole('button', { name: 'Team Owned System (owner-unknown) 설정 열기' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Team Owned System (team-owned) 설정 열기' }),
+    ).toBeInTheDocument();
+  });
+
+  test('FIX1 warning explains repair, marks its row and opens that system settings', async () => {
+    installFetch();
+    renderPage();
+    expect(
+      await screen.findByText(
+        '현재 설정 문제와 생성 시 기본 배정 실패 기록을 확인하고 필요하면 설정에서 기본 담당자/검토자를 다시 지정하세요.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('managed-system-row-team-owned')).getByText('자동 배정 경고'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('managed-system-row-owner-unknown')).queryByText('자동 배정 경고'),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Team Owned System 설정 열기' }));
+    expect(screen.getByRole('heading', { name: 'Team Owned System 설정' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Task Request 검토에 자동 배정됩니다. 비우면 기본 담당자가 검토합니다.'),
+    ).toBeInTheDocument();
+  });
+
+  test('FIX1 owner-only server candidate is absent from reviewer options', async () => {
+    installFetch({ ownerOnly: true });
+    renderPage();
+    await openRegister();
+    await chooseActor('create-default-owner');
+    fireEvent.click(screen.getByTestId('create-default-reviewer'));
+    const listbox = await screen.findByRole('listbox');
+    expect(within(listbox).getAllByRole('option')).toHaveLength(1);
+    expect(within(listbox).queryByRole('option', { name: ACTOR_NAME })).not.toBeInTheDocument();
+  });
+
+  test('FIX1 candidate read failure is visible and retry loads eligible options', async () => {
+    installFetch({ candidateError: true });
+    renderPage();
+    await openRegister();
+    expect(await screen.findAllByText('배정 후보를 불러오지 못했습니다.')).toHaveLength(2);
+    installFetch();
+    const retry = screen.getAllByRole('button', { name: '다시 시도' })[0];
+    if (!retry) throw new Error('Retry missing');
+    fireEvent.click(retry);
+    await chooseActor('create-default-owner');
+  });
+  test('FIX1 diagnostics retry restores warnings after a failed read', async () => {
+    installFetch({ diagnosticsError: true });
+    renderPage();
+    expect(await screen.findByText('설정 경고를 확인하지 못했습니다.')).toBeInTheDocument();
+    installFetch();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(
+      await screen.findByText(
+        '현재 설정 문제와 생성 시 기본 배정 실패 기록을 확인하고 필요하면 설정에서 기본 담당자/검토자를 다시 지정하세요.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('설정 경고를 확인하지 못했습니다.')).not.toBeInTheDocument();
   });
 });

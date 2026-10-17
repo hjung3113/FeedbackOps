@@ -2,9 +2,12 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import {
   addEvidenceHighlightRequestSchema,
+  attachSurveyEvidenceRequestSchema,
   createFindingCommentRequestSchema,
+  evidenceInventoryDetailQuerySchema,
   linkEvidenceRequestSchema,
   linkTaskRequestSchema,
+  listEvidenceInventoryQuerySchema,
   listFindingCommentsQuerySchema,
   listFindingsQuerySchema,
   patchFindingRequestSchema,
@@ -30,6 +33,60 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
 
   app.route({
     method: 'GET',
+    url: '/evidence-highlights',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const parsed = listEvidenceInventoryQuerySchema.safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      const result = await findingsService.listEvidenceInventory({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        query: parsed.data,
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+  app.route({
+    method: 'GET',
+    url: '/evidence-highlights/:id',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id))
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      const parsed = evidenceInventoryDetailQuerySchema.safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      const result = await findingsService.getEvidenceInventoryItem({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        highlightId: id,
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'GET',
     url: '/findings',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
     ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
@@ -43,6 +100,7 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
         });
       }
       const result = await findingsService.listFindings({
+        ...(parsed.data.q === undefined ? {} : { q: parsed.data.q }),
         actor: {
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,
@@ -52,6 +110,17 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
           ? { managedSystemId: parsed.data.managed_system_id }
           : {}),
         ...(parsed.data.execution !== undefined ? { execution: parsed.data.execution } : {}),
+        ...(parsed.data.analytics_area_id === undefined
+          ? {}
+          : { analyticsAreaId: parsed.data.analytics_area_id }),
+        ...(parsed.data.status === undefined ? {} : { status: parsed.data.status }),
+        ...(parsed.data.owner_actor_id === undefined
+          ? {}
+          : { ownerActorId: parsed.data.owner_actor_id }),
+        ...(parsed.data.owner_team_id === undefined
+          ? {}
+          : { ownerTeamId: parsed.data.owner_team_id }),
+        ...(parsed.data.assignment === undefined ? {} : { assignment: parsed.data.assignment }),
         ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
         ...(parsed.data.cursor === undefined ? {} : { cursor: parsed.data.cursor }),
       });
@@ -197,6 +266,45 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
     },
   });
 
+  app.route({
+    method: 'POST',
+    url: '/findings/:id/survey-evidence',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id))
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      const parsed = attachSurveyEvidenceRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const result = await findingsService.attachSurveyEvidence({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        findingId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hashRequestBody({
+          body: parsed.data,
+          findingId: id,
+          route: 'finding.survey_evidence',
+        }),
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
   app.route({
     method: 'POST',
     url: '/findings/:id/evidence-highlights',

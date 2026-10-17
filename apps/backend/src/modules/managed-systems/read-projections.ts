@@ -51,3 +51,15 @@ export function managedSystemIsLiveSql(managedSystemIdColumn: SQLWrapper): SQL {
     WHERE ms.id = ${managedSystemIdColumn} AND ms.archived_at IS NULL
   )`;
 }
+
+/** Active workspace-owned MS lock for bounded VOC suggestion admission (ADR-0068). */
+export async function lockLiveManagedSystemForShare(
+  tx: Tx,
+  workspaceId: string,
+  managedSystemId: string,
+): Promise<boolean> {
+  const result = await tx.execute(sql`SELECT id FROM ${managedSystems}
+    WHERE id = ${managedSystemId} AND workspace_id = ${workspaceId}
+      AND archived_at IS NULL FOR SHARE`);
+  return result.rows.length > 0;
+}

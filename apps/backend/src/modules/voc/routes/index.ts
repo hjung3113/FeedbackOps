@@ -15,6 +15,7 @@ import type { VocService } from '../service.js';
 import { vocConversationRoutes } from './conversation.js';
 import { vocConversionRoutes } from './conversion.js';
 import { vocCrudRoutes } from './crud.js';
+import { vocNoFollowUpRoutes } from './no-follow-up.js';
 import { vocPublicUpdatesRoutes } from './public-updates.js';
 
 export interface VocRoutesOptions {
@@ -38,5 +39,6 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
   await app.register(vocPublicUpdatesRoutes, opts);
   await app.register(vocConversionRoutes, opts);
   await app.register(vocCrudRoutes, opts);
+  await app.register(vocNoFollowUpRoutes, opts);
   await app.register(vocConversationRoutes, opts);
 };

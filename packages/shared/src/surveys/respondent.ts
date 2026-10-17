@@ -28,6 +28,7 @@ export const surveyRespondentFormDtoSchema = z
         title: z.string(),
         type: surveyTypeSchema,
         identity_protected: z.boolean(),
+        description: z.string().nullable(),
       })
       .strict(),
     questions: z.array(respondentQuestionSchema),

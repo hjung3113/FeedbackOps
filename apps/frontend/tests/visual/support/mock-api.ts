@@ -1,3 +1,4 @@
+import { vocOwnerCandidatesSchema } from '@fops/shared';
 import type { Page } from '@playwright/test';
 import {
   populatedInboxNotifications,
@@ -10,8 +11,10 @@ import { VOC_REPORTER_TASK_SUMMARY_IDS } from '../fixtures/voc-reporter-task-sum
 import { createScenario } from '../scenarios';
 import { createPermissionContextHandlers } from './mock-api/access';
 import { createAdminMutationHandlers, createWorkspaceSettingHandlers } from './mock-api/admin';
+import { createClusterSuggestionHandlers } from './mock-api/cluster-suggestions';
 import { createCommonHandlers, createDefaultActorHandlers } from './mock-api/common';
 import { createDashboardHandlers } from './mock-api/dashboard';
+import { createEvidenceHandlers } from './mock-api/evidence';
 import { createCommentHandlers, createFindingListFallbackHandlers } from './mock-api/fallback';
 import { createFindingHandlers } from './mock-api/finding';
 import { createHomeRequestHandlers } from './mock-api/home';
@@ -22,7 +25,7 @@ import {
   createPermissionRequestHandlers,
 } from './mock-api/permissions';
 import { createSavedViewHandlers } from './mock-api/saved-views';
-import { matchMockApiHandler } from './mock-api/shared';
+import { json, matchMockApiHandler } from './mock-api/shared';
 import {
   createSurveyActorHandlers,
   createSurveyHandlers,
@@ -38,6 +41,8 @@ import {
 
 export type { InstalledMockApi, RoleLevel } from './mock-api/types';
 export { parsePermissionDecisionBody } from './mock-api/permissions';
+
+const ownerCandidates = vocOwnerCandidatesSchema.parse({ actors: [] });
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
 
@@ -86,6 +91,11 @@ export async function installMockApi(
 
   // Array order is the first-match precedence from the original handler chain.
   const handlers = [
+    {
+      method: 'GET',
+      path: /^\/vocs\/[^/]+\/owner-candidates$/,
+      handle: (route: import('@playwright/test').Route) => json(route, 200, ownerCandidates),
+    },
     ...createCommonHandlers(context),
     ...createDashboardHandlers(context),
     ...createMilestoneHandlers(context),
@@ -94,6 +104,7 @@ export async function installMockApi(
     ...createVocHandlers(context),
     ...createPermissionContextHandlers(),
     ...createFindingHandlers(context),
+    ...createEvidenceHandlers(context),
     ...createSurveyActorHandlers(context),
     ...createDefaultActorHandlers(),
     ...createAdminMutationHandlers(context),
@@ -102,8 +113,9 @@ export async function installMockApi(
     ...createPermissionRequestHandlers(),
     ...createPermissionGrantHandlers(),
     ...createVocClusterListHandlers(),
+    ...createClusterSuggestionHandlers(context),
     ...createSurveyManagedSystemHandlers(context),
-    ...createManagedSystemHandlers(),
+    ...createManagedSystemHandlers(context),
     ...createFindingListFallbackHandlers(),
     ...createCommentHandlers(),
     ...createVocClusterDetailHandlers(),

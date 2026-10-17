@@ -511,6 +511,7 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<Record<string, unknown>>();
     for (const field of [
+      'severity',
       'similar_count',
       'similar',
       'analytics_area_id',
@@ -521,7 +522,6 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     }
     for (const field of [
       'triage_state',
-      'severity',
       'reporter_facing_status',
       'display_id',
       'conversation_timeline',

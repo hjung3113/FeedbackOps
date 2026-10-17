@@ -39,3 +39,6 @@ export {
   type GrantAdminServiceDeps,
   type GrantAdminServiceOptions,
 } from './grant-admin-service.js';
+
+export { createSelectedReadService, type SelectedReadService } from './selected-read-service.js';
+export { permissionRecoveryProjection, countRecoveryPermissionRequests } from './recovery-read.js';

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #514 A6 — Analytics Area scope on create and PATCH: not_found.record for
 // unknown/other-workspace ids, out_of_scope for cross-Managed-System areas,
 // conflict.parent_archived for archived areas; null clears on PATCH.
@@ -84,12 +85,16 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
       await migrateHandle.pool.query('delete from core.analytics_areas where workspace_id = $1', [
         otherWorkspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-        otherWorkspaceId,
-      ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
-        otherWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id = $1',
+        [otherWorkspaceId],
+      );
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWorkspaceId],
+      );
       otherWorkspaceId = '';
     }
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);

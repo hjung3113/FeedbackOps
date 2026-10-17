@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
-import { entityLinkDtoSchema } from '../entity-links.js';
+import { entityLinkDtoSchema, entityLinkTargetSummarySchema } from '../entity-links.js';
 import { LinkedAttachmentSchema } from './attachment.js';
 import { conversationEntrySchema } from './conversation.js';
+import { vocFollowUpStateSchema } from './follow-up-state.js';
 import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
 
 // Postponement is a list-only projection; preserve the existing detail read surface.
 const vocDetailBaseSchema = vocListItemSchema.omit({ review_postponed_at: true });
 export const vocDetailEnvelopeSchema = vocDetailBaseSchema.extend({
+  follow_up: vocFollowUpStateSchema.optional(),
   // The capped peer preview uses the same authorized peer set as similar_count.
   // similar_count remains the sole total; this array is intentionally not paginated.
   similar: z
@@ -50,10 +52,19 @@ export const vocDetailEnvelopeSchema = vocDetailBaseSchema.extend({
       reason: z.string(),
     })
     .optional(),
-  // Slice 3: entity_links table absent (Slice 4); always null.
+  // Compatibility refs include readable endpoints only; trails preserve every branch.
   linked_execution: z.object({
-    findingRef: z.null(),
-    taskRef: z.null(),
+    findingRef: z.object({ type: z.literal('finding'), id: z.string().uuid() }).nullable(),
+    taskRef: z.object({ type: z.literal('task'), id: z.string().uuid() }).nullable(),
+    trails: z
+      .array(
+        z.object({
+          origin: z.enum(['direct', 'cluster']),
+          cluster: entityLinkTargetSummarySchema.options[3].optional(),
+          links: z.array(entityLinkDtoSchema),
+        }),
+      )
+      .optional(),
   }),
   // Slice 4.1 #112: backend-decided Links tab rows from core.entity_links.
   // Optional so existing Slice 3 consumers and fixtures remain source-compatible.

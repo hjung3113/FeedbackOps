@@ -1,9 +1,11 @@
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { TASK_REQUEST_REVIEW_DECISION_LABEL } from '@/lib/copy/task-requests';
+import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import {
+  DetailPanelFullscreenContext,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
@@ -23,38 +25,45 @@ import { useTaskRequestDecision } from './useTaskRequestDecision';
 import { useTaskRequestPanelController } from './useTaskRequestPanelController';
 
 // ADR-0057 A2 amendment: keep panel navigation in Korean and preserve domain nouns.
-export function buildTaskRequestSections(
-  showDecisionSummary: boolean,
-  hasFindingSource: boolean,
-): PanelSection[] {
+export function buildTaskRequestSections(showDecisionSummary: boolean): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
     showDecisionSummary
       ? { id: 'outcome', label: '결정 요약' }
       : { id: 'decision', label: TASK_REQUEST_REVIEW_DECISION_LABEL },
-    hasFindingSource ? { id: 'source', label: '출처' } : null,
+    { id: 'source', label: '출처' },
     { id: 'properties', label: '속성' },
     { id: 'audit', label: '이력' },
-  ].filter((section): section is PanelSection => section !== null);
+  ];
 }
 
 interface TaskRequestPanelProps {
   item: TaskRequestDto;
   names: NameMaps;
+  eligibleActors?: readonly WorkspaceActor[];
   currentActorId: string | null;
   currentRole: string | null;
   onClose: () => void;
   onDecisionComplete?: (item: TaskRequestDto) => void;
+  getCompletedFocusTarget?: (result: TaskRequestDto) => HTMLElement | null;
+  onDecisionCloseComplete?: () => void;
+  decisionRecovery?: React.ReactNode;
 }
 
 export function TaskRequestPanel({
   item,
   names,
+  eligibleActors = [],
   currentActorId,
   currentRole,
   onClose,
   onDecisionComplete,
+  getCompletedFocusTarget,
+  onDecisionCloseComplete,
+  decisionRecovery,
 }: TaskRequestPanelProps) {
+  const fullscreen = React.useContext(DetailPanelFullscreenContext);
+  const decisionHeadingRef = React.useRef<HTMLHeadingElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
@@ -65,13 +74,25 @@ export function TaskRequestPanel({
     const result = decision.result;
     if (result === null || result === deliveredDecisionResultRef.current) return;
     deliveredDecisionResultRef.current = result;
+    if (fullscreen?.expanded) fullscreen.toggle();
     onDecisionComplete?.(result);
-  }, [decision.result, onDecisionComplete]);
+  }, [decision.result, onDecisionComplete, fullscreen]);
 
   const { sourceFindingQuery, conversion, link, resultingTask, taskForOutcome } =
     useTaskRequestPanelController({ item, currentRole });
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
-  const sections = buildTaskRequestSections(showDecisionSummary, item.source_type === 'finding');
+  // Known-team candidates for the conversion form's team picker: the Managed
+  // System defaults plus every team the queue context already names (ADR-0067).
+  const conversionTeamCandidates = [
+    ...new Set(
+      [
+        names.managedSystemsById[item.primary_managed_system_id]?.defaultReviewerTeamId,
+        names.managedSystemsById[item.primary_managed_system_id]?.defaultOwnerTeamId,
+        ...Object.keys(names.teamsById ?? {}),
+      ].filter((id): id is string => id !== undefined),
+    ),
+  ];
+  const sections = buildTaskRequestSections(showDecisionSummary);
 
   // Task Request has no impact field; omit the prototype's status-derived row (#585).
   return (
@@ -112,25 +133,32 @@ export function TaskRequestPanel({
 
         {showDecisionSummary ? (
           <TaskRequestOutcomeSection
+            headingRef={decisionHeadingRef}
             item={item}
             reviewerName={reviewer?.display_name}
             taskForOutcome={taskForOutcome}
           />
         ) : (
           <TaskRequestDecisionSection
+            headingRef={decisionHeadingRef}
             names={names}
             resultingTask={resultingTask}
             decision={decision}
             conversion={conversion}
             link={link}
+            teamCandidates={conversionTeamCandidates}
+            eligibleActors={eligibleActors}
           />
         )}
 
-        {item.source_type === 'finding' && (
-          <TaskRequestSourceSection item={item} sourceFinding={sourceFindingQuery.data} />
-        )}
+        <TaskRequestSourceSection item={item} sourceFinding={sourceFindingQuery.data} />
 
-        <TaskRequestPropertiesSection item={item} names={names} reviewer={reviewer} />
+        <TaskRequestPropertiesSection
+          item={item}
+          names={names}
+          reviewer={reviewer}
+          {...(conversion.canAssign === undefined ? {} : { canAssign: conversion.canAssign })}
+        />
 
         <section data-anchor="audit" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>이력</PanelSectionTitle>
@@ -159,6 +187,20 @@ export function TaskRequestPanel({
       <TaskRequestDecisionDialog
         key={item.id}
         dialog={decision.dialog}
+        completedResult={decision.result}
+        getCompletedFocusTarget={
+          getCompletedFocusTarget ??
+          ((result) =>
+            result.id === item.id &&
+            result.status === item.status &&
+            (result.status === 'approved' ||
+              result.status === 'rejected' ||
+              result.status === 'needs_more_evidence')
+              ? decisionHeadingRef.current
+              : null)
+        }
+        {...(onDecisionCloseComplete ? { onCompletedClose: onDecisionCloseComplete } : {})}
+        recovery={decisionRecovery}
         request={item}
         isSelfApproval={decision.isSelfApproval}
         isSubmitting={decision.isSubmitting}

@@ -23,13 +23,27 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import {
-  StorageUnavailableError,
   type StorageBackend,
   type StorageGetResult,
   type StoragePutInput,
+  StorageUnavailableError,
 } from '../../../lib/storage/index.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { insertActorRow } from '../../../test-support/actor-fixtures.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import {
+  denyCapability,
+  grantCapability,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
+import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
+import {
+  cleanupTestActorsByExternalIdPrefix,
+  insertPublicUpdate,
+  insertVocDirectly,
+} from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -433,3 +447,200 @@ describe.skipIf(!runIntegration)('GET /attachments/:id/download — PLAN-22 C4a'
     expect(res.headers['content-length']).toBe(String(bytes.byteLength));
   });
 });
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('missing attachment privacy fixture');
+  return value;
+}
+
+// Separate fixtures preserve all existing VOC-level and unlinked download cases.
+describe.skipIf(!(runIntegration && process.env.DATABASE_URL_MIGRATE))(
+  'comment attachment privacy (#1171)',
+  () => {
+    const prefix = `it-1171-download-${randomUUID()}`;
+    let handle: DbHandle;
+    let app: FastifyInstance;
+    let storage: MockStorage;
+    let ms: string;
+    let voc: string;
+    const actors: Record<'admin' | 'developer' | 'reporter', string> = {
+      admin: '',
+      developer: '',
+      reporter: '',
+    };
+    const cookies: Record<string, string> = {};
+    const attachments: Record<string, string> = {};
+    const keys: string[] = [];
+    const get = (entry: string, actor: string) =>
+      app.inject({
+        method: 'GET',
+        url: `/attachments/${attachments[entry]}/download`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookies[actor]}` },
+      });
+
+    beforeAll(async () => {
+      process.env.NODE_ENV = 'test';
+      handle = createDb(APP_URL);
+      storage = createMockStorage();
+      app = await buildServer({ config: loadConfig(), dbHandle: handle, storage });
+      await app.ready();
+      for (const [name, roleLevel] of [
+        ['admin', 'admin'],
+        ['developer', 'developer'],
+        ['reporter', 'user'],
+      ] as const) {
+        actors[name] = (
+          await insertActorRow(handle, {
+            workspaceId: WORKSPACE_ID,
+            externalId: `${prefix}-${name}`,
+            roleLevel,
+          })
+        ).id;
+        cookies[name] = await loginAs(app, `${prefix}-${name}`);
+      }
+      ms = await insertMsDirectly(handle, WORKSPACE_ID, prefix, 'Attachment privacy');
+      voc = (await insertVocDirectly(handle, WORKSPACE_ID, ms, actors.reporter, prefix)).id;
+      const publicId = await insertPublicUpdate(handle, voc, actors.admin);
+      const internal = await handle.pool.query<{ id: string }>(
+        `insert into voc.voc_internal_comments
+      (voc_id, actor_id, body_rich_content) values ($1,$2,$3) returning id`,
+        [voc, actors.admin, paragraphDoc('private')],
+      );
+      const own = await handle.pool.query<{ id: string }>(
+        `insert into voc.voc_reporter_replies
+      (voc_id, actor_id, body_rich_content) values ($1,$2,$3) returning id`,
+        [voc, actors.reporter, paragraphDoc('own reply')],
+      );
+      // The INSERT trigger requires the current Reporter. Build a historical
+      // other-author reply without disabling triggers or widening DB privileges.
+      const client = await handle.pool.connect();
+      let otherId: string;
+      try {
+        await client.query('BEGIN');
+        await client.query('update voc.vocs set reporter_id = $2 where id = $1', [
+          voc,
+          actors.admin,
+        ]);
+        const other = await client.query<{ id: string }>(
+          `insert into voc.voc_reporter_replies
+        (voc_id, actor_id, body_rich_content) values ($1,$2,$3) returning id`,
+          [voc, actors.admin, paragraphDoc('other author')],
+        );
+        otherId = required(other.rows[0]).id;
+        await client.query('update voc.vocs set reporter_id = $2 where id = $1', [
+          voc,
+          actors.reporter,
+        ]);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      for (const [name, commentId, commentKind] of [
+        ['public', publicId, 'public_update'],
+        ['internal', required(internal.rows[0]).id, 'internal_comment'],
+        ['own', required(own.rows[0]).id, 'reporter_reply'],
+        ['other', otherId, 'reporter_reply'],
+      ] as const) {
+        const key = `${WORKSPACE_ID}/${randomUUID()}/private.txt`;
+        keys.push(key);
+        storage.store.set(key, { bytes: Buffer.from('entry bytes'), mimeType: 'text/plain' });
+        attachments[name] = await seedAttachment(handle, {
+          storageKey: key,
+          name: 'private.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 11,
+          uploadedByActorId: actors.admin,
+          commentId,
+          commentKind,
+        });
+      }
+    });
+    beforeEach(async () => {
+      await handle.pool.query(
+        'delete from permission.permission_grants where actor_id = any($1::uuid[])',
+        [Object.values(actors)],
+      );
+      await handle.pool.query(
+        'delete from permission.permission_denies where actor_id = any($1::uuid[])',
+        [Object.values(actors)],
+      );
+      await grantCapability(handle, WORKSPACE_ID, actors.developer, 'voc.read', ms, actors.admin);
+    });
+    afterAll(async () => {
+      await handle.pool.query(
+        'delete from voc.voc_attachments where storage_key = any($1::text[])',
+        [keys],
+      );
+      await handle.pool.query('delete from voc.vocs where id = $1', [voc]);
+      // Grants and denies reference the Managed System; remove them first (FK).
+      await handle.pool.query(
+        'delete from permission.permission_grants where managed_system_id = $1',
+        [ms],
+      );
+      await handle.pool.query(
+        'delete from permission.permission_denies where managed_system_id = $1',
+        [ms],
+      );
+
+      await deleteRecoveryFixtureParents(handle, 'delete from core.managed_systems where id = $1', [
+        ms,
+      ]);
+      await cleanupTestActorsByExternalIdPrefix(handle, WORKSPACE_ID, prefix);
+      await app.close();
+      await handle.close();
+    });
+
+    it.each([
+      ['internal', 'reporter', false, false, 403],
+      ['internal', 'developer', false, false, 403],
+      ['internal', 'admin', false, true, 403],
+      ['internal', 'developer', true, false, 200],
+      ['public', 'reporter', false, false, 200],
+      ['own', 'reporter', false, false, 200],
+      ['other', 'reporter', false, false, 403],
+      ['own', 'developer', true, false, 200],
+      ['other', 'admin', false, false, 200],
+    ] as const)(
+      '%s attachment for %s (triage=%s, deny=%s) → %s',
+      async (entry, actor, triage, deny, status) => {
+        if (triage)
+          await grantCapability(
+            handle,
+            WORKSPACE_ID,
+            actors[actor],
+            'voc.triage',
+            ms,
+            actors.admin,
+          );
+        if (deny)
+          await denyCapability(handle, WORKSPACE_ID, actors[actor], 'voc.triage', ms, actors.admin);
+        const response = await get(entry, actor);
+        expect(response.statusCode).toBe(status);
+        if (status === 403) expect(response.json().code).toBe('permission.denied');
+        else expect(response.body).toBe('entry bytes');
+      },
+    );
+
+    it.each(['internal', 'own'] as const)(
+      '%s attachment is denied immediately after triage revocation on the same session',
+      async (entry) => {
+        const grant = await grantCapability(
+          handle,
+          WORKSPACE_ID,
+          actors.developer,
+          'voc.triage',
+          ms,
+          actors.admin,
+        );
+        expect((await get(entry, 'developer')).statusCode).toBe(200);
+        await revokeCapabilityGrant(handle, grant, actors.admin);
+        const after = await get(entry, 'developer');
+        expect(after.statusCode).toBe(403);
+        expect(after.json().code).toBe('permission.denied');
+      },
+    );
+  },
+);

@@ -3,6 +3,7 @@ import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import {
   type MilestoneDetailDto,
   type TaskDetailDto,
@@ -40,6 +41,14 @@ vi.mock('@fops/ui', async () => {
 const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
+  // The blocked-state 내 VOC link (#1238 item 7), stubbed as in TaskBoardRoute.test.tsx.
+  Link: ({
+    to,
+    search,
+    children,
+  }: { to: string; search: { view: string }; children: React.ReactNode }) => (
+    <a href={`${to}?view=${search.view}`}>{children}</a>
+  ),
 }));
 
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
@@ -70,6 +79,7 @@ vi.mock('@/lib/api', () => {
     status: 'backlog',
     priority: 'high',
     assignee_actor_id: '20000000-0000-0000-0000-000000000002',
+    assignee_team_id: null,
     due_date: null,
     milestone_id: null,
     analytics_area_id: null,
@@ -115,6 +125,7 @@ function priorityTask(priority: TaskDto['priority']): TaskDto {
     status: 'backlog',
     priority,
     assignee_actor_id: null,
+    assignee_team_id: null,
     due_date: null,
     milestone_id: null,
     analytics_area_id: null,
@@ -137,6 +148,7 @@ describe('TaskListRoute display ids', () => {
       id: '10000000-0000-0000-0000-000000000002',
       display_id: 'TASK-1001',
       assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+      assignee_team_id: null,
     };
     vi.mocked(listTasks).mockResolvedValueOnce({ items: [unassigned, unresolved] });
     renderWithClient(<TaskListRoute />);
@@ -149,6 +161,31 @@ describe('TaskListRoute display ids', () => {
     expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
     expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
     expect(screen.queryByText('Assigned')).not.toBeInTheDocument();
+  });
+
+  it('shows team responsibility in the list without labeling it unassigned or choosing a member', async () => {
+    const task = {
+      ...priorityTask('high'),
+      assignee_team_id: '60000000-0000-0000-0000-000000000006',
+    };
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [task] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ actors: [], teams: [{ id: task.assignee_team_id, name: '운영팀' }] }),
+            { status: 200 },
+          ),
+      ),
+    );
+    try {
+      renderWithClient(<TaskListRoute />);
+      expect(await screen.findByText(/팀 · 운영팀/)).toBeInTheDocument();
+      expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('uses the shared unassigned badge in Task detail properties', async () => {
@@ -172,6 +209,7 @@ describe('TaskListRoute display ids', () => {
     vi.mocked(getTask).mockResolvedValueOnce({
       ...priorityTaskDetail('high'),
       assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+      assignee_team_id: null,
     });
     renderWithClient(
       <TaskDetailPanel
@@ -389,6 +427,7 @@ function taskDetailFixture(
     status: 'backlog',
     priority: 'high',
     assignee_actor_id: '20000000-0000-0000-0000-000000000002',
+    assignee_team_id: null,
     due_date: null,
     milestone_id: milestoneId,
     analytics_area_id: null,
@@ -422,6 +461,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
           id: VOC_ID,
           display_id: 'V-204',
           title: VOC_TITLE,
+          reporter_facing_status: 'progress',
         },
         finding: {
           id: FINDING_ID,
@@ -449,6 +489,14 @@ describe('Task detail Linked context source VOC (#378)', () => {
         ? vocBadge.compareDocumentPosition(findingBadge) & Node.DOCUMENT_POSITION_FOLLOWING
         : 0;
     expect(vocFirst).toBeTruthy();
+
+    // The reporter-facing status is its own labelled fact, outside the VOC node's
+    // button name, and never replaces the Task status (ADR-0005).
+    expect(within(trail).getByText('공개 상태')).toBeInTheDocument();
+    expect(within(trail).getByText(REPORTER_STATUS_LABELS.progress)).toBeInTheDocument();
+    expect(
+      within(trail).getByRole('button', { name: new RegExp(VOC_TITLE) }),
+    ).not.toHaveTextContent(REPORTER_STATUS_LABELS.progress);
 
     // Clicking navigates exactly like every other VOC link: /vocs URL state.
     await userEvent.click(within(trail).getByRole('button', { name: new RegExp(VOC_TITLE) }));
@@ -496,6 +544,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
       within(trail).queryByRole('button', { name: new RegExp(VOC_TITLE) }),
     ).not.toBeInTheDocument();
     expect(within(trail).queryByText('V-204')).not.toBeInTheDocument();
+    expect(within(trail).queryByText('공개 상태')).not.toBeInTheDocument();
     // Finding node unchanged.
     expect(within(trail).getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();
   });

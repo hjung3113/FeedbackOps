@@ -1,4 +1,5 @@
 import { type ApiError, apiRequest } from '@/lib/api';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import {
   type OutcomeFollowUpMarkedResult,
   type OutcomeFollowUpReadDto,
@@ -21,6 +22,7 @@ function invalidateOutcomeFollowUp(
   surveyId: string,
 ) {
   return Promise.all([
+    invalidateRecovery(queryClient),
     queryClient.invalidateQueries({ queryKey: surveyKeys.outcomeFollowUp(surveyId) }),
     queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
   ]);

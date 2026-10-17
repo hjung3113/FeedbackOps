@@ -1,3 +1,4 @@
+import { invalidateRecovery } from '@/lib/query/recovery';
 // useVocPublicUpdateMutation — submit POST /vocs/:id/public-updates
 //
 // C5.2 (slice3 #21)
@@ -14,12 +15,12 @@
 //   Idempotency-Key: auto-minted by apiClient
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
-// On 201: caller should invalidate ['voc', vocId] and clear draft.
+// On 201: hook refreshes source/recovery queries; caller clears its draft.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
-import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
+import type { ReporterFacingStatusEnum, VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -54,7 +55,8 @@ export interface PublicUpdateSuccess {
     skip_reason: string | null;
     created_at: string;
   };
-  voc: VocDetailEnvelope;
+  /** #1187: the read-matrix summary when the writer has no full read. */
+  voc: VocDetailEnvelope | VocSummaryEnvelope;
 }
 
 export interface UseVocPublicUpdateMutationArgs {
@@ -86,6 +88,9 @@ export function useVocPublicUpdateMutation(
       return res.data;
     },
     onSuccess: (data, variables) => {
+      void invalidateRecovery(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ['voc', variables.vocId] });
+      void queryClient.invalidateQueries({ queryKey: ['vocs'] });
       invalidateNavCounts(queryClient);
       onSuccess?.(data, variables);
     },

@@ -8,6 +8,8 @@ Accepted (2026-08-04). The three §Open questions were answered by the user on
 2026-08-04; the answers are recorded in §Resolved open questions and are now
 part of this decision.
 
+Amended by ADR-0068: D4’s #340 paid-preview deferral is superseded by the owner-approved budgets and explicit-click protocol. #293’s heuristic and navigation-only contract remain history and remain valid. D3’s saved-panel-only wording does not prohibit ADR-0068’s separate persisted Cluster suggestion review.
+
 ## Context
 
 Issue #293 asks for a similar-VOC surface before a reporter submits a new VOC.
@@ -314,3 +316,16 @@ Consequence for issue closure: #293 is now unblocked for chunks 1–3, but the
 §Consequences *Conductor judgment* warning still holds — candidate B shows only
 the latest three peers per Managed System and does not guarantee the reported
 duplicate is among them.
+
+## Amended 2026-10-13 — paid preview approved for #340
+
+The owner approved actor 2/minute and 20/UTC day, workspace 10/minute and
+100/UTC day, reviewed after two weeks of use, and explicit `유사 VOC 확인`
+transmission only. ADR-0068 supersedes D4's #340 deferral and records the bounded
+input, atomic paid reservations, no-retry dispatch and privacy-safe replay.
+`같은 Managed System의 최근 VOC` remains the shipped zero-paid-call heuristic;
+`유사 VOC 추천` is a separate optional semantic check. Neither pre-submit
+surface supports dismiss/confirm, draft persistence or a join mutation. Existing
+UUID navigation and unsaved-change confirmation remain. #293 is not reopened.
+The prototype-fidelity approval instructions above are historical; ADR-0060
+makes shipped UI and visual baselines the authority for these changes.

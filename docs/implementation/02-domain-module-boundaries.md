@@ -76,6 +76,8 @@ Permission owns:
 - Permission Request
 - permission decisions
 - explicit deny handling
+- governed direct capability grants and supported scope policy; no Role Level promotion (ADR-0066, proposed/new)
+- selected request detail and explained risk, using authorized source projections
 
 Entity Linking owns:
 - relation registry
@@ -153,6 +155,63 @@ Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs
 
 When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas`, and imports of the owner tables' Drizzle symbols (`managedSystems`, `analyticsAreas` from `db/schema/core`), outside their owner modules; tests and migrations are excluded, and `src/test-support` is also barred from importing those symbols.
 
+### VOC detail follow-up read (#1225)
+
+VOC owns `read-projections.ts:vocFollowUpRootsSql`, the canonical presence-root
+SQL shared by list/count/grouped-count and Entity Links' detail reader.
+VOC Clusters owns `read-projections.ts:readVocClusterMemberships` for provenance.
+Entity Links' `readVocFollowUp` composes those approved projections with its own
+canonical links and registered providers, using the supplied transaction for
+post-write hydration. It serializes each disclosed edge using the existing
+visibility evaluator; its command-only Cluster evidence edge does not expand
+the generic Entity Links list/create registry. No cross-module write is added.
+
+### Transactional recovery projection seams (56-H)
+
+Dashboard's `recorder.ts` exports a type-only injected transaction interface; source factories
+capture independent owner truth before mutation and finalize it after all owner/link writes
+inside the idempotency miss path. `truth.ts` composes leaf `recovery-read.ts` predicates from
+VOC, Findings, Tasks, Permissions and Surveys, Entity Linking's `readRecoveryDependencies`,
+and VOC Clusters' `readClusterRecoveryMembers`. It never imports a source command factory
+through a runtime barrel or enforces the acting Actor's disclosure scope as transition truth.
+
+Recovery writers first acquire the transaction-scoped workspace advisory lock via
+`db/recovery-command-lock.ts` (`hashtextextended('recovery-command:' || workspaceId, 0)`),
+before idempotency, owner row, response or recovery identity locks. This includes source/status
+commands, ordinary link create/detach, Task Request creation, Cluster conversions/link/unlink,
+private Survey outcome commands, approved-excerpt attachment and discovery/reconciliation. It also covers VOC
+creation, saved-recommendation confirmation, Permission Request creation and each per-VOC transaction of a Cluster bulk public update.
+Nested recorder seams call `requireRecoveryCommandLock`, which fails the test run when the owning
+command reached the recorder without holding the lock; production still acquires it.
+Under that serialization, owner Finding locks precede expanded Finding rows (sorted UUIDs),
+then bound response advisory locks (sorted UUIDs), then recovery identities. Response-addressed
+Survey commands can lock their response before inserting a new Finding; they hold the same
+workspace lock first. Findings' leaf `lockFindingRecoverySubjects` owns expanded row locking;
+Survey's `readSurveyRecoveryDependencies` applies it before locking bound responses and returns
+only Survey IDs. Captures may reacquire the workspace lock inside the same transaction.
+Read paths never acquire it. Recovery writers in one workspace serialize until commit/rollback,
+a deliberate throughput tradeoff for the single-workspace MVP (~5k VOCs/5k Tasks over five years).
+Capture remains before domain mutation and finish after the last link write;
+response IDs stay inside Survey.
+`surveys/recovery-presentation.ts` owns the private response recorder/reconciler and personal
+queue/presentation/history adapter. Findings' response-derived creation and status commands
+use that transactional seam; public payloads still require the existing explicit personal gate.
+The private reconciler returns only a continuation cursor internally, never a generic response
+payload. Recorder writes are limited to the owner's recovery projection tables; domain links,
+source audits, decisions and permissions retain their existing owners.
+
+### Evidence inventory source projections (#1106)
+
+Findings composes its own parent/highlight reader with Survey's
+`resolveInventorySurveyHighlights` in `surveys/evidence-access.ts` and VOC's
+public `readVocEvidenceSources` export. Each hydration batch contains at most 100
+local highlights, authorizes its parents and sources in one transaction, and
+ends before the next batch. Survey's owner-backed
+`read_inventory_highlight_evidence(uuid,uuid[])` locks all batch response UUIDs
+in sorted order and refreshes the approval snapshot after lock waits. Finding
+summaries and private bindings never enter the inventory read model. Existing
+nested readers and attachment commands retain their contracts.
+
 ## Core Boundary
 
 Core is intentionally small.
@@ -215,3 +274,188 @@ Entity Linking uses providers to enforce:
 (screens under `src/features/voc-cluster/`, with route files under
 `src/routes/_authed/voc-clusters/` doing URL/shell wiring only), not a new
 top-level product domain.
+
+## Permission close-out seams (ADR-0066; #1080 / #1081, direct grant pending)
+
+Permission writes only its requests/grants/denies. Approval and direct grant share
+a Permission-owned grant command. Auth extends its workspace Actor lookup with
+an approved recipient lock, exported through its public API; Core owns the latest
+Admin-question audit projection, and Workspace Settings supplies the locked policy.
+Permission may compose those projections but does not copy foreign-table queries
+or mutate Role Level. Source-owner summary authorization remains mandatory.
+Home owns requester UI composition; Admin owns review/direct-grant composition.
+Shared typed contracts carry server scope options/revisions/risk; neither frontend
+nor packages/ui owns permission truth or computes risk scores.
+
+Selected Permission context (#1081) uses Auth's public
+`findWorkspaceActorDisplay` projection and Core's
+`latestPermissionRequestQuestion` audit projection after authorization.
+VOC and Task export `permissionVocSourceSummary` and
+`permissionTaskSourceSummary` through their public barrels; source-owner gates
+and explicit metadata allowlists stay inside those owners. Opaque Survey sources
+have no summary and cause no response reads. Permission owns active-deny overlap
+and selected risk calculation; collection reads do not invoke selected projections.
+Admin-only Permission Request recovery sources use
+Auth's public `workspaceActorDisplayNameSql` bounded workspace-matched display-name projection;
+it exposes no email/Role Level and adds no per-row application lookup. Actor-independent
+Permission recovery truth and discovery do not invoke that display projection.
+
+## Responsibility and recovery seams (ADR-0067; implemented)
+
+Core-owned Managed Systems/Analytics Areas export locked transaction-aware routing inputs;
+#1090 extends the existing AA lock with `owner_team_id` and consumes the Core-owned
+`responsibility-read-projections.ts` team validity input plus the Auth barrel actor lock.
+These are validity inputs only; no default resolver or domain assignment lives in Core.
+destination VOC/Finding/Task Request/Task application services decide eligibility and write
+only owned assignments. Extend `lockManagedSystem`/approved readers; shared contains DTOs,
+not runtime resolution. Survey's independent operator rule stays intact.
+
+Dashboard owns identity/occurrence/history/personal presentation projections.
+Inject its transaction-aware recorder into relevant source/link commands; approved reads
+reevaluate authoritative predicates and same-transaction transitions are deduplicated.
+Avoid runtime cycles through command barrels; Core never imports domain/Dashboard commands.
+Generic GETs write no projection/source state. Existing pg-boss handles discovery/reconciliation.
+Survey owns response decisions and personal-gated presentation/history adapter; Dashboard
+may reference it without bypassing privacy or duplicating decision state. Integration owns
+the shared recovery UI/public seam consumed by Home; full workflows remain on sources.
+
+## Analytics Area report composition (ADR-0069; backend/shared #1078)
+
+Dashboard owns the Area report read composition. VOC/Finding/Task/Survey own authorized
+source-list and grouped count predicates; Survey owns its safe Survey-level follow-up batch projection.
+Analytics Areas and Managed Systems own batch metadata lookup for authorized referenced UUIDs including
+archives. Read exports are owner seams, not foreign repository/table bypasses.
+Integration owns the Coverage Area tab; Admin owns catalog maintenance only. Source repair commands,
+entity-link visibility and canonical recovery resolution keep their existing owners. Report reads never
+mutate sources or create report-specific assignment/resolution state.
+
+Owner barrel exports added by #1078:
+
+- Findings: `actorFindingListScope` (the same elevated role + per-system `canReadFinding` decisions
+  used by `/findings`), `countGroupedFindingsForReport` (canonical execution/recovery predicates).
+- Tasks: `actorTaskListScope` (the same elevated role + per-system `checkFindingManage` decisions
+  used by `/tasks`), `countGroupedTasksForReport` (list predicates and DB UTC `as_of_date`).
+- Surveys: `countGroupedSurveysForReport` (authorized MATERIALIZED fence and the existing
+  aggregate-only `surveyFollowUpStateLateral`; Survey-grain, no personal audit).
+- VOC: existing `VocGroupedCountReader.countGroupedVocs`; no new projection or predicate.
+- Analytics Areas: `readAnalyticsAreaMetadata(db, workspaceId, ids)` returns
+  `{ id, managed_system_id, name, archived }`, including archived referenced UUIDs, without locks.
+- Managed Systems: `readManagedSystemMetadata(db, workspaceId, ids)` returns
+  `{ id, name, archived }`, including archived referenced UUIDs, without locks.
+
+The report calls one grouped query per domain and two batch metadata queries, with no Area argument
+or per-record read. Owner list-scope enumeration and memoized point checks are bounded by Managed
+Systems; availability is checked across the union even when an owner has no records in a System.
+Metadata inputs come only from authorized grouped results, never catalog enumeration.
+
+## Survey provenance and Evidence composition (ADR-0064)
+
+Protected provenance is implemented by #739/#740, with #1109 attachment extensions:
+Finding retains
+Finding/highlight lifecycle and counters; Survey owns protected
+response/approval/text extensions and authorized batch projections. Foreign
+modules reach those bindings only through the Survey application seam. Entity
+Links owns canonical link mutation, including the narrow Survey definer; Core
+keeps append-only audit APIs, with raw app audit reads revoked at cutover.
+
+Integration's proposed/new Evidence route consumes backend-composed authorized
+DTOs, never private provenance/link/audit joins. ADR-0065 assigns Findings as composition owner for proposed/new
+`GET /evidence-highlights` and `GET /evidence-highlights/:id`. UI ownership grants
+no Survey/Finding mutation ownership. #816 reuses the approved Survey projection
+and Finding-owned attachment command rather than granting personal-response
+access to safe result readers.
+
+## Cluster suggestion and draft-preview ownership (ADR-0068; suggestions shipped #1097, preview shipped #1099)
+
+VOC owns the non-domain suggestion lifecycle, generation job/cursor/caps and
+paid-preview ledger/budgets/cleanup (#1097 suggestions and #1099 preview implemented); subdirectories are
+`apps/backend/src/modules/voc/cluster-suggestions/` and
+`apps/backend/src/modules/voc/similarity-preview/` (shipped #1099). They are not a generic Core
+AI service. VOC Clusters alone writes its existing Cluster/member tables through
+exported application commands, called only on human suggestion confirmation.
+Automatic generation calls no Cluster mutation service. Saved recommendations
+and shadow measurements remain separate. Workspace Settings owns the shipped
+`voc_cluster_suggestions_enabled` policy; VOC consumes its exported resolved
+settings seam. Managed Systems exports `lockLiveManagedSystemForShare` and
+`managedSystemIsLiveSql` through its read projections for generation/C6.
+No foreign repository imports.
+
+2026-10-14 ADR-0068 concurrency amendment (#1097): all suggestion writers
+acquire workspace recovery first, serializing with unchanged manual/saved
+membership and permission commands. They do not add suggestion locks to those
+existing paths. Reacquisition by Cluster commands is allowed in the transaction.
+
+| Writer | Lock sequence |
+| --- | --- |
+| Generation | recovery → suggestion advisory → settings FOR UPDATE → active MS FOR SHARE → VOCs FOR SHARE (UUID order) → suggestion rows |
+| Confirm | recovery → authorization → idempotency → suggestion advisory → MS FOR UPDATE → VOCs FOR UPDATE (UUID order) → suggestion row → Cluster commands |
+| Discard / restore | recovery → authorization → idempotency → suggestion advisory → MS FOR UPDATE → VOCs FOR SHARE (UUID order) → suggestion row |
+
+This avoids the generation/settings → manual createCluster/MS/actor-FK →
+permission approval/recovery/actor/settings cycle. Restore adds C6/cap/disjoint
+checks; confirm/restore never lock settings. Permission checks precede replay;
+confirmation's injected per-transaction Cluster factory retains recoveryRecorder.
+
+Frontend `features/voc-cluster/` owns suggestion review on `/voc-clusters`,
+`features/voc/` owns optional preview on the create screen and Admin owns the
+opt-in on `/admin/settings`. No new shell, top-level feature or domain route is
+needed. Shared response/detail/audit schemas have no runtime permission logic.
+
+## Responsibility diagnostic seam (#1089)
+
+Core's Managed System module exports `recordResponsibilityDefaultFailure` from
+`managed-systems/index.ts` and extends `lockManagedSystem` with owner/reviewer defaults.
+Source commands may consume these transaction-aware inputs and append safe failed-rule
+observations through the explicit seam; they own eligibility, routing, permissions and
+assignment writes. No runtime Core-to-source or Dashboard import is introduced. The
+Admin-authorized diagnostic read is specified in `api/core.md`; creation-time callers
+remain #1090/#1091. Diagnostic inputs carry no private candidate or source identity.
+
+### #1109 approved Survey excerpt selection and attachment
+
+Survey's `createSurveyEvidenceCandidates` exposes the safe candidate read through
+its service. `resolveSurveyAttachmentSelection` is the approved cross-module source
+resolution seam: callers first authorize their target, then Survey locks settings
+and the response and rechecks source read, active approval and result suppression.
+It returns the existing internal response evidence subject, never a public response
+identifier or personal result payload. `resolveExcerptResultAudience` shares actual
+response/question suppression between candidate preview and submit without audited
+personal Results calls.
+
+Finding's `attachSurveyEvidence` owns the transaction, target authorization, public
+null-body highlight, count, audit and metadata-only idempotency response. Survey's
+existing `recordSurveyHighlightBinding` owns the protected approval snapshot.
+Entity Links' existing `createSurveyFindingLink` owns the canonical active internal
+`evidence_of`; the 0066 extension verifies the private attachment witness. These
+seams do not grant source modules ownership of Finding writes or change inventory
+and personal Results/creation contracts.
+
+### Task responsibility routing inputs (#1091)
+
+Task Request and Task share the Task-owned `tasks/responsibility.ts` destination resolver.
+It consumes `managed-systems/index.ts` locked defaults/diagnostics, Auth's public Actor lock,
+Finding's public authorization and `analytics-areas/index.ts` locked owner-team input.
+Core's `core/read-projections.ts` exports `readResponsibilityTeam` for transaction-aware
+same-workspace active-team input; destinations retain eligibility and all assignment writes.
+The Analytics Area lock preserves its prior signature and adds `owner_team_id` for both
+source workers. Cluster has no direct Area and no member-derived rule.
+
+### Managed System preview parent projection (#1099)
+
+`managed-systems/index.ts` exports `readManagedSystemState(db, workspaceId, id)`:
+non-locking ID/archive state within the workspace, solely for draft-preview parent
+validation. It grants no candidate read permission; VOC resolves scope via
+`actorReadScope` and uses `similarVocVisibilityPredicate` for every candidate read.
+
+### Finding execution projection after generic detach (#1174a)
+
+Findings exports `reconcileFindingExecution` and the type-only injected
+`FindingExecutionReconciler` from its public barrel. Server composition injects
+it into Entity Links; generic detach calls it after the canonical
+`finding -> task requested_task` link update and before recovery finish, inside
+the same transaction under the workspace recovery lock. The seam locks the
+Finding and clears its convenience `linked_task_id` only when no active Task
+`requested_task` link remains. Entity Links owns links; Findings owns its table.
+Finding link-task reads active canonical links through the Entity Links command
+read seam before deciding no-op, conflict or insertion. Task Request execution
+predicates and existing command permissions remain unchanged.

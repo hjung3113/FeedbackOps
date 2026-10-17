@@ -1,15 +1,23 @@
 import type {
   AddEvidenceHighlightRequest,
+  AttachSurveyEvidenceRequest,
+  AttachSurveyEvidenceResponse,
   EvidenceHighlightDto,
   LinkEvidenceRequest,
   ListEvidenceHighlightsResponse,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
-import { resolveVocEndpoint } from '../entity-links/index.js';
-import { resolveSurveyResponseHighlightAccess } from '../surveys/evidence-access.js';
+import { createSurveyFindingLink, resolveVocEndpoint } from '../entity-links/index.js';
+import {
+  recordSurveyHighlightBinding,
+  resolveFindingSurveyHighlights,
+  resolveSurveyAttachmentSelection,
+} from '../surveys/evidence-access.js';
 import { selectVocForUpdate } from '../voc/index.js';
+import { createEvidenceInventory } from './evidence-inventory.js';
 import { findFindingById } from './repo-read.js';
 import {
   type EvidenceHighlightRow,
@@ -32,7 +40,9 @@ function evidenceHighlightToDto(
     workspace_id: row.workspace_id,
     finding_id: row.finding_id,
     primary_managed_system_id: row.primary_managed_system_id,
-    ...(options.includeQuote ? { quote_or_summary: row.quote_or_summary } : {}),
+    ...(options.includeQuote && row.quote_or_summary !== null
+      ? { quote_or_summary: row.quote_or_summary }
+      : {}),
     analytics_area_id: row.analytics_area_id,
     sentiment: row.sentiment,
     importance: row.importance,
@@ -193,29 +203,119 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     });
   }
 
+  async function attachSurveyEvidence(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: AttachSurveyEvidenceRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: AttachSurveyEvidenceResponse }> {
+    const { actor, findingId, input } = args;
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const finding = await lockFindingById(tx, { workspaceId: actor.workspace_id, findingId });
+          if (!finding) throw new HttpError('not_found.record', 'finding not found');
+          if (finding.status === 'archived')
+            throw new HttpError('conflict.parent_archived', 'finding archived');
+          if (!(await canManageFinding(deps, actor, finding.primary_managed_system_id, { tx })))
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          const subject = await resolveSurveyAttachmentSelection(
+            deps,
+            tx,
+            actor,
+            input.approved_excerpt_id,
+          );
+          if (input.analytics_area_id)
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              actor.workspace_id,
+              finding.primary_managed_system_id,
+              input.analytics_area_id,
+            );
+          const highlight = await insertEvidenceHighlight(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+            primaryManagedSystemId: finding.primary_managed_system_id,
+            sourceType: 'survey_response',
+            sourceId: null,
+            approvedExcerptId: null,
+            quoteOrSummary: null,
+            analyticsAreaId: input.analytics_area_id ?? null,
+            sentiment: input.sentiment ?? null,
+            importance: input.importance ?? null,
+            createdBy: actor.actor_id,
+          });
+          await recordSurveyHighlightBinding(
+            tx,
+            actor,
+            highlight.id,
+            subject.response_id,
+            input.approved_excerpt_id,
+          );
+          const link = await createSurveyFindingLink(tx, {
+            workspaceId: actor.workspace_id,
+            responseId: subject.response_id,
+            findingId: finding.id,
+            relationType: 'evidence_of',
+            managedSystemId: subject.primary_managed_system_id,
+            createdBy: actor.actor_id,
+          });
+          await incrementFindingEvidenceCount(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: actor.workspace_id,
+            actor_id: actor.actor_id,
+            event_type: 'evidence_highlight_added',
+            subject_type: 'finding',
+            subject_id: finding.id,
+            summary: 'Evidence highlight added',
+            detail: {
+              finding_id: finding.id,
+              evidence_highlight_id: highlight.id,
+              source_type: 'survey_response',
+              source_id: subject.response_id,
+              primary_managed_system_id: finding.primary_managed_system_id,
+            },
+          });
+          if (link.inserted)
+            await deps.auditService.record(tx, {
+              workspace_id: actor.workspace_id,
+              actor_id: actor.actor_id,
+              event_type: 'entity_link.created',
+              subject_type: 'entity_link',
+              subject_id: link.id,
+              summary: 'Entity link created',
+              detail: {
+                link_id: link.id,
+                source: { type: 'survey_response', id: subject.response_id },
+                target: { type: 'finding', id: finding.id },
+                relation_type: 'evidence_of',
+                visibility: 'internal_only',
+              },
+            });
+          return {
+            status: 201,
+            body: { evidence_highlight_id: highlight.id, finding_id: finding.id },
+          };
+        },
+      );
+    });
+  }
   async function canReadEvidenceHighlightSource(args: {
     actor: FindingsActor;
     row: EvidenceHighlightRow;
   }): Promise<boolean> {
     if (args.row.source_type === 'note') return true;
-    if (args.row.source_type === 'survey_response') {
-      if (!args.row.source_id) return false;
-      try {
-        const access = await deps.db.transaction((tx) =>
-          resolveSurveyResponseHighlightAccess(
-            deps,
-            tx,
-            args.actor,
-            args.row.source_id ?? '',
-            args.row.approved_excerpt_id ?? '',
-          ),
-        );
-        return access !== null;
-      } catch (error) {
-        if (error instanceof HttpError && error.code === 'not_found.record') return false;
-        throw error;
-      }
-    }
+    if (args.row.source_type === 'survey_response') return false;
+
     if (!args.row.source_id) return false;
 
     const source = await resolveVocEndpoint(deps.db, args.actor.workspace_id, args.row.source_id);
@@ -232,90 +332,84 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     actor: FindingsActor;
     findingId: string;
   }): Promise<ListEvidenceHighlightsResponse> {
-    const finding = await findFindingById(deps.db, {
-      workspaceId: args.actor.workspace_id,
-      findingId: args.findingId,
-    });
-    if (!finding) throw new HttpError('not_found.record', 'finding not found');
+    return deps.db.transaction(async (tx) => {
+      const finding = await findFindingById(tx, {
+        workspaceId: args.actor.workspace_id,
+        findingId: args.findingId,
+      });
+      if (!finding) throw new HttpError('not_found.record', 'finding not found');
 
-    const readable = await canReadFinding(deps, args.actor, finding.primary_managed_system_id);
-    if (!readable) throw new HttpError('permission.denied', 'finding.read capability required');
+      const readable = await canReadFinding(deps, args.actor, finding.primary_managed_system_id, {
+        tx,
+      });
+      if (!readable) throw new HttpError('permission.denied', 'finding.read capability required');
 
-    const rows = await listEvidenceHighlightsByFinding(deps.db, {
-      workspaceId: args.actor.workspace_id,
-      findingId: finding.id,
-    });
-    const items: EvidenceHighlightDto[] = [];
-    const visibility: Array<{
-      row: EvidenceHighlightRow;
-      includeQuote: boolean;
-      surveyMeta: string | null;
-    }> = [];
-    for (const row of rows) {
-      // Resolve visibility and the safe source metadata from one snapshot. A
-      // second lookup after a successful visibility check could otherwise let
-      // an approval revoked between calls serialize a stale excerpt.
-      if (row.source_type === 'survey_response' && row.source_id) {
-        const access = await deps.db.transaction(async (tx) => {
-          try {
-            return await resolveSurveyResponseHighlightAccess(
-              deps,
-              tx,
-              args.actor,
-              row.source_id ?? '',
-              row.approved_excerpt_id ?? '',
-            );
-          } catch (error) {
-            if (error instanceof HttpError && error.code === 'not_found.record') return null;
-            throw error;
-          }
-        });
+      const rows = await listEvidenceHighlightsByFinding(tx, {
+        workspaceId: args.actor.workspace_id,
+        findingId: finding.id,
+      });
+      const items: EvidenceHighlightDto[] = [];
+      const visibility: Array<{
+        row: EvidenceHighlightRow;
+        includeQuote: boolean;
+        surveyMeta: string | null;
+      }> = [];
+      const surveyHighlights = await resolveFindingSurveyHighlights(
+        deps,
+        tx,
+        args.actor,
+        finding.id,
+        rows.filter((row) => row.source_type === 'survey_response').map((row) => row.id),
+      );
+      for (const row of rows) {
+        if (row.source_type === 'survey_response') {
+          const access = surveyHighlights.get(row.id);
+          visibility.push({
+            row: { ...row, quote_or_summary: access?.approved_excerpt_snapshot ?? null },
+            includeQuote: access !== undefined,
+            surveyMeta: access
+              ? `${access.survey_type} · ${access.survey_display_id} · Identity protected`
+              : null,
+          });
+          continue;
+        }
         visibility.push({
           row,
-          includeQuote: access !== null,
-          surveyMeta: access
-            ? `${access.survey_type} · ${access.survey_display_id} · Identity protected`
-            : null,
+          includeQuote: await canReadEvidenceHighlightSource({ actor: args.actor, row }),
+          surveyMeta: null,
         });
-        continue;
       }
-      visibility.push({
-        row,
-        includeQuote: await canReadEvidenceHighlightSource({ actor: args.actor, row }),
-        surveyMeta: null,
+      const readableVocIds = [
+        ...new Set(
+          visibility
+            .filter(
+              ({ row, includeQuote }) => includeQuote && row.source_type === 'voc' && row.source_id,
+            )
+            .map(({ row }) => row.source_id as string),
+        ),
+      ];
+      const sourceMetaRows = await listVocSourceMeta(tx, {
+        workspaceId: args.actor.workspace_id,
+        vocIds: readableVocIds,
       });
-    }
-    const readableVocIds = [
-      ...new Set(
-        visibility
-          .filter(
-            ({ row, includeQuote }) => includeQuote && row.source_type === 'voc' && row.source_id,
-          )
-          .map(({ row }) => row.source_id as string),
-      ),
-    ];
-    const sourceMetaRows = await listVocSourceMeta(deps.db, {
-      workspaceId: args.actor.workspace_id,
-      vocIds: readableVocIds,
+      const sourceMetaById = new Map(sourceMetaRows.map((meta) => [meta.id, meta]));
+
+      for (const { row, includeQuote, surveyMeta } of visibility) {
+        const sourceMeta =
+          includeQuote && row.source_type === 'voc' && row.source_id
+            ? sourceMetaById.get(row.source_id)
+            : null;
+        items.push(
+          evidenceHighlightToDto(row, {
+            includeQuote,
+            source_title: sourceMeta?.title ?? null,
+            source_meta: surveyMeta ?? sourceMeta?.display_id ?? null,
+          }),
+        );
+      }
+      return { items };
     });
-    const sourceMetaById = new Map(sourceMetaRows.map((meta) => [meta.id, meta]));
-
-    for (const { row, includeQuote, surveyMeta } of visibility) {
-      const sourceMeta =
-        includeQuote && row.source_type === 'voc' && row.source_id
-          ? sourceMetaById.get(row.source_id)
-          : null;
-      items.push(
-        evidenceHighlightToDto(row, {
-          includeQuote,
-          source_title: sourceMeta?.title ?? null,
-          source_meta: surveyMeta ?? sourceMeta?.display_id ?? null,
-        }),
-      );
-    }
-    return { items };
   }
-
   async function linkEvidence(args: {
     actor: FindingsActor;
     findingId: string;
@@ -324,6 +418,7 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     const { actor, findingId, input } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       const finding = await lockFindingById(tx, {
         workspaceId: actor.workspace_id,
         findingId,
@@ -336,6 +431,11 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
       if (!canManage) {
         throw new HttpError('permission.denied', 'finding.manage capability required');
       }
+
+      const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+        { type: 'finding', id: finding.id },
+        { type: 'voc', id: input.source_id },
+      ]);
 
       const result = await deps.entityLinksService
         .createLink({
@@ -353,6 +453,9 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
           throw err;
         });
 
+      if (recovery)
+        await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkEvidence');
+
       return {
         status: result.status,
         body: { id: result.link.id, relation_type: 'evidence_of' },
@@ -361,7 +464,9 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
   }
 
   return {
+    ...createEvidenceInventory(deps),
     addEvidenceHighlight,
+    attachSurveyEvidence,
     listEvidenceHighlights,
     linkEvidence,
   };

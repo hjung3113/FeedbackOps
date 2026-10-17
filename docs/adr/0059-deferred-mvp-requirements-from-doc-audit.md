@@ -4,7 +4,17 @@ Date: 2026-10-05
 
 ## Status
 
+D1/D3 deferrals superseded by [ADR-0067](0067-responsibility-defaults-and-recovery-items.md)
+on 2026-10-13; the text below records the earlier shipped scope. D2/D4 are unchanged.
+
 Accepted 2026-10-05 by the owner (recommendation approved in session).
+
+Amended by ADR-0069 for the new Analytics Area report's required snapshot time only.
+
+Amended 2026-10-13: the MVP close-out (`docs/design/13-mvp-roadmap.md`) schedules D1-D3 as their own issues; D4 is closed by rejecting ADR-0035/0036.
+
+D2 amended 2026-10-13 by [ADR-0070](0070-survey-starting-templates-and-definition-reuse.md);
+see the dated amendment below for delivery boundaries.
 
 ## Context
 
@@ -37,11 +47,31 @@ The shipped surface is `GET /dashboard/summary`: KPIs, action-queue counts with 
 
 The Outcome Survey follow-up flow keeps its own recovery identity (ADR-0055).
 
-### D4 — Public survey links stay unscheduled
+### D4 — Public survey links are not built
 
-ADR-0035 and ADR-0036 stay Proposed and unscheduled. MVP survey distribution is the authenticated in-app link `/surveys/:id/respond`.
+The owner rejected ADR-0035 and ADR-0036 on 2026-10-13. MVP survey distribution is the authenticated in-app link `/surveys/:id/respond`.
 
 ## Consequences
 
 - The design docs keep the requirement text and point here where they state D1-D4 behavior, so a reader does not mistake them for shipped behavior.
 - Building any of D1-D4 later needs its own issue and, where the design is incomplete, its own ADR. This ADR is not a backlog.
+
+## Amended 2026-10-13 — Area report snapshot time (ADR-0069)
+
+D3's deferred `computed_at` refers to the shipped Dashboard summary/recovery-model work.
+The separately accepted, proposed/new Area report requires `computed_at` and UTC `as_of_date`
+for truthful snapshot and overdue context. This exception does not deliver or fork the deferred
+recovery identity, resolution storage, detail, snooze/mute or history. The report consumes the
+canonical expected-follow-up/no-follow-up interface from the scheduled D3 close-out work;
+its delivery does not wait on snooze/history UI.
+
+## Amended 2026-10-13 — D2 delivery scope
+
+[ADR-0070](0070-survey-starting-templates-and-definition-reuse.md) narrows D2 to
+delivered behavior: #1073 supplies three built-in starting templates through
+the backend/shared creation contract; #1074 adds existing-definition reuse.
+Visible dialog selection (#1075) remains pending. The
+historical D2 statement above describes the 2026-10-05 audit baseline; these
+backend contracts do not complete #1047's user-visible FR-SURVEY-001 acceptance. An editable
+saved-template library remains outside the agreed MVP scope. Explicit Managed
+System/privacy and persisted-ID requirements from ADR-0039 stay in force.

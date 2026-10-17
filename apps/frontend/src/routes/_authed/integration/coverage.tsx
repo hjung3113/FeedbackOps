@@ -6,6 +6,9 @@ import { z } from 'zod';
 // docs/frontend/routes-and-layout.md: /integration/coverage?managedSystem=:managedSystemId|all
 export const integrationCoverageSearchSchema = z
   .object({
+    view: z.literal('areas').optional(),
+    'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    cursor: z.string().min(1).optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
   })
   .strict();

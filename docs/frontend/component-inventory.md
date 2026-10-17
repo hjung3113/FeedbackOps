@@ -32,7 +32,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment; `RichContentRenderer size=sm` | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
 | Select | single, multi; `SelectTrigger appearance=canvas`, `appearance=field`, `density=compact` | focus, disabled, invalid, loading | keyboard navigable |
 | DatePicker | typed date, calendar; `appearance=detail` | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
-| Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
+| Combobox | user, analytics-area, entity | focus, empty, loading, error, disabled option | keyboard navigable; disabled options are labelled, `aria-disabled`, skipped by keyboard and cannot be selected |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented; `spacing=compact` | focus, selected, disabled | group label required |
 | TabsList / TabsTrigger | default | focus, selected, disabled | keyboard navigable; Tabs semantics preserved |
@@ -57,7 +57,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Panel | detail, blocked, create | loading, dirty, error | close is keyboard reachable |
 | DetailPanelHeader | VOC, Finding, Task Request, Task, Milestone, Survey, Cluster | record id available or omitted | kind chip uses its accent and dot; non-Milestone headers retain the accent stripe; fullscreen toggle sits before close inside the detail slot |
 | DetailPanelReadingColumn | detail slot, Triage | expanded, collapsed, no fullscreen context | expanded: centred 60rem column with bordered gutters; otherwise `contents`, so the panel stays mounted across the toggle |
-| UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone includes text |
+| UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone (default) includes text; `tone="neutral"` only inside unassigned views (Inbox `tab=unassigned`, Triage unassigned) |
 | Toolbar | view, action, bulk | default, selection-active | one primary action maximum |
 
 ## Composed Components
@@ -101,16 +101,19 @@ Names in the primitive table and the composed list above are design-time names. 
 | RoleLevelAwareSidebar | `AppRail` + `AppSidebar` | `apps/frontend/src/lib/layout/` |
 | ManagedSystemScopeSwitcher | scope selector inside `AppSidebar` (`ManagedSystemScopeOption`) | `apps/frontend/src/lib/layout/AppSidebar.tsx` |
 | ObjectList, ListRow | `ObjectRow` + `ListToolbar` / `ListTabs` + `ListStateMessage` | `packages/ui/src/data/ObjectRow.tsx`, `packages/ui/src/toolbar/`, `apps/frontend/src/components/ListStateMessage.tsx` |
+| Active filters | `ActiveFilterBar` — presentational chips with visible labels, tooltip-backed remove buttons, and one clear-all control; empty items render nothing | `packages/ui/src/toolbar/ActiveFilterBar.tsx` |
 | FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
 | LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `packages/ui/src/components/shadcn/skeleton.tsx`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |
 | DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelReadingColumn`, `DetailPanelSectionNav` (mount the nav as a sibling above the scroll root; the cover is then the strip's overlap with the root), `PanelTitleBlock` (`inset=none`), `PanelSectionTitle` (`inset=panel`, `size=tiny`), `FieldRow`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
 | StatusBadge | shared `ReporterStatusBadge`, `InternalTaskBadge`; feature-local `SurveyStatusBadge`, `LinkStatusBadge`, `MilestoneStatusBadge` | `packages/ui/src/badges/`, `apps/frontend/src/features/surveys/components/`, `apps/frontend/src/features/integration/components/`, `apps/frontend/src/features/tasks/components/` |
-| SignalBadge | `SeverityBadge`, `SeverityIndicator`, `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
+| SignalBadge | `SeverityBadge` (default accessible prefix `심각도`; full `ariaLabel` override for Task `우선순위`), `SeverityIndicator` (full `label` override), `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
 | RichContentEditor | `RichEditor` + `RichContentRenderer` | `packages/ui/src/rich-content/` |
 | PublicUpdateComposer | feature-local `PublicUpdateComposer` | `apps/frontend/src/features/voc/components/detail/` |
 | ConversationComposer | feature-local `ComposerSection` + `ComposerTabs` hosting `PublicUpdateComposer`, `ReporterReplyComposer`, `InternalCommentComposer` | `apps/frontend/src/features/voc/components/detail/` |
+| Evidence inventory | feature-local `EvidenceContent`, `EvidenceMetadata`, `EvidenceRow`, `EvidencePanel` | `apps/frontend/src/features/integration/components/` |
 | EvidenceHighlight | feature-local `EvidenceHighlights` | `apps/frontend/src/features/findings/components/FindingDetail/` |
+| Integration destination card | feature-local `IntegrationJumpCard`; optional secondary link is a sibling of the primary anchor (Coverage Area tab) | `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
 | ActionQueueRow | feature-local `ActionQueueRow` (Home); `IntegrationDashboardCards` (Integration) | `apps/frontend/src/features/home/HomeScreen.tsx`, `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
 | CommandMenu | `CommandPalette` with local `CommandPaletteItemIcon` | `apps/frontend/src/lib/layout/command-palette/` |
 | UserPicker | feature-local `OwnerPicker` (VOC Triage owner) | `apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx` |
@@ -132,7 +135,7 @@ Never built: `IconButton`, `Table` / `DataTable`, `InboxList`, `ScopeFilterBar`,
 
 ## Implemented Shared Flow Components
 
-- `CommandPalette` (`apps/frontend/src/lib/layout/command-palette/`) — the inventory's `CommandMenu`, built in #611: cmdk's Radix Dialog hosted by `AppFrame`, shortcut + sidebar-row entry per `docs/frontend/routes-and-layout.md` → Global command palette (#611).
+- `CommandPalette` (`apps/frontend/src/lib/layout/command-palette/`) — the inventory's `CommandMenu`, built in #611: cmdk `Command` composed inside `@fops/ui` Radix dialog primitives (`Dialog` + `DialogPortal` + `DialogOverlay` + `DialogContentBare`; the palette scrim/panel is the `variant="palette"` treatment owned by `packages/ui`, not app-side classes), hosted by `AppFrame`; #1050 replaced `Command.Dialog` so undo-toast clicks don't dismiss the palette. Shortcut + sidebar-row entry per `docs/frontend/routes-and-layout.md` → Global command palette (#611).
 - `apps/frontend/src/features/cross-system/request-task/TaskRequestDraftCard.tsx` — neutral inline source request form and pending-source read presentation with the contract fields Evidence Summary and Requested Outcome; source mutations stay in their owning features.
 - `ListTabs` — reusable 28px list tab strip with optional bare counts, icons, native title tips, and overflow controls; composed by `ListToolbar`.
 - Internal `useHorizontalOverflow` — shared 1px scroll-edge state, resize observation, direct-child rebinding, and cleanup for `ListTabs` and `DetailPanelSectionNav`. Each consumer retains its active-item reveal, fade or scrollspy behavior, and component-specific layout rules.
@@ -176,7 +179,6 @@ Task Request Status:
 Milestone Detail:
 - Header with title, Primary Managed System, Analytics Area, owner, status, due date, and actions
 - Overview section for why the milestone exists and source context
-- Timeline section with child Task Gantt chart
 - Tasks section with child Task list
 - Evidence section with linked Evidence Highlights and source objects
 - Activity section with decisions, audit events, and updates
@@ -185,7 +187,6 @@ Milestone List Row:
 - Title and source context
 - Managed System and Analytics Area
 - Owner, status, due date, and progress
-- Mini timeline for schedule risk scanning
 
 Finding Status:
 - draft
@@ -249,3 +250,17 @@ disabled while loading, and offers retry after a next-page failure without
 replacing loaded rows or counts. Copy reuses `HOME_INBOX_COPY`'s load-more,
 loading and retry strings. Ordinary Button keyboard focus remains available;
 permission-blocked and initial-error screens do not render the control.
+
+
+### Recovery composition (Integration-owned, ADR-0067)
+
+| Component/seam | Location | Contract |
+| --- | --- | --- |
+| `useRecoveryQueue` | `apps/frontend/src/features/integration/recovery/useRecoveryQueue.tsx` | ObjectRow/ListToolbar/ListLoadMore composition; bounded operational/actionable reads, hidden/history tabs and URL selection. |
+| `RecoveryPanel` | `apps/frontend/src/features/integration/recovery/RecoveryPanel.tsx` | Existing PageShell detail slot; backend safe summaries/actions, personal presentation, independent loading/error/resolved states and keyboard close/focus. |
+| `RecoveryFreshness` | `apps/frontend/src/features/integration/recovery/RecoveryFreshness.tsx` | One line for server computation time, last successful refresh and stale marker; queue/detail suppress matching page timestamps unless stale. `formatRecoveryTime` also formats resolution and snooze timestamps. Shared by Home, Integration and Coverage. |
+| Integration public seam | `apps/frontend/src/features/integration/public.ts` | Home consumes recovery composition/freshness only through this module; Home/Integration routes inject `RenderRecoveryAccess` so Integration internals remain Admin-free. |
+| Recovery invalidation | `apps/frontend/src/lib/query/recovery.ts` | Neutral recovery/summary query prefixes; presentation also refreshes owning source caches. Source mutation hooks own their source invalidation. |
+
+The host retains PageShell ownership. Inbox unregisters Home's slot, resolved selections
+stay readable, and late personal PATCH completion cannot close a newer selection.

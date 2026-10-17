@@ -7,7 +7,9 @@ import { useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 import { VocCreateScreen } from '../components/create/VocCreateScreen';
 
-export function CreateRoute(): React.ReactElement {
+export function CreateRoute({
+  backView = 'inbox',
+}: { backView?: 'inbox' | 'my' }): React.ReactElement {
   // Read managedSystem from URL search (useSearch strict:false so this
   // component can be mounted from anywhere that passes VocSearch shape).
   const search = useSearch({ strict: false }) as { managedSystem?: string };
@@ -57,7 +59,7 @@ export function CreateRoute(): React.ReactElement {
   }
 
   function handleCancel(): void {
-    void navigate({ to: '/vocs', search: { view: 'inbox' } });
+    void navigate({ to: '/vocs', search: { view: backView } });
   }
 
   return (

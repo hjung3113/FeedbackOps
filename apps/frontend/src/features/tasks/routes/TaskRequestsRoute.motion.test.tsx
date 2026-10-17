@@ -19,6 +19,11 @@ vi.mock('@/lib/auth/useMe', () => ({
 vi.mock('@/lib/api/managed-systems', () => ({
   fetchManagedSystems: async () => ({ items: [] }),
 }));
+// Motion tests await isFetching() === 0; the picker's candidate read must not
+// keep a query in flight.
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [] }),
+}));
 vi.mock('@fops/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@fops/ui')>()),
   ListShell: ({ list, detailPanel }: { list: ReactNode; detailPanel?: ReactNode }) => (
@@ -58,6 +63,8 @@ const rows: TaskRequestDto[] = [1, 2, 3].map((n) => ({
   requested_outcome: `Request ${n}`,
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -108,7 +115,7 @@ it.each([
   ['scope', 'empty'],
   ['scope', 'rows'],
 ] as const)(
-  'skips %s context motion for stale %s refreshes, including revisits',
+  'preserves %s context through stale %s refreshes and revisits',
   async (switchBy, cachePhase) => {
     const changeScope = mount();
     await screen.findByRole('button', { name: /REQ-1/ });
@@ -116,7 +123,7 @@ it.each([
     for (let visit = 0; visit < 2; visit += 1) {
       const cachedRows = cachePhase === 'empty' ? [] : rows;
       const targetScope = switchBy === 'scope' ? 'scope-b' : 'scope-a';
-      const targetTab = switchBy === 'scope' ? 'pending_review' : 'approved';
+      const targetTab = switchBy === 'tab' ? 'approved' : 'pending_review';
       const fresh: TaskRequestDto[] = rows.slice(2).map((row) => ({ ...row, status: targetTab }));
       seed(targetScope, targetTab, cachedRows);
       let resolve!: (page: ListTaskRequestsResponse) => void;
@@ -139,7 +146,7 @@ it.each([
       );
       if (cachePhase === 'rows')
         expect(screen.getByRole('button', { name: /REQ-2/ })).toBeInTheDocument();
-      else
+      else if (switchBy !== 'decision')
         expect(
           screen.getByText(
             switchBy === 'scope'
@@ -148,17 +155,28 @@ it.each([
           ),
         ).toBeInTheDocument();
       await act(async () => {});
-      expect(environment.animate).not.toHaveBeenCalled();
+      if (switchBy !== 'decision') expect(environment.animate).not.toHaveBeenCalled();
       await act(async () => {
         resolve(taskRequestPage(fresh));
       });
       await settled();
+      if (switchBy === 'decision')
+        await act(async () => {
+          for (const result of environment.animate.mock.results) {
+            const calls = result.value.addEventListener.mock.calls as Array<[string, () => void]>;
+            for (const [event, callback] of calls) if (event === 'finish') callback();
+          }
+        });
       expect(screen.getByRole('button', { name: /REQ-3/ })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /REQ-2/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /REQ-1/ })).not.toBeInTheDocument();
-      expect(environment.animate).not.toHaveBeenCalled();
+      if (switchBy !== 'decision') expect(environment.animate).not.toHaveBeenCalled();
       if (switchBy === 'scope') changeScope('scope-a');
-      else fireEvent.mouseDown(screen.getByRole('tab', { name: /^검토 대기/ }));
+      else if (switchBy === 'decision') {
+        fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }));
+        await settled();
+        fireEvent.mouseDown(screen.getByRole('tab', { name: /^검토 대기/ }));
+      } else fireEvent.mouseDown(screen.getByRole('tab', { name: /^검토 대기/ }));
       await settled();
       // Restore the decided row for a second independent decision into the visited context.
       await act(async () => {
@@ -172,7 +190,7 @@ it.each([
   },
 );
 
-it('keeps settled decision removal and load-more motion with boundary and scroll, then shows empty immediately', async () => {
+it('keeps all-tab decision membership and load-more boundary and scroll until a fresh empty result', async () => {
   mount();
   await screen.findByRole('button', { name: /REQ-1/ });
   fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }));
@@ -194,7 +212,8 @@ it('keeps settled decision removal and load-more motion with boundary and scroll
   });
   environment.animate.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Convert selected' }));
-  await waitFor(() => expect(environment.animate.mock.contexts).toContain(removedRow));
+  expect(removedRow.isConnected).toBe(true);
+  expect(removedRow).toHaveTextContent('전환됨');
   expect(client.getQueryState(key('scope-a', 'all'))?.fetchStatus).toBe('fetching');
   expect(screen.getByRole('button', { name: /REQ-2/ }).parentElement).toBe(boundary);
   expect(boundary.scrollTop).toBe(123);
@@ -221,11 +240,12 @@ it('keeps settled decision removal and load-more motion with boundary and scroll
   );
   expect(screen.getByRole('button', { name: /REQ-4/ }).parentElement).toBe(boundary);
   expect(boundary.scrollTop).toBe(123);
-  // Each conversion reconciles the real infinite cache, including invalidation.
-  for (const n of [2, 4]) {
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`REQ-${n}`) }));
-    fireEvent.click(screen.getByRole('button', { name: 'Convert selected' }));
-  }
+  // All-tab membership is retained even on conversion; only an authoritative
+  // empty read can replace these rows with a truthful empty state.
+  fireEvent.click(screen.getByRole('button', { name: /REQ-2/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Convert selected' }));
+  await act(async () => resolve(taskRequestPage([])));
+  await settled();
   expect(screen.getByText('Task Request가 없습니다.')).toBeInTheDocument();
   expect(boundary.isConnected).toBe(false);
 });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listPageSchema } from '../list-page.js';
+import { surveyTypeSchema } from '../surveys/dto.js';
 
 import { findingStatusSchema } from './status.js';
 
@@ -23,6 +24,8 @@ export type EvidenceHighlightImportance = z.infer<typeof evidenceHighlightImport
 
 export const createFindingRequestSchema = z
   .object({
+    owner_actor_id: z.string().uuid().nullable().optional(),
+    owner_team_id: z.string().uuid().nullable().optional(),
     title: z.string().trim().min(1).max(200),
     summary: z.string().trim().min(1),
     severity: findingSeveritySchema,
@@ -35,10 +38,20 @@ export type CreateFindingRequest = z.infer<typeof createFindingRequestSchema>;
 
 export const patchFindingRequestSchema = z
   .object({
-    status: findingStatusSchema,
+    status: findingStatusSchema.optional(),
+    owner_actor_id: z.string().uuid().nullable().optional(),
+    owner_team_id: z.string().uuid().nullable().optional(),
     reason: z.string().trim().min(1).max(1000).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (input) =>
+      input.status !== undefined ||
+      input.owner_actor_id !== undefined ||
+      input.owner_team_id !== undefined,
+    { message: 'status or responsibility is required', path: ['status'] },
+  );
+
 export type PatchFindingRequest = z.infer<typeof patchFindingRequestSchema>;
 
 export const linkTaskRequestSchema = z
@@ -77,6 +90,13 @@ const findingDtoBaseSchema = {
   severity: findingSeveritySchema,
   confidence: findingConfidenceSchema.nullable(),
   status: findingStatusSchema,
+  owner_actor_id: z.string().uuid().nullable(),
+  owner_team_id: z.string().uuid().nullable(),
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
   analytics_area_id: z.string().uuid().nullable(),
   linked_task_id: z.string().uuid().nullable(),
   linked_milestone_id: z.string().uuid().nullable(),
@@ -214,8 +234,19 @@ export type LinkEvidenceRequest = z.infer<typeof linkEvidenceRequestSchema>;
 
 export const listFindingsQuerySchema = z
   .object({
+    q: z
+      .string()
+      .trim()
+      .max(100)
+      .optional()
+      .transform((value) => (value === undefined || value === '' ? undefined : value)),
+    analytics_area_id: z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    status: z.literal('active').optional(),
     managed_system_id: z.string().uuid().optional(),
     execution: z.literal('none').optional(),
+    owner_actor_id: z.string().uuid().optional(),
+    owner_team_id: z.string().uuid().optional(),
+    assignment: z.enum(['assigned', 'unassigned']).optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })
@@ -223,3 +254,103 @@ export const listFindingsQuerySchema = z
 export type ListFindingsQuery = z.infer<typeof listFindingsQuerySchema>;
 
 export * from './comments.js';
+
+// ADR-0065 inventory is an independent wire contract; nested Evidence stays unchanged.
+export const listEvidenceInventoryQuerySchema = z
+  .object({
+    managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    source_type: evidenceHighlightSourceTypeSchema.optional(),
+    q: z.string().trim().max(200).optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .strict();
+export type ListEvidenceInventoryQuery = z.infer<typeof listEvidenceInventoryQuerySchema>;
+
+const evidenceInventoryBase = {
+  id: z.string().uuid(),
+  finding_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  analytics_area_id: z.string().uuid().nullable(),
+  sentiment: evidenceHighlightSentimentSchema.nullable(),
+  importance: evidenceHighlightImportanceSchema.nullable(),
+  created_at: z.string().datetime(),
+  finding: z.object({ id: z.string().uuid(), display_id: z.string(), title: z.string() }).strict(),
+  content_state: z.enum(['available', 'withheld']),
+  quote_or_summary: z.string().optional(),
+};
+const inventoryVocSource = z
+  .object({
+    id: z.string().uuid(),
+    display_id: z.string(),
+    title: z.string(),
+    route: z.string(),
+  })
+  .strict();
+const inventorySurveySource = z
+  .object({
+    survey_type: surveyTypeSchema,
+    survey_display_id: z.string(),
+    question_label: z.string(),
+    identity_protected: z.boolean(),
+  })
+  .strict();
+export const evidenceInventoryItemSchema = z
+  .discriminatedUnion('source_type', [
+    z
+      .object({
+        ...evidenceInventoryBase,
+        source_type: z.literal('voc'),
+        source: inventoryVocSource.optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...evidenceInventoryBase,
+        source_type: z.literal('survey_response'),
+        source: inventorySurveySource.optional(),
+      })
+      .strict(),
+    z.object({ ...evidenceInventoryBase, source_type: z.literal('note') }).strict(),
+  ])
+  .superRefine((item, ctx) => {
+    if ((item.content_state === 'available') !== (item.quote_or_summary !== undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['quote_or_summary'],
+        message: 'quote is required only for available content',
+      });
+    }
+    if (item.content_state === 'withheld' && 'source' in item && item.source !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['source'],
+        message: 'withheld content must omit source context',
+      });
+    }
+  });
+export type EvidenceInventoryItem = z.infer<typeof evidenceInventoryItemSchema>;
+export const evidenceInventoryDetailQuerySchema = z.object({}).strict();
+export const getEvidenceInventoryResponseSchema = evidenceInventoryItemSchema;
+export const listEvidenceInventoryResponseSchema = z
+  .object({
+    items: z.array(evidenceInventoryItemSchema),
+    page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
+  })
+  .strict();
+export type ListEvidenceInventoryResponse = z.infer<typeof listEvidenceInventoryResponseSchema>;
+
+// Approval selection is separate from the generic VOC/note evidence command.
+export const attachSurveyEvidenceRequestSchema = z
+  .object({
+    approved_excerpt_id: z.string().uuid(),
+    analytics_area_id: z.string().uuid().nullable().optional(),
+    sentiment: evidenceHighlightSentimentSchema.nullable().optional(),
+    importance: evidenceHighlightImportanceSchema.nullable().optional(),
+  })
+  .strict();
+export type AttachSurveyEvidenceRequest = z.infer<typeof attachSurveyEvidenceRequestSchema>;
+export const attachSurveyEvidenceResponseSchema = z
+  .object({ evidence_highlight_id: z.string().uuid(), finding_id: z.string().uuid() })
+  .strict();
+export type AttachSurveyEvidenceResponse = z.infer<typeof attachSurveyEvidenceResponseSchema>;

@@ -9,6 +9,11 @@ import { buildServer } from '../../../server.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import {
+  cleanupSystemRecoveryFixtures,
+  deleteRecoveryFixtureParents,
+} from '../../../test-support/recovery-fixtures.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -44,6 +49,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    await cleanupSystemRecoveryFixtures(migrateHandle, WORKSPACE_ID, `${SLUG_PREFIX}%`);
     const managedSystems =
       'select id from core.managed_systems where workspace_id = $1 and slug like $2';
     const surveys = `select id from survey.surveys where workspace_id = $1 and primary_managed_system_id in (${managedSystems})`;
@@ -74,7 +80,8 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
       `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -142,6 +149,23 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     });
   }
 
+  it('does not fabricate an outcome recovery episode for a validation Survey lifecycle', async () => {
+    const id = await createSurvey();
+    await addQuestion(id);
+    expect((await transition(id, 'open')).statusCode).toBe(200);
+    expect((await transition(id, 'close')).statusCode).toBe(200);
+    const identity = await appHandle.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('bad-outcome-no-followup', id)],
+    );
+    const history = await appHandle.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('bad-outcome-no-followup', id)],
+    );
+    expect(identity.rows).toEqual([]);
+    expect(history.rows).toEqual([]);
+  });
+
   it('requires at least one question before opening', async () => {
     const surveyId = await createSurvey();
     const response = await transition(surveyId, 'open');
@@ -158,7 +182,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json<{ status: string; opened_at: string | null }>().status).toBe('open');
     expect(response.json<{ opened_at: string | null }>().opened_at).not.toBeNull();
-    const audit = await appHandle.pool.query<{
+    const audit = await migrateHandle.pool.query<{
       event_type: string;
       detail: { question_count: number };
     }>(
@@ -180,7 +204,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     const repeated = await transition(surveyId, 'open');
 
     expect(repeated.statusCode).toBe(200);
-    const audits = await appHandle.pool.query<{ count: number }>(
+    const audits = await migrateHandle.pool.query<{ count: number }>(
       `select count(*)::int as count from core.audit_log where subject_id = $1 and event_type = 'survey_opened'`,
       [surveyId],
     );
@@ -196,7 +220,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     expect(closed.statusCode).toBe(200);
     expect(closed.json<{ status: string; closed_at: string | null }>().status).toBe('closed');
     expect(closed.json<{ closed_at: string | null }>().closed_at).not.toBeNull();
-    const closeAudit = await appHandle.pool.query<{
+    const closeAudit = await migrateHandle.pool.query<{
       event_type: string;
       detail: { survey_id: string };
     }>(

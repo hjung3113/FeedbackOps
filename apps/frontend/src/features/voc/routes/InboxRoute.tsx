@@ -1,14 +1,19 @@
 // InboxRoute — list-first layout for /vocs?view=inbox and /vocs?view=my.
-// Owns: URL state reading, useVocList params building, filter/sort/tab handlers,
+// Owns: URL state reading, useVocListPages params building, filter/sort/tab handlers,
 // out_of_scope_summary peek banner, and VocDetailPanel forwarding into ListShell.
 // C9 of Slice 3 #20.
 
+import { ListLoadMore } from '@/components/ListLoadMore';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
+import { VOC_INBOX_LABEL, VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
+import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import {
+  ActiveFilterBar,
   Button,
   type FilterCategory,
   ListFilterButton,
@@ -23,10 +28,10 @@ import {
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'lucide-react';
 import * as React from 'react';
+import { VocAreaFilterSelect } from '../components/VocAreaFilterSelect';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
-import { useCommittedSearchDraft } from '../hooks/useCommittedSearchDraft';
-import { useVocList } from '../hooks/useVocList';
+import { type SearchTabTransition, useVocListPages } from '../hooks/useVocListPages';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -58,7 +63,7 @@ interface InboxSearch {
   'filter.severity'?: string;
   'filter.reporterStatus'?: string;
   'filter.owner'?: string;
-  'filter.analytics_area'?: 'unset';
+  'filter.analytics_area'?: string;
   sort?: InboxSort;
   selected?: string;
 }
@@ -185,7 +190,15 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   // ── Derived URL state ─────────────────────────────────────────────────────
 
-  const hasAnalyticsAreaUnsetFilter = search['filter.analytics_area'] === 'unset';
+  const area = search['filter.analytics_area'];
+  const areaLabel = useAnalyticsAreaFilterLabel(area, search.managedSystem);
+  const removeArea = () => {
+    void navigate({
+      to: '/vocs',
+      search: ({ 'filter.analytics_area': _area, ...rest }) => rest,
+    });
+  };
+  const hasAnalyticsAreaFilter = area !== undefined;
   // #821: the URL q is the source of truth for the fetch; the box keeps a
   // local draft so keystrokes do not navigate on every character.
   const urlQ = search.q ?? '';
@@ -196,12 +209,32 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const searchingAllTabs = view === 'inbox' && urlQ !== '' && search.tab === undefined;
   const activeTab = searchingAllTabs
     ? ''
-    : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged'));
+    : (search.tab ?? (hasAnalyticsAreaFilter ? '' : 'untriaged'));
   const apiTab = searchingAllTabs
     ? undefined
-    : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged'));
-  const currentSort = search.sort ?? DEFAULT_SORT;
+    : (search.tab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged'));
+  const mySeveritySort = view === 'my' && search.sort?.startsWith('severity:') === true;
+  const mySeverityTab = view === 'my' && (search.tab === 'high' || search.tab === 'high-no-link');
+  const mySeverityFilter = view === 'my' && search['filter.severity'] !== undefined;
+  const currentSort = mySeveritySort ? DEFAULT_SORT : (search.sort ?? DEFAULT_SORT);
+  React.useEffect(() => {
+    if (!mySeveritySort && !mySeverityTab && !mySeverityFilter) return;
+    void navigate({
+      to: '/vocs',
+      search: (prev) => {
+        const { sort, tab, 'filter.severity': severity, ...rest } = prev;
+        return {
+          ...rest,
+          ...(!mySeveritySort && sort !== undefined ? { sort } : {}),
+          ...(!mySeverityTab && tab !== undefined ? { tab } : {}),
+          ...(!mySeverityFilter && severity !== undefined ? { 'filter.severity': severity } : {}),
+        };
+      },
+      replace: true,
+    });
+  }, [mySeveritySort, mySeverityTab, mySeverityFilter, navigate]);
   // The tab the current search started from, restored when the search is cleared.
+  const [searchTabTransition, setSearchTabTransition] = React.useState<SearchTabTransition>();
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
   // #864: the hook calls this to write the URL q, from its debounced effect and
   // its immediate Enter/blur commit. Carries the #821 tab rules: starting a
@@ -216,6 +249,16 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       if (starting) tabBeforeSearchRef.current = urlTab;
       const restoreTab = clearing ? tabBeforeSearchRef.current : undefined;
       if (clearing) tabBeforeSearchRef.current = undefined;
+      if (starting || clearing) {
+        setSearchTabTransition({
+          fromQ: base,
+          fromTab: apiTab,
+          toQ: draft,
+          toTab: starting
+            ? undefined
+            : (urlTab ?? restoreTab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged')),
+        });
+      }
       void navigate({
         to: '/vocs',
         search: (prev) => {
@@ -236,9 +279,17 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         },
         replace: true,
       });
+      // Undefined, not false: a raw write can still change the URL, so the
+      // draft waits for `committed` instead of settling as a no-op.
+      return undefined;
     },
-    [navigate, search.tab, view],
+    [navigate, search.tab, view, apiTab, hasAnalyticsAreaFilter],
   );
+  React.useEffect(() => {
+    if (searchTabTransition?.toQ === urlQ && searchTabTransition.toTab === apiTab) {
+      setSearchTabTransition(undefined);
+    }
+  }, [searchTabTransition, urlQ, apiTab]);
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: urlQ,
     write: writeSearchDraft,
@@ -248,25 +299,26 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
     const out: Record<string, string[]> = {};
     const sev = parseCommaList(search['filter.severity']);
-    if (sev.length > 0) out['filter.severity'] = sev;
+    if (view !== 'my' && sev.length > 0) out['filter.severity'] = sev;
     const status = parseCommaList(search['filter.reporterStatus']);
     if (status.length > 0) out['filter.reporterStatus'] = status;
     const owner = parseCommaList(search['filter.owner']);
     if (owner.length > 0) out['filter.owner'] = owner;
     return out;
-  }, [search]);
+  }, [search, view]);
 
   const apiFilters = React.useMemo(() => {
     const analyticsArea = search['filter.analytics_area'];
-    return analyticsArea === 'unset'
+    return analyticsArea !== undefined
       ? { ...currentFilters, 'filter.analytics_area': [analyticsArea] }
       : currentFilters;
   }, [currentFilters, search['filter.analytics_area']]);
 
-  // ── useVocList params ─────────────────────────────────────────────────────
+  // ── useVocListPages params ────────────────────────────────────────────────
 
-  const vocList = useVocList({
+  const vocList = useVocListPages({
     view,
+    searchTabTransition,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
     ...(urlQ !== '' ? { q: urlQ } : {}),
@@ -274,10 +326,19 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     sort: currentSort,
   });
   const isSearching = urlQ !== '';
+  const items = React.useMemo(
+    () => vocList.data?.pages.flatMap((page) => page.items) ?? [],
+    [vocList.data],
+  );
+  const outOfScopeSummary = vocList.data?.pages[0]?.out_of_scope_summary;
+  // A failed next page keeps the loaded rows; it must not reach the list's
+  // error or permission-denied states.
+  const listError = vocList.isFetchNextPageError ? null : vocList.error;
   // Captured outside JSX: property narrowing does not survive into the renderTrigger callback.
   const deniedMsScoped =
-    isPermissionDenied(vocList.error) &&
-    typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string';
+    isPermissionDenied(listError) &&
+    typeof listError.envelope.requestable_permission?.managed_system_id === 'string';
+  const inboxPermissionBlocked = view === 'inbox' && isPermissionDenied(listError);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -311,6 +372,14 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     });
   }
 
+  function handleAreaChange(next: string | undefined): void {
+    void navigate({
+      to: '/vocs',
+      search: ({ 'filter.analytics_area': _area, ...rest }) =>
+        next === undefined ? rest : { ...rest, 'filter.analytics_area': next },
+    });
+  }
+
   function handleSortChange(next: string): void {
     void navigate({
       to: '/vocs',
@@ -338,16 +407,16 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   // ShellHeader which has no Tabs slot; ListToolbar from @fops/ui already owns
   // both the title/tabs row and the actions row in one sticky component.
 
-  const outOfScopeBanner = vocList.data?.out_of_scope_summary ? (
+  const outOfScopeBanner = outOfScopeSummary ? (
     <PermissionBlockedPanel
       state="summary_visible"
       category="조회 권한 외 VOC"
       summary={
         <div>
-          <p>{vocList.data.out_of_scope_summary.count}건의 VOC를 조회할 수 없습니다.</p>
+          <p>{outOfScopeSummary.count}건의 VOC를 조회할 수 없습니다.</p>
           <p className="text-xs text-text-muted">
             심각도 분포:{' '}
-            {Object.entries(vocList.data.out_of_scope_summary.severity_distribution)
+            {Object.entries(outOfScopeSummary.severity_distribution)
               .map(([sev, n]) => `${sev}=${String(n)}`)
               .join(', ')}
           </p>
@@ -360,64 +429,93 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const list = (
     <>
       <ListToolbar
-        {...(view === 'inbox'
+        {...(view === 'inbox' && !inboxPermissionBlocked
           ? {
               tabs: INBOX_TABS,
               activeTab,
               onTabChange: handleTabChange,
             }
-          : { title: GLOSSARY.myVocs })}
+          : { title: view === 'my' ? GLOSSARY.myVocs : VOC_INBOX_LABEL })}
         action={
-          <div className="flex items-center gap-2">
-            {/* #821: server-side text search on GET /vocs. The box is a local
-                draft; useCommittedSearchDraft writes the URL q on debounce or
-                Enter/blur (#864). */}
-            <SearchInput
-              placeholder="필터, 키워드…"
-              value={draft}
-              onValueChange={setDraft}
-              onCommit={commit}
-            />
-            <ListFilterButton
-              categories={FILTER_CATEGORIES}
-              values={currentFilters}
-              onChange={handleFiltersChange}
-            />
-            <ListSortButton
-              options={SORT_OPTIONS}
-              value={currentSort}
-              defaultValue={DEFAULT_SORT}
-              onChange={handleSortChange}
-            />
-            {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
-            <Button asChild variant="primary" size="sm" spacing="compact">
+          inboxPermissionBlocked ? (
+            <Button asChild variant="secondary" size="sm" spacing="compact">
               <Link to="/vocs" search={{ action: 'create' }}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {createLabel('VOC')}
               </Link>
             </Button>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {/* #821: server-side text search on GET /vocs. The box is a local
+                draft; useCommittedSearchDraft writes the URL q on debounce or
+                Enter/blur (#864). */}
+              <SearchInput
+                placeholder={LIST_SEARCH_PLACEHOLDER}
+                value={draft}
+                onValueChange={setDraft}
+                onCommit={commit}
+              />
+              <VocAreaFilterSelect
+                value={area}
+                managedSystemId={search.managedSystem}
+                onChange={handleAreaChange}
+              />
+              <ListFilterButton
+                categories={
+                  view === 'my'
+                    ? FILTER_CATEGORIES.filter((category) => category.key !== 'filter.severity')
+                    : FILTER_CATEGORIES
+                }
+                values={currentFilters}
+                onChange={handleFiltersChange}
+              />
+              <ListSortButton
+                options={
+                  view === 'my'
+                    ? SORT_OPTIONS.filter((option) => !option.value.startsWith('severity:'))
+                    : SORT_OPTIONS
+                }
+                value={currentSort}
+                defaultValue={DEFAULT_SORT}
+                onChange={handleSortChange}
+              />
+              {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
+              <Button asChild variant="primary" size="sm" spacing="compact">
+                <Link to="/vocs" search={{ action: 'create' }}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  {createLabel('VOC')}
+                </Link>
+              </Button>
+            </div>
+          )
         }
       />
+      {!inboxPermissionBlocked && (
+        <ActiveFilterBar
+          items={
+            area === undefined ? [] : [{ key: 'area', label: areaLabel, onRemove: removeArea }]
+          }
+          onClearAll={removeArea}
+          className="mx-4 my-2"
+        />
+      )}
       {outOfScopeBanner}
-      {isPermissionDenied(vocList.error) ? (
+      {isPermissionDenied(listError) ? (
         <div className="m-4 space-y-3">
-          {vocList.error.envelope.requestable_permission ? (
+          {listError.envelope.requestable_permission ? (
             <RequestAccessButton
-              capability={vocList.error.envelope.requestable_permission.permission}
+              capability={listError.envelope.requestable_permission.permission}
               returnRouteIntent={`/vocs?view=${view}`}
-              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
-              'string'
+              {...(typeof listError.envelope.requestable_permission.managed_system_id === 'string'
                 ? {
-                    managedSystemId:
-                      vocList.error.envelope.requestable_permission.managed_system_id,
+                    managedSystemId: listError.envelope.requestable_permission.managed_system_id,
                   }
                 : {})}
               renderTrigger={(onRequestAccess) => (
                 <PermissionBlockedPanel
                   // The server marks the capability requestable, so its panel state owns the CTA.
                   state="request_access"
-                  category="VOC 수신함"
+                  category={VOC_INBOX_LABEL}
                   // #562 copy: a named Managed System means this selected scope is out of reach.
                   reason={
                     deniedMsScoped
@@ -433,12 +531,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
               // -> blocked_not_requestable (#562).
               state="blocked_not_requestable"
-              category="VOC 수신함"
+              category={VOC_INBOX_LABEL}
               reason={PERMISSION_BLOCKED_REASONS.vocInbox}
             />
           )}
-          {view === 'inbox' &&
-          typeof vocList.error.envelope.requestable_permission?.managed_system_id !== 'string' ? (
+          {view === 'inbox' && listError.envelope.requestable_permission === undefined ? (
             <Button
               asChild
               variant="subtle"
@@ -454,29 +551,44 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           ) : null}
         </div>
       ) : (
-        <VocList
-          items={vocList.data?.items ?? []}
-          // Placeholder data keeps the previous page while the next key loads.
-          // `isLoading` is then false. VocList still mounts rows when items
-          // exist; an empty previous page must stay on the skeleton branch
-          // instead of the old query's empty state. A real error replaces
-          // placeholder data, so that branch is unchanged.
-          loading={vocList.isLoading || vocList.isPlaceholderData}
-          error={vocList.error ?? null}
-          selectedId={search.selected ?? null}
-          onSelect={handleRowSelect}
-          view={view}
-          searching={isSearching}
-          onRetry={() => {
-            void vocList.refetch();
-          }}
-          onCreate={() =>
-            void navigate({
-              to: '/vocs',
-              search: (previous) => ({ ...previous, action: 'create' }),
-            })
-          }
-        />
+        <>
+          <VocList
+            items={items}
+            // Placeholder data keeps the previous page while the next key loads.
+            // `isLoading` is then false. VocList still mounts rows when items
+            // exist; an empty previous page must stay on the skeleton branch
+            // instead of the old query's empty state. A real error replaces
+            // placeholder data, so that branch is unchanged.
+            loading={vocList.isLoading || vocList.isPlaceholderData}
+            error={listError ?? null}
+            selectedId={search.selected ?? null}
+            onSelect={handleRowSelect}
+            view={view}
+            {...(view === 'inbox' && activeTab === 'unassigned'
+              ? { unassignedBadgeTone: 'neutral' as const }
+              : {})}
+            searching={isSearching}
+            areaFiltered={view === 'inbox' && area !== undefined}
+            areaLabel={areaLabel}
+            onRetry={() => {
+              void vocList.refetch();
+            }}
+            onCreate={() =>
+              void navigate({
+                to: '/vocs',
+                search: (previous) => ({ ...previous, action: 'create' }),
+              })
+            }
+          />
+          <ListLoadMore
+            hasMore={vocList.hasNextPage}
+            loadingMore={vocList.isFetchingNextPage}
+            failed={vocList.isFetchNextPageError}
+            onLoadMore={() => {
+              void vocList.fetchNextPage();
+            }}
+          />
+        </>
       )}
     </>
   );

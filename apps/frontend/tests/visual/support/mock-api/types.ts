@@ -1,4 +1,5 @@
 import type { AdminSettingsVisualScenario } from '../../fixtures/admin-settings';
+import type { EvidenceVisualScenario } from '../../fixtures/evidence';
 import type { HomeVisualScenario } from '../../fixtures/home';
 import type { populatedInboxNotifications } from '../../fixtures/notifications';
 import type {
@@ -9,6 +10,7 @@ import type {
   PermissionScenarioName,
   createPermissionRequestsScenario,
 } from '../../fixtures/permissions';
+import type { RecoveryVisualScenario } from '../../fixtures/recovery';
 import type { SurveyParticipationVisualScenario } from '../../fixtures/survey-participation';
 import type { SurveyResultsVisualScenario } from '../../fixtures/survey-results';
 import type { SurveyVisualScenario } from '../../fixtures/surveys';
@@ -22,12 +24,17 @@ import type {
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstallOptions {
+  clusterSuggestions?: 'populated' | 'empty' | 'unavailable';
+  recovery?: RecoveryVisualScenario;
+  evidence?: EvidenceVisualScenario;
   permissionScenario?: PermissionScenarioName;
+  /** Serves a grant-options candidate for the direct-grant form visual state. */
   permissionGrantsScenario?: PermissionGrantsScenarioName;
   role?: RoleLevel;
   scenario?: ScenarioName;
   /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
   vocReview?: boolean;
+  vocNoFollowUp?: 'eligible' | 'decided';
   /** Supplies a schema-validated VOC list for the High · no link inbox state. */
   inboxHighNoLink?: boolean;
   /** Issue #179 reporter-safe linked Task summary surface. */
@@ -49,18 +56,29 @@ export interface InstallOptions {
   notifications?: 'populated' | 'subject-references';
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
   coverage?: 'populated' | 'empty';
+  areaReport?: 'populated' | 'unclassified' | 'denied';
   /** #532 Integration Action Dashboard summary and Managed System fixtures. */
   integrationDashboard?: IntegrationDashboardVisualScenario;
   /** Request-access confirmation dialog state; screenshot spec is host-owned. */
   permissionRequestCompose?: boolean;
   /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
   managedSystemOwner?: boolean;
+  /** Populated registry configuration and creation-failure diagnostics. */
+  managedSystemDiagnostics?: boolean;
   /** Triage Analytics Area wiring and Finding inheritance states. */
   triageAreaScenario?: TriageAreaVisualScenario;
   /** VOC creation with a selected Managed System and pre-submit peers. */
   vocCreate?: boolean;
   /** Issue #399 Finding detail baseline surface; schemas validate fixtures at import. */
   findingDetail?: boolean;
+  findingSurveyEvidence?:
+    | 'visible'
+    | 'none'
+    | 'suppressed'
+    | 'empty'
+    | 'denied'
+    | 'retry'
+    | 'revoked';
   /**
    * #514 Milestone list surface: `true` serves the prototype-mirrored list,
    * `'empty'` serves an empty list; status-query params filter the fixture.

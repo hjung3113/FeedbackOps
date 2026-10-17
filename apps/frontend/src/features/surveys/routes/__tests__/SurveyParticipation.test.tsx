@@ -1,3 +1,5 @@
+import { DOCUMENT_TITLE_COPY } from '@/lib/copy/document-titles';
+import { DocumentTitleProvider } from '@/lib/router/document-title';
 import {
   type AnswerableSurveysResponse,
   type MySurveyResponsesResponse,
@@ -8,6 +10,14 @@ import {
   surveyResponseSubmissionSchema,
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
@@ -68,6 +78,7 @@ const formDto = surveyRespondentFormDtoSchema.parse({
     title: 'Q3 사용성 진단',
     type: 'discovery',
     identity_protected: true,
+    description: null,
   },
   questions: [
     {
@@ -185,6 +196,7 @@ function installFetch(
     pendingHistory?: boolean;
     form?: SurveyRespondentFormDto;
     formStatus?: number;
+    formCode?: string;
     postNetworkErrorOnce?: boolean;
     postStatuses?: Array<{ status: number; code?: string }>;
   } = {},
@@ -251,9 +263,17 @@ function installFetch(
     if (url.pathname === `/surveys/${surveyId}/form`) {
       if (options.formStatus !== undefined) {
         const error =
-          options.formStatus === 409
-            ? { code: 'conflict.survey_not_open', message: 'survey is not open' }
-            : { code: 'not_found.record', message: 'survey not found' };
+          options.formCode !== undefined
+            ? {
+                code: options.formCode,
+                message:
+                  options.formCode === 'conflict.survey_response_already_submitted'
+                    ? 'survey response already submitted'
+                    : 'survey is not open',
+              }
+            : options.formStatus === 409
+              ? { code: 'conflict.survey_not_open', message: 'survey is not open' }
+              : { code: 'not_found.record', message: 'survey not found' };
         return jsonResponse(error, options.formStatus);
       }
       return jsonResponse(options.form ?? formDto);
@@ -489,11 +509,11 @@ describe('respondent form', () => {
     const { requests } = installFetch({ form: ratingForm() });
     renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
 
-    await screen.findByText(/사용 빈도는 어떠했나요/);
-    const ratingGroup = screen.getByRole('radiogroup', { name: /사용 빈도는 어떠했나요/ });
+    const ratingGroup = await screen.findByRole('group', { name: /사용 빈도는 어떠했나요/ });
+    expect(within(ratingGroup).getAllByRole('radio')).toHaveLength(5);
     expect(within(ratingGroup).getByText('훨씬 자주')).toBeInTheDocument();
     expect(within(ratingGroup).getByText('거의 없음')).toBeInTheDocument();
-    await userEvent.setup().click(within(ratingGroup).getByRole('button', { name: '5' }));
+    await userEvent.setup().click(within(ratingGroup).getByRole('radio', { name: '5' }));
     await userEvent.setup().click(screen.getByRole('button', { name: '제출' }));
 
     expect(await screen.findByText('응답이 제출되었습니다')).toBeInTheDocument();
@@ -501,6 +521,77 @@ describe('respondent form', () => {
     expect(surveyResponseSubmissionSchema.parse(submission?.body)).toEqual({
       answers: [{ question_id: firstQuestion.id, value: 5 }],
     });
+  });
+
+  it('exposes the focus-visible ring contract on every rating chip', async () => {
+    installFetch({ form: ratingForm() });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+
+    const group = await screen.findByRole('group', { name: /사용 빈도는 어떠했나요/ });
+    for (const radio of within(group).getAllByRole('radio')) {
+      expect(radio.closest('label')).toHaveClass(
+        'has-[:focus-visible]:ring-2',
+        'has-[:focus-visible]:ring-focus-ring',
+        'has-[:focus-visible]:ring-offset-2',
+      );
+    }
+  });
+
+  it('moves the rating with an arrow key and submits that score', async () => {
+    const user = userEvent.setup();
+    const { requests } = installFetch({ form: ratingForm() });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+
+    const ratingGroup = await screen.findByRole('group', { name: /사용 빈도는 어떠했나요/ });
+    const radios = within(ratingGroup).getAllByRole('radio');
+    expect(radios).toHaveLength(5);
+    radios[0]?.focus();
+    await user.keyboard('{ArrowRight}');
+
+    const checked = within(ratingGroup).getByRole('radio', { checked: true });
+    const score = Number((checked as HTMLInputElement).value);
+    expect(score).toBe(2);
+    await user.click(screen.getByRole('button', { name: '제출' }));
+
+    expect(await screen.findByText('응답이 제출되었습니다')).toBeInTheDocument();
+    const submission = requests.find((request) => request.method === 'POST');
+    expect(surveyResponseSubmissionSchema.parse(submission?.body)).toEqual({
+      answers: [{ question_id: firstQuestion.id, value: score }],
+    });
+  });
+
+  it('shows a saved description under the title and omits it when empty', async () => {
+    installFetch({
+      form: surveyRespondentFormDtoSchema.parse({
+        ...formDto,
+        survey: { ...formDto.survey, description: '배포 맥락' },
+      }),
+    });
+    const described = renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+    expect(await screen.findByText('배포 맥락')).toBeInTheDocument();
+    expect(screen.queryByText('아직 설명이 추가되지 않았습니다.')).not.toBeInTheDocument();
+    described.unmount();
+
+    installFetch();
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+    expect(await screen.findByText('사용하기 쉬웠나요?')).toBeInTheDocument();
+    expect(screen.queryByText('배포 맥락')).not.toBeInTheDocument();
+    expect(screen.queryByText('아직 설명이 추가되지 않았습니다.')).not.toBeInTheDocument();
+  });
+
+  it('shows the already-submitted message and back link when the form load conflicts', async () => {
+    installFetch({
+      formStatus: 409,
+      formCode: 'conflict.survey_response_already_submitted',
+    });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+
+    expect(await screen.findByText('이 Survey에는 이미 응답을 제출했습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Survey 참여로 돌아가기' })).toHaveAttribute(
+      'href',
+      '/surveys/participate',
+    );
+    expect(screen.queryByTestId('survey-respondent-form')).not.toBeInTheDocument();
   });
 
   it('keeps a branch hidden until its single-choice trigger is selected', async () => {
@@ -725,6 +816,36 @@ describe('respondent form', () => {
       expect(screen.queryAllByRole('link', { name: /Q3 사용성 진단/ })).toHaveLength(0);
     });
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+  });
+});
+
+describe('respond route document title', () => {
+  it('replaces the not-found title after the routed Survey form loads', async () => {
+    installFetch({ form: formDto });
+    const rootRoute = createRootRoute({
+      component: () => (
+        <DocumentTitleProvider>
+          <Outlet />
+        </DocumentTitleProvider>
+      ),
+    });
+    const respondRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/surveys/$surveyId/respond',
+      component: () => <RespondSurveyPage surveyId={surveyId} />,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([respondRoute]),
+      history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}/respond`] }),
+    });
+    await router.load();
+
+    renderWithQuery(<RouterProvider router={router} />);
+
+    expect(await screen.findByTestId('survey-respondent-form')).toBeInTheDocument();
+    expect(document.title).not.toContain(DOCUMENT_TITLE_COPY.notFound);
+    await waitFor(() => expect(document.title).toContain(formDto.survey.title));
+    expect(document.title).not.toContain(DOCUMENT_TITLE_COPY.notFound);
   });
 });
 

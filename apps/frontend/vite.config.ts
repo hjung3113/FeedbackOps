@@ -43,6 +43,7 @@ export default defineConfig({
       // forward them unconditionally in development.
       '/workspace': 'http://127.0.0.1:3011',
       // Slice 2 / Slice 3 data endpoints (root-level, no /api prefix).
+      '/voc-cluster-suggestions': 'http://127.0.0.1:3011',
       '/entity-links': 'http://127.0.0.1:3011',
       // `/vocs` overlaps with the FE route of the same name, so we bypass the
       // proxy for browser HTML navigations and only forward JSON/XHR requests.
@@ -62,6 +63,11 @@ export default defineConfig({
       // with the FE route of the same name, so bypass the proxy for browser
       // HTML navigations and only forward JSON/XHR requests (mirrors /vocs).
       '/findings': {
+        target: 'http://127.0.0.1:3011',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
+      },
+      // #1106 Evidence inventory API (ADR-0065 54-2); HTML navigations stay with the SPA.
+      '/evidence-highlights': {
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },

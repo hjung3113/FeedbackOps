@@ -22,6 +22,7 @@ const RESPONDENT_FORM = {
     title: '온보딩 탐구 설문',
     type: 'discovery',
     identity_protected: true,
+    description: '온보딩 안내',
   },
   questions: [
     {
@@ -53,6 +54,18 @@ const VALID_SUBMISSION = {
 describe('survey respondent schemas', () => {
   it('parses the respondent-safe form DTO', () => {
     expect(surveyRespondentFormDtoSchema.parse(RESPONDENT_FORM)).toEqual(RESPONDENT_FORM);
+  });
+
+  it('accepts a null description and rejects a form that omits it', () => {
+    const withNull = {
+      ...RESPONDENT_FORM,
+      survey: { ...RESPONDENT_FORM.survey, description: null },
+    };
+    expect(surveyRespondentFormDtoSchema.parse(withNull).survey.description).toBeNull();
+    const { description: _description, ...survey } = RESPONDENT_FORM.survey;
+    expect(surveyRespondentFormDtoSchema.safeParse({ ...RESPONDENT_FORM, survey }).success).toBe(
+      false,
+    );
   });
 
   it('parses strict response submission and acknowledgement bodies', () => {

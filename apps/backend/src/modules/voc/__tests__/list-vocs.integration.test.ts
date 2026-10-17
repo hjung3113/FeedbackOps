@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // GET /vocs integration tests — Slice 3 #15 C4 acceptance coverage.
 //
 // Every AC bullet from issue #15 §list-vocs maps to at least one test here.
@@ -17,7 +18,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
-import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { createAa, insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { randomUUID, uid } from '../../../test-support/ids.js';
 import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
@@ -83,6 +84,226 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     await app?.close();
     await dbHandle?.close();
     await migrateHandle?.close();
+  });
+
+  it('1077: exact Area intersects scope and recovery tabs, agrees with counts, and writes nothing', async () => {
+    const msA = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Area A');
+    const msB = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Area B');
+    const areaA = await createAa(app, adminCookie, {
+      managed_system_id: msA,
+      slug: uid(SLUG_PREFIX),
+      name: 'Same name',
+    });
+    const areaB = await createAa(app, adminCookie, {
+      managed_system_id: msB,
+      slug: uid(SLUG_PREFIX),
+      name: 'Same name',
+    });
+    const selected = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Selected Area',
+      { severity: 'high', triageState: 'triaged' },
+    );
+    const resolved = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Resolved Area',
+      { severity: 'high', triageState: 'triaged' },
+    );
+    const assigned = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Assigned owner in Area',
+      { severity: 'high', ownerUserId: adminActorId },
+    );
+    const linked = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Task linked in Area',
+      { severity: 'high' },
+    );
+    const low = await insertVocDirectly(dbHandle, WORKSPACE_ID, msA, reporterId, 'Low in Area', {
+      severity: 'low',
+    });
+    const archived = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Archived in Area',
+      { severity: 'high' },
+    );
+    await dbHandle.pool.query('update voc.vocs set archived_at=now() where id=$1', [archived.id]);
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,managed_system_id,created_by)
+       values ($1,'voc',$2,'task',$3,'evidence_of',$4,$5)`,
+      [WORKSPACE_ID, linked.id, randomUUID(), msA, adminActorId],
+    );
+    const areaIds = [selected.id, resolved.id, assigned.id, linked.id, low.id].sort();
+    const other = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msB,
+      reporterId,
+      'Same name other Area',
+      { severity: 'high' },
+    );
+    const unset = await insertVocDirectly(dbHandle, WORKSPACE_ID, msA, reporterId, 'Unset Area');
+    await dbHandle.pool.query('update voc.vocs set analytics_area_id=$1 where id=any($2::uuid[])', [
+      areaA,
+      [...areaIds, archived.id],
+    ]);
+    await dbHandle.pool.query("update voc.vocs set reporter_facing_status='resolved' where id=$1", [
+      resolved.id,
+    ]);
+    await dbHandle.pool.query('update voc.vocs set analytics_area_id=$1 where id=$2', [
+      areaB,
+      other.id,
+    ]);
+    await migrateHandle.pool.query(
+      'update core.analytics_areas set archived_at=now(), archived_by_actor_id=$1 where id=$2',
+      [adminActorId, areaA],
+    );
+    const devA = await insertDevActor(dbHandle, WORKSPACE_ID, uid('area-dev-a'));
+    const devB = await insertDevActor(dbHandle, WORKSPACE_ID, uid('area-dev-b'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devA.id, 'voc.read', msA, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, devB.id, 'voc.read', msB, adminActorId);
+    const cookieA = await loginAs(app, devA.externalId);
+    const cookieB = await loginAs(app, devB.externalId);
+    const read = async (cookie: string, area: string, scope = 'all', tab?: string) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=inbox&managed_system_id=${scope}&filter.analytics_area=${area}${tab ? `&tab=${tab}` : ''}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(response.statusCode).toBe(200);
+      return response
+        .json<{ items: { id: string }[] }>()
+        .items.map((item) => item.id)
+        .sort();
+    };
+    const snapshot = async () =>
+      (
+        await migrateHandle.pool.query(
+          `select
+      (select jsonb_agg(to_jsonb(v) order by id) from voc.vocs v where workspace_id=$1) as vocs,
+      (select jsonb_agg(to_jsonb(f) order by id) from finding.findings f where workspace_id=$1) as findings,
+      (select jsonb_agg(to_jsonb(e) order by id) from core.entity_links e where workspace_id=$1) as links,
+      (select jsonb_agg(to_jsonb(c) order by id) from core.analytics_areas c where workspace_id=$1) as areas,
+      (select jsonb_agg(to_jsonb(t) order by id) from task.tasks t where workspace_id=$1) as tasks,
+      (select jsonb_agg(to_jsonb(r) order by id) from task_request.task_requests r where workspace_id=$1) as requests,
+      (select jsonb_agg(to_jsonb(s) order by id) from survey.surveys s where workspace_id=$1) as surveys,
+      (select jsonb_agg(to_jsonb(a) order by id) from core.audit_log a where workspace_id=$1) as audit`,
+          [WORKSPACE_ID],
+        )
+      ).rows;
+    const before = await snapshot();
+    expect(await read(adminCookie, areaA)).toEqual(areaIds);
+    expect(await snapshot()).toEqual(before);
+    expect(await read(cookieA, areaA)).toEqual(areaIds);
+    expect(await read(cookieB, areaA, msB)).toEqual([]);
+    expect(await read(cookieB, areaA)).toEqual([]);
+    expect(await read(adminCookie, areaA, msB)).toEqual([]);
+    expect(await read(adminCookie, randomUUID())).toEqual([]);
+    const mine = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=my&managed_system_id=${msA}&filter.analytics_area=${areaA}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${reporterCookie}` },
+    });
+    expect(mine.statusCode).toBe(200);
+    expect(
+      mine
+        .json()
+        .items.map((item: { id: string }) => item.id)
+        .sort(),
+    ).toEqual(areaIds);
+    expect(await read(adminCookie, 'unset', msA)).toEqual([unset.id]);
+    expect(await read(adminCookie, areaA, msA, 'unassigned')).toEqual(
+      areaIds.filter((id) => id !== assigned.id),
+    );
+    expect(await read(adminCookie, areaA, msA, 'no-task')).toEqual(
+      areaIds.filter((id) => id !== linked.id),
+    );
+    expect(await read(adminCookie, areaA, msA, 'high-no-link')).toEqual(
+      areaIds.filter((id) => id !== linked.id && id !== low.id),
+    );
+    const pagedIds: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=inbox&managed_system_id=${msA}&filter.analytics_area=${areaA}&limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(response.statusCode).toBe(200);
+      const page = response.json<{
+        items: { id: string }[];
+        page: { has_more: boolean; cursor?: string };
+      }>();
+      pagedIds.push(...page.items.map((item) => item.id));
+      cursor = page.page.has_more ? page.page.cursor : undefined;
+    } while (cursor);
+    expect(pagedIds.sort()).toEqual(areaIds);
+    const service = createVocReadService({
+      db: dbHandle.db,
+      checkService: undefined as never,
+      entityLinksService: undefined as never,
+    });
+    expect(
+      await service.countVocs({
+        actor: { actor_id: adminActorId, workspace_id: WORKSPACE_ID, role_level: 'admin' },
+        query: { view: 'inbox', managed_system_id: msA, 'filter.analytics_area': areaA },
+      }),
+    ).toBe(pagedIds.length);
+    const forbidden = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msA}&filter.analytics_area=${areaA}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookieB}` },
+    });
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json().code).toBe('permission.scope_required');
+  });
+
+  it('1077: foreign-workspace Area UUID yields an empty authorized list', async () => {
+    const ws = randomUUID();
+    await migrateHandle.pool.query('insert into core.workspaces (id,name) values ($1,$2)', [
+      ws,
+      uid('Area foreign workspace'),
+    ]);
+    const ms = await insertMsDirectly(migrateHandle, ws, uid('area-foreign'), 'Foreign');
+    const area = randomUUID();
+    try {
+      await migrateHandle.pool.query(
+        'insert into core.analytics_areas (id,workspace_id,managed_system_id,slug,name) values ($1,$2,$3,$4,$5)',
+        [area, ws, ms, uid('foreign-area'), 'Same name'],
+      );
+      const response = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=inbox&managed_system_id=all&filter.analytics_area=${area}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().items).toEqual([]);
+    } finally {
+      await migrateHandle.pool.query('delete from core.analytics_areas where id=$1', [area]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where id=$1',
+        [ms],
+      );
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
+        ws,
+      ]);
+    }
   });
 
   it('940: unassigned list exposes postponed timestamps and null for active review', async () => {
@@ -1117,10 +1338,14 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
       await dbHandle.pool.query(`delete from core.actors where workspace_id = $1`, [
         secondWorkspaceId,
       ]);
-      await dbHandle.pool.query(`delete from core.managed_systems where workspace_id = $1`, [
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        `delete from core.managed_systems where workspace_id = $1`,
+        [secondWorkspaceId],
+      );
+      await deleteRecoveryFixtureParents(dbHandle, `delete from core.workspaces where id = $1`, [
         secondWorkspaceId,
       ]);
-      await dbHandle.pool.query(`delete from core.workspaces where id = $1`, [secondWorkspaceId]);
     }
   });
 

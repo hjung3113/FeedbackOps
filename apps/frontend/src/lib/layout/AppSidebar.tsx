@@ -2,7 +2,7 @@ import type { SavedViewSurface } from '@/lib/api/saved-views';
 import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { cn } from '@fops/ui';
-import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import * as React from 'react';
 
 export type NavCounts = Partial<Record<NavCountKey, number>>;
@@ -37,7 +37,6 @@ export interface SidebarNavEntry {
   countKey?: NavCountKey;
   /** Explicit, route-owned count. Undefined is deliberately not rendered. */
   count?: number;
-  urgent?: boolean;
   disabled?: boolean;
   trailing?: React.ReactNode;
 }
@@ -58,14 +57,6 @@ export interface SidebarNavActionEntry {
 
 export type SidebarNavItem = SidebarNavEntry | SidebarNavActionEntry;
 
-export interface SidebarFooterItem {
-  id: string;
-  label: string;
-  href?: string;
-  icon: React.ReactNode;
-  disabled?: boolean;
-}
-
 export interface ManagedSystemScopeOption {
   id: string;
   name: string;
@@ -74,7 +65,6 @@ export interface ManagedSystemScopeOption {
 
 export interface AppSidebarProps {
   entries: SidebarNavItem[];
-  footerItems?: SidebarFooterItem[];
   systemLabel?: string;
   systemSubtitle?: string;
   className?: string;
@@ -85,7 +75,8 @@ export interface AppSidebarProps {
   /** False on a route whose data is not scoped by Managed System (e.g. most of Admin). */
   scopeControlEnabled?: boolean;
   isAdmin?: boolean;
-  canAccessWorkspaceAdmin?: boolean;
+  /** Whether the actor's current scope is workspace-wide, rather than a granted union. */
+  workspaceWideScope?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
   /**
@@ -101,9 +92,6 @@ export interface AppSidebarProps {
 }
 
 const STORAGE_KEY = 'appSidebarCollapsed';
-const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [
-  { id: 'workspace-settings', label: '워크스페이스 설정', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
-];
 
 function readInitialCollapsed(defaultValue: boolean): boolean {
   if (typeof window === 'undefined') return defaultValue;
@@ -117,7 +105,6 @@ function readInitialCollapsed(defaultValue: boolean): boolean {
 
 export function AppSidebar({
   entries,
-  footerItems = DEFAULT_FOOTER_ITEMS,
   systemLabel = 'VOC',
   systemSubtitle = '고객 피드백',
   className,
@@ -127,7 +114,7 @@ export function AppSidebar({
   selectedManagedSystemId,
   scopeControlEnabled = true,
   isAdmin = true,
-  canAccessWorkspaceAdmin = false,
+  workspaceWideScope = isAdmin,
   onManagedSystemChange,
   savedViews = [],
   savedViewSurface,
@@ -140,7 +127,7 @@ export function AppSidebar({
   const [scopeOpen, setScopeOpen] = React.useState(false);
   const selectedSystem = managedSystems.find((system) => system.id === selectedManagedSystemId);
   const grantedSystems = managedSystems.filter((system) => system.granted);
-  const isUnion = !isAdmin && selectedManagedSystemId === undefined;
+  const isUnion = !workspaceWideScope && selectedManagedSystemId === undefined;
   const scopeName = scopeControlEnabled
     ? (selectedSystem?.name ?? SCOPE_SELECTOR_COPY.allLabel)
     : SCOPE_SELECTOR_COPY.workspaceAll;
@@ -152,9 +139,6 @@ export function AppSidebar({
         : null
     : null;
   const scopeAccessibleName = scopeQualifier ? `${scopeName}, ${scopeQualifier}` : scopeName;
-  const visibleFooterItems = footerItems.filter(
-    (item) => item.id !== 'workspace-settings' || canAccessWorkspaceAdmin,
-  );
 
   const toggle = React.useCallback(() => {
     setCollapsed((prev) => {
@@ -235,7 +219,7 @@ export function AppSidebar({
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{SCOPE_SELECTOR_COPY.allLabel}</span>
                   <span className="block text-caption text-text-muted">
-                    {isAdmin
+                    {workspaceWideScope
                       ? SCOPE_SELECTOR_COPY.workspaceAll
                       : `${SCOPE_SELECTOR_COPY.assignedCountPrefix} ${grantedSystems.length} / ${managedSystems.length}`}
                   </span>
@@ -284,8 +268,8 @@ export function AppSidebar({
                   aria-label={collapsed ? entry.label : undefined}
                 >
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
-                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
-                  {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate" title={entry.label}>{entry.label}</span>}
+                  {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} />}
                   {!collapsed && entry.trailing}
                 </InternalLink>
               )}
@@ -303,15 +287,6 @@ export function AppSidebar({
           )}
         </div>
       </nav>
-      {visibleFooterItems.length > 0 && (
-        <div className="border-t border-border-subtle p-2" data-testid="sidebar-footer">
-          <div className="flex flex-col gap-0.5">
-            {visibleFooterItems.map((item) => (
-              <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
-            ))}
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
@@ -445,25 +420,12 @@ function SavedViewsSection({
   );
 }
 
-function NavCountBadge({ entryId, count, urgent }: { entryId: string; count: number; urgent?: boolean }) {
-  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-caption font-semibold tabular-nums text-text-secondary', urgent && count > 0 && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
+function NavCountBadge({ entryId, count }: { entryId: string; count: number }) {
+  return <span className="rounded-full bg-surface-row-selected px-1.5 py-0.5 text-caption font-semibold tabular-nums text-text-secondary" data-testid={`sidebar-count-${entryId}`}>{count}</span>;
 }
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {
   return <span className={cn('inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-micro font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
-}
-
-function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; collapsed: boolean }) {
-  const props = { className: cn(navItemClass(collapsed), item.disabled && 'opacity-60 cursor-not-allowed'), 'data-testid': `sidebar-footer-${item.id}`, title: collapsed ? item.label : undefined, 'aria-label': collapsed ? item.label : undefined };
-  if (item.href && !item.disabled) {
-    return (
-      <InternalLink href={item.href} {...props}>
-        <span className="shrink-0">{item.icon}</span>
-        {!collapsed && <span className="truncate">{item.label}</span>}
-      </InternalLink>
-    );
-  }
-  return <button type="button" disabled={item.disabled} {...props}><span className="shrink-0">{item.icon}</span>{!collapsed && <span className="truncate">{item.label}</span>}</button>;
 }
 
 function navItemClass(collapsed: boolean, active = false, contextActive = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary', contextActive && !active && 'font-medium text-text-primary'); }

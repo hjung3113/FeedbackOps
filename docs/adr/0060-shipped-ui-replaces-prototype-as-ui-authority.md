@@ -34,3 +34,11 @@ Slices 1-29 have shipped every MVP surface. Since then the product has deliberat
 - The prototype-deviation ADRs (0022, 0037-0041, 0057) remain valid as product decisions. Future divergences from the prototype need no ADR.
 - `docs/design-prototype/screenshots/final-baselines/` stops being a gate input. It remains as a picture of the original design.
 - The `token-fidelity` snapshot test in `packages/ui` stays as is. It pins the token values, and any change to them is a deliberate token change.
+
+## Amended 2026-10-16 — link-copy fallback
+
+The existing link-copy action in
+`packages/ui/src/panel/DetailPanelHeaderActions.tsx` may use
+`document.execCommand('copy')` only as a narrow fallback when the Clipboard API
+is unavailable or fails. This does not permit other `document.execCommand`
+uses or prototype APIs.

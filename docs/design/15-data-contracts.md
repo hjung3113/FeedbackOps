@@ -30,6 +30,8 @@ core.managed_systems
 - external_key: text, nullable
 - default_owner_actor_id: uuid, nullable
 - default_owner_team_id: uuid, nullable; at most one of default_owner_actor_id and default_owner_team_id is set
+- default_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing shipped in #1090/#1091)
+- default_reviewer_team_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067); XOR-or-both-null with reviewer Actor
 - default_survey_operator_actor_id: uuid, nullable
 - archived_at: timestamp, nullable
 - archived_by_actor_id: uuid, nullable
@@ -194,12 +196,14 @@ findings
 - title: text, required
 - summary: text, required
 - source_type: enum(voc, voc_cluster, survey, survey_response, manual), required
-- source_id: uuid, nullable when source_type=manual
+- source_id: uuid, NULL for manual and survey_response after ADR-0064 cutover; required for ordinary source provenance
 - evidence_count: integer, required
 - severity: enum(low, medium, high, critical), required
 - confidence: enum(low, medium, high), nullable
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
+- owner_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation/edit routing #1090)
+- owner_team_id: uuid, nullable (storage #1089; creation/edit routing #1090, ADR-0067); XOR-or-both-null with owner Actor
 - linked_task_id: uuid, nullable
 - linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required
@@ -229,10 +233,11 @@ evidence_highlights
 - finding_id: uuid, required   # parent Finding (added by ADR-0024 §F; POST /findings/:id/evidence-highlights)
 - primary_managed_system_id: uuid, required
 - source_type: enum(voc, survey_response, note), required
-- source_id: uuid, nullable when source_type=note
+- source_id: uuid, NULL for note and survey_response after ADR-0064 cutover; required for voc
 - source_title: text, nullable
 - source_meta: text, nullable
-- quote_or_summary: text, required
+- quote_or_summary: text, NULL for survey_response after ADR-0064 cutover; required for voc/note
+- approved_excerpt_id: uuid, NULL in public parents after ADR-0064 cutover; exact Survey binding is private
 - analytics_area_id: uuid, nullable
 - sentiment: enum(negative, neutral, positive), nullable
 - importance: enum(low, medium, high), nullable
@@ -243,7 +248,8 @@ evidence_highlights
 Rules:
 
 ```text
-- Evidence Highlight must preserve source reference when source_type is voc or survey_response.
+- Evidence Highlight preserves VOC source reference publicly and Survey response reference
+  in a Survey-owned protected extension (ADR-0064); never substitute Survey ID for response ID.
 - Evidence visibility cannot exceed source visibility.
 - source_title and source_meta are read-time DTO derivations for source_type=voc only.
   source_title is the source VOC title; source_meta is the source VOC display_id.
@@ -286,9 +292,15 @@ Read DTO extensions:
 Candidate-peer picker DTO (separate read endpoint):
 
 ```text
+ListSameManagedSystemCandidatePeersQuery
+- q: text, optional; trimmed, max 100 after trimming, blank = no filter; case-insensitive display_id prefix OR title contains, %/_ literal
+- limit: integer(1..50), default 20
+- cursor: opaque keyset cursor shared with Finding/Task lists, optional; malformed = 422 at cursor (invalid_cursor)
+
 ListSameManagedSystemCandidatePeersResponse
 - candidate_basis: literal(same_managed_system_active_voc), required
 - candidates: array of SameManagedSystemCandidatePeerDto, required
+- page: { has_more: boolean, required; cursor: opaque string, present only when has_more }, required
 
 SameManagedSystemCandidatePeerDto
 - voc_id: uuid, required
@@ -305,8 +317,11 @@ Rules:
 - owner_user_id references an assignable internal user in the cluster workspace.
 - confirmed_by and confirmed_at are server-owned. A draft-to-confirmed transition
   writes both atomically; later confirmation requests preserve the original provenance.
-- linked_findings lists Findings created from the cluster where
-  finding.source_type='voc_cluster' and finding.source_id=cluster.id.
+- linked_findings lists every active `created_finding` or `evidence_of` Finding link of the
+  cluster that the reader can read (`docs/implementation/api/voc-clusters.md`, Linked Findings
+  visibility). Cross-system history is canonical through entity_links, not the Finding's
+  source_type/source_id convenience columns (root AGENTS.md, Product Invariants; reconciled
+  2026-10-13 in #1070).
 - linked_findings is derived at read time. It exposes only id, display_id, and
   status; title and summary are intentionally omitted to avoid content leakage.
 - Cluster detail and list reads include linked_findings as an array. Create and
@@ -346,7 +361,9 @@ task_requests
 - requested_outcome: text, required
 - requester_actor_id: uuid, required
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
-- reviewer_actor_id: uuid, nullable
+- assigned_reviewer_actor_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067)
+- assigned_reviewer_team_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067); XOR-or-both-null
+- reviewer_actor_id: uuid, nullable; actual deciding Actor, never a routing default
 - decision_reason: text, nullable
 - decided_at: timestamp, nullable
 - created_at: timestamp, required
@@ -367,7 +384,7 @@ Rules:
 - Reviewer may be Admin or Developer within the same Managed System scope.
 - Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
-- Managed System default resolution for `reviewer_actor_id` is not implemented.
+- ADR-0067 default resolution into the assigned-reviewer pair is implemented. `reviewer_actor_id` remains actual decision attribution.
 ```
 
 ## Task
@@ -384,6 +401,7 @@ tasks
 - status: enum(backlog, todo, doing, review, done, released, reopened), required
 - priority: enum(low, medium, high, urgent), required
 - assignee_actor_id: uuid, nullable
+- assignee_team_id: uuid, nullable (storage #1089; conversion/edit routing #1091, ADR-0067); XOR-or-both-null with assignee Actor
 - due_date: date, nullable
 - milestone_id: uuid, nullable, FK to milestones.id ON DELETE RESTRICT
 - analytics_area_id: uuid, nullable
@@ -478,7 +496,8 @@ permission_requests
 - source_object_id: uuid, nullable
 - source_action_id: text, nullable
 - return_route_intent: text, nullable
-- status: enum(pending, needs_more_info, approved, rejected, expired, revoked), required
+- status: text + CHECK(pending, needs_more_info, approved, rejected, expired, revoked, cancelled), required; cancelled is added by migration 0058 (ADR-0066)
+- revision: positive integer, required, default 1; migration 0058 (ADR-0066)
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -487,7 +506,9 @@ Rules:
 
 ```text
 - Sensitive permissions require reason.
-- requested_managed_system_id carries the scope for scoped Developer grants in MVP; requested_object_type and requested_object_id scope a single-object request.
+- requested_managed_system_id carries supported Managed System scope; nullable workspace scope is capability-policy controlled. Single-object authorization is post-MVP (ADR-0066). Preserve historical requested_object_type/id, reject non-null object scope in new create/edit/supplement and legacy approval, and never silently widen it. source_object_* remain provenance.
+- Requester pending edit and needs_more_info supplement retain identity; withdrawal to cancelled frees the open slot and preserves history. Every successful request mutation advances revision and updated_at (#1080).
+- Approval retains requested scope/expiration and records actual granted scope/expiration separately in response and audit; no requested-field overwrite.
 - analytics_area_id is not an MVP permission boundary.
 - Expiry and revocation must be enforceable.
 - Decisions are audited. The deciding Admin, decision time, reason, and an Admin's more-info note are recorded on the audit event, not on this table; approval inserts a permission_grants row and deny inserts a permission_denies row.
@@ -612,3 +633,200 @@ Detail additionally includes `similar.items`, capped at three and ordered by
 
 Peer visibility is `voc.read` scope or reporter ownership of that peer. A
 triage-only summary envelope includes neither field. See ADR-0031.
+
+## Permission Grant reissue (ADR-0066 / #1085)
+
+`permission.permission_grants` remains the existing Permission-owned table.
+Add nullable timestamp `superseded_at`, set only on an expired, unrevoked exact-scope
+predecessor during atomic reissue. Insert a fresh grant ID; retain all predecessor
+expiry, grantor/time and revoke metadata. No in-place renewal or fake revoke.
+`permission_grants_active_uq` retains its complete COALESCE scope tuple and uses
+`revoked_at IS NULL AND superseded_at IS NULL`; expiry remains a runtime predicate.
+Checks, scope resolution, active lists, revoke validation and seed existence checks
+exclude superseded rows. An old/expired grant ID remains non-revocable (409).
+See `docs/implementation/04-database-and-migrations.md` for rollout and rollback limits.
+
+## Coverage settings and recovery projections (ADR-0067; implemented)
+
+`core.workspace_settings.coverage_thresholds` (BE/shared #1087; editor and rendered
+consumers shipped #1088 in the same PR): JSON object with exactly `voc-task`,
+`finding-execution`, `high-followup`, `released-update`, `analytics-area`; each pair has
+integer `good_min_percent`/`warn_min_percent`, 75/40 defaults, `0 <= warn < good <= 100`.
+Resolved missing row/keys default; PATCH accepts partial maps of complete pairs.
+Coverage DTO status adds `no_data` only for total zero; unreadable keys remain absent.
+Summary DTO adds server `computed_at`; it is not an atomic database snapshot time.
+
+Dashboard-owned 56-H storage (`dashboard.recovery_identities`, `recovery_history`,
+`recovery_presentations`; Survey response equivalents live under `survey.outcome_recovery_*`):
+
+- Stable identity: opaque `recovery_item_id`, workspace, category, source key; unique
+  workspace/category/source, current occurrence and active/resolved/withdrawn projection.
+- Occurrence/history: identity + occurrence unique, resolution time/action/evidence metadata
+  and safe metadata, separate withdrawal/observation metadata; no raw body/private comment.
+  Reopen increments occurrence, preserves earlier resolutions, resets personal hiding.
+- Personal presentation: workspace/session Actor/identity/occurrence unique, snooze until
+  (one or seven days), current-occurrence mute and restore. It cannot store resolution.
+
+Index active scope/category, history `(workspace_id, resolved_at, id)`, source identity,
+and Actor presentation keys. History reads are limited to three calendar months by
+resolution time: inclusive first instant of the current UTC month minus two whole months.
+Filter current permissions before count/LIMIT, order `(resolved_at DESC, id DESC)`, and bind
+cursors to the session Actor and current filters/scopes. Runtime history has no general
+UPDATE/DELETE grant; no pruning is implemented. Any later pruning preserves stable identities,
+current occurrence and indefinite `core.audit_log`. Initialize active identities without
+fabricating prior history. Source predicates remain authoritative and transition recording
+commits with source/link repairs; reconciliation marks observation time when exact evidence
+is unavailable. Survey-owned response presentation/history uses a gated adapter, not a
+second decision store or response identity disclosure to non-personal holders.
+
+Responsibility pairs above and existing VOC owner fields validate workspace, active team,
+and destination Actor eligibility. No backfill from `created_by`/`reviewer_actor_id`, no
+automatic reassignment, team membership, or permission grant. Safe proposed/new creation
+metadata `default_resolved`, `source_rule`, `managed_system_id`, persisted responsibility,
+and skipped-rule categories lives in responses/creation audits, not a second assignment
+truth; private candidate IDs stay out of Reporter responses.
+
+## Analytics Area report projection — accepted, proposed/new (ADR-0069)
+
+This is a computed read projection, not a table or new lifecycle. Wire shape is owned by
+`docs/implementation/api/dashboard.md`; metric meanings by FR-DASH-002 in `08-dashboard-system.md`.
+VOC/Finding/Task/Survey retain their existing nullable `analytics_area_id`, attributed independently
+to each source's current classification. Null is valid and has a per-System `미지정` row; referenced
+archived UUIDs remain distinct from a new Area reusing the same slug/name. No source Area backfill,
+mandatory field, linked-source inheritance rule or Task Request Area column is introduced.
+Canonical active `requested_task` links define Finding handoff, not `linked_task_id`.
+Survey report totals count Surveys and use Survey-grain `follow_up_needed`; the response-grain
+ADR-0055 decision state remains Survey-owned and is never copied into report storage.
+
+## Survey protected provenance (ADR-0064; migration 0059)
+
+Migration 0059 models these Survey-owned protected extensions. Deployment and
+combined #739/#740 acceptance remain pending; names and application seams are in
+`docs/implementation/survey-provenance-cutover-739.md`.
+
+| Survey-owned extension | Private fields | Consistency |
+| --- | --- | --- |
+| `survey.finding_response_bindings` | workspace_id, finding_id, response_id, historical_generated_title, historical_generated_summary | Exactly one binding per Survey-derived Finding, including zero highlights |
+| `survey.highlight_response_bindings` | workspace_id, highlight_id, response_id, approved_excerpt_id, approved_excerpt_snapshot | Exactly one binding per Survey highlight; approval belongs to exact response |
+
+Workspace-qualified composite keys/constraints and transactional validation
+must enforce parent/Survey/response/approval consistency. `fops_app` has no
+SELECT or general DML on either extension; narrow owner-backed functions are
+specified in `docs/implementation/04-database-and-migrations.md`. Original UUIDs
+and historical generated text remain recoverable to the controlled operator.
+
+Public Survey Finding title/summary is deterministic allowlisted source metadata
+only; never copied excerpt text, Survey title or respondent data. Public Survey
+highlight binding/text columns are NULL; DTO quote is supplied only after fresh
+source/target and exact-active-approval checks. Denied/revoked text is omitted,
+with safe local metadata/unavailable state. VOC/Cluster IDs and note/VOC text
+retain ordinary behavior. Task source summaries/defaults must not automatically
+copy Survey excerpt text; independently authored prose is outside this backfill.
+
+Canonical Entity Link fields and active uniqueness remain unchanged; after #740,
+ordinary app access uses the proposed/new filtered view excluding both Survey
+endpoints in every status. Audit identifiers remain canonical but raw app audit
+SELECT is revoked. #816 approval selection IDs are safe selection references,
+not response IDs; candidate suppression counts response subjects/answers, never
+approval rows. Its proposed/new DTO/API shapes are owned by the API contracts.
+
+## VOC Cluster Suggestion (ADR-0068; storage #1096, BE/shared shipped #1097)
+
+Owner: VOC. Separate from both domain Clusters and shadow measurements.
+
+```text
+voc.voc_cluster_suggestions
+- id: uuid; workspace_id, primary_managed_system_id: uuid, required
+- voc_a_id, voc_b_id: uuid, required; sorted, distinct same-workspace/MS pair
+- unique: (workspace_id, primary_managed_system_id, voc_a_id, voc_b_id), across all versions
+- state: pending | discarded | confirmed; revision: positive integer
+- provider, model, dimensions, embedding_version: required current scoring metadata
+- source_hash_a, source_hash_b: derived-text fingerprints, required
+- embedding_watermark_a/b: source-row watermarks, required
+- score, cut, run_correlation_id: required; created_at, refreshed_at: timestamptz
+- discarded_by_actor_id, discarded_at: nullable, required together only when discarded
+- confirmed_by_actor_id, confirmed_at, voc_cluster_id: nullable, required together only when confirmed
+```
+
+Pair identity/initial timestamp are immutable; rescore updates pending metadata
+and increments revision. Confirmed state/reference are terminal; discarded state
+can only restore within five minutes by its actor with fresh validation, clearing
+its own discard fields and incrementing revision. Confirm retains reviewed
+scoring/hash metadata. Discard history remains append-only in human audit.
+All referenced VOCs/Cluster/actors belong to the workspace; MS matches both VOCs
+and the resulting Cluster. Keep terminal rows forever, no hard delete. Pending
+eligibility is derived from current text/vectors/provider/MS/archive/membership/
+saved-dismissal state before reads or occupancy counts. Ineligible pending rows
+release cap/disjoint occupancy without becoming human rejection. Proposal UUID
+is not a CLU display ID; no status/origin fields are added to domain Clusters.
+
+Suggestion read DTO is the complete-pair shape in
+`docs/implementation/api/voc.md`: current authorized titles/prose, reviewed
+hashes/version/revision, no partial pair, hidden total, score or execution fields.
+Human-confirmed Cluster uses existing DTO/status/provenance fields. Suggestion
+confirm writes no saved directional recommendation decision.
+
+VOC-owned operational storage (hourly bounded generator registered by #1097):
+
+```text
+voc.voc_cluster_suggestion_counters
+- workspace_id: PK/FK; eligible_pending_count: non-negative integer, default 0; updated_at
+voc.voc_cluster_suggestion_admissions
+- workspace_id, primary_managed_system_id, window_start: composite PK
+- window_start: timestamptz at a UTC hour boundary; new_admissions: non-negative integer, default 0
+voc.voc_cluster_suggestion_cursors
+- workspace_id, primary_managed_system_id: composite PK; embedding_version: positive integer
+- embedding_watermark: required timestamptz source-row watermark; last_voc_id: required UUID tie-break
+- reconciliation_after_voc_id, reconciled_at: nullable progress; updated_at
+```
+
+Cursor UUIDs are scan positions, not retained entity references. Counters/cursors
+are shared across pods. Only generator commands spend admissions and advance
+cursors; generation and the human confirm/discard/restore commands recompute the
+workspace occupancy counter, atomically with their committed writes. Policy
+toggles never materialize or update them.
+Only ended hour admission buckets may be reclaimed by the app; durable suggestions,
+workspace occupancy and cursors have no app DELETE/TRUNCATE. Migration guards enforce
+write-time workspace/MS reference integrity, immutable pair/initial timestamp and
+confirmed history; NO ACTION FKs retain referenced VOC/Actor/Cluster rows.
+Current eligibility, disjointness/caps, revision increments and five-minute restore
+validation belong to the shipped application commands (ADR item 2), not these DB checks.
+Existing source changes may make pending pairs ineligible; reads must recheck them.
+
+## Draft Similar-VOC Preview operational data (ADR-0068; shipped by #1099)
+
+```text
+voc.voc_similarity_preview_requests
+- id: UUID attempt identity (operational logs only)
+- workspace_id, actor_id, idempotency_key(UUIDv4): unique required identity
+- request_hash, primary_managed_system_id, provider/model/dimensions/version: required
+- outcome: reserved | succeeded | failed | timed_out | outcome_unknown
+- reserved_at, completed_at(nullable), expires_at: timestamptz; tombstone TTL 24h
+- vector(nullable), vector_expires_at(nullable): successful retry vector, at most ten minutes
+voc.voc_similarity_preview_budgets
+- workspace_id, scope(actor|workspace), actor_id(actor scope only), scope_key(non-null), period(minute|day), window_start
+- used_attempts: non-negative integer
+- unique: workspace/scope/actor-or-workspace/period/UTC window
+```
+
+Reservation claims one request and increments all four actor/workspace buckets
+atomically; rolled-back denials increment none. One dispatched/uncertain attempt
+consumes allowance; completion updates only operational outcome/vector. No raw
+draft text, attachment data, saved candidate prose, result IDs/titles or cached
+response body. Ended buckets can be purged; reads enforce vector/tombstone TTL
+independently of cleanup. Identity is actor-scoped, never a shared draft cache.
+In-flight/version-incompatible/expired replay cannot redispatch and exposes an
+explicit unavailable reason. Candidate DTO is only `{id,display_id,title,created_at}`
+with the availability union in `docs/implementation/api/voc.md`. There is no
+persisted source VOC, recommendation decision, Entity Link or domain audit row.
+
+## Automatic-default diagnostic inputs (#1089)
+
+Core owns `core.responsibility_default_failures`: UUID id, workspace/system FKs,
+workflow, responsibility, skipped rule, safe category, created_at. Closed values and
+Admin-only response contract live in `docs/implementation/api/core.md` and
+`packages/shared/src/managed-system-diagnostics.ts`. No candidate or source identity,
+private content, or membership is stored. Runtime SELECT/INSERT is append-only;
+configuration edits supersede earlier observations through the registry audit diff,
+without deleting historical input or changing assignments. Creation producers remain
+#1090/#1091; these diagnostic observations are not Dashboard recovery items.

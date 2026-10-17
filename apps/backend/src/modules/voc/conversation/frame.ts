@@ -42,6 +42,7 @@ export function runConversationCommand<TBody>(args: {
   actorId: string;
   idempotencyKey: string;
   requestHash: string;
+  recoveryWorkspaceId?: string;
   work: (tx: Tx) => Promise<TBody>;
 }): Promise<{ status: number; body: TBody }> {
   return runIdempotentCommand({ ...args, status: 201 });

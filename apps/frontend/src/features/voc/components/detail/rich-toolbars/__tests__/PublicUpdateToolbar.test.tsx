@@ -13,6 +13,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { PublicUpdateToolbar } from '../PublicUpdateToolbar';
 
 describe('<PublicUpdateToolbar>', () => {
+  it('uses the attachment picker focus-visible ring on toolbar buttons', () => {
+    render(<PublicUpdateToolbar editor={null} />);
+    expect(screen.getByRole('button', { name: '굵게' })).toHaveClass(
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-focus-ring',
+    );
+  });
+
   it('renders Bold, Italic, and BulletList; Link never renders', () => {
     render(<PublicUpdateToolbar editor={null} />);
 

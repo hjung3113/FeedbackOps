@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -66,13 +67,21 @@ describe.skipIf(!runIntegration)('Survey foundation migration 0036', () => {
     await migrateHandle?.pool.query('delete from core.display_counters where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle?.pool.query('delete from core.managed_systems where workspace_id = $1', [
-      workspaceId,
-    ]);
+    if (migrateHandle)
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id = $1',
+        [workspaceId],
+      );
     await migrateHandle?.pool.query('delete from core.actors where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle?.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+    if (migrateHandle)
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     await appHandle?.close();
     await migrateHandle?.close();
   });
@@ -91,7 +100,12 @@ describe.skipIf(!runIntegration)('Survey foundation migration 0036', () => {
       `select table_name from information_schema.tables where table_schema = 'survey' order by table_name`,
     );
     expect(rows.map((row) => row.table_name)).toEqual([
+      'finding_response_bindings',
+      'highlight_response_bindings',
       'outcome_follow_up_decisions',
+      'outcome_recovery_history',
+      'outcome_recovery_identities',
+      'outcome_recovery_presentations',
       'survey_questions',
       'survey_response_answers',
       'survey_response_excerpt_approvals',

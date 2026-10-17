@@ -16,6 +16,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { actors } from '../../../db/schema/core.js';
 import { permissionGrants } from '../../../db/schema/permission.js';
 import { type ActorContext, createCheckService } from '../check-service.js';
+import { actorScopeForCapability } from '../scope-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -117,5 +118,34 @@ describe.skipIf(!runIntegration)('checkService.checkCapability tx-scoped read (S
 
     const after = await svc.checkCapability(userActor, capability, scope);
     expect(after.allow).toBe(false);
+  });
+
+  it('superseded history supplies neither effective access nor capability/list scope', async () => {
+    await handle.db.insert(permissionGrants).values({
+      workspaceId: WORKSPACE_ID,
+      actorId: tempActorId,
+      capability: 'survey.export',
+      grantedByActorId: adminActor.actor_id,
+      supersededAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const actor = {
+      actor_id: tempActorId,
+      workspace_id: WORKSPACE_ID,
+      role_level: 'user' as const,
+    };
+    await expect(
+      svc.checkCapability(actor, 'survey.export', { workspace_id: WORKSPACE_ID }),
+    ).resolves.toMatchObject({ allow: false, reason: 'no_grant' });
+    await expect(
+      svc.capabilityScope(actor, 'survey.export', { workspace_id: WORKSPACE_ID }),
+    ).resolves.toEqual({
+      kind: 'scoped',
+      managed_system_ids: [],
+    });
+    await expect(actorScopeForCapability(handle.db, actor, 'survey.export')).resolves.toEqual({
+      kind: 'scoped',
+      managedSystemIds: [],
+    });
   });
 });

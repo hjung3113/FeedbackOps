@@ -1,3 +1,8 @@
+import {
+  managedSystemDefaultCandidatesSchema,
+  managedSystemDefaultDiagnosticsSchema,
+} from '@fops/shared';
+import { apiRequest } from './client';
 // Managed Systems registry (Slice 2 #10).
 
 import { UnauthenticatedError } from './auth';
@@ -11,6 +16,8 @@ export interface ManagedSystemDto {
   external_key: string | null;
   default_owner_actor_id: string | null;
   default_owner_team_id: string | null;
+  default_reviewer_actor_id: string | null;
+  default_reviewer_team_id: string | null;
   archived_at: string | null;
   archived_by_actor_id: string | null;
   created_at: string;
@@ -23,6 +30,8 @@ export interface RegisterManagedSystemBody {
   external_key?: string | null;
   default_owner_actor_id?: string | null;
   default_owner_team_id?: string | null;
+  default_reviewer_actor_id?: string | null;
+  default_reviewer_team_id?: string | null;
 }
 
 export interface UpdateManagedSystemBody {
@@ -30,6 +39,8 @@ export interface UpdateManagedSystemBody {
   external_key?: string | null;
   default_owner_actor_id?: string | null;
   default_owner_team_id?: string | null;
+  default_reviewer_actor_id?: string | null;
+  default_reviewer_team_id?: string | null;
 }
 
 async function readEnvelope(res: Response): Promise<never> {
@@ -110,4 +121,29 @@ export async function archiveManagedSystem(
   if (res.status === 401) throw new UnauthenticatedError();
   if (res.status < 200 || res.status >= 300) return readEnvelope(res);
   return (await res.json()) as ManagedSystemDto & { cascaded_analytics_area_ids: string[] };
+}
+
+export async function fetchManagedSystemDefaultDiagnostics(signal?: AbortSignal) {
+  const result = await apiRequest(
+    'GET',
+    '/managed-systems/default-diagnostics',
+    managedSystemDefaultDiagnosticsSchema,
+    signal ? { signal } : {},
+  );
+  return result.data;
+}
+
+export async function fetchManagedSystemDefaultCandidates(
+  managedSystemId?: string,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams();
+  if (managedSystemId) params.set('managed_system_id', managedSystemId);
+  const result = await apiRequest(
+    'GET',
+    `/managed-systems/default-candidates${params.size ? `?${params}` : ''}`,
+    managedSystemDefaultCandidatesSchema,
+    signal ? { signal } : {},
+  );
+  return result.data;
 }

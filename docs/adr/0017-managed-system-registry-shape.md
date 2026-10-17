@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amended by ADR-0019.
+Accepted. Amended by ADR-0019 and ADR-0067 (2026-10-13, reviewer routing inputs).
 
 **ADR-0019 (Sections A, B, D, E) amends the archived-row mutation policy, cascade-race recovery, and concurrency lock for this ADR. The decisions below remain in force; consult ADR-0019 for the additions.**
 
@@ -117,3 +117,21 @@ Per-event detail schemas live in the domain modules `packages/shared/src/audit/m
 - Audit consumers (BI export, ops dashboard) need a different cascade-tracking shape than the `cascade_source_managed_system_id` / `cascaded_analytics_area_ids` pair. Reopen only the audit-detail section.
 
 Slug immutability, the snake-case audit verb convention, the UUID-as-wire-key choice, and the workspace-scoped uniqueness predicates are independent of these triggers and remain in force.
+
+## Amended 2026-10-13 — responsibility inputs (ADR-0067)
+
+[ADR-0067](0067-responsibility-defaults-and-recovery-items.md), implemented for storage/registry by #1089, adds nullable
+`core.managed_systems.default_reviewer_actor_id` / `default_reviewer_team_id`, XOR-or-both-null.
+They are independent of the owner pair and Survey operator. Registry create snapshots and
+update diffs must include both fields in the strict managed-system audit detail schema.
+Admin edits validate same-workspace eligible Actor or active team; destination services
+revalidate automatic routing inside creation transactions. Default edits never reassign
+existing records. Slug, archive/cascade, and existing audit conventions remain in force.
+
+
+#1089 implements the nullable reviewer pair, separate Admin inputs, DTOs and audit
+snapshots/diffs in migration `0058_responsibility_defaults.sql`. Historical rows remain
+null and old audit snapshots remain readable. The Admin diagnostic read and Core-owned
+transaction-aware safe failure input are specified in `docs/implementation/api/core.md`;
+creation-time default resolution remains #1090/#1091. No team write privileges or Survey
+operator change is part of this amendment.

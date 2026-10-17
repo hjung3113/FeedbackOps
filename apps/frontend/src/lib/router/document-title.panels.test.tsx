@@ -129,6 +129,14 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...actual,
     apiRequest: vi.fn(async (_method: string, path: string) => {
       if (path.split('?')[0] === '/findings') return { data: { items: [] } };
+      if (path.split('?')[0]?.endsWith('/candidate-peers'))
+        return {
+          data: {
+            candidate_basis: 'same_managed_system_active_voc',
+            candidates: [],
+            page: { has_more: false },
+          },
+        };
       const [collection, id] = path.split('/').slice(1);
       const reads =
         collection === 'findings'
@@ -139,8 +147,6 @@ vi.mock('@/lib/api', async (importOriginal) => {
       return { data: await readResults.resolveRead(reads, id ?? '') };
     }),
     apiClient: vi.fn(async (_method: string, path: string) => {
-      if (path.endsWith('/candidate-peers'))
-        return { data: { candidate_basis: 'same_managed_system_active_voc', candidates: [] } };
       const id = path.split('/').at(-1) ?? '';
       return { data: await readResults.resolveRead(readResults.vocs, id) };
     }),
@@ -289,6 +295,8 @@ const taskRequest = (id: string, displayId: string, requestedOutcome: string): T
   requested_outcome: requestedOutcome,
   requester_actor_id: '40000000-0000-4000-8000-000000000004',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -322,6 +330,7 @@ const taskDetail = (id: string, displayId: string, title: string): TaskDetailDto
   status: 'backlog',
   priority: 'medium',
   assignee_actor_id: null,
+  assignee_team_id: null,
   due_date: null,
   primary_managed_system_id: '30000000-0000-4000-8000-000000000003',
   milestone_id: null,

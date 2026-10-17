@@ -142,7 +142,8 @@ Acceptance Criteria:
 ```text
 - Admin or same-scope Developer can create Finding from VOC, VOC Cluster, Survey Result, or manual analysis when synthesis is needed.
 - Finding requires exactly one Primary Managed System.
-- Finding stores source_type and source_id.
+- Finding stores source_type and preserves source identity. Under ADR-0064, Survey
+  response UUIDs live in Survey-owned protected provenance, with public source_id NULL.
 - Finding can link Analytics Area under its Primary Managed System.
 - Finding can include Evidence Highlights.
 - Finding is not required for every VOC, Survey Result, or Task.
@@ -219,12 +220,12 @@ Layout:
 - Source Type
 - Severity
 - Confidence
+- Linked Task Request / Task
 - Evidence Highlights
 - Primary Managed System
 - Affected Analytics Area
 - Linked VOC Cluster
 - Linked Survey Result
-- Linked Task Request / Task
 - Progress notes (진행 메모)
 ```
 
@@ -241,7 +242,8 @@ The linked Task Request row shows its display ID and status when the read
 succeeds. While the read is loading, show muted `확인 중…`; on failure, show a
 Korean error and `다시 시도`. Show `—` only after a successful empty read. While
 the result is unknown, hide the primary execution action and keep secondary
-actions available. A successful empty read makes `Task 요청` primary; a pending
+actions available. A successful read with a linked Task makes `Task 열기` the
+single primary and keeps `Task 요청` as secondary; a successful empty read makes `Task 요청` primary; a pending
 Task Request makes `Task Request 보기` primary and `Task 요청` secondary.
 
 Finding-to-Milestone and Finding-to-Work-Initiative actions are future
@@ -275,3 +277,50 @@ Existing Task.
 - Complex tagging taxonomy
 - Automatic priority scoring
 ```
+
+## Creation responsibility (ADR-0067; implemented by #1090)
+
+VOC-, Cluster-, and Survey-response-derived Findings persist the nullable
+Actor/team owner pair in the destination Finding module. `created_by` is provenance,
+never implicit ownership. Explicit/null/omitted and MS/AA/fallback resolution follows
+ADR-0067 and `09-permission-access.md`; target-system eligibility and source visibility
+remain separate gates. Assignment display/edit/filter is source-owned and auditable.
+
+## Survey evidence withdrawal and reuse (ADR-0064)
+
+Accepted target contract; implementation pending #739/#740/#816. The generic
+field sketches above are qualified for Survey evidence: public source/binding/text
+columns are NULL, while Survey-owned protected extensions retain original source
+UUIDs and historical generated text (`15-data-contracts.md`). Generated Survey
+Finding title/summary and provider/default summaries contain metadata only.
+Fresh authorized exact-active-approval highlight reads supply excerpt text; source
+deny or approval revocation omits the quote with safe unavailable local metadata.
+VOC/Cluster references, VOC source checks and authored note text remain unchanged.
+
+Survey result readers may reuse only suppression-visible approved excerpts with
+target `finding.manage`, without personal-response permission. #816 replaces the
+raw response UUID/free quote inputs with scoped Survey selection and approved safe
+previews, including empty/suppressed/denied/error/revoked states and submit-time
+revalidation. Response-addressed create-Finding keeps its explicit personal gate.
+Source/target Managed Systems may differ with independent authorization in one
+workspace. UI ownership and endpoint contracts stay in their existing modules.
+
+## Evidence retrieval and picker (ADR-0065)
+
+Integration Evidence (`/integration/evidence`, #1107) is a read-only search inventory of highlights
+already stored on readable Findings, not a standalone research inbox. One row
+per highlight shows safe source/content state and parent Finding identity; its
+primary action opens that Finding. Findings owns the bounded inventory/detail
+APIs in `docs/implementation/api/findings.md`. Eligibility precedes search and
+pagination; unavailable text and generated summaries never act as hidden matches.
+No Unlinked tab, Evidence lifecycle/display ID, execution KPI or duplicate editor.
+
+Finding's Add Evidence Survey branch (implementation pending #816) uses the ADR-0064 candidate/attachment APIs:
+select authorized Survey, then approved question/excerpt, then attach server-side.
+No raw UUID or editable Survey quote; source changes clear selection, pending
+submit disables, retry preserves draft, stale approval allows reselection. Distinguish
+no responses, suppressed cohort, no approved excerpts, denied/error/revoked states.
+Survey catalog titles stay on that independently authorized surface, not evidence
+DTOs. Source/target scope is independent; invalidate Finding and inventory caches
+on success and reread fresh content. VOC/note behavior is unchanged. Retrieval
+has no mutation or gap-resolution action; execution stays on Finding detail.

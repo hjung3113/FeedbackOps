@@ -1,6 +1,6 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { fetchVocOwnerCandidates } from '@/lib/api/voc-owner-candidates';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
-import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { FindingSeverity, VocListItem } from '@fops/shared';
 import { type PickerOption, UndoToast } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -46,17 +46,22 @@ export function useTriagePanelController({
   onOptimisticRestore?: (vocId: string, input?: TriageInput) => void;
 }) {
   const { panelState, baseline, dispatch, dirty } = useTriagePanelState(voc);
-  const { actors } = useWorkspaceActors();
+  const ownerCandidatesQuery = useQuery({
+    queryKey: ['voc', voc.id, 'owner-candidates'] as const,
+    queryFn: ({ signal }) => fetchVocOwnerCandidates(voc.id, signal),
+  });
+  const actors = ownerCandidatesQuery.data?.actors;
   const vocDetailQuery = useVocDetail(voc.id);
   // Ref for the scrollable body — used by DetailPanelSectionNav to observe anchors
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
-  // Build owner candidates from workspace actors list
+  // The VOC-scoped advisory list shares the mutation eligibility validator.
   const candidates: OwnerCandidate[] = React.useMemo(() => {
     if (!actors) return [];
     return actors.map((a) => ({
       id: a.id,
       display_name: a.display_name,
+      eligible: a.eligible,
       // Actor list has no teams (ADR-0018); OwnerPicker still wants kind.
       kind: 'user' as const,
     }));

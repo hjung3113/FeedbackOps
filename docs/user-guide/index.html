@@ -426,6 +426,7 @@
             <ul><li><strong>VOC에서</strong> — 특정 VOC를 근거로</li><li><strong>설문 응답에서</strong> — 승인된 발췌만 사용합니다. 익명 응답이나 신원 보호된 응답은 가린 뒤 명시적으로 승인해야 근거로 붙습니다.</li></ul>
             <p>Finding 상태는 <code>draft</code> → <code>active</code> → <code>converted</code>(실행으로 넘어감), 또는 <code>not_actionable</code> / <code>archived</code>입니다.</p>
             <p>Finding 상세에서 근거를 더 붙이는 현재 UI 이름은 <code>Evidence 추가</code>와 <code>기존 Evidence 연결</code>입니다. 연결된 VOC·Task로 이동할 수 있습니다.</p>
+            <p>이미 저장한 근거를 찾을 때는 <strong>Integration → Evidence</strong> (<code>/integration/evidence</code>)를 엽니다. Admin 또는 Finding을 읽을 수 있는 범위의 Developer가 인용문, 출처의 안전한 정보, 부모 Finding 이름으로 검색할 수 있습니다. 출처와 Managed System 범위를 선택하고 행을 열면 상세가 표시됩니다. <strong>Finding 보기</strong>로 부모 Finding을 열고 뒤로 가면 검색 조건과 선택을 복원합니다. 원본 권한이나 승인이 사라진 내용은 가려집니다. 읽기 전용이며 추가·수정은 Finding 상세에서 합니다.</p>
             <blockquote><strong>신뢰도를 낮게 적는 것을 두려워하지 마세요.</strong> <code>low</code>는 더 살펴봐야 한다는 정직한 신호이고, 근거가 쌓이면 올릴 수 있습니다.</blockquote>
           `
         },
@@ -826,7 +827,7 @@
           description: 'Surveys를 상태별로 살펴보고 새 설문을 시작합니다.',
           hotspots: [
             hit('testid:survey-list · name=전체 1 진행 중 0 초안 1', [292,50,1147,116], 'Survey 목록', 'Surveys 화면에서 설문을 관리합니다.', 'docs/USER-MANUAL.md:234'),
-            hit('testid:survey-create-button · name=Survey 생성', [1306,59,117,32], 'Survey 생성', '설문 생성과 운영에는 survey.manage가 필요합니다.', 'docs/USER-MANUAL.md:232-234'),
+            hit('testid:survey-create-button · name=Survey 생성', [1306,59,117,32], 'Survey 생성', '설문 생성과 운영에는 survey.manage가 필요합니다. 시작 방법에서 빈 Survey, 기본 템플릿, 기존 Survey 문항 사용을 선택합니다. Managed System을 직접 선택한 뒤 문항을 확인하세요. 기존 문항은 검색과 더 보기로 찾습니다. 제목·유형은 수정할 수 있고 설명·응답 익명 보호는 직접 선택합니다. 문항만 새 초안으로 가져오며 응답·결과·후속 조치는 복사하지 않습니다. 생성 성공 후 저장된 builder로 이동합니다. 문항 변경·권한 오류는 새로고침 후 다시 선택하고, 생성 중에는 창을 닫을 수 없습니다. 취소하면 입력이 초기화됩니다.', 'docs/USER-MANUAL.md:232-234'),
             hit('testid:survey-status-draft · name=초안', [368,132,33,21], '초안 상태', 'draft에서 질문을 편집할 수 있습니다.', 'docs/USER-MANUAL.md:243')
           ]
         },
@@ -947,8 +948,7 @@
           description: '시스템을 등록하고 기본 담당자나 검토자를 지정합니다.',
           hotspots: [
             hit('testid:ms-register-button · name=Managed System 등록', [1241,9,182,32], 'Managed System 등록', 'Admin이 Managed System을 등록합니다.', 'docs/USER-MANUAL.md:304'),
-            hit('testid:managed-systems-registry · name=IP Identity Platform', [324,109,1083,122], 'Managed System 레지스트리', '시스템별 기본 담당자를 설정할 수 있습니다.', 'docs/USER-MANUAL.md:304, 310'),
-            hit('testid:ms-review-button · name=검토', [1322,329,68,32], '검토', '대기 중인 권한 요청을 검토하는 화면으로 이동합니다.', 'docs/USER-MANUAL.md:306')
+            hit('testid:managed-systems-registry · name=IP Identity Platform', [324,109,1083,122], 'Managed System 레지스트리', '시스템별 기본 담당자를 설정할 수 있습니다.', 'docs/USER-MANUAL.md:304, 310')
           ]
         },
         {

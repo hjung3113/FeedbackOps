@@ -1,3 +1,5 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
+import { cleanupResponsibilityFailures } from '../../../test-support/responsibility-fixtures.js';
 // PATCH /vocs/:id/description integration tests — Slice 3 #17 acceptance coverage.
 //
 // Mirrors patch-voc.integration.test.ts harness.
@@ -16,7 +18,7 @@ import { buildServer } from '../../../server.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
@@ -167,28 +169,20 @@ async function grantVocTriage(
 
 // Archives a VOC row directly.
 async function archiveVoc(dbHandle: DbHandle, vocId: string): Promise<void> {
-  await dbHandle.pool.query(
-    `update voc.vocs set archived_at = now() where id = $1`,
-    [vocId],
-  );
+  await dbHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [vocId]);
 }
 
 // Archives a managed system directly.
 async function archiveMs(dbHandle: DbHandle, msId: string): Promise<void> {
-  await dbHandle.pool.query(
-    `update core.managed_systems set archived_at = now() where id = $1`,
-    [msId],
-  );
+  await dbHandle.pool.query('update core.managed_systems set archived_at = now() where id = $1', [
+    msId,
+  ]);
 }
 
 // Forces triage_state to a non-untriaged value directly.
-async function forceTriageState(
-  dbHandle: DbHandle,
-  vocId: string,
-  state: string,
-): Promise<void> {
+async function forceTriageState(dbHandle: DbHandle, vocId: string, state: string): Promise<void> {
   await dbHandle.pool.query(
-    `update voc.vocs set triage_state = $2, updated_at = now() where id = $1`,
+    'update voc.vocs set triage_state = $2, updated_at = now() where id = $1',
     [vocId, state],
   );
 }
@@ -202,7 +196,7 @@ async function getAuditDetail(
   const ops = createDb(MIGRATE_URL);
   try {
     const rows = await ops.pool.query<{ detail: Record<string, unknown> }>(
-      `select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1`,
+      'select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1',
       [vocId, eventType],
     );
     return rows.rows[0]?.detail ?? null;
@@ -217,10 +211,10 @@ async function countAuditRows(vocId: string, eventType: string): Promise<number>
   const ops = createDb(MIGRATE_URL);
   try {
     const rows = await ops.pool.query<{ n: string }>(
-      `select count(*) as n from core.audit_log where subject_id = $1 and event_type = $2`,
+      'select count(*) as n from core.audit_log where subject_id = $1 and event_type = $2',
       [vocId, eventType],
     );
-    return parseInt(rows.rows[0]?.n ?? '0', 10);
+    return Number.parseInt(rows.rows[0]?.n ?? '0', 10);
   } finally {
     await ops.close();
   }
@@ -232,6 +226,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   let adminActorId: string;
 
   async function cleanupProductTables() {
+    await cleanupResponsibilityFailures(WORKSPACE_ID, 'it-pd-');
     await dbHandle.pool.query(
       `delete from permission.permission_grants
         where workspace_id = $1
@@ -261,7 +256,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
           select id from core.managed_systems where slug like 'it-pd-%'
         )`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-pd-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-pd-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     await dbHandle.pool.query('delete from core.rate_limits');
     await dbHandle.pool.query(
@@ -339,17 +337,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-happy-all', 'Happy All');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'original title',
-      description_rich_content: paragraphDoc('original'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'original title',
+        description_rich_content: paragraphDoc('original'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'updated title',
-      description_rich_content: paragraphDoc('updated content'),
-      attachment_ids: [],
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'updated title',
+        description_rich_content: paragraphDoc('updated content'),
+        attachment_ids: [],
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -371,15 +380,26 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-title-only', 'Title Only');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'old title',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'old title',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'new title',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'new title',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(200);
     expect(res.json().title).toBe('new title');
@@ -396,15 +416,26 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-desc-only', 'Desc Only');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'title stays',
-      description_rich_content: paragraphDoc('original body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'title stays',
+        description_rich_content: paragraphDoc('original body'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      description_rich_content: paragraphDoc('updated body'),
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        description_rich_content: paragraphDoc('updated body'),
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(200);
 
@@ -412,7 +443,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       const detail = await getAuditDetail(voc.id, 'voc_description_edited');
       const changes = detail?.changes as Record<string, unknown> | undefined;
       expect(changes?.description_rich_content).toBeDefined();
-      const hashChange = changes?.description_rich_content as { from_hash: string; to_hash: string };
+      const hashChange = changes?.description_rich_content as {
+        from_hash: string;
+        to_hash: string;
+      };
       expect(hashChange.from_hash).toHaveLength(64);
       expect(hashChange.to_hash).toHaveLength(64);
       expect(hashChange.from_hash).not.toBe(hashChange.to_hash);
@@ -425,17 +459,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-attach-noop', 'Attach Noop');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'same title',
-      description_rich_content: paragraphDoc('same body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'same title',
+        description_rich_content: paragraphDoc('same body'),
+      },
+      randomUUID(),
+    );
 
     // Send title same value + attachment_ids: [] — only attachments in body
     // but title is unchanged and description is unchanged, so empty diff.
-    const res = await patchDescription(app, reporter, voc.id, {
-      attachment_ids: [],
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        attachment_ids: [],
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(200);
     // updated_at should NOT change — empty diff
@@ -450,44 +495,68 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   // ── Permission ──────────────────────────────────────────────────────────
 
   // Case 5: other reporter
-  it('case 5: other Reporter on someone else\'s VOC → 403 permission.denied', async () => {
+  it("case 5: other Reporter on someone else's VOC → 403 permission.denied", async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-other-reporter', 'Other Reporter');
     const reporter1 = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter1, {
-      primary_managed_system_id: msId,
-      title: 'reporter1 voc',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter1,
+      {
+        primary_managed_system_id: msId,
+        title: 'reporter1 voc',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     // Create a second reporter
     const { externalId: r2ExternalId } = await insertReporterActor(
-      dbHandle, WORKSPACE_ID, `5-${randomUUID().slice(0, 8)}`,
+      dbHandle,
+      WORKSPACE_ID,
+      `5-${randomUUID().slice(0, 8)}`,
     );
     const reporter2 = await loginAs(app, r2ExternalId);
 
-    const res = await patchDescription(app, reporter2, voc.id, {
-      title: 'hacked title',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter2,
+      voc.id,
+      {
+        title: 'hacked title',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('permission.denied');
   });
 
   // Case 6: workspace admin
-  it('case 6: Workspace Admin on reporter\'s VOC → 403 permission.denied (no admin elevation)', async () => {
+  it("case 6: Workspace Admin on reporter's VOC → 403 permission.denied (no admin elevation)", async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-admin-denied', 'Admin Denied');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'reporter voc',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'reporter voc',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, admin, voc.id, {
-      title: 'admin edited',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      admin,
+      voc.id,
+      {
+        title: 'admin edited',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('permission.denied');
@@ -498,21 +567,34 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-dev-denied', 'Dev Denied');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'reporter voc',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'reporter voc',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     const { id: devId, externalId: devExtId } = await insertDevActor(
-      dbHandle, WORKSPACE_ID, `7-${randomUUID().slice(0, 8)}`,
+      dbHandle,
+      WORKSPACE_ID,
+      `7-${randomUUID().slice(0, 8)}`,
     );
     await grantVocTriage(dbHandle, WORKSPACE_ID, devId, msId, adminActorId);
     const dev = await loginAs(app, devExtId);
 
-    const res = await patchDescription(app, dev, voc.id, {
-      title: 'dev hacked',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      dev,
+      voc.id,
+      {
+        title: 'dev hacked',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('permission.denied');
@@ -525,25 +607,36 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-triaged', 'Triaged');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'to be triaged',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'to be triaged',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     // Force triage state via SQL
     await forceTriageState(dbHandle, voc.id, 'triaged');
 
     // Refresh updated_at
     const fresh = await dbHandle.pool.query<{ updated_at: string }>(
-      `select updated_at::text as updated_at from voc.vocs where id = $1`,
+      'select updated_at::text as updated_at from voc.vocs where id = $1',
       [voc.id],
     );
     const freshAt = fresh.rows[0]?.updated_at ?? voc.updated_at;
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'edit after triage',
-    }, { idempotencyKey: randomUUID(), ifMatch: freshAt });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'edit after triage',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: freshAt },
+    );
 
     expect(res.statusCode).toBe(409);
     const body = res.json();
@@ -556,17 +649,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-archived', 'Archived');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'to be archived',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'to be archived',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     await archiveVoc(dbHandle, voc.id);
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'edit archived',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'edit archived',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('conflict.record_archived');
@@ -577,17 +681,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-parent-arch', 'Parent Archived');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'reporter voc',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'reporter voc',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     await archiveMs(dbHandle, msId);
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'edit with archived ms',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'edit with archived ms',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('conflict.parent_archived');
@@ -600,15 +715,27 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-empty-body', 'Empty Body');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, {}, {
-      idempotencyKey: randomUUID(), ifMatch: voc.updated_at,
-    });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {},
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: voc.updated_at,
+      },
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.failed');
@@ -619,15 +746,27 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-forbidden-sev', 'Forbidden Sev');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, { severity: 'high' }, {
-      idempotencyKey: randomUUID(), ifMatch: voc.updated_at,
-    });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { severity: 'high' },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: voc.updated_at,
+      },
+    );
 
     expect(res.statusCode).toBe(422);
     const body = res.json();
@@ -640,17 +779,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-forbidden-multi', 'Forbidden Multi');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     // Route pre-checks one at a time in FORBIDDEN list order; first match fires
-    const res = await patchDescription(app, reporter, voc.id, {
-      severity: 'low',
-      triage_state: 'triaged',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        severity: 'low',
+        triage_state: 'triaged',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.unexpected_field');
@@ -661,15 +811,26 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-bad-title', 'Bad Title');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'a'.repeat(201),
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'a'.repeat(201),
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.failed');
@@ -681,11 +842,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-attach-link', 'Attach Link');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     // Seed an unlinked attachment owned by the reporter.
     const reporterActorRow = await dbHandle.pool.query<{ id: string }>(
@@ -704,15 +870,21 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       [attachmentId, storageKey, reporterActorId],
     );
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      attachment_ids: [attachmentId],
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        attachment_ids: [attachmentId],
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(200);
 
     // Attachment row linked to the voc.
     const row = await dbHandle.pool.query<{ voc_id: string; linked_at: Date | null }>(
-      `select voc_id, linked_at from voc.voc_attachments where id = $1`,
+      'select voc_id, linked_at from voc.voc_attachments where id = $1',
       [attachmentId],
     );
     expect(row.rows[0]?.voc_id).toBe(voc.id);
@@ -726,11 +898,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-img-forbidden', 'Img Forbidden');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     const docWithImage = {
       type: 'doc',
@@ -742,9 +919,15 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       ],
     };
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      description_rich_content: docWithImage,
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        description_rich_content: docWithImage,
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('rich_content.external_image_forbidden');
@@ -755,11 +938,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-js-link', 'JS Link');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     const docWithJsLink = {
       type: 'doc',
@@ -777,9 +965,15 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       ],
     };
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      description_rich_content: docWithJsLink,
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        description_rich_content: docWithJsLink,
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(422);
     const body = res.json();
@@ -795,16 +989,27 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-no-ifmatch', 'No IfMatch');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, { title: 'new' }, {
-      idempotencyKey: randomUUID(),
-      // no ifMatch
-    });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'new' },
+      {
+        idempotencyKey: randomUUID(),
+        // no ifMatch
+      },
+    );
 
     expect(res.statusCode).toBe(422);
     const body = res.json();
@@ -817,17 +1022,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-stale', 'Stale');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     const bogus = '1970-01-01T00:00:00.000Z';
-    const res = await patchDescription(app, reporter, voc.id, { title: 'new' }, {
-      idempotencyKey: randomUUID(),
-      ifMatch: bogus,
-    });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'new' },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: bogus,
+      },
+    );
 
     expect(res.statusCode).toBe(409);
     const body = res.json();
@@ -839,24 +1055,35 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   // ── Concurrency ──────────────────────────────────────────────────────────
 
   // Case 20: Reporter starts edit; admin commits triage first
-  it('case 20: admin commits triage between Reporter\'s lock and edit → 409 conflict.triage_already_committed', async () => {
+  it("case 20: admin commits triage between Reporter's lock and edit → 409 conflict.triage_already_committed", async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-race-triage', 'Race Triage');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'race voc',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'race voc',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     // Admin commits triage directly via SQL (simulates concurrent admin PATCH)
     await forceTriageState(dbHandle, voc.id, 'triaged');
 
     // Reporter now tries to edit description with original If-Match
-    const res = await patchDescription(app, reporter, voc.id, { title: 'new title' }, {
-      idempotencyKey: randomUUID(),
-      ifMatch: voc.updated_at,
-    });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'new title' },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: voc.updated_at,
+      },
+    );
 
     // State check fires (triage_already_committed) before If-Match comparison
     expect(res.statusCode).toBe(409);
@@ -868,24 +1095,41 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-race-stale', 'Race Stale');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'race voc 2',
-      description_rich_content: paragraphDoc('body'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'race voc 2',
+        description_rich_content: paragraphDoc('body'),
+      },
+      randomUUID(),
+    );
 
     // First edit succeeds
-    const res1 = await patchDescription(app, reporter, voc.id, { title: 'first edit' }, {
-      idempotencyKey: randomUUID(),
-      ifMatch: voc.updated_at,
-    });
+    const res1 = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'first edit' },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: voc.updated_at,
+      },
+    );
     expect(res1.statusCode).toBe(200);
 
     // Second edit with original (now stale) If-Match
-    const res2 = await patchDescription(app, reporter, voc.id, { title: 'second edit' }, {
-      idempotencyKey: randomUUID(),
-      ifMatch: voc.updated_at, // stale
-    });
+    const res2 = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'second edit' },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: voc.updated_at, // stale
+      },
+    );
     expect(res2.statusCode).toBe(409);
     expect(res2.json().code).toBe('conflict.stale_write');
   });
@@ -897,17 +1141,23 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-idem-replay', 'Idem Replay');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     const key = randomUUID();
     const body = { title: 'idempotent title' };
 
     const res1 = await patchDescription(app, reporter, voc.id, body, {
-      idempotencyKey: key, ifMatch: voc.updated_at,
+      idempotencyKey: key,
+      ifMatch: voc.updated_at,
     });
     expect(res1.statusCode).toBe(200);
     const firstBody = res1.json();
@@ -918,7 +1168,8 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     // (vitest .toEqual) locks the *content* invariant which is what
     // idempotency semantics require.
     const res2 = await patchDescription(app, reporter, voc.id, body, {
-      idempotencyKey: key, ifMatch: voc.updated_at,
+      idempotencyKey: key,
+      ifMatch: voc.updated_at,
     });
     expect(res2.statusCode).toBe(200);
     expect(res2.json()).toEqual(firstBody);
@@ -929,22 +1180,41 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-idem-mismatch', 'Idem Mismatch');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     const key = randomUUID();
-    const res1 = await patchDescription(app, reporter, voc.id, { title: 'body A' }, {
-      idempotencyKey: key, ifMatch: voc.updated_at,
-    });
+    const res1 = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'body A' },
+      {
+        idempotencyKey: key,
+        ifMatch: voc.updated_at,
+      },
+    );
     expect(res1.statusCode).toBe(200);
 
     // Different body, same key
-    const res2 = await patchDescription(app, reporter, voc.id, { title: 'body B' }, {
-      idempotencyKey: key, ifMatch: voc.updated_at,
-    });
+    const res2 = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'body B' },
+      {
+        idempotencyKey: key,
+        ifMatch: voc.updated_at,
+      },
+    );
     expect(res2.statusCode).toBe(409);
     expect(res2.json().code).toBe('conflict.idempotency_key_reuse');
   });
@@ -954,23 +1224,42 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-idem-ifmatch', 'Idem IfMatch');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     const key = randomUUID();
-    const res1 = await patchDescription(app, reporter, voc.id, { title: 'same body' }, {
-      idempotencyKey: key, ifMatch: voc.updated_at,
-    });
+    const res1 = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'same body' },
+      {
+        idempotencyKey: key,
+        ifMatch: voc.updated_at,
+      },
+    );
     expect(res1.statusCode).toBe(200);
     const freshAt = res1.json().updated_at as string;
 
     // Same key, same body, but fresh If-Match → different hash → mismatch
-    const res2 = await patchDescription(app, reporter, voc.id, { title: 'same body' }, {
-      idempotencyKey: key, ifMatch: freshAt,
-    });
+    const res2 = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'same body' },
+      {
+        idempotencyKey: key,
+        ifMatch: freshAt,
+      },
+    );
     expect(res2.statusCode).toBe(409);
     expect(res2.json().code).toBe('conflict.idempotency_key_reuse');
   });
@@ -984,11 +1273,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-ratelimit', 'Rate Limit');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     // clear rate limits before test
     await dbHandle.pool.query('delete from core.rate_limits');
@@ -998,7 +1292,9 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
 
     for (let i = 0; i < 31; i++) {
       const res = await patchDescription(
-        app, reporter, voc.id,
+        app,
+        reporter,
+        voc.id,
         { title: `edit ${i}` },
         { idempotencyKey: randomUUID(), ifMatch: updatedAt },
       );
@@ -1009,7 +1305,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     }
 
     // First 30 should succeed, 31st should be 429.
-    expect(statuses.slice(0, 30).every(s => s === 200)).toBe(true);
+    expect(statuses.slice(0, 30).every((s) => s === 200)).toBe(true);
     expect(statuses[30]).toBe(429);
   });
 
@@ -1020,19 +1316,30 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-order-26', 'Order 26');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
     await forceTriageState(dbHandle, voc.id, 'triaged');
     const bogus = '1970-01-01T00:00:00.000Z';
 
-    const res = await patchDescription(app, reporter, voc.id, { title: 'new' }, {
-      idempotencyKey: randomUUID(),
-      ifMatch: bogus, // stale
-    });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      { title: 'new' },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: bogus, // stale
+      },
+    );
 
     // triage_already_committed fires before stale_write (per plan §ordering)
     expect(res.statusCode).toBe(409);
@@ -1044,16 +1351,27 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-unknown-27', 'Unknown 27');
     const reporter = await loginAs(app, 'mock-user-1');
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: paragraphDoc('x'),
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      title: 'ok',
-      foobar: 'unknown key',
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        title: 'ok',
+        foobar: 'unknown key',
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.failed');
@@ -1071,30 +1389,37 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
 
     const docOriginal = {
       type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'stable diff test' }] },
-      ],
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'stable diff test' }] }],
     };
 
-    const voc = await postVoc(app, reporter, {
-      primary_managed_system_id: msId,
-      title: 'v',
-      description_rich_content: docOriginal,
-    }, randomUUID());
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'v',
+        description_rich_content: docOriginal,
+      },
+      randomUUID(),
+    );
 
     // Re-submit a freshly-built doc that is structurally identical. Sanitizer's
     // canonical rebuild on both sides produces identical canonical JSON →
     // identical SHA-256 → empty diff → 200 with no audit row.
     const docResubmit = {
       type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'stable diff test' }] },
-      ],
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'stable diff test' }] }],
     };
 
-    const res = await patchDescription(app, reporter, voc.id, {
-      description_rich_content: docResubmit,
-    }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
+    const res = await patchDescription(
+      app,
+      reporter,
+      voc.id,
+      {
+        description_rich_content: docResubmit,
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
 
     expect(res.statusCode).toBe(200);
 

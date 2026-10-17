@@ -1,5 +1,6 @@
 import { type ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { CreateTaskRequestFromVocClusterRequest, TaskRequestDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -29,6 +30,7 @@ export function useRequestTaskFromCluster(
       return res.data;
     },
     onSuccess: (data) => {
+      void invalidateRecovery(queryClient);
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['voc-cluster', clusterId] });
       void queryClient.invalidateQueries({ queryKey: ['voc-clusters'] });

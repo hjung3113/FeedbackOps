@@ -10,7 +10,7 @@ import {
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { HOME_COVERAGE_HREF } from '@/features/home/HomeScreen';
@@ -25,6 +25,7 @@ const respondentForm = surveyRespondentFormDtoSchema.parse({
     title: 'Q3 매출 리포트 사용성 진단',
     type: 'discovery',
     identity_protected: true,
+    description: null,
   },
   questions: [
     {
@@ -62,6 +63,8 @@ const links = [
     ...Object.values(DASHBOARD_HOP_ROUTES),
     ...ALL_SIDEBAR_ENTRIES.map((entry) => entry.href),
     HOME_COVERAGE_HREF,
+    '/tasks?view=backlog&public_update=missing',
+    '/surveys?follow_up=needed',
   ]),
 ];
 
@@ -116,6 +119,17 @@ describe('shipped deep-link contract', () => {
     const { foundRoute } = router.getMatchedRoutes('/surveys/participate');
 
     expect(foundRoute?.id).toBe('/_authed/surveys/participate');
+  });
+
+  test('#1179: recovery queue constants land on their filtered source lists', () => {
+    expect(DASHBOARD_ACTIONABLE_FINDINGS_ROUTE).toBe('/findings?execution=none');
+    expect(DASHBOARD_RELEASED_TASKS_ROUTE).toBe('/tasks?view=backlog&reporter_update=needed');
+    expect(DASHBOARD_OUTCOME_SURVEYS_ROUTE).toBe('/surveys?follow_up=needed');
+    [
+      DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+      DASHBOARD_RELEASED_TASKS_ROUTE,
+      DASHBOARD_OUTCOME_SURVEYS_ROUTE,
+    ].forEach(assertResolvable);
   });
 
   test('renders respondent form without loading Survey management data', async () => {
@@ -192,6 +206,82 @@ describe('shipped deep-link contract', () => {
     });
     expect(requests).not.toContainEqual({ method: 'GET', pathname: '/surveys' });
   });
+
+  test.each(
+    ['/vocs', '/findings'].flatMap((pathname) => [
+      { pathname, area: respondentSurveyId, specific: true, keepArea: false },
+      { pathname, area: respondentSurveyId, specific: false, keepArea: true },
+      { pathname, area: 'unset', specific: true, keepArea: true },
+      { pathname, area: 'unset', specific: false, keepArea: true },
+    ]),
+  )(
+    'scope switch on $pathname with Area $area (specific=$specific) preserves only compatible Area state',
+    async ({ pathname, area, specific, keepArea }) => {
+      const systemId = '33333333-3333-4333-8333-333333333333';
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), 'http://localhost');
+          if (url.pathname === '/managed-systems')
+            return jsonResponse(200, {
+              items: [
+                {
+                  id: systemId,
+                  workspace_id: '22222222-2222-4222-8222-222222222222',
+                  slug: 'finance',
+                  name: 'Finance',
+                  description: null,
+                  archived_at: null,
+                  created_at: '2026-01-01T00:00:00.000Z',
+                  updated_at: '2026-01-01T00:00:00.000Z',
+                },
+              ],
+              total: 1,
+            });
+          if (url.pathname === '/me/permissions/scope')
+            return jsonResponse(200, { scope: { kind: 'all' } });
+          if (url.pathname === '/me/permissions/check')
+            return jsonResponse(200, { state: 'approved', decision: { allow: true } });
+          if (url.pathname === '/nav/counts') return jsonResponse(200, { counts: {} });
+          if (url.pathname === '/actors') return jsonResponse(200, { actors: [] });
+          return jsonResponse(200, { items: [], total: 0, page: { has_more: false, total: 0 } });
+        }),
+      );
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      queryClient.setQueryData(ME_QUERY_KEY, {
+        actor: {
+          id: '11111111-1111-4111-8111-111111111111',
+          external_id: 'scope-test',
+          email: 'scope@example.test',
+          display_name: 'Scope test',
+          role_level: 'admin',
+        },
+        workspace_id: '22222222-2222-4222-8222-222222222222',
+      });
+      const routeRouter = createRouter({
+        routeTree,
+        context: { queryClient },
+        history: createMemoryHistory({
+          initialEntries: [
+            `${pathname}?managedSystem=${specific ? 'all' : systemId}&filter.analytics_area=${area}`,
+          ],
+        }),
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={routeRouter} />
+        </QueryClientProvider>,
+      );
+      fireEvent.click(await screen.findByTestId('scope-selector'));
+      fireEvent.click(await screen.findByTestId(`scope-option-${specific ? systemId : 'all'}`));
+      await waitFor(() =>
+        expect(routeRouter.state.location.search).toEqual({
+          ...(specific ? { managedSystem: systemId } : {}),
+          ...(keepArea ? { 'filter.analytics_area': area } : {}),
+        }),
+      );
+    },
+  );
 
   test.each([
     {

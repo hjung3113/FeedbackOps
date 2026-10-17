@@ -1,9 +1,9 @@
 // useCommittedSearchDraft — debounce, immediate commit, and acknowledgement.
 // The inbox route used to own this; these tests are the seam that moved with it.
 
+import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
 const DEBOUNCE_MS = 300;
 // #875: searchDebounceMs waits this long when the draft ends in Hangul.
@@ -218,6 +218,63 @@ describe('useCommittedSearchDraft', () => {
     expect(write).toHaveBeenNthCalledWith(2, '로그인 오류', '로그인');
   });
 
+  it('settles a normalized no-op when the writer reports no change', () => {
+    const write = vi.fn((): boolean | undefined => false);
+    const { result, rerender } = renderHook(
+      ({ committed }: { committed: string }) =>
+        useCommittedSearchDraft({
+          committed,
+          write,
+        }),
+      { initialProps: { committed: 'padded' } },
+    );
+
+    act(() => {
+      result.current.setDraft(' padded ');
+    });
+    act(() => {
+      result.current.commit();
+    });
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith(' padded ', 'padded');
+    expect(result.current.draft).toBe('padded');
+
+    rerender({ committed: '' });
+    expect(result.current.draft).toBe('');
+
+    write.mockImplementation(() => true);
+    act(() => {
+      result.current.setDraft('again');
+    });
+    act(() => {
+      result.current.commit();
+    });
+    expect(write).toHaveBeenLastCalledWith('again', '');
+    expect(result.current.draft).toBe('again');
+  });
+
+  // VOC writes the raw draft and the URL can change even when trim matches.
+  // That writer returns void, so the raw draft stays pending.
+  it('keeps a trim-equivalent draft pending when the writer does not report no change', () => {
+    const { result, rerender, write } = renderDraft('padded');
+
+    act(() => {
+      result.current.setDraft(' padded ');
+    });
+    act(() => {
+      result.current.commit();
+    });
+    expect(write).toHaveBeenCalledWith(' padded ', 'padded');
+    expect(result.current.draft).toBe(' padded ');
+
+    act(() => {
+      result.current.setDraft(' newer ');
+    });
+    rerender({ committed: ' padded ' });
+    expect(result.current.draft).toBe(' newer ');
+  });
+
   it('replaces an idle draft when committed changes outside the box', () => {
     const { result, rerender, write } = renderDraft('로그인');
 
@@ -238,7 +295,7 @@ describe('useCommittedSearchDraft', () => {
     const first = vi.fn();
     const second = vi.fn();
     const { result, rerender } = renderHook(
-      ({ write }: { write: (draft: string, base: string) => void }) =>
+      ({ write }: { write: (draft: string, base: string) => boolean | undefined }) =>
         useCommittedSearchDraft({
           committed: '',
           write,

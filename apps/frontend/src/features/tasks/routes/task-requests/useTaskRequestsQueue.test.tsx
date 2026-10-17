@@ -44,6 +44,8 @@ const taskRequest = {
   requested_outcome: 'Task 전환 검토',
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -78,6 +80,29 @@ describe('useTaskRequestsQueue tab counts (#706)', () => {
     fetchTaskRequestsMock.mockReset();
     resolveActorsMock.mockReset();
     resolveActorsMock.mockResolvedValue({ actors: [], teams: [] });
+  });
+
+  it('renders fresh all-tab status and assignment after a completed decision', async () => {
+    fetchTaskRequestsMock.mockResolvedValue({ items: [taskRequest] });
+    const { result } = renderQueue();
+    await waitFor(() => expect(result.current.selected?.id).toBe(taskRequest.id));
+    act(() => result.current.setActiveTab('all'));
+    await waitFor(() => expect(result.current.queueSettled).toBe(true));
+    const approved = { ...taskRequest, status: 'approved' as const };
+    const fresh = {
+      ...approved,
+      status: 'converted' as const,
+      assigned_reviewer_actor_id: 'fresh-reviewer',
+    };
+    fetchTaskRequestsMock.mockResolvedValue({ items: [fresh] });
+    act(() => result.current.onDecisionComplete(approved));
+    await waitFor(() =>
+      expect(result.current.selected).toMatchObject({
+        status: 'converted',
+        assigned_reviewer_actor_id: 'fresh-reviewer',
+      }),
+    );
+    expect(result.current.selectedId).toBe(taskRequest.id);
   });
 
   it.each(['pending', 'failed', 'loaded', 'loaded-empty'] as const)(

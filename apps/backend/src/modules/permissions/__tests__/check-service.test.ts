@@ -121,14 +121,14 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({ allow: true, via: 'role' });
   });
 
-  it('user deny on workspace.admin → no_grant with requestable', async () => {
+  it('user deny on workspace.admin → no_grant without requestable', async () => {
     const d = await svc.checkCapability(userActor, 'workspace.admin', {
       workspace_id: WORKSPACE_ID,
     });
     expect(d.allow).toBe(false);
     if (d.allow) return;
     expect(d.reason).toBe('no_grant');
-    expect(d.requestable).toEqual([{ workspace_id: WORKSPACE_ID }]);
+    expect(d.requestable).toBeNull();
   });
 
   it('workspace_mismatch when actor is bound to a different workspace', async () => {
@@ -189,7 +189,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({ allow: true, via: 'direct_grant', grant_id: inserted[0]?.id });
   });
 
-  it('grant expired → grant_expired with requestable scope', async () => {
+  it('grant expired → grant_expired without requestable scope', async () => {
     const tempActor: ActorContext = {
       actor_id: tempActorId,
       workspace_id: WORKSPACE_ID,
@@ -208,7 +208,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({
       allow: false,
       reason: 'grant_expired',
-      requestable: [{ workspace_id: WORKSPACE_ID }],
+      requestable: null,
     });
   });
 
@@ -297,7 +297,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({
       allow: false,
       reason: 'grant_revoked',
-      requestable: [{ workspace_id: WORKSPACE_ID }],
+      requestable: null,
     });
   });
 });

@@ -42,6 +42,7 @@ const childTask: TaskDto = {
   status: 'doing',
   priority: 'urgent',
   assignee_actor_id: ASSIGNEE_ID,
+  assignee_team_id: null,
   due_date: '2026-06-15',
   milestone_id: MILESTONE_ID,
   analytics_area_id: AREA_ID,
@@ -120,21 +121,22 @@ beforeEach(() => {
 });
 
 describe('MilestoneDetailPanel (#514 B2d)', () => {
-  it('renders the overview copy, progress strip, and property labels from the detail DTO', async () => {
+  it('renders a single progress fact and keeps identity chips in the header', async () => {
     renderPanel(linkedDetail);
 
     expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
     expect(screen.getByText('이 Milestone의 목적')).toBeInTheDocument();
-    expect(screen.getByText('Task 1개 중 0개 Released')).toBeInTheDocument();
-    for (const label of [
-      '상태',
-      'Managed System',
-      'Analytics Area',
-      '담당자',
-      '시작일',
-      '목표일',
-      '생성일',
-    ]) {
+    expect(screen.getByText('Released 0/1')).toBeInTheDocument();
+    expect(screen.queryByText('Task 1개 중 0개 Released')).not.toBeInTheDocument();
+    expect(screen.queryByText('Released/Done')).not.toBeInTheDocument();
+    expect(screen.queryByText('대기 중')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '상태' })).toBeInTheDocument();
+    expect(screen.queryByText('Managed System', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics Area', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Power BI', { exact: true })).toHaveLength(1);
+    expect(screen.getAllByText('Product Usage', { exact: true })).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Tasks' })).toBeInTheDocument();
+    for (const label of ['상태', '담당자', '시작일', '목표일', '생성일']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getByText('2026. 5. 10.')).toBeInTheDocument();
@@ -197,7 +199,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
   });
 
-  it('renders Managed System as read-only text, not an input', async () => {
+  it('renders the header Managed System as read-only text, not an input', async () => {
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
@@ -454,17 +456,18 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
     renderPanel(linkedDetail);
 
-    await screen.findByText('Tasks · 1');
+    await screen.findByRole('heading', { name: 'Tasks' });
     expect(vi.mocked(listTasks)).toHaveBeenCalledWith({
       milestone_id: MILESTONE_ID,
       signal: expect.any(AbortSignal),
     });
   });
 
-  it('renders the Tasks header count and empty copy when no child rows exist', async () => {
+  it('renders a count-free Tasks heading and empty copy when no child rows exist', async () => {
     renderPanel(linkedDetail);
 
-    expect(await screen.findByText('Tasks · 0')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tasks' })).toBeInTheDocument();
+    expect(screen.queryByText('Tasks · 0')).not.toBeInTheDocument();
     expect(screen.getByText('아직 연결된 Task 가 없습니다.')).toBeInTheDocument();
   });
 
@@ -472,11 +475,11 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
     renderPanel(linkedDetail);
 
-    const section = await screen.findByText('Tasks · 1');
+    const section = await screen.findByRole('heading', { name: 'Tasks' });
     const row = section.closest('[data-anchor="tasks"]');
     if (!row) throw new Error('tasks section not found');
     // SeverityIndicator driven by task.priority (urgent → critical).
-    expect(within(row as HTMLElement).getByLabelText('critical')).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByLabelText('우선순위 긴급')).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText('TASK-902')).toBeInTheDocument();
     expect(
       within(row as HTMLElement).getByText('Power BI 임베디드 SSO 재인증 핸들러 구현'),
@@ -517,7 +520,9 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       </QueryClientProvider>,
     );
 
-    const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
+    const row = (await screen.findByRole('heading', { name: 'Tasks' })).closest(
+      '[data-anchor="tasks"]',
+    );
     if (!row) throw new Error('tasks section not found');
     // The avatar renders the Korean assigned fallback; the badge stays
     // specific to a genuinely null assignment.
@@ -546,7 +551,9 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
     renderPanel(linkedDetail);
 
-    const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
+    const row = (await screen.findByRole('heading', { name: 'Tasks' })).closest(
+      '[data-anchor="tasks"]',
+    );
     expect(row).toHaveTextContent('2026. 6. 15.');
     expect(row).not.toHaveTextContent('estimate');
   });
@@ -555,7 +562,9 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
     renderPanel(linkedDetail);
 
-    const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
+    const row = (await screen.findByRole('heading', { name: 'Tasks' })).closest(
+      '[data-anchor="tasks"]',
+    );
     expect(row).toHaveTextContent('업데이트 2026. 7. 21.');
   });
 
@@ -563,7 +572,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
     renderPanel(linkedDetail);
 
-    await screen.findByText('Tasks · 1');
+    await screen.findByRole('heading', { name: 'Tasks' });
     expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
   });
 
@@ -588,7 +597,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
   // B2d fixup F1 — the milestone and child reads have separate lifetimes:
   // after a successful child read, a denied refetch must clear the retained
-  // count from the nav and section title (same terminal-error contract as
+  // count from the nav (same terminal-error contract as
   // the milestone read, R2-1) before showing the blocked panel.
   it('clears the retained count when a successful child read is denied on refetch', async () => {
     vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
@@ -606,7 +615,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText('Tasks · 1')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tasks' })).toBeInTheDocument();
 
     vi.mocked(listTasks).mockRejectedValue(
       new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
@@ -616,8 +625,9 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(await screen.findByRole('heading', { name: 'Task 목록' })).toBeInTheDocument();
     expect(screen.getByText('이 Milestone의 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
-    // Retained success data no longer feeds the nav entry or section count.
+    // Retained success data no longer feeds the nav count; the section heading stays quiet.
     expect(screen.queryByText('Tasks · 1')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tasks' })).toBeInTheDocument();
     const nav = screen.getByRole('button', { name: '요약' }).closest('div');
     if (!nav) throw new Error('section nav not found');
     const labels = within(nav)

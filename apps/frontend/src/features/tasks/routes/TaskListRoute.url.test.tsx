@@ -60,6 +60,7 @@ const first: TaskDetailDto = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: actor,
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,
@@ -142,6 +143,31 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it.each(['empty', 'populated'] as const)(
+  'follows My Task after an unassigned backlog auto-selection (%s)',
+  async (state) => {
+    mockTasks([
+      { ...first, assignee_actor_id: null },
+      ...(state === 'populated' ? [sameScope] : []),
+    ]);
+    const mounted = mount('/tasks?view=backlog');
+    expect(await screen.findByTestId('detail')).toHaveTextContent(first.id);
+
+    await act(async () => {
+      await mounted.router.navigate({ to: '/tasks', search: { view: 'my' } });
+    });
+    await settle(mounted);
+
+    if (state === 'populated') {
+      expect(await screen.findByTestId('detail')).toHaveTextContent(sameScope.id);
+    } else {
+      expect(screen.getByText('나에게 배정된 Task가 없습니다.')).toBeInTheDocument();
+      expectNoSelectedRow();
+    }
+    expect(screen.queryByTestId('tasks-link-missing')).not.toBeInTheDocument();
+  },
+);
+
 it.each(['backlog', 'my'] as const)(
   'pushes row selection keeping every search key in %s',
   async (view) => {
@@ -158,6 +184,8 @@ it.each(['backlog', 'my'] as const)(
     );
     expect(mounted.history.length).toBe(2);
     expect(screen.getByTestId('detail')).toHaveTextContent(second.id);
+    const { signal: _signal, ...sent } = vi.mocked(listTasks).mock.calls.at(-1)?.[0] ?? {};
+    expect(listTasksQuerySchema.parse(sent).public_update).toBe('missing');
   },
 );
 it('closes with replace and keeps scope, stays closed through refetch, and reopens on row selection', async () => {
@@ -172,6 +200,8 @@ it('closes with replace and keeps scope, stays closed through refetch, and reope
     }),
   );
   expect(mounted.history.length).toBe(1);
+  const { signal: _signal, ...sent } = vi.mocked(listTasks).mock.calls.at(-1)?.[0] ?? {};
+  expect(listTasksQuerySchema.parse(sent).public_update).toBe('missing');
   expectNoSelectedRow();
   await settle(mounted);
   expectNoSelectedRow();
@@ -217,6 +247,7 @@ it.each(['404', 'scope', 'assignee'] as const)(
       ...second,
       primary_managed_system_id: cause === 'scope' ? B : A,
       assignee_actor_id: cause === 'assignee' ? null : actor,
+      assignee_team_id: null,
     };
     mockTasks([first, inaccessible]);
     const view = cause === 'assignee' ? 'my' : 'backlog';

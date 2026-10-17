@@ -8,6 +8,7 @@ import type {
 import { resolvePublicUpdateReviewCandidateResponseSchema } from '@fops/shared';
 
 import type { Db } from '../../../db/client.js';
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { RoleLevel } from '../../auth/session-service.js';
@@ -105,6 +106,7 @@ export function createPublicUpdateReviewCandidateService(deps: {
     vocId: string;
     input: ResolvePublicUpdateReviewCandidateRequest;
   }): Promise<ResolvePublicUpdateReviewCandidateResponse> {
+    if (args.input.action === 'apply') await lockRecoveryCommand(args.tx, args.actor.workspace_id);
     const voc = await requireTriage(args.tx, args.actor, args.vocId);
     if (args.input.action === 'apply') {
       const publicUpdate = await deps.conversationService.postPublicUpdate({

@@ -18,6 +18,7 @@ import { cn } from '@fops/ui';
 import { Bold, Code, Italic, Link, List } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
+import { useComposerEditorFocus } from '../composer-editor/useComposerEditorFocus';
 import { MentionPickerButton } from '../mentions/MentionPickerButton';
 import { insertMention } from '../mentions/insertMention';
 import { type ProgressNotesResource, useCreateProgressNote } from './useProgressNotes';
@@ -52,10 +53,11 @@ function ToolbarButton({
     <button
       type="button"
       onMouseDown={(e) => {
-        // Prevent the editor from losing focus on toolbar click.
+        // Mouse only: stop the button from taking focus (and the selection) from the editor.
         e.preventDefault();
-        onClick();
       }}
+      // Native click covers mouse and Enter/Space; the command refocuses the editor itself.
+      onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}
@@ -64,6 +66,7 @@ function ToolbarButton({
         'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
         'hover:bg-surface-row-hover hover:text-text-primary',
         'disabled:cursor-not-allowed disabled:opacity-40',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
         isActive && 'bg-surface-row-selected text-text-primary',
       )}
     >
@@ -72,7 +75,7 @@ function ToolbarButton({
   );
 }
 
-function NotesToolbar({ editor }: { editor: TipTapEditor | null }) {
+export function NotesToolbar({ editor }: { editor: TipTapEditor | null }) {
   const editorDisabled = editor === null;
 
   return (
@@ -149,9 +152,13 @@ export function ProgressNotesComposer({
   const copy = COMPOSER_COPY[resource.kind];
   const [draftDoc, setDraftDoc] = React.useState<TipTapDoc | null>(null);
   const editorRef = React.useRef<TipTapEditor | null>(null);
+  const { editorHandle, focusEditor } = useComposerEditorFocus();
 
   const mutation = useCreateProgressNote(resource, {
-    onSuccess: () => setDraftDoc(null), // controlled value null clears the editor (REV-3)
+    onSuccess: () => {
+      setDraftDoc(null); // controlled value null clears the editor (REV-3)
+      focusEditor();
+    },
     onError: (error: ApiError) => toast.error(errorMapper(error.envelope).message),
   });
 
@@ -178,7 +185,12 @@ export function ProgressNotesComposer({
         toolbar={(editor) => {
           // Keep the editor ref in sync for mention insertion.
           editorRef.current = editor;
-          return <NotesToolbar editor={editor} />;
+          return (
+            <>
+              {editorHandle(editor)}
+              <NotesToolbar editor={editor} />
+            </>
+          );
         }}
       />
 

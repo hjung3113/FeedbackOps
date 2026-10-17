@@ -20,3 +20,29 @@ Analytics Areas, the Managed System Registry, and attachment governance are impl
 - Expose stable interfaces for workspace checks, actor context, Analytics Area lookup, and audit appends.
 - Expose stable interfaces for Managed System lookup and default owner/reviewer resolution inputs.
 - Audit APIs must preserve actor, workspace, target, action, timestamp, and safe metadata.
+
+## Permission audit projection (ADR-0066; proposed/new)
+
+Core supplies the approved workspace/request-scoped latest Admin-question audit
+projection for Permission requester detail. Keep storage reads inside Core and
+return only the allowed question metadata. Permission supplies authorization and
+owns requester lifecycle/risk; Core must not import Permission or decide access.
+
+## Close-out contract (ADR-0067; implemented)
+
+- ADR-0067 Managed System reviewer Actor/team inputs alongside owner are implemented by #1089.
+  Core-owned registry/Analytics Area seams provide transaction-aware inputs, not destination
+  eligibility or assignment writes. No runtime import of Dashboard/source commands.
+- Teams can be responsibility targets without new CRUD/membership or permission grants;
+  defaults do not retroactively reassign records. Survey operator routing is independent.
+
+## Audit and cached Survey responses (ADR-0064; coordinated cutover)
+
+#740 revokes raw `core.audit_log` SELECT from `fops_app`, retaining INSERT and
+no UPDATE/DELETE. Preserve canonical Actor/subject/detail identifiers, append-only
+history and same-transaction accountability; controlled migrate/operator reads
+supply test observations. Core exposes only the latest Permission Request question and responsibility
+configuration-change projections. No broad app-readable audit definer. Inventory consumers
+before cutover. ADR-0015 permits only targeted sanitization of confirmed legacy
+Survey-generated cached Finding responses, preserving Actor/key/hash/status and
+exactly-once side effects; no unrelated cache reset or authored-text rewrite.

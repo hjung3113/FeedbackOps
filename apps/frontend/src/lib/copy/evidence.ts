@@ -1,0 +1,27 @@
+import { ADMIN_PERMISSIONS_COPY } from './admin-permissions';
+
+export const EVIDENCE_COPY = {
+  title: 'Evidence',
+  panelLabel: 'Evidence 상세',
+  closePanel: ADMIN_PERMISSIONS_COPY.closePanel,
+  close: ADMIN_PERMISSIONS_COPY.close,
+  sourceTabs: 'Evidence 출처',
+  identityProtected: '응답자 보호',
+  loading: 'Evidence 확인 중…',
+  description: 'Finding에 저장된 Evidence를 찾습니다.',
+  search: 'Evidence 검색…',
+  withheld: '원본 접근 권한 또는 승인 상태가 변경되어 내용을 표시할 수 없습니다.',
+  empty: '표시할 Evidence가 없습니다.',
+  filteredEmpty: '조건에 맞는 Evidence가 없습니다.',
+  missing: '선택한 Evidence를 찾을 수 없습니다.',
+  mismatch: '선택한 Evidence가 현재 조건에 맞지 않습니다.',
+  blocked: 'Evidence 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+  error: 'Evidence를 불러오지 못했습니다.',
+  moreError: '다음 Evidence를 불러오지 못했습니다.',
+  retry: '다시 시도',
+  more: '더 보기',
+  startOver: '처음부터 보기',
+  parent: 'Finding 보기',
+  clear: '조건 초기화',
+  searchAll: '전체에서 검색',
+} as const;

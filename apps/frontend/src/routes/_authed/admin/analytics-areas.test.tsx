@@ -172,9 +172,7 @@ describe('/admin/analytics-areas route', () => {
       expect(screen.getByTestId('aa-grouped-list')).toBeInTheDocument();
     });
     expect(
-      screen.getByText(
-        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 대시보드와 Triage에서 쓰는 필터 기준입니다.',
-      ),
+      screen.getByText('Managed System 안에서 Analytics Area 분류 기준을 관리합니다.'),
     ).toBeVisible();
     expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
       'Analytics Area는 권한 경계가 아닙니다',
@@ -182,6 +180,7 @@ describe('/admin/analytics-areas route', () => {
     expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
       'Analytics Area는 Managed System 안에서 분류와 집계에만 쓰입니다. 권한 범위는 Managed System으로만 정해집니다.',
     );
+    expect(screen.getAllByText('Analytics Area는 권한 경계가 아닙니다')).toHaveLength(1);
     // Both MS groups render; Tableau has one area, Power BI is empty.
     expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
     expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
@@ -190,7 +189,7 @@ describe('/admin/analytics-areas route', () => {
     ).toBeInTheDocument();
   });
 
-  test('uses user-facing language in the Analytics Area detail guardrail', async () => {
+  test('keeps the permission boundary explanation in one place when detail is open', async () => {
     renderPage({
       permissionState: 'approved',
       managedSystems: [TABLEAU],
@@ -202,9 +201,25 @@ describe('/admin/analytics-areas route', () => {
 
     fireEvent.click(screen.getByTestId('aa-row-permission-management'));
     const detail = await screen.findByTestId('aa-slide-over');
-    expect(detail).toHaveTextContent(
-      'Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage 필터, 대시보드 탭, Survey 대상 지정에만 사용되며 권한 확인에는 영향을 주지 않습니다.',
-    );
+    expect(screen.getAllByText('Analytics Area는 권한 경계가 아닙니다')).toHaveLength(1);
+    expect(detail.querySelector('[data-anchor="guardrail"]')).toBeNull();
+  });
+
+  // jsdom has no layout, so overlap cannot be measured; the header row that reserves the
+  // absolute close slot must come before the section navigation and leave room (pr-12).
+  test('detail reserves the close control slot above the section navigation', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+    });
+    fireEvent.click(await screen.findByTestId('aa-row-permission-management'));
+    const detail = await screen.findByTestId('aa-slide-over');
+    const header = within(detail).getByTestId('aa-slide-over-header');
+    const nav = within(detail).getByRole('navigation', { name: '섹션 이동' });
+    expect(header).toHaveClass('pr-12');
+    expect(header.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(detail).getByRole('button', { name: '닫기' })).toBeInTheDocument();
   });
 
   test('filters by Managed System and archived inclusion through requests, then clears both', async () => {
@@ -307,24 +322,26 @@ describe('/admin/analytics-areas route', () => {
       expect(screen.getByTestId('aa-slide-over')).toBeInTheDocument();
     });
     const drawer = screen.getByTestId('aa-slide-over');
-    // Title appears twice: the sr-only SheetTitle (a11y) + the visible PanelTitleBlock.
-    expect(within(drawer).getAllByText('PM Tableau').length).toBeGreaterThanOrEqual(1);
-    // Section nav exposes all six sections including deferred Workload/Findings.
-    for (const label of [
-      '개요',
-      '권한 경계',
-      '정의',
-      '작업량 신호',
-      '최근 Finding',
-      '사용 위치',
-    ]) {
+    // The visible area name and slug each appear once in the detail panel.
+    expect(
+      within(drawer)
+        .getAllByText('PM Tableau')
+        .filter((node) => !node.classList.contains('sr-only')),
+    ).toHaveLength(1);
+    expect(within(drawer).getAllByText('permission-management', { exact: true })).toHaveLength(1);
+    // Section nav keeps the catalog details compact while retaining deferred Workload/Findings.
+    for (const label of ['개요', '정의', '작업량 신호', '최근 Finding', '사용 위치']) {
       expect(within(drawer).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
     }
     // Lead resolved via /actors/resolve.
     expect(within(drawer).getByText('Data Platform')).toBeInTheDocument();
     // Deferred surfaces render placeholders, not invented counts.
-    expect(within(drawer).getByTestId('aa-workload-defer')).toBeInTheDocument();
-    expect(within(drawer).getByTestId('aa-findings-defer')).toBeInTheDocument();
+    expect(within(drawer).queryByTestId('aa-workload-defer')).not.toBeInTheDocument();
+    const unavailable = within(drawer).getByTestId('aa-findings-defer');
+    expect(unavailable).toHaveTextContent(
+      'Findings · Evidence 집계와 목록은 아직 제공되지 않습니다.',
+    );
+    expect(unavailable).toHaveClass('text-xs', 'text-text-muted');
   });
 
   test.each(['detail', 'row click', 'row Enter'])(

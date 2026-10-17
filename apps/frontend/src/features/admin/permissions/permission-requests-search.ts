@@ -1,4 +1,5 @@
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
@@ -7,6 +8,7 @@ import { z } from 'zod';
 // `pending` is the default tab and omitted from the URL.
 export const permissionRequestsSearchSchema = z
   .object({
+    returnTo: recoverySearchFields.returnTo,
     tab: z.enum(['needs_more_info', 'approved', 'rejected', 'all']).optional(),
     selected: z.string().uuid().optional(),
   })
@@ -18,7 +20,7 @@ export function validatePermissionRequestsSearch(raw: unknown) {
   return parseRouteSearch(permissionRequestsSearchSchema, raw);
 }
 
-export type ReviewTab = AdminPermissionRequestRow['status'] | 'all';
+export type ReviewTab = 'pending' | 'needs_more_info' | 'approved' | 'rejected' | 'all';
 
 export const permissionRequestTabs: Array<{ value: ReviewTab; label: string }> = [
   { value: 'pending', label: '대기 중' },
@@ -33,4 +35,7 @@ export const permissionRequestStatusLabel: Record<AdminPermissionRequestRow['sta
   needs_more_info: '추가 정보 필요',
   approved: '승인됨',
   rejected: '거절됨',
+  cancelled: '철회',
+  expired: '만료됨',
+  revoked: '취소됨',
 };

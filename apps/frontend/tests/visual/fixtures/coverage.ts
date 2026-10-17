@@ -11,6 +11,7 @@ export const COVERAGE_IDS = {
 // explicit zero (finding-execution 0/4, unassigned-voc 0), system B omits the
 // finding keys entirely (em dashes), and the area row omits high-severity.
 export const coverageSummaryFixture = dashboardSummarySchema.parse({
+  computed_at: '2026-07-20T08:00:00.000Z',
   kpis: {
     open_voc: 47,
     active_finding: 14,
@@ -84,7 +85,7 @@ export const coverageSummaryFixture = dashboardSummarySchema.parse({
   ],
   coverage: [
     { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'bad' },
-    { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'warn' },
+    { id: 'finding-execution', value: 0, total: 0, percent: 0, status: 'no_data' },
     { id: 'high-followup', value: 41, total: 47, percent: 87, status: 'good' },
     { id: 'released-update', value: 12, total: 17, percent: 70, status: 'warn' },
     { id: 'analytics-area', value: 412, total: 612, percent: 67, status: 'warn' },
@@ -139,6 +140,8 @@ export const coverageManagedSystemsFixture = {
       external_key: null,
       default_owner_actor_id: null,
       default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
       archived_at: null,
       archived_by_actor_id: null,
       created_at: '2026-07-10T00:00:00.000Z',
@@ -152,6 +155,8 @@ export const coverageManagedSystemsFixture = {
       external_key: null,
       default_owner_actor_id: null,
       default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null,
       archived_at: null,
       archived_by_actor_id: null,
       created_at: '2026-07-10T00:00:00.000Z',
@@ -180,6 +185,7 @@ export const coverageAnalyticsAreasFixture = {
 } as const;
 
 export const coverageEmptySummaryFixture = dashboardSummarySchema.parse({
+  computed_at: '2026-07-20T08:00:00.000Z',
   kpis: {},
   action_queues: [],
   coverage: [],

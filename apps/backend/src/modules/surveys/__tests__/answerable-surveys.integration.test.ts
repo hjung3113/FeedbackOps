@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { answerableSurveysResponseSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
@@ -102,13 +103,19 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
         await migrateHandle.pool.query('delete from survey.surveys where workspace_id = $1', [
           workspaceId,
         ]);
-        await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-          workspaceId,
-        ]);
+        await deleteRecoveryFixtureParents(
+          migrateHandle,
+          'delete from core.managed_systems where workspace_id = $1',
+          [workspaceId],
+        );
         await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
           workspaceId,
         ]);
-        await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+        await deleteRecoveryFixtureParents(
+          migrateHandle,
+          'delete from core.workspaces where id = $1',
+          [workspaceId],
+        );
       }
       foreignWorkspaceIds.clear();
     }
@@ -138,7 +145,8 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
       WORKSPACE_ID,
       `${SLUG}%`,
     ]);
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id=$1 and slug like $2',
       [WORKSPACE_ID, `${SLUG}%`],
     );

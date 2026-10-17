@@ -1,4 +1,8 @@
-import { permissionDenyAdminItemSchema, permissionGrantAdminItemSchema } from '@fops/shared';
+import {
+  permissionDenyAdminItemSchema,
+  permissionGrantAdminItemSchema,
+  permissionGrantOptionsSchema,
+} from '@fops/shared';
 
 export const PERMISSION_GRANTS_IDS = {
   grant: '66666666-6666-4666-8666-666666666666',
@@ -6,6 +10,8 @@ export const PERMISSION_GRANTS_IDS = {
   actor: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   denyActor: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   admin: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  /** Admin Two from `workspaceActorsFixture`; the Admin-recipient grant-options fixture. */
+  adminRecipient: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
 } as const;
 
 export const permissionGrants = [
@@ -32,7 +38,40 @@ export const permissionDenies = [
   }),
 ];
 
-export type PermissionGrantsScenarioName = 'populated' | 'empty';
+export const directGrantPermissionOptions = permissionGrantOptionsSchema.parse({
+  recipient: {
+    id: PERMISSION_GRANTS_IDS.actor,
+    display_name: 'Named Requester',
+    role_level: 'developer',
+  },
+  self_policy: 'allowed',
+  self_approval_required: false,
+  candidates: [
+    {
+      capability: 'workspace.admin',
+      managed_system_id: null,
+      governance_required: true,
+      preflight: { state: 'available' },
+    },
+  ],
+});
+
+export const adminDirectGrantPermissionOptions = permissionGrantOptionsSchema.parse({
+  recipient: {
+    id: PERMISSION_GRANTS_IDS.adminRecipient,
+    display_name: 'Admin Two',
+    role_level: 'admin',
+  },
+  self_policy: 'allowed',
+  self_approval_required: false,
+  candidates: directGrantPermissionOptions.candidates,
+});
+
+export type PermissionGrantsScenarioName =
+  | 'populated'
+  | 'empty'
+  | 'direct-grant-form'
+  | 'direct-grant-admin-form';
 
 export function createPermissionGrantsScenario(name: PermissionGrantsScenarioName = 'populated') {
   return {

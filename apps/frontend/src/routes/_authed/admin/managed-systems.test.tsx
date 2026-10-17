@@ -25,7 +25,7 @@ function buildHarness({ initialPath }: { initialPath: string }) {
     path: '/admin/managed-systems',
     component: ManagedSystemsAdminPage,
   });
-  // Stub target for the "검토 콘솔 열기" / "Review" links.
+  // Stub target for the review-console link.
   const reqRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin/permissions/requests',
@@ -83,14 +83,21 @@ function installFetch(c: FetchCase) {
     if (url.endsWith('/permissions/requests') && (!init?.method || init.method === 'GET')) {
       return jsonResponse({ requests: [], count: c.requestsCount ?? 0 });
     }
+    if (url.endsWith('/managed-systems/default-diagnostics')) {
+      return jsonResponse({ items: [] });
+    }
+    if (url.includes('/managed-systems/default-candidates')) {
+      return jsonResponse({ owners: [], reviewers: [] });
+    }
     if (url.includes('/managed-systems') && init?.method === 'POST') {
       const r = c.createResponse ?? { status: 201, body: c.managedSystems[0] };
       return jsonResponse(r.body, r.status);
     }
     if (url.includes('/managed-systems')) {
-      const items = new URL(url, 'http://localhost').searchParams.get('include_archived') === 'true'
-        ? c.managedSystems
-        : c.managedSystems.filter((system) => system.archived_at === null);
+      const items =
+        new URL(url, 'http://localhost').searchParams.get('include_archived') === 'true'
+          ? c.managedSystems
+          : c.managedSystems.filter((system) => system.archived_at === null);
       return jsonResponse({ items, total: items.length });
     }
     return new Response('not mocked', { status: 500 });
@@ -162,7 +169,7 @@ describe('/admin/managed-systems route', () => {
     });
     expect(
       screen.getByText(
-        'Managed System은 권한과 집계의 기준 단위입니다. 프로젝트와는 다릅니다. 시스템별 기본 담당자, Analytics Area 매핑, 활성 상태를 관리합니다.',
+        'Managed System은 권한과 집계의 기준 단위입니다. 기본 담당자·검토자, Analytics Area 매핑, 활성 상태를 관리합니다.',
       ),
     ).toBeVisible();
     expect(screen.getByTestId('managed-system-row-tableau')).toBeInTheDocument();
@@ -170,10 +177,13 @@ describe('/admin/managed-systems route', () => {
     await waitFor(() => expect(screen.getByText('김지원')).toBeInTheDocument());
     expect(screen.getByText('Revenue')).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByTestId('ms-requests-count')).toHaveTextContent(
-        '결정 대기 중인 요청 3건',
-      ),
+      expect(screen.getByTestId('ms-requests-count')).toHaveTextContent('결정 대기 중인 요청 3건'),
     );
+    const reviewConsoleLinks = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href') === '/admin/permissions/requests');
+    expect(reviewConsoleLinks).toHaveLength(1);
+    expect(reviewConsoleLinks[0]).toHaveTextContent('검토 콘솔 열기');
     expect(screen.getByTestId('ms-register-button')).toBeInTheDocument();
   });
 
@@ -186,7 +196,9 @@ describe('/admin/managed-systems route', () => {
     });
     renderRoute();
 
-    await waitFor(() => expect(screen.getByTestId('managed-system-row-tableau')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('managed-system-row-tableau')).toBeInTheDocument(),
+    );
     expect(screen.queryByTestId('managed-system-row-looker')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('ms-filter-button'));

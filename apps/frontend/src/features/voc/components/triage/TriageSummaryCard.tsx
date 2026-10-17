@@ -1,6 +1,7 @@
 /** Summary of staged changes in the triage panel. */
 
 import { GLOSSARY } from '@/lib/copy/glossary';
+import type { VocListItem } from '@fops/shared';
 import { FieldRow, ReporterStatusBadge, SEVERITY_LABELS, cn } from '@fops/ui';
 import type { AvatarUser, ReporterFacingStatusEnum, SeverityEnum } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
@@ -15,6 +16,8 @@ export interface TriageSummaryCardProps {
   analyticsAreaName?: string | null | undefined;
   ownerTeamName?: string | null | undefined;
   currentReporterStatus?: ReporterFacingStatusEnum;
+  /** The VOC's actual triage state: confirming unchanged values only changes a VOC that is not triaged yet. */
+  triageState?: VocListItem['triage_state'];
   className?: string;
 }
 
@@ -49,6 +52,7 @@ export function TriageSummaryCard({
   analyticsAreaName,
   ownerTeamName,
   currentReporterStatus,
+  triageState,
   className,
 }: TriageSummaryCardProps): React.ReactElement {
   const severityChanged = panelState.severity !== baseline.severity;
@@ -57,13 +61,12 @@ export function TriageSummaryCard({
     panelState.ownerTeamId !== baseline.ownerTeamId;
   const areaChanged = panelState.analyticsAreaId !== baseline.analyticsAreaId;
   const hasChanges = severityChanged || ownerChanged || areaChanged;
-  const stagedOwnerMissing = panelState.ownerUserId === null && panelState.ownerTeamId === null;
 
   return (
     <div className={cn('bg-surface-canvas rounded-md p-3 flex flex-col gap-2.5', className)}>
       {!hasChanges ? (
         <p className="text-sm text-text-muted" data-testid="summary-no-changes">
-          변경 없음 — 현재 값 그대로 확정됩니다.
+          {triageState === 'triaged' ? '변경 없음' : '변경 없음 — 현재 값 그대로 확정됩니다.'}
         </p>
       ) : (
         <>
@@ -117,13 +120,12 @@ export function TriageSummaryCard({
 
       {currentReporterStatus !== undefined && (
         <div
-          className="flex items-center gap-1.5 text-xs text-text-muted"
-          data-testid="reporter-status-transition"
+          className="flex flex-wrap items-center gap-1.5 text-xs text-text-muted"
+          data-testid="summary-reporter-status"
         >
-          <span>확정 시 공개 상태:</span>
+          <span>공개 상태:</span>
           <ReporterStatusBadge status={currentReporterStatus} />
-          <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />
-          <ReporterStatusBadge status={stagedOwnerMissing ? 'reviewing' : 'assigned'} />
+          <span>확정해도 공개 상태는 바뀌지 않습니다.</span>
         </div>
       )}
     </div>

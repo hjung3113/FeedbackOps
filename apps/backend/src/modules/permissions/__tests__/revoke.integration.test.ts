@@ -249,7 +249,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
   }
 
   async function expectNoAudit(command: Command, id: string): Promise<void> {
-    const rows = await db.pool.query(
+    const rows = await migrateDb.pool.query(
       'select 1 from core.audit_log where subject_id = $1 and event_type = $2',
       [id, command.eventType],
     );
@@ -257,7 +257,10 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
   }
 
   async function assertAudit(command: Command, id: string, detail: Record<string, unknown>) {
-    const rows = await db.pool.query<{ subject_type: string; detail: Record<string, unknown> }>(
+    const rows = await migrateDb.pool.query<{
+      subject_type: string;
+      detail: Record<string, unknown>;
+    }>(
       'select subject_type, detail from core.audit_log where subject_id = $1 and event_type = $2',
       [id, command.eventType],
     );
@@ -303,7 +306,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
   }
 
   it('admin revokes a grant, notifies the grantee, and enables a new request', async () => {
-    const id = await seedGrant({ capability: 'workspace.admin' });
+    const id = await seedGrant({ capability: 'survey.export' });
     const response = await revoke(COMMANDS[0], id);
 
     expect(response.statusCode).toBe(200);
@@ -325,7 +328,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
     });
     await assertAudit(COMMANDS[0], id, {
       grant_id: id,
-      capability: 'workspace.admin',
+      capability: 'survey.export',
       managed_system_id: null,
       grantee_actor_id: actorId,
       reason: 'Administrative access review completed.',
@@ -352,12 +355,12 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
     expect(await grantNotificationReference(actorCookie, id)).toEqual({
       visibility_state: 'allowed',
       display_id: id.slice(0, 8),
-      title: 'workspace.admin',
+      title: 'survey.export',
     });
     expect(await grantNotificationReference(adminCookie, id)).toEqual({
       visibility_state: 'allowed',
       display_id: id.slice(0, 8),
-      title: 'workspace.admin',
+      title: 'survey.export',
     });
     expect(await grantNotificationReference(otherActorCookie, id)).toEqual({
       visibility_state: 'unavailable',
@@ -365,7 +368,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
 
     const check = await app.inject({
       method: 'GET',
-      url: '/me/permissions/check?capability=workspace.admin',
+      url: '/me/permissions/check?capability=survey.export',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
     });
     expect(check.statusCode).toBe(200);
@@ -386,7 +389,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
         cookie: `${SESSION_COOKIE_NAME}=${actorCookie}`,
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'I need access again.' },
+      payload: { requested_capability: 'survey.export', reason: 'I need access again.' },
     });
     expect(request.statusCode).toBe(201);
     const requestId = request.json<{ id: string }>().id;
@@ -395,13 +398,13 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
 
   it('an expired grant is requestable and its new request becomes pending', async () => {
     await seedGrant({
-      capability: 'workspace.admin',
+      capability: 'survey.export',
       expiresAt: new Date(Date.now() - 60_000),
     });
 
     const expiredCheck = await app.inject({
       method: 'GET',
-      url: '/me/permissions/check?capability=workspace.admin',
+      url: '/me/permissions/check?capability=survey.export',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
     });
     expect(expiredCheck.statusCode).toBe(200);
@@ -421,7 +424,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
         cookie: `${SESSION_COOKIE_NAME}=${actorCookie}`,
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'I need access again.' },
+      payload: { requested_capability: 'survey.export', reason: 'I need access again.' },
     });
     expect(request.statusCode).toBe(201);
     const requestId = request.json<{ id: string }>().id;
@@ -429,7 +432,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
 
     const pendingCheck = await app.inject({
       method: 'GET',
-      url: '/me/permissions/check?capability=workspace.admin',
+      url: '/me/permissions/check?capability=survey.export',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
     });
     expect(pendingCheck.statusCode).toBe(200);
@@ -496,7 +499,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       url: '/me/permissions/check?capability=workspace.admin',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
     });
-    expect(check.json()).toMatchObject({ state: 'request_access' });
+    expect(check.json()).toMatchObject({ state: 'blocked_non_requestable' });
   });
 
   it.each(['forbidden', 'allowed'] as const)(
@@ -510,7 +513,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       ]);
       const hadSettingsRow = settingsRow.rows.length > 0;
       const originalPolicy = settingsRow.rows[0]?.permission_self_approval ?? 'allowed';
-      const settingAudits = await db.pool.query<{ id: string }>(
+      const settingAudits = await migrateDb.pool.query<{ id: string }>(
         `select id from core.audit_log
           where workspace_id = $1 and subject_type = 'workspace' and subject_id = $1
             and event_type = 'workspace_settings_updated'`,
@@ -551,7 +554,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
         expect(
           (await patchWorkspaceSettings({ permission_self_approval: originalPolicy })).statusCode,
         ).toBe(200);
-        const updatedAudits = await db.pool.query<{ id: string }>(
+        const updatedAudits = await migrateDb.pool.query<{ id: string }>(
           `select id from core.audit_log
             where workspace_id = $1 and subject_type = 'workspace' and subject_id = $1
               and event_type = 'workspace_settings_updated'`,
@@ -730,7 +733,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       expect(first.statusCode).toBe(200);
       expect(replay.statusCode).toBe(200);
       expect(replay.json()).toEqual(first.json());
-      const audits = await db.pool.query(
+      const audits = await migrateDb.pool.query(
         'select 1 from core.audit_log where subject_id = $1 and event_type = $2',
         [id, command.eventType],
       );

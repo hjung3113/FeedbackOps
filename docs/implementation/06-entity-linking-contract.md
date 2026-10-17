@@ -200,8 +200,11 @@ active tuple.
 
 Every `survey_response`-source tuple, `(survey_response, finding, generated_finding)`
 and `(survey_response, finding, evidence_of)`, is command-only: it is registered
-for DB validation and created only by `POST /survey-responses/:id/create-finding`
-(which also writes the `evidence_of` link once per approved excerpt). Generic
+for DB validation and currently created by `POST /survey-responses/:id/create-finding`
+(which creates highlights per excerpt, with one active `evidence_of` link per
+response/Finding pair). ADR-0064 also accepts the proposed/new
+`POST /findings/:id/survey-evidence` for approval-selection attachment: it writes
+`evidence_of` only, never `generated_finding`. Generic
 `POST /entity-links` and generic link listings exclude every `survey_response`
 source (`genericEntityLinkPairs` in the backend entity-links service).
 
@@ -237,13 +240,19 @@ Slice 4.2 detach lifecycle (#113):
 PATCH /entity-links/:id
 - request body: { reason: string } where reason is required, trimmed, and non-empty
 - supported transition: active -> detached only
-- authz: actor must have the same voc.read capability used by link creation on
-  both source and target VOC Managed Systems
-- not found / cross-workspace / missing scope on either endpoint: 404
+- authz: both endpoints must be readable through their providers, and detach
+  requires the same mutation capability as creation for the generic tuple:
+  target canCreateTarget when defined, otherwise target read; source read
+- command-only tuples remain excluded from generic detach
+- not found / cross-workspace / unreadable endpoint / missing creation capability /
+  command-only tuple: the same non-disclosing 404 not_found.record
 - already detached, revoked, stale, or lost update race: 409
 - side effects in one transaction: update status/detach metadata and append
-  audit_log event_type entity_link.detached
-- hard delete is forbidden; fops_app has UPDATE but not DELETE on core.entity_links
+  audit_log event_type entity_link.detached; detaching finding -> task requested_task
+  calls the Findings-owned execution projection seam in that transaction to clear
+  linked_task_id when no active requested_task link to a Task remains
+- hard delete is forbidden; after ADR-0064 cutover fops_app UPDATE uses the filtered
+  canonical-link view (proposed/new), not the raw core.entity_links table; no DELETE
 ```
 
 Because the active uniqueness constraint is partial (`WHERE status='active'`),
@@ -290,7 +299,52 @@ Dashboard may query entity links to detect records missing relation types expect
 - VOC Cluster marked "needs synthesis" without Finding
 - Finding marked actionable without Task Request, Task, linked existing Task, or not_actionable decision
 - Released Task with unresolved reporter-facing VOC status
-- Bad Outcome Survey without configured follow-up Finding or Task Request
+- Bad Outcome Survey response without the qualifying Finding or current no-follow-up decision (ADR-0055); Task Request links do not clear the response classifier
 ```
 
 Dashboard must not treat every unlinked record as incomplete. Dashboard must deep-link users to owning module actions and must not mutate source lifecycle state directly.
+
+### Analytics Area report relation attribution (ADR-0069; implementation pending)
+
+Report source membership/counts use canonical active links and approved owner read projections,
+with Entity Linking visibility semantics. Finding handoff recognizes `requested_task` to Task Request
+or Task, not convenience columns; direct VOC→Task coverage uses an active direct link. Cross-Area
+links within the allowed Managed System do not change source attribution or multiply source counts.
+If required linked facts are unavailable, omit the cross-source metric instead of treating hidden
+links as absent. Survey's safe aggregate classifier retains ADR-0055's approved resolution semantics
+without exposing linked Finding metadata or response-grain facts on the report.
+
+## ADR-0064 Survey boundary (accepted; #739/#740 implementation pending)
+
+Canonical `core.entity_links` retains original endpoints, all statuses, active
+uniqueness and detach history. A proposed/new column-listed owner-backed
+`security_barrier` updatable view with `WITH CHECK OPTION` excludes either
+`survey_response` endpoint in every status. Ordinary app SELECT/INSERT/UPDATE
+uses this view, no DELETE; raw table and surviving column ACLs are revoked.
+All generic inventory counts/cursors/status filters and detach exclude Survey
+response tuples, not merely their endpoint IDs. Survey mutations are narrow
+Entity Links-owned definers returning local link ID/inserted state only.
+
+The Survey command-only Managed System exception above is explicit: source
+Survey and target Finding may differ in Managed System, but both must be
+independently authorized in the same workspace. The old universal-equality
+module guide is superseded on this exception by ADR-0064.
+
+Results uses a proposed/new Survey-owned workspace+Survey-ID reader returning
+candidate Finding IDs/target scope, not response UUIDs; the application applies
+source read/privacy and target Finding read. No personal grant is required just
+to discover accessible derived Findings. Generic Finding summaries remain
+metadata-only for Survey-derived records; excerpt text uses fresh exact-active
+approval/source/target checks. Raw audit reads are removed per ADR-0008's
+ADR-0064 amendment, preserving controlled operator history. Cutover must prove
+ordinary view conflict/RETURNING paths and concurrency before revoking grants;
+unsupported operations block rollout rather than justify restoring raw access.
+
+## Assistance is not a link endpoint (ADR-0068; proposed/new)
+
+VOC Cluster Suggestions and Draft Similar-VOC Preview are outside the registered
+entity-type/tuple vocabulary. Do not register suggestion or unsaved-draft providers,
+accept their UUIDs as Cluster sources, create convenience Entity Links, or count
+them in expected-link/coverage/recovery queries. Only authorized human suggestion
+confirmation creates a real Cluster; its later commands/providers use existing
+Cluster contracts. No auto-origin or pre-accept domain Cluster guard is needed.

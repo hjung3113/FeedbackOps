@@ -14,6 +14,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -32,6 +33,7 @@ import {
 
 import { actors, analyticsAreas, entityLinks, managedSystems, teams, workspaces } from './core.js';
 import { tasks } from './task.js';
+import { vocClusters } from './voc-cluster.js';
 
 export const vocSchema = pgSchema('voc');
 
@@ -82,6 +84,14 @@ export const vocs = vocSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    recoveryUnassignedIdx: index('vocs_recovery_unassigned_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(
+        sql`${t.archivedAt} IS NULL AND ${t.ownerUserId} IS NULL AND ${t.ownerTeamId} IS NULL`,
+      ),
+    recoveryHighIdx: index('vocs_recovery_high_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(sql`${t.archivedAt} IS NULL AND ${t.severity} IN ('high', 'critical')`),
     workspaceDisplayUq: uniqueIndex('vocs_workspace_display_id_uq').on(t.workspaceId, t.displayId),
     inboxIdx: index('vocs_inbox_idx').on(
       t.workspaceId,
@@ -144,6 +154,12 @@ export const vocEmbeddings = vocSchema.table(
     workspaceVersionIdx: index('voc_embeddings_workspace_version_idx').on(
       t.workspaceId,
       t.embeddingVersion,
+    ),
+    workspaceWatermarkIdx: index('voc_embeddings_workspace_watermark_idx').on(
+      t.workspaceId,
+      t.embeddingVersion,
+      t.updatedAt,
+      t.vocId,
     ),
     dimensionsPositive: check('voc_embeddings_dimensions_positive', sql`${t.dimensions} > 0`),
     versionPositive: check('voc_embeddings_version_positive', sql`${t.embeddingVersion} > 0`),
@@ -514,4 +530,240 @@ export const reporterFacingStatusTransitions = vocSchema.table(
       sql`${t.allowed} = true OR (${t.forbiddenReason} IS NOT NULL AND length(trim(${t.forbiddenReason})) > 0)`,
     ),
   }),
+);
+
+// ADR-0068 item 1: inert, durable sorted pairs outside domain Cluster tables.
+// Cross-reference scope and immutable terminal history are guarded in migration SQL.
+export const vocClusterSuggestions = vocSchema.table(
+  'voc_cluster_suggestions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    vocAId: uuid('voc_a_id')
+      .notNull()
+      .references(() => vocs.id),
+    vocBId: uuid('voc_b_id')
+      .notNull()
+      .references(() => vocs.id),
+    state: text('state').notNull().default('pending'),
+    revision: integer('revision').notNull().default(1),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    embeddingVersion: integer('embedding_version').notNull(),
+    sourceHashA: text('source_hash_a').notNull(),
+    sourceHashB: text('source_hash_b').notNull(),
+    embeddingWatermarkA: timestamp('embedding_watermark_a', { withTimezone: true }).notNull(),
+    embeddingWatermarkB: timestamp('embedding_watermark_b', { withTimezone: true }).notNull(),
+    score: doublePrecision('score').notNull(),
+    cut: doublePrecision('cut').notNull(),
+    runCorrelationId: uuid('run_correlation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    refreshedAt: timestamp('refreshed_at', { withTimezone: true }).notNull().defaultNow(),
+    discardedByActorId: uuid('discarded_by_actor_id').references(() => actors.id),
+    discardedAt: timestamp('discarded_at', { withTimezone: true }),
+    confirmedByActorId: uuid('confirmed_by_actor_id').references(() => actors.id),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    // Lazy typed FK permits the Cluster/member schema's existing VOC import.
+    vocClusterId: uuid('voc_cluster_id').references((): AnyPgColumn => vocClusters.id),
+  },
+  (t) => ({
+    pairUq: uniqueIndex('voc_cluster_suggestions_pair_uq').on(
+      t.workspaceId,
+      t.primaryManagedSystemId,
+      t.vocAId,
+      t.vocBId,
+    ),
+    pendingIdx: index('voc_cluster_suggestions_pending_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.createdAt)
+      .where(sql`${t.state} = 'pending'`),
+    sortedPair: check('voc_cluster_suggestions_sorted_pair', sql`${t.vocAId} < ${t.vocBId}`),
+    revisionPositive: check('voc_cluster_suggestions_revision_positive', sql`${t.revision} > 0`),
+    metadataCheck: check(
+      'voc_cluster_suggestions_metadata_check',
+      sql`length(trim(${t.provider})) > 0 AND length(trim(${t.model})) > 0 AND ${t.dimensions} > 0 AND ${t.embeddingVersion} > 0 AND length(trim(${t.sourceHashA})) > 0 AND length(trim(${t.sourceHashB})) > 0 AND ${t.score} BETWEEN 0 AND 1 AND ${t.cut} BETWEEN 0 AND 1`,
+    ),
+    lifecycleCheck: check(
+      'voc_cluster_suggestions_lifecycle_check',
+      sql`
+      (${t.state} = 'pending' AND ${t.discardedByActorId} IS NULL AND ${t.discardedAt} IS NULL AND ${t.confirmedByActorId} IS NULL AND ${t.confirmedAt} IS NULL AND ${t.vocClusterId} IS NULL)
+      OR (${t.state} = 'discarded' AND ${t.discardedByActorId} IS NOT NULL AND ${t.discardedAt} IS NOT NULL AND ${t.confirmedByActorId} IS NULL AND ${t.confirmedAt} IS NULL AND ${t.vocClusterId} IS NULL)
+      OR (${t.state} = 'confirmed' AND ${t.discardedByActorId} IS NULL AND ${t.discardedAt} IS NULL AND ${t.confirmedByActorId} IS NOT NULL AND ${t.confirmedAt} IS NOT NULL AND ${t.vocClusterId} IS NOT NULL)
+    `,
+    ),
+  }),
+);
+
+export const vocClusterSuggestionCounters = vocSchema.table(
+  'voc_cluster_suggestion_counters',
+  {
+    workspaceId: uuid('workspace_id')
+      .primaryKey()
+      .references(() => workspaces.id),
+    eligiblePendingCount: integer('eligible_pending_count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    nonnegative: check(
+      'voc_cluster_suggestion_counters_nonnegative',
+      sql`${t.eligiblePendingCount} >= 0`,
+    ),
+  }),
+);
+
+export const vocClusterSuggestionAdmissions = vocSchema.table(
+  'voc_cluster_suggestion_admissions',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    newAdmissions: integer('new_admissions').notNull().default(0),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workspaceId, t.primaryManagedSystemId, t.windowStart] }),
+    nonnegative: check(
+      'voc_cluster_suggestion_admissions_nonnegative',
+      sql`${t.newAdmissions} >= 0`,
+    ),
+    utcHour: check(
+      'voc_cluster_suggestion_admissions_utc_hour',
+      sql`${t.windowStart} AT TIME ZONE 'UTC' = date_trunc('hour', ${t.windowStart} AT TIME ZONE 'UTC')`,
+    ),
+  }),
+);
+
+export const vocClusterSuggestionCursors = vocSchema.table(
+  'voc_cluster_suggestion_cursors',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    embeddingVersion: integer('embedding_version').notNull(),
+    embeddingWatermark: timestamp('embedding_watermark', { withTimezone: true }).notNull(),
+    lastVocId: uuid('last_voc_id').notNull(),
+    reconciliationAfterVocId: uuid('reconciliation_after_voc_id'),
+    reconciledAt: timestamp('reconciled_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workspaceId, t.primaryManagedSystemId] }),
+    versionPositive: check(
+      'voc_cluster_suggestion_cursors_version_positive',
+      sql`${t.embeddingVersion} > 0`,
+    ),
+  }),
+);
+
+// ADR-0068 paid draft preview: operational state only, never draft prose or response bodies.
+export const vocSimilarityPreviewRequests = vocSchema.table(
+  'voc_similarity_preview_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    idempotencyKey: uuid('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    embeddingVersion: integer('embedding_version').notNull(),
+    outcome: text('outcome').notNull().default('reserved'),
+    reservedAt: timestamp('reserved_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    vector: vector('vector'),
+    vectorExpiresAt: timestamp('vector_expires_at', { withTimezone: true }),
+  },
+  (t) => ({
+    key: uniqueIndex('voc_similarity_preview_requests_key_uq').on(
+      t.workspaceId,
+      t.actorId,
+      t.idempotencyKey,
+    ),
+    expiry: index('voc_similarity_preview_requests_expiry_idx').on(t.expiresAt),
+    outcome: check(
+      'voc_similarity_preview_requests_outcome_ck',
+      sql`${t.outcome} IN ('reserved','succeeded','failed','timed_out','outcome_unknown')`,
+    ),
+    dimensions: check(
+      'voc_similarity_preview_requests_dimensions_ck',
+      sql`${t.dimensions} > 0 AND ${t.embeddingVersion} > 0`,
+    ),
+    ttl: check(
+      'voc_similarity_preview_requests_ttl_ck',
+      sql`${t.expiresAt} <= ${t.reservedAt} + interval '24 hours' AND (${t.vectorExpiresAt} IS NULL OR ${t.vectorExpiresAt} <= ${t.reservedAt} + interval '10 minutes')`,
+    ),
+  }),
+);
+export const vocSimilarityPreviewBudgets = vocSchema.table(
+  'voc_similarity_preview_budgets',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    scope: text('scope').notNull(),
+    actorId: uuid('actor_id').references(() => actors.id),
+    scopeKey: text('scope_key').notNull(),
+    period: text('period').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    usedAttempts: integer('used_attempts').notNull(),
+  },
+  (t) => ({
+    key: primaryKey({
+      columns: [t.workspaceId, t.scopeKey, t.period, t.windowStart],
+      name: 'voc_similarity_preview_budgets_pk',
+    }),
+    scope: check(
+      'voc_similarity_preview_budgets_scope_ck',
+      sql`(${t.scope}='workspace' AND ${t.actorId} IS NULL AND ${t.scopeKey}='workspace') OR (${t.scope}='actor' AND ${t.actorId} IS NOT NULL AND ${t.scopeKey}=${t.actorId}::text)`,
+    ),
+    period: check('voc_similarity_preview_budgets_period_ck', sql`${t.period} IN ('minute','day')`),
+    attempts: check('voc_similarity_preview_budgets_attempts_ck', sql`${t.usedAttempts} >= 0`),
+  }),
+);
+
+// #1226: single current-state row; prior decisions remain in the append-only audit log.
+export const vocNoFollowUpDecisions = vocSchema.table(
+  'no_follow_up_decisions',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    decision: text('decision').notNull(),
+    reason: text('reason').notNull(),
+    decidedByActorId: uuid('decided_by_actor_id')
+      .notNull()
+      .references(() => actors.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.vocId] }),
+    check('voc_no_follow_up_decision_check', sql`${t.decision} = 'no_follow_up'`),
+    check('voc_no_follow_up_reason_check', sql`length(btrim(${t.reason})) BETWEEN 1 AND 2000`),
+  ],
 );

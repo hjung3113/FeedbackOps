@@ -11,7 +11,7 @@ const toggleGroupItemVariants = cva(
         default:
           'bg-transparent hover:bg-surface-card hover:text-text-primary data-[state=on]:bg-surface-card data-[state=on]:text-text-primary',
         outline:
-          'border border-border-subtle bg-transparent hover:bg-surface-card hover:text-text-primary data-[state=on]:bg-surface-card data-[state=on]:text-text-primary',
+          'border border-border-subtle bg-transparent hover:bg-surface-card hover:text-text-primary data-[state=on]:bg-surface-card data-[state=on]:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
       },
       size: {
         default: 'h-10 px-3',

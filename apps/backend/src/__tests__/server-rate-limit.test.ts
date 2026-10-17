@@ -40,6 +40,7 @@ function config(): AppConfig {
     PUBLIC_ATTACHMENT_ORIGIN: "'self'",
     TRUSTED_PROXY_HOPS: 0,
     NOTIFICATION_EMAIL_CHANNEL: 'mock',
+    VOC_SIMILARITY_PREVIEW: 'enabled',
     EMBEDDING_PROVIDER: 'disabled',
     EMBEDDING_VERSION: 1,
     OIDC_SCOPES: 'openid email profile',

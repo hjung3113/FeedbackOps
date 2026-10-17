@@ -19,6 +19,8 @@ export const managedSystemRegisteredDetailSchema = z.object({
   external_key: z.string().nullable(),
   default_owner_actor_id: z.string().uuid().nullable(),
   default_owner_team_id: z.string().uuid().nullable(),
+  default_reviewer_actor_id: z.string().uuid().nullable().optional(),
+  default_reviewer_team_id: z.string().uuid().nullable().optional(),
 });
 export type ManagedSystemRegisteredDetail = z.infer<typeof managedSystemRegisteredDetailSchema>;
 
@@ -31,6 +33,7 @@ const changeEntrySchema = z.object({
 });
 export const managedSystemUpdatedDetailSchema = z.object({
   managed_system_id: z.string().uuid(),
+  configuration_changed_at: z.string().datetime({ offset: true }).optional(),
   changes: z.record(z.string(), changeEntrySchema).refine((c) => Object.keys(c).length > 0, {
     message: 'changes must include at least one field',
   }),

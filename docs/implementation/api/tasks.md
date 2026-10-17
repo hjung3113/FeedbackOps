@@ -11,6 +11,8 @@ requirement_id: FOP-TASK-001
 request body:
   evidence_summary string required
   requested_outcome string required
+  assigned_reviewer_actor_id optional nullable uuid
+  assigned_reviewer_team_id optional nullable uuid (XOR-or-both-null)
 response body: TaskRequestDto
 auth and permission: authenticated Actor in workspace; finding.manage on the
   source Finding's primary_managed_system_id. Admin bypass follows the same
@@ -43,6 +45,8 @@ Task. VOC and VOC Cluster Task Request sources are implemented by
 requirement_id: FOP-TASK-002
 query:
   status optional pending_review|approved|rejected|needs_more_evidence|converted
+  reviewer optional Actor UUID or me (assigned reviewer, not decision Actor)
+  reviewer_team_id optional team UUID
   managed_system_id optional uuid or all
   cursor optional opaque string (used with limit)
   limit optional integer 1..100; list client sends 50, no server default
@@ -52,7 +56,8 @@ response body with limit: { items, page: { has_more, cursor?, total?, status_cou
   total only on the first page (no cursor), visible rows under the same filters
   status_counts only on the first page without a status filter; keys:
     pending_review, approved, rejected, needs_more_evidence, converted
-    values count visible rows under the same non-status filters, including zeros
+    values count visible rows under the workspace/Managed System authority scope,
+    ignoring personal reviewer filters, including zeros
 validation: invalid cursor -> 422 validation.failed,
   detail.fields: [{ path: ['cursor'], code: 'invalid_cursor' }]
   invalid limit -> 422 validation.failed (query-validation envelope)
@@ -116,7 +121,14 @@ no-op: already in target status returns 200 with current DTO and no new audit
   event
 self-approval: if reviewer is requester, approve requires non-empty reason and
   `task_request.self_approve` on the same Managed System unless reviewer is
-  Admin. Denied attempts record `task_request_self_approval_denied`.
+  Admin. Denied permission/reason attempts record `task_request_self_approval_denied`.
+rate tiers: every approve consumes the 10/min mutation bucket. Self-approval
+  additionally consumes the shared 5/min sensitive bucket on an idempotency miss, keyed by
+  workspace_id:actor_id with a 60,000 ms window, from the locked stored requester.
+  Peer approvals consume only mutation capacity. Sensitive 429 returns
+  rate_limited.actor with detail.retry_after_seconds and Retry-After, before
+  decision/audit/notification writes; no idempotency response is recorded, so
+  an identical key/body retry can succeed after the sensitive window expires.
 audit events:
   approve: task_request_approved
   reject: task_request_rejected
@@ -137,6 +149,7 @@ request body:
   title string required min 1 max 200
   priority optional low|medium|high|urgent default medium
   assignee_actor_id optional nullable uuid
+  assignee_team_id optional nullable uuid (XOR-or-both-null)
   due_date optional nullable ISO date
   milestone_id optional nullable uuid
   analytics_area_id optional nullable uuid
@@ -151,7 +164,8 @@ validation errors:
   - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
   - unknown or cross-workspace Milestone: 404 not_found.record
   - Milestone on another Managed System: 422 validation.failed with out_of_scope on milestone_id
-  - unknown or cross-workspace assignee_actor_id: 404 not_found.record
+  - invalid explicit Actor/team responsibility: 422 validation.failed (foreign_workspace,
+    archived_team, ineligible_actor, or mutually_exclusive on responsibility fields)
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
@@ -188,9 +202,13 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 
 ```text
 query:
+  q optional trimmed string, max 100 characters; blank means absent
   status optional backlog|todo|doing|review|done|released|reopened
-  assignee optional uuid or me
-  milestone_id optional uuid
+  assignee optional comma list (max 20) of uuid, me or unassigned
+  assignee_team_id optional team UUID
+  milestone_id optional comma list (max 20) of uuid, any or none
+  priority optional comma list (max 4) of low|medium|high|urgent
+  status_group optional in-flight|open
   managed_system_id optional uuid or all
   public_update optional: missing
   cursor optional opaque string (used with limit)
@@ -212,8 +230,34 @@ sort: updated_at DESC, id DESC; cursor continues both columns with raw
   PostgreSQL timestamp precision (including microseconds)
 ```
 
-Task Board, Home and other full-set Task consumers omit `limit` and keep their
-complete population. Saved Task views reject `cursor` and `limit` at the
+List filters (#1178). `assignee`, `milestone_id` and `priority` are comma lists with OR
+inside the list and AND across filters; empty and repeated tokens are dropped, and an
+empty list, an unknown token, or too many tokens is `422 validation.failed` with
+`detail.fields: [{ path: ['<name>'], ... }]`. `me` resolves per token to the caller;
+`unassigned` matches Tasks with neither an Actor nor a team assignee (a team-assigned
+Task is not unassigned); the legacy single `assignee=<uuid|me>` and `assignee_team_id`
+keep their intersecting meaning. `milestone_id` tokens are exact Milestone ids plus
+`any` (has a Milestone) and `none` (has none). `status_group=in-flight` is Todo, Doing
+and Review; `status_group=open` is Backlog, Todo, Doing, Review and Reopened. All
+values are bound parameters and `page.total` counts under the same predicates and the
+same read scope.
+
+Optional `q` is trimmed, at most 100 characters; blank/whitespace becomes absent.
+Matching is case-insensitive `display_id` prefix OR `title` contains; `\`, `%`
+and `_` in the input match literally. Bound SQL parameters apply this predicate
+after read scope and intersect it with all other filters, before pagination.
+Body/summary text is not searched. A 101-character normalized query returns
+`422 validation.failed` with `detail.fields: [{ path: ['q'], code: 'too_big' }]`.
+The first-page `page.total` counts the complete authorized matching population
+under the same filters, including zero; later pages omit it. Without `limit`,
+all authorized matching rows are returned. Navigation/report/badge counts omit
+`q` and remain unchanged.
+
+Home and other full-set Task consumers omit `limit` and keep their complete
+population. The Task board pages each status column (`status`, `limit=50`, cursor,
+the column total is the first page's `page.total`), reads the open set once with
+`status_group=open` and no `limit` for its other groupings, and gets its summary
+totals from `limit=1` reads whose `page.total` is the count. Saved Task views reject `cursor` and `limit` at the
 persistence boundary, including historical-filter reads.
 
 `GET /tasks/:id`
@@ -229,7 +273,9 @@ source resolution:
     (finding, task_request, requested_task) when present; for a Finding-sourced
     request, prefer its own source Finding (#773), otherwise the newest active link
   - source.voc is the backend's VOC visibility verdict (#378), never synthesized
-    by the FE: allowed = { visibility_state, id, display_id, title };
+    by the FE: allowed = { visibility_state, id, display_id, title,
+    reporter_facing_status } (the VOC's reporter-facing status, shown in Task
+    detail as a separate fact, never as Task status; ADR-0005, #1242);
     summary_visible and denied = { visibility_state } only; hidden = the key is
     omitted. The verdict is the VOC detail read decision, so an actor whose
     VOC detail read would be 404 (including a non-reporter Admin with an explicit
@@ -252,12 +298,14 @@ requirement_id: FOP-TASK-001
 request body:
   evidence_summary string required
   requested_outcome string required
+  assigned_reviewer_actor_id optional nullable uuid
+  assigned_reviewer_team_id optional nullable uuid (XOR-or-both-null)
 response body: TaskRequestDto
 auth and permission:
-  - VOC: authenticated Actor in workspace; source VOC readable under the same
-    rule used by `POST /vocs/:id/create-finding`, plus `finding.manage` on the
-    VOC Primary Managed System. Admin bypass follows the Finding actions
-    convention.
+  - VOC: authenticated Actor in workspace; source VOC read is permitted to its
+    Reporter, otherwise requires a deny-first `voc.read` check for every role
+    including Admin (an explicit Admin deny returns 404 `not_found.record`),
+    plus the unchanged `finding.manage` gate on the VOC Primary Managed System.
   - VOC Cluster: Admin or Developer with `finding.manage` on the cluster Primary
     Managed System, mirroring `POST /voc-clusters/:id/create-finding`.
 validation errors:
@@ -460,3 +508,110 @@ Slice 6. It is created only through source transition routes:
 | Audit event | `task_milestone_assigned` with strict detail `{ from_milestone_id: uuid \| null, to_milestone_id: uuid \| null }`, written in the same transaction as the UPDATE. |
 | Idempotency hash | Includes `taskId`, `ifMatch`, route identity `task.milestone_assign`, and request body. |
 | Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
+
+## Close-out responsibility (ADR-0067; #1091)
+
+Task Request creation from Finding/VOC/Cluster persists nullable
+`assigned_reviewer_actor_id` / `assigned_reviewer_team_id`, never prefilling actual
+`reviewer_actor_id`. Reviewer MS default → eligible general owner → same-system AA team →
+shared authorized queue, with explicit/null precedence and automatic-failure fallback.
+Request stays pending; other authorized reviewers/self-approval rules remain unchanged.
+The `reviewer` (Actor UUID or `me`) and `reviewer_team_id` filters select assigned
+routing without narrowing the unfiltered operational queue; Home requests `reviewer=me`.
+Source Analytics Area is read through its owner seam for routing; no new Task Request
+Analytics Area column is required.
+
+Conversion persists nullable `assignee_team_id`; XOR with existing Actor field,
+authorized explicit null skips defaults, omission requests owner defaults. Invalid explicit
+responsibility now rejects `validation.failed` (superseding the older assignee-only 404
+validation above); automatic invalid targets skip. Keep Backlog, provenance/links, audits
+and replay notification deduplication; team targets send no arbitrary-member notification.
+Typed DTOs/source-owned edits and Actor/team filters must ship with fields; `assignee=me`
+remains personal Actor assignment, never implicit team membership. No standalone create
+endpoint is introduced by this ADR.
+
+## Analytics Area report destination extension (ADR-0069)
+
+The wire query keys, browser search, typed frontend forwarding and rendered filters are
+**implemented by #1077 (backend + shared + frontend)**. Keep existing unfiltered,
+legacy and paging behavior. Apply workspace and source authorization before Area filtering,
+counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
+`unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
+an empty authorized result, without catalog existence disclosure. Archived referenced Areas
+remain filterable; they are not selectable as new classifications. Browser key is
+`filter.analytics_area=<uuid|unset>`; clients translate it to the owning wire query key below.
+Grouped report counts and exact list membership must share the owner predicate, including
+cross-source availability rules; hidden links are not absent links. These ordinary reads write
+no source records or domain audit events. Source repair commands keep their existing gates/audits.
+
+`GET /tasks` gains wire `analytics_area_id=<uuid|unset>`, `status_group=in-flight`, `overdue=true`,
+and `reporter_update=needed`. Keep single `status` (the seven existing lowercase wire values)
+and `public_update=missing`; combined filters intersect, never widen scope.
+
+- `status_group=in-flight`: `todo`, `doing`, `review`; Backlog is separate from work started.
+- `overdue=true`: status in `backlog`, `todo`, `doing`, `review`, `reopened`, with non-null
+  `due_date` strictly before the current UTC date. Due today/null and Done/Released are excluded.
+  The report uses its UTC `as_of_date`; arrival recomputes live date/state, so a midnight boundary
+  may change membership and is explained by the snapshot time rather than frozen authorization.
+- `public_update=missing`: Released Tasks with at least one active `voc→task evidence_of` link
+  to a non-archived VOC and no linked non-skipped Public Update. Its matching ratio means at least
+  one update exists, not all reporters updated after release.
+- `reporter_update=needed`: Released Tasks with at least one such linked VOC whose reporter-facing
+  status is neither `resolved` nor `closed`. Each Task counts once regardless of linked VOC count.
+
+Report destinations use `/tasks?view=backlog` for all these filters, with source System and Area;
+extend strict browser validation and typed client forwarding to support `public_update=missing`
+in that list as well as the existing board. Linked VOC/report-update facts require the existing
+VOC read seam; omit unavailable cross-source report metrics instead of returning hidden complements.
+Task detail opens the approved linked VOC/review path, and publishing stays VOC-owned.
+The report introduces no Task Blocked state and never resolves VOC on Task release.
+
+## Survey-derived source summaries/defaults (ADR-0064; cutover pending)
+
+After #739/#740, Survey-derived Finding title/summary in Task source DTOs and
+Task Request draft defaults is deterministic source metadata only, never a copied
+excerpt. Excerpt display delegates to a fresh authorized Finding/Survey highlight
+projection with exact active approval and source/target checks. This does not
+authorize retroactive rewriting of independently authored `evidence_summary`,
+requested outcomes or Task prose. Ordinary source links and their permissions
+remain unchanged; canonical relation reads use #740's filtered view. Inventory
+cached Task mutation DTOs with nested Finding summaries too; confirmed generated
+Survey copies follow ADR-0015's targeted legacy sanitization exception.
+
+## Source responsibility edits (#1091)
+
+`POST /task-requests/:id/reviewer` accepts both required nullable fields
+`assigned_reviewer_actor_id` and `assigned_reviewer_team_id`.
+`POST /tasks/:id/responsibility` accepts both required nullable fields
+`assignee_actor_id` and `assignee_team_id`, plus the existing ISO timestamp `If-Match`
+header. Both require `Idempotency-Key`, workspace ownership and Admin-or-scoped-Developer
+`finding.manage` (including the existing Admin bypass). Bodies are strict. XOR, active
+same-workspace team and current destination Actor authority are validated in the transaction;
+both null deliberately unassigns without consulting defaults. Unknown source records return
+`404 not_found.record`; denied writes return `403 permission.denied`; invalid destinations
+return `422 validation.failed`. Stale Task versions return `409 conflict.stale_write` with
+`current_updated_at`. Responses are `TaskRequestDto` / `TaskDto` with persisted responsibility.
+
+Effective edits append `task_request_reviewer_assigned` / `task_responsibility_assigned`
+with strict `{ from_actor_id, from_team_id, to_actor_id, to_team_id }` detail. No-op or replay
+adds no audit or notification. An effective Task edit to a different concrete Actor sends
+one existing `task.assigned_to_me` notification; teams have no member notifications.
+Workflow state, requester/created-by provenance, actual review attribution and links stay
+unchanged. Writes, audits and notifications roll back together.
+
+Creation/conversion responses and creation audits expose safe `default_resolved`,
+`source_rule`, `managed_system_id` and the actual responsibility pair. Automatic candidates
+are rechecked in the destination transaction. Each configured-but-invalid skipped MS
+reviewer/owner/AA candidate adds one Core diagnostic regardless of the final outcome;
+empty (`missing`) skipped candidates add diagnostics only when creation ends at
+`workspace_fallback_queue`. A fallback succeeds with null responsibility and
+`source_rule=workspace_fallback_queue`. Explicit input/null, rejected transactions and
+replay add no diagnostic. Ordinary reads return current assignments without reconstructing
+creation provenance. Cluster has no direct Analytics Area classification and uses MS then
+queue routing; no member-derived Area is inferred. Source commands consume the existing
+source-owned Finding/VOC locks and Core-owned `lockAnalyticsArea` owner-team input.
+
+Reviewer/assignee filters apply before list paging and matching total counts. Task Request
+status counts and the separate queue summary stay scope-wide. Home sends `reviewer=me`
+under Actor-and-scope cache keys and never treats team membership as personal assignment.
+Assignment, decision and conversion refresh source detail/list and personal Home caches.

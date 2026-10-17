@@ -162,7 +162,7 @@ These opt-in props encode repeated caller treatments. Their default values prese
 | DatePicker | `appearance=detail` | Detail-surface background |
 | DialogFooter | `spacing=compact` | Compact action spacing |
 | PanelTitleBlock | `inset=none` | Remove title-block inset |
-| PanelSectionTitle | `inset=panel`; `size=tiny` | Align section heading with panel content or render milestone-sized typography |
+| PanelSectionTitle | `inset=panel`; `size=tiny`; heading DOM props and ref | Align section heading with panel content or render milestone-sized typography; `tabIndex=-1` supports programmatic focus |
 | RichContentRenderer | `size=sm` | Small rich-text rendering |
 | Skeleton | `shape=rounded` | Smaller-radius placeholder (`rounded`, 4px instead of the default `rounded-md` 6px) |
 | TooltipContent | `size=sm` | Small tooltip text |
@@ -408,6 +408,7 @@ Rules:
 - Each node has object type, title, status, and jump action.
 - Missing expected link is shown as a dashed placeholder with CTA only when policy or workflow configuration expects it.
 - Permission-hidden node uses summary-visible contract when available.
+- `iconTone` defaults to `default`; `iconTone="quiet"` lowers the node icon weight (font-medium badge) so trail marks stop competing with surrounding text — the VOC detail trail section opts in.
 - Compact surfaces use LinkedEntityTrail as preview only; full linked-object details belong in the linked object's DetailPanel or route.
 ```
 
@@ -532,7 +533,7 @@ Rules:
 ```text
 - Signal badges are secondary unless they represent urgent action.
 - Critical and blocked states must remain distinguishable for color-blind users through icon or label.
-- Use the shared UnassignedBadge for missing owners and reviewers: danger text on a faint danger background, default label `담당자 없음`, reviewer label `검토자 없음`.
+- Use the shared UnassignedBadge for missing owners and reviewers: danger text on a faint danger background, default label `담당자 없음`, reviewer label `검토자 없음`. `tone="neutral"` (bordered muted chip) is reserved for the Inbox `tab=unassigned` and Triage `activeTab=unassigned` rows; every other consumer keeps the danger default.
 ```
 
 ### RichContentEditor
@@ -914,8 +915,12 @@ slow/enter timing. Escape cancellation uses return timing freshly read at drag s
 the current reduced-motion preference. Zero-duration timing disables that animation. Source
 opacity restores immediately at return completion; colour and shadow transitions remain.
 Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
-auto-scroll remains eligible. Keyboard Left/Right moves one column per press in live visual
-left-to-right order, centring the card horizontally and clamping at the first/last column.
+auto-scroll remains eligible. Keyboard Left/Right moves exactly one column per press: the board tracks a column index
+(seeded from the dragged Task's status, reset on drag start, end, cancel and any
+scope, grouping or filter change), advances or clamps it per press against the live
+left-to-right column rects, and centres the card horizontally on that column. It never
+re-derives the current column from `over` or the collision rect, which lag the auto-scroll
+a press can trigger, so no column is skipped and none is snapped back to.
 Up/Down does nothing because card order is not persisted. Keyboard sensor ancestor scrolling
 is instant (`auto`); during an active keyboard drag only, all four arrow keys prevent their
 native default so browser scrolling cannot compete. The listener is removed on end, cancel,
@@ -926,17 +931,35 @@ announcements use Korean chrome, the Task display ID, and `TASK_STATUS_LABELS` c
 role description `끌 수 있는 Task`; disabled cards have no role description. Initial over
 announcements for the pickup column do not overwrite pickup; after reaching a different
 column, returning to the origin is announced normally. After a keyboard move, the route waits
+(a destination column whose first page is still loading is loaded before the move writes)
 for the optimistic destination card to render, then focuses it only if focus
 is on the body or still inside the board. Focus moved outside the board is respected;
 same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
-The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
-active copy, and per-drop animation choice. A rejected keyboard move follows that Task's
+The route disables dnd-kit's scheduled focus restoration and owns the active copy and per-drop
+animation choice. Its route-lifetime `useTaskBoardKeyboardFocus` hook owns pending keyboard
+focus recovery, with its scope (grouping, Managed System, `public_update`, `q` and the
+personal filters) memoized on primitive inputs separately from loaded-card availability
+across all columns. A rejected keyboard move follows that Task's
 rendered card through rollback and the following refetch, in any status column, only if focus
-is on the body or inside the board and no newer drag has started. Recovery retires when the post-rejection tasks refetch settles, after the
+is on the body or inside the board and no newer drag has started. Recovery retires when every post-rejection board column refetch settles, after the
 focus attempt or outside-focus guard declines. Newer drags, scope changes, unmount, and another
 route status mutation of the same Task clear keyboard focus ownership and pending recovery;
 an older move's failure cannot clear a newer drag's request.
-`useTaskStatusTransition` continues to own cache writes and rollback.
+`useTaskStatusTransition` continues to own cache writes and rollback: a move removes the
+Task from its source column pages, inserts it at the destination's first-page top and
+adjusts both first-page totals by one; a failure undoes only that invocation's membership and
+count delta, so a later move of another Task is never overwritten. Settlement invalidates lists
+immediately but defers active list refetches until no status move remains pending or the oldest
+deferred settlement has waited 1,500 ms, whichever comes first. One timer per board is cleared
+on flush and unmount; unmount and scope, grouping or filter changes flush immediately.
+Deadline reads rebase outstanding per-invocation deltas on fresh pages so later rollback
+still undoes only that move. Per-Task tokens guard rollback and detail invalidation;
+the last settlement also flushes any queued list refresh. Rejected keyboard recovery stays
+alive while reconciliation is queued and until that flush's reads settle.
+A detail fallback changes column membership and totals only when it matches the current board
+population. Excluded fallbacks still send the status write and refresh detail/lists. Unloaded
+matching Tasks keep the same total adjustments and mounted destination card; a server-only
+predicate that the detail cannot establish (`public_update`) waits for the server refresh.
 
 Layout regions open and close without width transitions (#996): the detail panel, its
 fullscreen toggle, and the sidebar collapse switch width in one frame. A width transition
@@ -964,27 +987,31 @@ recommendation/question removal still shows the existing empty/onboarding branch
 Stock auto-animate insert/remove easings and native Survey drag reorder remain unchanged.
 Upgrade `@formkit/auto-animate` only together with `patches/@formkit__auto-animate@0.10.0.patch`, preserving its teardown and removed-row polling cleanup.
 
+The shared `DialogContent` forwards `forceMount` to its portal as well as its content,
+so a caller can preserve focused content until a successful-close focus handoff completes.
+Without `forceMount`, existing open/close presence and animation behavior is unchanged.
+
 Existing transitions use fast/standard through the Tailwind default aliases. Overlay
-animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.
+animations use `animation-duration-base|slow` and `ease-enter` with `tw-animate-css`.
+Overlays are enter-only: exit Presence keeps a closed Radix layer registered and swallowing Escape, including in nested stacks (ADR-0063, #1127).
 The exported constants in `packages/ui/src/utils/motion.ts` are the only overlay motion seam;
 wrappers and the command palette compose them without inline motion classes:
 
 - `POPPER_CONTENT_MOTION`: popover, dropdown (including sub-content), hover card, and tooltip;
-  fade, zoom 95, and a 2-unit slide from the trigger side. Enter is base/enter; exit is fast/exit.
+  fade, zoom 95, and a 2-unit slide from the trigger side. Enter is base/enter.
   Enter covers `open`, `delayed-open`, and `instant-open` states.
-- `SELECT_CONTENT_MOTION`: the same enter motion only. Radix Select has no exit Presence;
+- `SELECT_CONTENT_MOTION`: the same enter-only popper motion;
   closing retains its existing lifecycle.
 - `DIALOG_CONTENT_MOTION`: dialog, alert dialog, and command palette content; fade and zoom 95
-  without slide, entering at base/enter and exiting at fast/exit.
-- `SCRIM_MOTION`: fade only, with the same base/enter and fast/exit timing.
-- `SHEET_CONTENT_MOTION`: slide from/to each sheet side, entering at slow/enter and exiting
-  at base/exit.
+  without slide, entering at base/enter.
+- `SCRIM_MOTION`: fade only, entering at base/enter.
+- `SHEET_CONTENT_MOTION`: slide from each sheet side, entering at slow/enter.
 
 The global `prefers-reduced-motion: reduce` rule in `compat.css` applies to `*, ::before,
 ::after`: animation and transition duration become `0.01ms !important`, animation iteration
 count becomes `1 !important`, and scroll behavior becomes `auto !important`. The nonzero
-animation duration still lets Radix exit unmounting finish through `animationend`. This also
-stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMotion()` at
+animation duration preserves animation completion events; overlays unmount immediately on close.
+This also stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMotion()` at
 use time and selects `auto` rather than `smooth`, since explicit JS smooth scrolling is not
 controlled by the CSS rule. The helper returns false when `window` or `matchMedia` is absent.
 
@@ -1057,7 +1084,7 @@ Rule:
 
 ```text
 Task Board is execution work only. VOC owner assignment is not Task assignee/kanban assignment.
-Task Board cards show title, status, assignee, priority, due date, Managed System, and linked-context indicators only. Source VOC, Finding, Survey, Evidence, Reporter Summary, and Public Update candidates belong in Task Detail or the source object's route.
+The board is bounded: status columns are separate paged reads with exact totals and a load-more control; other groupings show the open set only, with a one-line note that Done and Released are excluded. Task Board cards show title, status, assignee, priority, due date, Managed System, and linked-context indicators only. Source VOC, Finding, Survey, Evidence, Reporter Summary, and Public Update candidates belong in Task Detail or the source object's route.
 ```
 
 Task Detail:

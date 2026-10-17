@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
+import { waitForResponseEvidenceWaiters } from '../../../test-support/response-evidence-barrier.js';
 
 import {
   approvedExcerptDtoSchema,
+  surveyEvidenceCandidatesResponseSchema,
   surveyResponseExcerptCandidateDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
@@ -66,6 +69,9 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   beforeEach(async () => {
     expectedSideEffects = deniedPathSideEffects;
     await cleanup();
+    await migrateHandle.pool.query('delete from core.rate_limits where key=$1', [
+      `${WORKSPACE_ID}:${adminId}`,
+    ]);
   });
   afterEach(async () => cleanup(true));
   afterAll(async () => {
@@ -144,6 +150,28 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       `delete from core.audit_log where subject_id in (${surveys}) or subject_id in (${responses}) or subject_id in (${approvals})`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
+    const links = `select id from core.entity_links where source_id in (${responses})`;
+    await migrateHandle.pool.query(`delete from core.audit_log where subject_id in (${links})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
+    const parents = `select finding_id from survey.finding_response_bindings where response_id in (${responses})`;
+    await migrateHandle.pool.query(
+      `delete from core.entity_links where source_id in (${responses}) or target_id in (${parents})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(`delete from core.audit_log where subject_id in (${parents})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
+    await migrateHandle.pool.query(
+      `delete from finding.evidence_highlights where finding_id in (${parents})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(`delete from finding.findings where id in (${parents})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
     await migrateHandle.pool.query(
       `delete from survey.survey_response_excerpt_approvals where survey_id in (${surveys})`,
       [WORKSPACE_ID, `${SLUG}%`],
@@ -169,6 +197,17 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
+      'delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.rate_limits where key in (
+         select workspace_id::text || ':' || id::text from core.actors
+         where workspace_id=$1 and external_id like $2
+       )`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
       'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
       [WORKSPACE_ID, `${SLUG}-%`],
     );
@@ -177,6 +216,11 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
+      'delete from core.responsibility_default_failures where managed_system_id in (select id from core.managed_systems where workspace_id=$1 and slug like $2)',
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id=$1 and slug like $2',
       [WORKSPACE_ID, `${SLUG}%`],
     );
@@ -263,10 +307,14 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       await migrateHandle.pool.query('delete from core.actors where workspace_id=$1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id=$1', [
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id=$1',
+        [workspaceId],
+      );
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id=$1', [workspaceId]);
       if (assertTeardown) {
         for (const [table, count] of Object.entries(await foreignCounts()))
           expect(count, `foreign ${table} rows after cleanup`).toBe(0);
@@ -742,6 +790,77 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     expect(approval.rows[0]?.revoked_at).toBeNull();
   });
 
+  it.each(['create-first', 'revoke-first'] as const)(
+    'serializes approved Finding creation and revocation: %s (#739)',
+    async (order) => {
+      expectedSideEffects = {
+        audit: { count: 1, message: 'one approval revoke audit' },
+        approvals: { count: 1, message: 'one retained approval' },
+      };
+      const source = await seed();
+      const creator = await actor();
+      const revoker = await actor();
+      for (const operator of [creator, revoker]) {
+        await grant(operator.id, 'survey.read', source.msId);
+        await grant(operator.id, 'survey.read_personal_responses', source.msId);
+        await grant(operator.id, 'survey.manage', source.msId);
+      }
+      await grant(creator.id, 'finding.manage', source.msId);
+      await grant(creator.id, 'finding.read', source.msId);
+      const approval = await approveDirectly(source);
+      const blocker = await appHandle.pool.connect();
+      const create = () =>
+        app.inject({
+          method: 'POST',
+          url: `/survey-responses/${source.responseId}/create-finding`,
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}`,
+            'idempotency-key': randomUUID(),
+          },
+          payload: { severity: 'medium', approved_excerpt_ids: [approval] },
+        });
+      const revoke = () =>
+        del(`/survey-responses/${source.responseId}/approved-excerpts/${approval}`, revoker.cookie);
+      let first: Promise<Awaited<ReturnType<typeof create>>> | undefined;
+      let second: Promise<Awaited<ReturnType<typeof create>>> | undefined;
+      try {
+        await blocker.query('begin');
+        await blocker.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [
+          source.responseId,
+        ]);
+        first = (order === 'create-first' ? create() : revoke()).then((r) => r);
+        await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, first);
+        second = (order === 'create-first' ? revoke() : create()).then((r) => r);
+        await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 2, second);
+        await blocker.query('commit');
+        const [a, b] = await Promise.all([first, second]);
+        const created = order === 'create-first' ? a : b;
+        expect((order === 'create-first' ? b : a).statusCode).toBe(200);
+        expect(created.statusCode).toBe(order === 'create-first' ? 201 : 422);
+        const bindings = await migrateHandle.pool.query<{ count: string }>(
+          'select count(*)::text as count from survey.highlight_response_bindings where response_id=$1',
+          [source.responseId],
+        );
+        expect(bindings.rows).toEqual([{ count: order === 'create-first' ? '1' : '0' }]);
+        if (order === 'create-first') {
+          const findingId = created.json<{ id: string }>().id;
+          const read = await app.inject({
+            method: 'GET',
+            url: `/findings/${findingId}/evidence-highlights`,
+            headers: { cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}` },
+          });
+          expect(read.statusCode).toBe(200);
+          expect(
+            read.json<{ items: Array<{ quote_or_summary?: string }> }>().items[0]?.quote_or_summary,
+          ).toBeUndefined();
+        }
+      } finally {
+        await blocker.query('rollback');
+        blocker.release();
+        await Promise.allSettled([first, second].filter((p) => p !== undefined));
+      }
+    },
+  );
   it('returns 422 for an approval belonging to another response without revoking either row', async () => {
     expectedSideEffects = {
       audit: { count: 0, message: 'mismatched approval leaves no audit row before cleanup' },
@@ -791,5 +910,27 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     expect(
       approvals.rows.find((approval) => approval.id === otherApproval.rows[0]?.id)?.revoked_at,
     ).toBeNull();
+  });
+  it('#1109 safe Survey picker read does not inherit the personal candidate audit', async () => {
+    const source = await seed();
+    const approvalId = await approveDirectly(source);
+    expectedSideEffects = {
+      audit: { count: 0, message: 'safe picker produces no personal read audit' },
+      approvals: { count: 1, message: 'safe picker preserves the active approval' },
+    };
+    const holder = await actor();
+    await grant(holder.id, 'survey.read', source.msId);
+    await grant(holder.id, 'survey.read_personal_responses', source.msId);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/surveys/${source.surveyId}/evidence-candidates`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${holder.cookie}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const result = surveyEvidenceCandidatesResponseSchema.parse(response.json());
+    expect(result.response_state).toBe('visible');
+    expect(result.items.map((item) => item.approved_excerpt_id)).toEqual([approvalId]);
+    expect(response.body).not.toContain(source.responseId);
+    expect(response.body).not.toContain('Raw private response text');
   });
 });

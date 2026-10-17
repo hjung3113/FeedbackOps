@@ -407,6 +407,111 @@
       "when": 1790899200000,
       "tag": "0057_excerpt_approval_response_id_isolation",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791849600000,
+      "tag": "0058_permission_request_revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791849601000,
+      "tag": "0059_survey_finding_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791849602000,
+      "tag": "0060_responsibility_defaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791849603000,
+      "tag": "0061_coverage_thresholds",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791854622294,
+      "tag": "0062_cluster_suggestion_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1791857242632,
+      "tag": "0063_permission_grant_reissue",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791858391004,
+      "tag": "0064_canonical_read_boundary",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1791867562014,
+      "tag": "0065_evidence_inventory_batch",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791871373441,
+      "tag": "0066_survey_evidence_attachment",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791886996564,
+      "tag": "0067_recovery_read_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791891701641,
+      "tag": "0068_recovery_presentation_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791893462040,
+      "tag": "0069_recovery_durable_references",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791967228726,
+      "tag": "0070_voc_similarity_preview",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791969982986,
+      "tag": "0071_voc_cluster_suggestion_generation",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792155846827,
+      "tag": "0072_normal_captain_marvel",
+      "breakpoints": true
     }
   ]
 }

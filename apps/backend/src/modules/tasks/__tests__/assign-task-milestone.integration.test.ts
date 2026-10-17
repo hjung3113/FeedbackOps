@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #514 B1b — POST /tasks/:id/milestone (assign and unassign).
 //
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID. The conductor
@@ -95,15 +96,19 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
       foreignMilestoneId = null;
     }
     if (foreignManagedSystemId) {
-      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
-        foreignManagedSystemId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where id = $1',
+        [foreignManagedSystemId],
+      );
       foreignManagedSystemId = null;
     }
     if (foreignWorkspaceId) {
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
-        foreignWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [foreignWorkspaceId],
+      );
       foreignWorkspaceId = null;
     }
     await migrateHandle.pool.query(
@@ -215,7 +220,7 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
   }
 
   async function milestoneAuditDetails(taskId: string): Promise<unknown[]> {
-    const rows = await dbHandle.pool.query<{ detail: unknown }>(
+    const rows = await migrateHandle.pool.query<{ detail: unknown }>(
       `select detail from core.audit_log
         where workspace_id = $1 and event_type = 'task_milestone_assigned' and subject_id = $2`,
       [WORKSPACE_ID, taskId],

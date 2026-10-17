@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -337,11 +338,15 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
       permissionGrantIds: grantIds,
     });
     await ops.pool.query('delete from finding.findings where id=$1', [foreignFindingId]);
-    await ops.pool.query('delete from core.managed_systems where workspace_id=$1', [
+    await deleteRecoveryFixtureParents(
+      ops,
+      'delete from core.managed_systems where workspace_id=$1',
+      [foreignWorkspaceId],
+    );
+    await ops.pool.query('delete from core.actors where workspace_id=$1', [foreignWorkspaceId]);
+    await deleteRecoveryFixtureParents(ops, 'delete from core.workspaces where id=$1', [
       foreignWorkspaceId,
     ]);
-    await ops.pool.query('delete from core.actors where workspace_id=$1', [foreignWorkspaceId]);
-    await ops.pool.query('delete from core.workspaces where id=$1', [foreignWorkspaceId]);
     await app?.close();
     await appDb?.close();
     await ops?.close();

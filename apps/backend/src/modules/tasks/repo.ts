@@ -1,10 +1,13 @@
 import { sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
+import { escapeLikePattern } from '../../lib/sql-like.js';
+import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 
 import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { releasedTaskUnresolvedVocPredicate } from '../voc/index.js';
 
 export interface TaskRow {
   cursor_timestamp?: string;
@@ -16,6 +19,7 @@ export interface TaskRow {
   status: TaskStatus;
   priority: TaskPriority;
   assignee_actor_id: string | null;
+  assignee_team_id: string | null;
   due_date: string | null;
   milestone_id: string | null;
   analytics_area_id: string | null;
@@ -40,6 +44,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     status: row.status as TaskStatus,
     priority: row.priority as TaskPriority,
     assignee_actor_id: (row.assignee_actor_id as string | null) ?? null,
+    assignee_team_id: (row.assignee_team_id as string | null) ?? null,
     due_date: (row.due_date as string | null) ?? null,
     milestone_id: (row.milestone_id as string | null) ?? null,
     analytics_area_id: (row.analytics_area_id as string | null) ?? null,
@@ -81,7 +86,7 @@ function mapTaskCommentRow(row: Record<string, unknown>): TaskCommentRow {
 
 const TASK_SELECT = sql`
   id, workspace_id, display_id, primary_managed_system_id, title, status, priority,
-  assignee_actor_id, due_date::text AS due_date, milestone_id, analytics_area_id,
+  assignee_actor_id, assignee_team_id, due_date::text AS due_date, milestone_id, analytics_area_id,
   source_task_request_id, created_by, created_at, updated_at
 `;
 
@@ -93,6 +98,7 @@ export async function insertTask(
     title: string;
     priority: TaskPriority;
     assigneeActorId: string | null;
+    assigneeTeamId?: string | null;
     dueDate: string | null;
     milestoneId: string | null;
     analyticsAreaId: string | null;
@@ -111,12 +117,12 @@ export async function insertTask(
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO task.tasks (
       workspace_id, display_id, primary_managed_system_id, title, status, priority,
-      assignee_actor_id, due_date, milestone_id, analytics_area_id,
+      assignee_actor_id, assignee_team_id, due_date, milestone_id, analytics_area_id,
       source_task_request_id, created_by
     )
     VALUES (
       ${input.workspaceId}, ${displayId}, ${input.primaryManagedSystemId}, ${input.title},
-      'backlog', ${input.priority}, ${input.assigneeActorId}, ${input.dueDate},
+      'backlog', ${input.priority}, ${input.assigneeActorId}, ${input.assigneeTeamId ?? null}, ${input.dueDate},
       ${input.milestoneId}, ${input.analyticsAreaId}, ${input.sourceTaskRequestId},
       ${input.createdBy}
     )
@@ -278,34 +284,33 @@ export async function findTaskIdByDisplayId(
 }
 
 interface ListInput {
+  q?: string;
   workspaceId: string;
   status?: TaskStatus;
-  assigneeActorId?: string;
+  /** Actor ids OR'd with `assigneeUnassigned` (no actor and no team). */
+  assigneeActorIds?: string[];
+  assigneeUnassigned?: boolean;
+  assigneeTeamId?: string;
   managedSystemId?: string;
+  analyticsAreaId?: string;
+  statusGroup?: 'in-flight' | 'open';
+  priorities?: string[];
+  overdue?: 'true';
+  reporterUpdate?: 'needed';
   publicUpdate?: 'missing';
-  milestoneId?: string;
+  /** Exact Milestone ids OR'd with presence (`milestoneAny`) / absence (`milestoneNone`). */
+  milestoneIds?: string[];
+  milestoneAny?: boolean;
+  milestoneNone?: boolean;
   allowedSystemIds?: string[];
   limit?: number;
   cursor?: ListCursor;
 }
 
-function listPredicates(input: ListInput) {
-  const predicates = [sql`workspace_id = ${input.workspaceId}`];
-  if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
-  if (input.assigneeActorId !== undefined) {
-    predicates.push(sql`assignee_actor_id = ${input.assigneeActorId}`);
-  }
-  if (input.managedSystemId !== undefined) {
-    predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
-  }
-  // Gap side of countReleasedTasksWithPublicUpdate (dashboard/repo.ts):
-  // released, in that denominator, and not in that numerator. Do not import it.
-  if (input.publicUpdate === 'missing') {
-    predicates.push(sql`
-      status = 'released'
-      AND EXISTS (
+function releasedWithVocPredicate() {
+  return sql`status = 'released' AND EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
@@ -316,10 +321,12 @@ function listPredicates(input: ListInput) {
           AND link.target_id = task.tasks.id
           AND link.relation_type = 'evidence_of'
           AND link.status = 'active'
-      )
-      AND NOT EXISTS (
+      )`;
+}
+function releasedWithPublicUpdatePredicate() {
+  return sql`EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
@@ -333,16 +340,73 @@ function listPredicates(input: ListInput) {
           AND link.target_id = task.tasks.id
           AND link.relation_type = 'evidence_of'
           AND link.status = 'active'
-      )
-    `);
+      )`;
+}
+
+function listPredicates(input: ListInput) {
+  const predicates = [sql`workspace_id = ${input.workspaceId}`];
+  if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
+  if (input.assigneeTeamId !== undefined)
+    predicates.push(sql`assignee_team_id = ${input.assigneeTeamId}`);
+  const assigneeAlternatives = [];
+  if (input.assigneeActorIds !== undefined && input.assigneeActorIds.length > 0)
+    assigneeAlternatives.push(
+      sql`assignee_actor_id = ANY(${sql.param(input.assigneeActorIds)}::uuid[])`,
+    );
+  if (input.assigneeUnassigned === true)
+    assigneeAlternatives.push(sql`(assignee_actor_id IS NULL AND assignee_team_id IS NULL)`);
+  if (assigneeAlternatives.length > 0)
+    predicates.push(sql`(${sql.join(assigneeAlternatives, sql` OR `)})`);
+  if (input.priorities !== undefined && input.priorities.length > 0)
+    predicates.push(
+      sql`priority IN (${sql.join(
+        input.priorities.map((priority) => sql`${priority}`),
+        sql`, `,
+      )})`,
+    );
+  if (input.managedSystemId !== undefined) {
+    predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
   }
-  if (input.milestoneId !== undefined) {
-    predicates.push(sql`milestone_id = ${input.milestoneId}`);
+  if (input.analyticsAreaId !== undefined) {
+    predicates.push(
+      input.analyticsAreaId === 'unset'
+        ? sql`analytics_area_id IS NULL`
+        : sql`analytics_area_id = ${input.analyticsAreaId}::uuid`,
+    );
   }
+  if (input.statusGroup === 'in-flight')
+    predicates.push(sql`status IN ('todo', 'doing', 'review')`);
+  if (input.statusGroup === 'open')
+    predicates.push(sql`status IN ('backlog', 'todo', 'doing', 'review', 'reopened')`);
+  if (input.overdue === 'true')
+    predicates.push(sql`status IN ('backlog', 'todo', 'doing', 'review', 'reopened')
+      AND due_date IS NOT NULL AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date`);
+  if (input.reporterUpdate === 'needed')
+    predicates.push(
+      sql`status = 'released' AND ${releasedTaskUnresolvedVocPredicate(input.workspaceId, sql`task.tasks.id`)}`,
+    );
+  if (input.publicUpdate === 'missing') {
+    predicates.push(
+      sql`${releasedWithVocPredicate()} AND NOT (${releasedWithPublicUpdatePredicate()})`,
+    );
+  }
+  const milestoneAlternatives = [];
+  if (input.milestoneIds !== undefined && input.milestoneIds.length > 0)
+    milestoneAlternatives.push(sql`milestone_id = ANY(${sql.param(input.milestoneIds)}::uuid[])`);
+  if (input.milestoneAny === true) milestoneAlternatives.push(sql`milestone_id IS NOT NULL`);
+  if (input.milestoneNone === true) milestoneAlternatives.push(sql`milestone_id IS NULL`);
+  if (milestoneAlternatives.length > 0)
+    predicates.push(sql`(${sql.join(milestoneAlternatives, sql` OR `)})`);
   if (input.allowedSystemIds !== undefined)
     predicates.push(
       sql`primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,
     );
+  if (input.q !== undefined && input.q !== '') {
+    const pattern = escapeLikePattern(input.q);
+    predicates.push(
+      sql`(display_id ILIKE ${`${pattern}%`} ESCAPE '\\' OR title ILIKE ${`%${pattern}%`} ESCAPE '\\')`,
+    );
+  }
   return predicates;
 }
 
@@ -460,7 +524,7 @@ export async function resolveTaskSource(
       f.source_type AS finding_source_type,
       f.source_id AS finding_source_id
     FROM task_request.task_requests tr
-    LEFT JOIN core.entity_links el
+    LEFT JOIN core.entity_links_app el
       ON el.workspace_id = tr.workspace_id
      AND el.source_type = 'finding'
      AND el.target_type = 'task_request'
@@ -505,4 +569,107 @@ export async function resolveTaskSource(
         ? findingSourceId
         : null;
   return { source, vocId };
+}
+
+export async function updateTaskResponsibility(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    taskId: string;
+    actorId: string | null;
+    teamId: string | null;
+  },
+): Promise<TaskRow> {
+  const rows = await tx.execute(sql`UPDATE task.tasks SET
+    assignee_actor_id = ${input.actorId}, assignee_team_id = ${input.teamId}, updated_at = GREATEST(now(), updated_at + INTERVAL '1 millisecond')
+    WHERE workspace_id = ${input.workspaceId} AND id = ${input.taskId}
+    RETURNING ${TASK_SELECT}`);
+  const row = rows.rows[0];
+  if (!row) throw new Error('updateTaskResponsibility returned no row');
+  return mapTaskRow(row);
+}
+
+export type TaskReportGroup = {
+  managed_system_id: string;
+  analytics_area_id: string | null;
+  total: number;
+  backlog: number;
+  todo: number;
+  doing: number;
+  review: number;
+  done: number;
+  released: number;
+  reopened: number;
+  in_flight: number;
+  overdue: number;
+  released_total: number;
+  released_updated: number;
+  public_update_missing: number;
+  reporter_update_needed: number;
+};
+export async function countGroupedTasksForReport(
+  db: Db,
+  args: { actor: ScopeActorContext; readScope: Scope; managedSystemId?: string },
+): Promise<{ as_of_date: string; rows: TaskReportGroup[] }> {
+  const base: ListInput = {
+    workspaceId: args.actor.workspace_id,
+    ...(args.managedSystemId === undefined ? {} : { managedSystemId: args.managedSystemId }),
+    ...(args.readScope.kind === 'all' ? {} : { allowedSystemIds: args.readScope.managedSystemIds }),
+  };
+  const filter = (extra: Partial<ListInput>) =>
+    sql.join(listPredicates({ ...base, ...extra }), sql` AND `);
+  const result = await db.execute<{ as_of_date: string; groups: TaskReportGroup[] }>(sql`
+    WITH report_tasks AS MATERIALIZED (
+      SELECT id, workspace_id, primary_managed_system_id, analytics_area_id, status, due_date
+      FROM task.tasks WHERE ${filter({})}
+    ), released_voc_links AS MATERIALIZED (
+      SELECT link.target_id AS task_id, voc.id AS voc_id, voc.reporter_facing_status
+      FROM report_tasks
+      JOIN core.entity_links_app link
+        ON link.workspace_id = report_tasks.workspace_id
+       AND link.target_id = report_tasks.id
+       AND link.source_type = 'voc'
+       AND link.target_type = 'task'
+       AND link.relation_type = 'evidence_of'
+       AND link.status = 'active'
+      JOIN voc.vocs voc
+        ON voc.id = link.source_id
+       AND voc.workspace_id = link.workspace_id
+       AND voc.archived_at IS NULL
+      WHERE report_tasks.status = 'released'
+    ), released_vocs AS (
+      SELECT task_id,
+        bool_or(reporter_facing_status NOT IN ('resolved', 'closed')) AS unresolved
+      FROM released_voc_links GROUP BY task_id
+    ), released_updates AS (
+      SELECT DISTINCT link.task_id
+      FROM released_voc_links link
+      JOIN voc.voc_public_updates public_update
+        ON public_update.voc_id = link.voc_id
+       AND public_update.skip_public_update = false
+    ), grouped AS (
+      SELECT primary_managed_system_id AS managed_system_id, analytics_area_id, count(*)::int AS total,
+        count(*) FILTER (WHERE status='backlog')::int AS backlog,
+        count(*) FILTER (WHERE status='todo')::int AS todo,
+        count(*) FILTER (WHERE status='doing')::int AS doing,
+        count(*) FILTER (WHERE status='review')::int AS review,
+        count(*) FILTER (WHERE status='done')::int AS done,
+        count(*) FILTER (WHERE status='released')::int AS released,
+        count(*) FILTER (WHERE status='reopened')::int AS reopened,
+        count(*) FILTER (WHERE ${filter({ statusGroup: 'in-flight' })})::int AS in_flight,
+        count(*) FILTER (WHERE ${filter({ overdue: 'true' })})::int AS overdue,
+        count(*) FILTER (WHERE released_vocs.task_id IS NOT NULL)::int AS released_total,
+        count(*) FILTER (WHERE released_updates.task_id IS NOT NULL)::int AS released_updated,
+        count(*) FILTER (WHERE released_vocs.task_id IS NOT NULL AND released_updates.task_id IS NULL)::int AS public_update_missing,
+        count(*) FILTER (WHERE released_vocs.unresolved)::int AS reporter_update_needed
+      FROM report_tasks
+      LEFT JOIN released_vocs ON released_vocs.task_id = report_tasks.id
+      LEFT JOIN released_updates ON released_updates.task_id = report_tasks.id
+      GROUP BY primary_managed_system_id, analytics_area_id
+    ) SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS as_of_date,
+      coalesce(jsonb_agg(grouped), '[]'::jsonb) AS groups FROM grouped
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('Task report clock missing');
+  return { as_of_date: row.as_of_date, rows: row.groups };
 }

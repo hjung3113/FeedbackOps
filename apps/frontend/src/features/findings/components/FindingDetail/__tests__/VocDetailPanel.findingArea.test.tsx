@@ -51,7 +51,10 @@ vi.mock('@/features/voc/components/detail/IdentitySection', () => ({
   IdentityMetadataStrip: () => null,
   IdentitySection: () => null,
 }));
-vi.mock('@/features/voc/components/detail/LinkedEntityTrailSection', () => ({
+vi.mock('@/features/voc/components/detail/LinkedEntityTrailSection', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/voc/components/detail/LinkedEntityTrailSection')
+  >()),
   LinkedEntityTrailSection: () => null,
 }));
 vi.mock('@/features/voc/components/detail/LinkedExecutionSection', () => ({

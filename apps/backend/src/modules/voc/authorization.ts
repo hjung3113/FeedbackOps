@@ -9,6 +9,9 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import type { CheckService } from '../permissions/check-service.js';
+import { isRequestableDenial } from '../permissions/index.js';
 import {
   type Scope,
   type ScopeActorContext,
@@ -28,8 +31,8 @@ export interface ActorContextLite {
 // ── Scope resolvers ───────────────────────────────────────────────────────────
 
 /**
- * Effective scope: union of voc.read and voc.triage grants for the actor.
- * Admin role → 'all'. MS-scoped grants → union of both capability MS lists.
+ * Effective scope: union of deny-aware voc.read and voc.triage scopes.
+ * Admin role-derived scope honours explicit denies on each capability.
  *
  * WHY: using undefined (any capability) let future non-VOC capabilities
  * widen VOC summary visibility, creating an unintended existence-probe
@@ -39,9 +42,6 @@ export interface ActorContextLite {
  * Used for out_of_scope_summary visibility and detail-existence-probe defense.
  */
 export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
-  if (actor.role_level === 'admin') {
-    return { kind: 'all' };
-  }
   const [readScope, triageScope] = await Promise.all([
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
@@ -55,14 +55,14 @@ export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite):
 }
 
 /**
- * voc.read scope. Admin → 'all'. Otherwise: workspace-wide voc.read grant →
- * 'all'; MS-scoped voc.read grants → scoped list. Empty list → scoped:[].
+ * Deny-aware voc.read scope, including Admin role-derived access.
+ * Broad allow without denies → 'all'; otherwise scoped ids after deny subtraction.
  */
 export async function actorReadScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read');
 }
 
-/** voc.triage scope. Same shape as actorReadScope; admin → 'all'. */
+/** Deny-aware voc.triage scope, independent of voc.read. */
 export async function actorTriageScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
 }
@@ -117,4 +117,42 @@ export function isVocVisibleToActor(
     readScope.managedSystemIds.includes(voc.primary_managed_system_id) ||
     voc.reporter_id === actorId
   );
+}
+
+/** Shared caller gate for triage mutation and advisory owner candidates. */
+export async function assertVocTriage(
+  tx: Tx,
+  checkService: CheckService,
+  actor: ActorContextLite,
+  managedSystemId: string,
+): Promise<void> {
+  const decision = await checkService.checkCapability(
+    { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
+    'voc.triage',
+    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
+    { tx },
+  );
+  if (decision.allow !== true) {
+    // F1: `no_grant`, `grant_revoked`, and `grant_expired` map to
+    // `permission.scope_required` for developers (ADR-0061 §6).
+    // Explicit deny and workspace mismatch remain denied.
+    if (isRequestableDenial(decision.reason) && actor.role_level === 'developer') {
+      throw new HttpError(
+        'permission.scope_required',
+        'voc.triage capability required; developer needs MS-scoped grant',
+        {
+          requiredScope: [managedSystemId],
+          requestable_permission: {
+            permission: 'voc.triage',
+            managed_system_id: managedSystemId,
+            reason_required: false,
+          },
+        },
+      );
+    }
+    // Explicit deny, workspace mismatch, and non-developer denials stay generic.
+    throw new HttpError('permission.denied', `voc.triage denied: ${decision.reason}`, {
+      reason: decision.reason,
+    });
+  }
 }

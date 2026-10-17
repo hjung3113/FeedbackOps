@@ -241,6 +241,19 @@ describe('_authed sidebar current destination', () => {
       searchStr: '?view=my',
       expectedId: 'my-tasks',
     },
+    {
+      route: 'Task board',
+      pathname: '/tasks',
+      searchStr: '?view=board',
+      expectedId: 'tasks-board',
+    },
+    // #1179: the backlog list highlights the same Tasks entry as the board.
+    {
+      route: 'Task backlog',
+      pathname: '/tasks',
+      searchStr: '?view=backlog',
+      expectedId: 'tasks-board',
+    },
   ])(
     'renders the expected current destination for $route',
     ({ pathname, searchStr, expectedId }) => {
@@ -288,4 +301,18 @@ describe('_authed sidebar current destination', () => {
       }
     },
   );
+});
+
+describe('Evidence sidebar entry (#1107)', () => {
+  it('keeps Evidence reachable and activates it without activating the dashboard', () => {
+    const entry = NAV_TREE.integration.find((item) => item.id === 'integration-evidence');
+    expect(entry).toBeDefined();
+    if (!entry) throw new Error('Missing Evidence entry');
+    expect(entry.href).toBe('/integration/evidence');
+    expect(entry.label).toBe('Evidence');
+    expect(isSidebarEntryActive(entry, '/integration/evidence', '')).toBe(true);
+    const dashboard = NAV_TREE.integration[0];
+    if (!dashboard) throw new Error('Missing dashboard');
+    expect(isSidebarEntryActive(dashboard, '/integration/evidence', '')).toBe(false);
+  });
 });

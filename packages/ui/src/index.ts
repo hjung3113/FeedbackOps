@@ -20,6 +20,7 @@ export {
   readMotionTiming,
 } from './utils/motion.js';
 export { useListMotion } from './utils/useListMotion.js';
+export { isToastTarget } from './utils/toast-target.js';
 
 // shadcn primitives (Pack 17, ADR-0021)
 // Note: shadcn/button re-exports Button/buttonVariants already exported above — omitted to avoid collision
@@ -128,6 +129,7 @@ export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/Us
 export { UserChip, type UserChipProps } from './identity/UserChip';
 
 // Toolbar primitives (Slice 3 #20)
+export { ActiveFilterBar, type ActiveFilterBarProps } from './toolbar/ActiveFilterBar.js';
 export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
 export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
 export {
