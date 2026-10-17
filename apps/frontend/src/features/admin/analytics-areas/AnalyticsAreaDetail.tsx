@@ -84,6 +84,15 @@ export function AnalyticsAreaSlideOver({
       >
         <SheetTitle className="sr-only">{area.name}</SheetTitle>
         <SheetDescription className="sr-only">Analytics Area 상세</SheetDescription>
+        <div
+          data-testid="aa-slide-over-header"
+          className="flex h-toolbar shrink-0 items-center border-b border-border-subtle pl-6 pr-12"
+        >
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-primary/15 px-2 py-0.5 text-xs font-medium text-accent-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" />
+            Analytics Area
+          </span>
+        </div>
 
         <DetailPanelSectionNav sections={sections} scrollRef={scrollRef} />
 

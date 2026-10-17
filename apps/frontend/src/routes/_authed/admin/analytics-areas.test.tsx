@@ -205,6 +205,23 @@ describe('/admin/analytics-areas route', () => {
     expect(detail.querySelector('[data-anchor="guardrail"]')).toBeNull();
   });
 
+  // jsdom has no layout, so overlap cannot be measured; the header row that reserves the
+  // absolute close slot must come before the section navigation and leave room (pr-12).
+  test('detail reserves the close control slot above the section navigation', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+    });
+    fireEvent.click(await screen.findByTestId('aa-row-permission-management'));
+    const detail = await screen.findByTestId('aa-slide-over');
+    const header = within(detail).getByTestId('aa-slide-over-header');
+    const nav = within(detail).getByRole('navigation', { name: '섹션 이동' });
+    expect(header).toHaveClass('pr-12');
+    expect(header.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(detail).getByRole('button', { name: '닫기' })).toBeInTheDocument();
+  });
+
   test('filters by Managed System and archived inclusion through requests, then clears both', async () => {
     const requests: string[] = [];
     renderPage({

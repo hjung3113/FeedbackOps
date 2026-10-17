@@ -192,7 +192,9 @@ it('leads recovery rows with source identity and keeps the reason secondary', as
 
   const row = await screen.findByRole('button', { name: /VOC 담당자 배정이 필요/ });
   const text = row.textContent ?? '';
+  expect(text.indexOf('VOC-1')).toBeGreaterThanOrEqual(0);
   expect(text.indexOf('VOC-1')).toBeLessThan(text.indexOf('다운로드 오류'));
+  expect(text.indexOf('다운로드 오류')).toBeGreaterThanOrEqual(0);
   expect(text.indexOf('다운로드 오류')).toBeLessThan(text.indexOf(item.reason));
   const reason = Array.from(row.querySelectorAll('span')).find(
     (span) => span.textContent === item.reason,
