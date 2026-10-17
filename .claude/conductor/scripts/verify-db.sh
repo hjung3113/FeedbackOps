@@ -23,11 +23,13 @@ Usage:
   verify-db.sh drop <name>
   verify-db.sh down
   verify-db.sh reset-rate-limits <name>
+  verify-db.sh has-preview-fixtures <name>
 
 up provisions fops-verify on localhost:5439 and runs db:migrate on the feedbackops template.
 create clones feedbackops, writes $WAVE_STATE/env.verify.<name>, and runs db:migrate
 from <checkout> (default: this script's checkout). drop removes the env file after the DB drops.
-drop/reset-rate-limits use feedbackops_<name>.
+drop/reset-rate-limits/has-preview-fixtures use feedbackops_<name>; has-preview-fixtures reports whether the
+[preview] fixture cluster exists (one JSON line with a "fixtures" bool).
 The development database on port 5434 is never used.
 EOF
 }
@@ -306,6 +308,33 @@ reset_rate_limits() {
   finish true 0
 }
 
+has_preview_fixtures() {
+  check_port
+  require_state
+  database_for "$1"
+  local env_file=$WAVE_STATE/env.verify.$1
+  [[ -f "$env_file" ]] || fail "environment file not found: $env_file" 2
+  (
+    set -a
+    . "$env_file"
+    set +a
+    case "${DATABASE_URL_MIGRATE:-}" in
+      "postgres://fops_migrate:fops_migrate@$DB_HOST:$DB_PORT/$DB_NAME") ;;
+      *) printf 'refusing migrate URL that does not target %s on port %s\n' "$DB_NAME" "$DB_PORT" >&2; exit 2 ;;
+    esac
+    fixtures=$(psql -X "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -tA \
+      -c "SELECT EXISTS (SELECT 1 FROM voc_cluster.voc_clusters WHERE title = '[preview] VOC Cluster')") || exit $?
+    fixtures=${fixtures//[[:space:]]/}
+    case "$fixtures" in
+      t) fixtures=true ;;
+      f) fixtures=false ;;
+      *) printf 'unexpected psql output for %s: %s\n' "$DB_NAME" "$fixtures" >&2; exit 1 ;;
+    esac
+    printf 'Preview fixtures in %s: %s.\n' "$DB_NAME" "$fixtures"
+    printf '{"ok":true,"command":"has-preview-fixtures","fixtures":%s}\n' "$fixtures"
+  ) || fail "could not check preview fixtures for $DB_NAME" "$?"
+}
+
 main() {
   if (( $# == 0 )) || [[ "$1" == --help || "$1" == -h ]]; then
     MODE=help
@@ -324,11 +353,12 @@ main() {
       (( $# >= 1 )) || fail 'usage: verify-db.sh create <name> [--migrate-from <checkout>]' 2
       create_db "$@"
       ;;
-    drop|reset-rate-limits)
+    drop|reset-rate-limits|has-preview-fixtures)
       (( $# == 1 )) || fail "usage: verify-db.sh $MODE <name>" 2
       case "$MODE" in
         drop) drop_db "$1" ;;
         reset-rate-limits) reset_rate_limits "$1" ;;
+        has-preview-fixtures) has_preview_fixtures "$1" ;;
       esac
       ;;
     down)

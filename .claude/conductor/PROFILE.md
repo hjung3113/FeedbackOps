@@ -94,6 +94,14 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
   `[preview]` Cluster's member FK). For 5k data run `SEED_MODE=scale npx tsx src/seed/index.ts` from
   `apps/backend` with the issue env after `--seed`.
 - Stop previews (`app-preview.py stop <label>`) as soon as UX and perf are done.
+- **`ux-prep.sh <n> <worktree> [--scale] [--targets <hrefs>] [--no-perf]`** (§Tools) runs the whole lane in the
+  background. Rebase the worktree onto `origin/develop` and refresh `$WAVE_STATE/baseline` (skill step 7c) first,
+  then launch it with `run_in_background` as soon as the code review launches: it creates or reuses the issue DB,
+  reseeds only when the `[preview]` fixtures are gone, starts or reuses the `<n>-develop` and `<n>-branch`
+  previews, curls the targets, probes Ego Lite (one automatic restart) and runs nav-perf, writing
+  `$WAVE_STATE/ux-prep-<n>.json`. It leaves both previews running for the UX reviewer: stop them
+  (`app-preview.py stop <n>-develop`, `stop <n>-branch`) before rebasing the worktree or refreshing the baseline
+  again — the preview backends are not watched and would keep serving the old checkout.
 
 ## Review
 
@@ -104,8 +112,11 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
   global `~/.agents/agents/review-ux.md` with § Review lens: UX; `review-perf` → `templates/review-rules-perf.md` (`.review/00-REVIEW-RULES-PERF.md`);
   `review-quality` → global `~/.agents/agents/review-quality.md` with § Review lens: quality; brief check → `templates/brief-check.md`.
 - **Perf measurement** (before UX, never while another lane's UX review or a vitest/integration run is on the
-  host): `verify-db.sh reset-rate-limits <n>`, then `scripts/nav-perf.sh --base develop=<url> --base branch=<url>
-  --targets <hrefs> --out <worktree>/.review/<n>-perf/nav-perf.json`, with `run_in_background`. Targets are rail
+  host): when `ux-prep.sh` already ran for the issue, read `$WAVE_STATE/ux-prep-<n>.json` instead of rerunning
+  `reset-rate-limits` + nav-perf. Otherwise `scripts/nav-perf.sh --base develop=<url> --base branch=<url>
+  --targets <hrefs> --out <worktree>/.review/<n>-perf/nav-perf.json --reset-db <n>`, with `run_in_background`;
+  nav-perf curls each target first, clears the shared rate-limit bucket immediately before every attempt, and
+  retries the browser + summary step once. Targets are rail
   hrefs the harness clicks: `/home,/vocs?view=inbox,/vocs?view=triage,/findings,/tasks?view=board,/surveys/participate`
   plus touched rail links (`/`, `/vocs` or `?action=create` give no samples). Stdout is a text table ending in
   `breach: none|<hrefs>`; read numbers from `--out`.
@@ -193,13 +204,14 @@ issue is about that behaviour.
 | --- | --- | --- |
 | `scripts/launch-worker.sh <n> <slug> [be]` | §Launch | – |
 | `scripts/verify-fe.sh <worktree>` / `verify-be.sh <worktree> <n> [filters]` | §Verify; logs in `$WAVE_STATE/verify-<wt>/` and `$WAVE_STATE/vbe-<n>/` | – |
-| `scripts/verify-db.sh up` / `create <n> [--migrate-from <checkout>]` / `drop <n>` / `reset-rate-limits <n>` / `down` | throwaway Postgres on 5439; `drop` removes the env file | – |
+| `scripts/verify-db.sh up` / `create <n> [--migrate-from <checkout>]` / `drop <n>` / `reset-rate-limits <n>` / `has-preview-fixtures <n>` / `down` | throwaway Postgres on 5439; `drop` removes the env file; `has-preview-fixtures` reports the `[preview]` fixture cluster | – |
 | `scripts/visual.sh run` / `update` / `stable` / `capture` | visual harness; picks the checkout from the cwd (or `VISUAL_ROOT`); `capture --clean` trashes its spec | – |
 | `scripts/baseline-keep.py` | baseline keep/revert with crops | – |
 | `scripts/biome-cmp.sh <worktree> <file>...` | biome error categories on develop vs branch | – |
 | `scripts/worker-hygiene.sh <worktree>` | fails on a new `biome-ignore`; reports whitespace-only churn | `test-worker-hygiene.py` |
 | `scripts/review-plan.py` | §Review plan; refuses uncommitted changes | `test-review-plan.py` (14 cases) |
-| `scripts/nav-perf.sh` (+ `nav-perf.mjs`, `nav-perf-summary.py`) | §Review perf. Times click → quiet (no fetch, nothing loading for 300 ms, cap 30 s) in ego-browser; one warm-up pass, then bases alternate for `--runs`; one admin persona per base (`--personas`, default `mock-admin-1,mock-admin-2`); 429 samples excluded; an error or inconclusive target exits 1 (reset rate limits, rerun); output log `<out>.log`. Noise floor ≤4 ms | – |
+| `scripts/nav-perf.sh` (+ `nav-perf.mjs`, `nav-perf-summary.py`) | §Review perf. Times click → quiet (no fetch, nothing loading for 300 ms, cap 30 s) in ego-browser; one warm-up pass, then bases alternate for `--runs`; one admin persona per base (`--personas`, default `mock-admin-1,mock-admin-2`); 429 samples excluded; an error or inconclusive target exits 1 (`--reset-db` plus the one retry handle it); output log `<out>.log`; curls every target and `--start` once first; `--reset-db <n>` clears the rate limits immediately before every attempt; the browser + summary step is retried once (first log kept as `<out>.attempt1.log`). Noise floor ≤4 ms | – |
+| `scripts/ux-prep.sh <n> <worktree> [--baseline <checkout>] [--scale] [--targets <hrefs>] [--no-perf]` | §Browser evidence: issue DB + seeded `<n>-develop`/`<n>-branch` previews + curl warm-up + Ego Lite probe (one restart) + nav-perf in one background run; writes `$WAVE_STATE/ux-prep-<n>.json` (last stdout line) and leaves the previews running | – |
 | `scripts/app-preview.py start <checkout> [--backend --env <env> [--seed]] [--name <label>]` / `stop <label>\|--all` / `status` | §Browser evidence. Refuses an env on 5434; `--seed` runs the personas seed then `preview-fixtures.mjs` (one `[preview]` record per drawer surface); a fixtures failure is a warning in the start JSON, its output in `$WAVE_STATE/preview-<label>-fixtures.log`; generates an `.mts` vite config; `status` reports dead PIDs and orphans, `stop --all` clears both | – |
 | `scripts/release-gate.sh <develop-checkout>` | §Slice close | – |
 | `scripts/wave-status.py [--json] [--prs] [--state-dir <dir>]` | read-only wave snapshot (workers, previews, worktrees, containers, PR CI); the `/wave` mod draws it | `test-wave-status.py` |
@@ -216,7 +228,7 @@ Run the three `scripts/test-*.py` after changing a pinned script. `scripts/test-
   reseed (`--seed`, `SEED_MODE=scale`) before nav-perf or UX previews, and run perf/UX before integration reruns when
   possible.
 - nav-perf medians are skewed by concurrent host load (vitest, integration): measure on a quiet host. A cold vite
-  gives `PageEvaluationTimeoutError`: open each target once (`curl`) before measuring.
+  gives `PageEvaluationTimeoutError`: nav-perf.sh curls each target first and retries the browser step once.
 - `insertVocDirectly(…, reporterActorId, …)`: a recipient who is the reporter keeps reading after a grant revoke.
 - TanStack Router merges the root's raw search into child matches; dropped keys must be overwritten with `undefined`.
 - A route added under an existing `$param.tsx` becomes its child and renders only through the parent's `<Outlet/>`;
