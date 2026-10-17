@@ -433,7 +433,9 @@ describe('AppFrame capability navigation', () => {
           ]) {
             expect(screen.getByTestId(`sidebar-nav-${id}`)).toBeInTheDocument();
           }
-          expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
+          const settingsLinks = screen.getAllByRole('link', { name: '워크스페이스 설정' });
+          expect(settingsLinks).toHaveLength(1);
+          expect(settingsLinks[0]).toHaveAttribute('href', '/admin/settings');
         } else {
           expect(screen.queryByRole('link', { name: '관리자' })).not.toBeInTheDocument();
           expect(screen.queryByTestId('sidebar-section-admin')).not.toBeInTheDocument();
@@ -446,7 +448,7 @@ describe('AppFrame capability navigation', () => {
           ]) {
             expect(screen.queryByTestId(`sidebar-nav-${id}`)).not.toBeInTheDocument();
           }
-          expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();
+          expect(screen.queryByRole('link', { name: '워크스페이스 설정' })).not.toBeInTheDocument();
         }
       } finally {
         unmount();
@@ -498,7 +500,7 @@ describe('AppFrame capability navigation', () => {
       await waitFor(() => expect(resolveAdminCheck).toBeTypeOf('function'));
       expect(screen.queryByTestId('rail-admin')).not.toBeInTheDocument();
       expect(screen.queryByTestId('sidebar-nav-admin-ms')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('sidebar-nav-admin-settings')).not.toBeInTheDocument();
 
       await act(async () => {
         resolveAdminCheck?.(json({ state: 'approved', decision: { allow: true } }));
@@ -506,7 +508,8 @@ describe('AppFrame capability navigation', () => {
 
       expect(await screen.findByTestId('rail-admin')).toBeInTheDocument();
       expect(screen.getByTestId('sidebar-nav-admin-ms')).toBeInTheDocument();
-      expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-nav-admin-settings')).toBeInTheDocument();
+      expect(screen.getAllByRole('link', { name: '워크스페이스 설정' })).toHaveLength(1);
     } finally {
       unmount();
       globalThis.fetch = originalFetch;

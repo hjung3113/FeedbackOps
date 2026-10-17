@@ -30,7 +30,6 @@ export function homeSidebarEntries(
     section: '액션 큐',
     countKey: QUEUE_COUNT_KEY[queue.id],
     count: queue.count,
-    urgent: queue.severity === 'urgent',
   })) ?? [];
   // #611 exposes the action only in frames that can open the mounted palette.
   const commandRow: SidebarNavItem[] =

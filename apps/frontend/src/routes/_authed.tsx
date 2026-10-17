@@ -113,7 +113,6 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       parentId: 'triage',
       icon: <User className="h-4 w-4" />,
       countKey: 'voc.tab.unassigned',
-      urgent: true,
     },
     {
       id: 'no-link',

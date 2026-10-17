@@ -67,12 +67,21 @@ function installFetch(
     pendingSummary?: boolean;
     unreadCount?: number;
     failUnreadCountAfterFirst?: boolean;
+    roleLevel?: string;
+    taskItems?: unknown[];
+    taskRequestItems?: unknown[];
+    answerableSurveys?: unknown;
   } = {},
 ): ReturnType<typeof vi.fn> {
   let unreadCountRequests = 0;
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.startsWith('/me'))
+    if (url.startsWith('/me/answerable-surveys'))
+      return new Response(
+        JSON.stringify(options.answerableSurveys ?? { items: [], page: { has_more: false } }),
+        { status: 200 },
+      );
+    if (url === '/me')
       return new Response(
         JSON.stringify({
           actor: {
@@ -80,7 +89,7 @@ function installFetch(
             external_id: 'actor',
             email: 'actor@example.test',
             display_name: '지원',
-            role_level: 'admin',
+            role_level: options.roleLevel ?? 'admin',
           },
           workspace_id: '22222222-2222-4222-8222-222222222222',
         }),
@@ -90,8 +99,12 @@ function installFetch(
       if (options.pendingSummary) return new Promise<Response>(() => {});
       return new Response(JSON.stringify(summary), { status: 200 });
     }
-    if (url.startsWith('/tasks') || url.startsWith('/task-requests'))
-      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    if (url.startsWith('/tasks'))
+      return new Response(JSON.stringify({ items: options.taskItems ?? [] }), { status: 200 });
+    if (url.startsWith('/task-requests'))
+      return new Response(JSON.stringify({ items: options.taskRequestItems ?? [] }), {
+        status: 200,
+      });
     if (url.startsWith('/permission-requests/mine'))
       return new Response(JSON.stringify({ requests: [] }), { status: 200 });
     if (url.startsWith('/notifications')) {
@@ -177,21 +190,20 @@ describe('HomeScreen route content', () => {
       '/vocs?view=triage',
     );
     expect(
-      screen.getByText(
-        '오늘 워크스페이스에 3개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.',
-      ),
+      screen.getByText('오늘 확인할 운영 큐가 있습니다. 우선순위가 높은 큐부터 확인하세요.'),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/\d+개의 운영 갭/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-queue-high-severity-unlinked')).toBeNull();
   });
 
-  it('keeps an urgent zero Home sidebar queue badge neutral', () => {
+  it('keeps a positive urgent Home sidebar queue badge neutral', () => {
     const summary = dashboardSummarySchema.parse({
       ...response,
       action_queues: [
         {
           id: 'bad-outcome-no-followup',
           severity: 'urgent',
-          count: 0,
+          count: 3,
           next_action: { label: 'Review', route: '/surveys', intent: 'review' },
           secondary_action: null,
         },
@@ -201,7 +213,7 @@ describe('HomeScreen route content', () => {
     render(<AppSidebar entries={homeSidebarEntries(summary, true)} />);
 
     const badge = screen.getByTestId('sidebar-count-queue-bad-outcome-no-followup');
-    expect(badge).toHaveTextContent('0');
+    expect(badge).toHaveTextContent('3');
     expect(badge.className).toContain('bg-surface-row-selected');
     expect(badge.className).not.toContain('text-accent-danger');
   });
@@ -339,38 +351,7 @@ describe('HomeScreen route content', () => {
     expect(row).toHaveTextContent(COVERAGE_METRIC_LABELS[id as DashboardCoverageId]);
   });
 
-  it('labels the Home coverage KPI with the VOC-to-Task metric', async () => {
-    const summary = dashboardSummarySchema.parse({
-      ...response,
-      kpis: { open_voc: 1, coverage_percent: 18 },
-    });
-    installFetch(summary);
-    renderHome();
-
-    const pill = await screen.findByTestId('home-kpi-coverage_percent');
-    expect(pill).toHaveTextContent(COVERAGE_METRIC_LABELS['voc-task']);
-  });
-
-  // #1087 UX: with an empty denominator the chip answers from the voc-task
-  // signal row like the panel below — 집계 대상 없음, never 0%.
-  it('renders the coverage KPI as neutral no-data when the voc-task signal has no denominator', async () => {
-    const summary = dashboardSummarySchema.parse({
-      ...response,
-      kpis: { open_voc: 1, coverage_percent: 0 },
-      coverage: [
-        { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
-        { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
-      ],
-    });
-    installFetch(summary);
-    renderHome();
-
-    const pill = await screen.findByTestId('home-kpi-coverage_percent');
-    expect(pill.textContent).toContain('집계 대상 없음');
-    expect(pill.textContent).not.toContain('%');
-  });
-
-  it('keeps the coverage KPI percentage when the voc-task signal has a denominator', async () => {
+  it('shows VOC-to-Task coverage only in CoveragePanel, not as a Home stat pill', async () => {
     const summary = dashboardSummarySchema.parse({
       ...response,
       kpis: { open_voc: 1, coverage_percent: 18 },
@@ -379,9 +360,9 @@ describe('HomeScreen route content', () => {
     installFetch(summary);
     renderHome();
 
-    const pill = await screen.findByTestId('home-kpi-coverage_percent');
-    expect(pill.textContent).toContain('18%');
-    expect(pill.textContent).not.toContain('집계 대상 없음');
+    await screen.findByTestId('home-coverage-row-voc-task');
+    expect(screen.queryByTestId('home-kpi-coverage_percent')).not.toBeInTheDocument();
+    expect(screen.getByTestId('home-coverage')).toBeInTheDocument();
   });
 
   it('keeps the selected managed system on coverage hops', async () => {
@@ -1509,10 +1490,11 @@ describe('HomeScreen route content', () => {
     expect(input).toHaveFocus();
   });
 
-  it('renders the empty state without the request list after the query resolves', async () => {
+  it('collapses the empty open permission request section after the query resolves', async () => {
     installFetch();
     renderHome();
-    await screen.findByText('열린 요청이 없습니다.');
+    await screen.findByTestId('home-action-queues');
+    expect(screen.queryByRole('heading', { name: '열린 요청' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-open-requests-list')).not.toBeInTheDocument();
   });
 
@@ -1534,6 +1516,66 @@ describe('HomeScreen route content', () => {
     render(<AppSidebar entries={homeSidebarEntries(undefined, true)} />);
     expect(screen.getByTestId('sidebar-nav-home')).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar-nav-my-work')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['with personal assignments', true, ['home-my-work', 'home-action-queues']],
+    ['without personal assignments', false, ['home-action-queues', 'home-my-work']],
+  ] as const)(
+    'orders assigned work from returned data %s',
+    async (_caseName, hasAssignments, expectedOrder) => {
+      installFetch(response, {
+        ...(hasAssignments
+          ? {
+              taskItems: [
+                { id: 'task-a1', display_id: 'TSK-701', title: '담당 Task', status: 'doing' },
+              ],
+              taskRequestItems: [
+                {
+                  id: 'request-b2',
+                  display_id: 'REQ-902',
+                  requested_outcome: '검토 Task Request',
+                  status: 'pending_review',
+                },
+              ],
+            }
+          : {}),
+      });
+      renderHome();
+
+      await screen.findByText(
+        hasAssignments ? 'TSK-701 — 담당 Task' : '현재 내게 배정된 작업이 없습니다.',
+      );
+      await screen.findByTestId('home-action-queues');
+      const panelOrder = Array.from(
+        document.querySelectorAll(
+          '[data-testid="home-my-work"], [data-testid="home-action-queues"]',
+        ),
+      ).map((element) => element.getAttribute('data-testid'));
+      expect(panelOrder).toEqual(expectedOrder);
+    },
+  );
+
+  it('leads with answerable Surveys and 내 VOC when operator data is empty', async () => {
+    const emptySummary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: {},
+      action_queues: [],
+      coverage: [],
+    });
+    installFetch(emptySummary, { roleLevel: 'user' });
+    renderHome();
+
+    await screen.findByTestId('home-reporter-empty');
+    const surveys = await screen.findByRole('heading', { name: '응답할 Survey' });
+    const myVocs = screen.getByRole('link', { name: '내 VOC' });
+    expect(myVocs).toHaveAttribute('href', '/vocs?view=my');
+    expect(surveys.compareDocumentPosition(myVocs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId('home-kpis')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('home-action-queues')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('home-coverage')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('home-my-work')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '열린 요청' })).not.toBeInTheDocument();
   });
 
   it('requests only the current Actor assigned-reviewer queue and keeps scope-wide summary', async () => {
@@ -1624,8 +1666,8 @@ describe('HomeScreen route content', () => {
     }) as typeof globalThis.fetch;
     renderHome();
 
-    const panel = await screen.findByTestId('home-my-work');
-    await within(panel).findByText('TSK-701 — 쿼리 플랜 개선');
+    await screen.findByText('TSK-701 — 쿼리 플랜 개선');
+    const panel = screen.getByTestId('home-my-work');
     expect(within(panel).getByText('REQ-902 — 재인증 흐름 개선')).toBeInTheDocument();
     const links = within(panel).getAllByRole('link');
     expect(links).toHaveLength(2);
@@ -1642,6 +1684,16 @@ describe('HomeScreen route content', () => {
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('3'),
     );
+  });
+
+  it('hides the dashboard greeting and actions on the Inbox tab', async () => {
+    installFetch(response);
+    renderHome('/home?tab=inbox');
+
+    await screen.findByTestId('home-inbox-list');
+    expect(screen.queryByRole('heading', { name: '안녕하세요, 지원님' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '큐 새로고침' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'VOC 생성' })).not.toBeInTheDocument();
   });
 
   it('caps the Inbox tab badge and hides it after its count refetch fails', async () => {

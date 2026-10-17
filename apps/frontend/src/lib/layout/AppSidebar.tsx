@@ -2,7 +2,7 @@ import type { SavedViewSurface } from '@/lib/api/saved-views';
 import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { cn } from '@fops/ui';
-import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import * as React from 'react';
 
 export type NavCounts = Partial<Record<NavCountKey, number>>;
@@ -103,9 +103,7 @@ export interface AppSidebarProps {
 }
 
 const STORAGE_KEY = 'appSidebarCollapsed';
-const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [
-  { id: 'workspace-settings', label: '워크스페이스 설정', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
-];
+const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [];
 
 function readInitialCollapsed(defaultValue: boolean): boolean {
   if (typeof window === 'undefined') return defaultValue;

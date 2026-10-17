@@ -265,8 +265,28 @@ describe('InboxPanel', () => {
     );
     expect(within(allowedRow).getByText('VOC-0123')).toBeInTheDocument();
     expect(within(allowedRow).getByText('Could not submit the form')).toBeInTheDocument();
+    expect(within(allowedRow).getByText('VOC-0123')).toHaveClass(
+      'font-mono',
+      'text-caption',
+      'text-text-muted',
+    );
     expect(within(unavailableRow).getByText('접근할 수 없는 항목')).toBeInTheDocument();
     expect(within(unavailableRow).queryByText('Could not submit the form')).not.toBeInTheDocument();
+  });
+
+  it('renders a raw capability key with its shared display label', async () => {
+    installNotificationFetch([
+      makeNotification({
+        event_type: 'permission_request.submitted',
+        subject_type: 'permission_request',
+        summary: 'workspace.admin',
+      }),
+    ]);
+    renderInbox();
+
+    const row = await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
+    expect(row).toHaveTextContent('워크스페이스 관리자 권한');
+    expect(row).not.toHaveTextContent('workspace.admin');
   });
 
   it.each([

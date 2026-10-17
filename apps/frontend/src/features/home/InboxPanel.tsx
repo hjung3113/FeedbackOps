@@ -1,4 +1,4 @@
-import type { NotificationDto } from '@fops/shared';
+import { type NotificationDto, isCapability } from '@fops/shared';
 import {
   Button,
   SkeletonRows,
@@ -24,6 +24,7 @@ import {
   markNotificationRead,
   notificationsQueryKey,
 } from '@/lib/api';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import { formatRelativeTime } from '@/lib/format/datetime';
 
@@ -59,6 +60,10 @@ export function notificationTarget(notification: NotificationDto): string | null
 
 function reportMutationError(error: ApiError): void {
   toast.error(mapUnknownError(error).message);
+}
+
+function notificationSummary(summary: string): string {
+  return isCapability(summary) ? getCapabilityDisplayLabel(summary) : summary;
 }
 
 export function InboxPanel(): React.ReactElement {
@@ -223,13 +228,17 @@ function NotificationRow({
           <span className="shrink-0 text-caption font-medium tracking-wide text-text-muted">
             {HOME_INBOX_COPY.categories[notification.subject_type]}
           </span>
-          <span className="truncate text-sm text-text-primary">{notification.summary}</span>
+          <span className="truncate text-sm text-text-primary">
+            {notificationSummary(notification.summary)}
+          </span>
         </span>
         {notification.subject_ref ? (
           <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
             {notification.subject_ref.visibility_state === 'allowed' ? (
               <>
-                <span className="shrink-0 font-mono">{notification.subject_ref.display_id}</span>
+                <span className="shrink-0 font-mono text-caption text-text-muted">
+                  {notification.subject_ref.display_id}
+                </span>
                 <span className="truncate">{notification.subject_ref.title}</span>
               </>
             ) : (
