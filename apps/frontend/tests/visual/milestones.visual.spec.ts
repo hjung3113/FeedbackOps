@@ -81,7 +81,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
     await expect(page.getByText('이 Milestone의 목적')).toBeVisible();
-    await expect(page.getByText('Released 0/1', { exact: true })).toBeVisible();
+    await expect(
+      page.getByTestId('milestone-detail-scroll').getByText('Released 0/1', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText('FIN-181')).toBeVisible();
     // #675: panel section labels follow the Korean chrome policy (Evidence stays English).
     for (const label of ['요약', 'Evidence', '이력']) {
