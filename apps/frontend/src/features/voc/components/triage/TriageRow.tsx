@@ -23,7 +23,6 @@ import { ReporterStatusBadge, SeverityIndicator, UnassignedBadge, cn } from '@fo
 import { useId } from 'react';
 import type * as React from 'react';
 
-import { formatSameManagedSystemVocCount } from '@/lib/copy/voc';
 import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 
 // ---------------------------------------------------------------------------
@@ -40,6 +39,8 @@ export interface TriageRowProps {
   onSelect: () => void;
   className?: string;
   showPostponedMarker?: boolean;
+  /** Neutralizes the unassigned cue in the Triage unassigned tab only. */
+  unassignedBadgeTone?: 'danger' | 'neutral';
 }
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,7 @@ export function TriageRow({
   onSelect,
   className,
   showPostponedMarker = true,
+  unassignedBadgeTone,
 }: TriageRowProps): React.ReactElement {
   const metaId = useId();
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
@@ -136,19 +138,7 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <UnassignedBadge />
-            </>
-          )}
-
-          {voc.similar_count > 0 && (
-            <>
-              <span
-                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
-                aria-hidden="true"
-              />
-              <span className="text-text-muted">
-                {formatSameManagedSystemVocCount(voc.similar_count)}
-              </span>
+              <UnassignedBadge tone={unassignedBadgeTone ?? 'danger'} />
             </>
           )}
         </div>

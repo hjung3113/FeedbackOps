@@ -118,6 +118,7 @@ function AllowedTaskLink({
   return (
     <div data-testid="linked-task-allowed">
       <LinkedEntityTrail
+        nodeIconClassName="font-medium"
         nodes={[
           {
             type: 'task',
@@ -202,6 +203,7 @@ function AllowedFindingLink({
   return (
     <div data-testid="linked-finding-allowed">
       <LinkedEntityTrail
+        nodeIconClassName="font-medium"
         nodes={[
           {
             type: 'finding',
@@ -307,7 +309,7 @@ function FollowUpTrail({
   return (
     <div className="flex flex-col gap-2" data-testid="voc-follow-up-trail">
       {trail.links.length === 0 && trail.cluster && (
-        <LinkedEntityTrail nodes={[node(trail.cluster)]} />
+        <LinkedEntityTrail nodeIconClassName="font-medium" nodes={[node(trail.cluster)]} />
       )}
       {trail.links.map((link) => {
         if (link.visibility_state === 'hidden') return null;
@@ -337,7 +339,7 @@ function FollowUpTrail({
             key={link.id}
             aria-label={`${link.source_summary?.display_id ?? ''} → ${link.target_summary?.display_id ?? ''}`}
           >
-            <LinkedEntityTrail nodes={summaries.map(node)} />
+            <LinkedEntityTrail nodeIconClassName="font-medium" nodes={summaries.map(node)} />
           </section>
         );
       })}

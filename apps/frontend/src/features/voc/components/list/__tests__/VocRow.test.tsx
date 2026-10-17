@@ -282,16 +282,14 @@ describe('<VocRow>', () => {
     expect(screen.getByRole('row').className).toContain('opacity-60');
   });
 
-  it('announces unspecified severity when severity is null', () => {
+  it('omits the standalone severity glyph when severity is null and keeps the neutral stripe', () => {
     const vocNoSeverity: VocListItem = { ...BASE_VOC, severity: null };
     const { container } = render(
       <VocRow voc={vocNoSeverity} selected={false} onSelect={onSelect} managedSystem={null} />,
     );
-    // SeverityIndicator renders with data-severity attribute
-    const indicator = container.querySelector('[data-severity]');
-    expect(indicator).not.toBeNull();
-    expect(screen.getByLabelText('심각도 미지정')).toBeInTheDocument();
-    expect(screen.queryByLabelText('low')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-severity]')).toBeNull();
+    expect(screen.queryByLabelText('심각도 미지정')).not.toBeInTheDocument();
+    expect(screen.getByTestId('voc-row-left-bar')).toHaveClass('bg-border-strong');
   });
 
   it('renders relative time in trailing area', () => {

@@ -151,16 +151,8 @@ export function FullDetailView({
           )}
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
-            {/* Relocated metadata strip — severity/managed-system/AA/source-context
-                chips moved out of the title block per .review/title-reference.png */}
-            <IdentityMetadataStrip
-              voc={voc}
-              analyticsAreaName={
-                voc.analytics_area_id != null
-                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
-                  : null
-              }
-            />
+            {/* Managed System and source context remain visible below the body. */}
+            <IdentityMetadataStrip voc={voc} />
           </div>
           {!isReporterArm && (
             <NoFollowUpSection

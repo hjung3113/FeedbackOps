@@ -8,6 +8,7 @@
 //   - VocDetailPanel is mounted when `selected` is set
 
 import { ApiError } from '@/lib/api/types';
+import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { listVocsQuerySchema } from '@fops/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
@@ -652,11 +653,18 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC 수신함');
+    const panel = await screen.findByRole('heading', { name: 'VOC 수신함', level: 4 });
     // #562: specs/voc.md R-VOC-INBOX — nothing requestable -> blocked_not_requestable.
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'blocked_not_requestable');
     expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
     expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+    expect(screen.queryByPlaceholderText(LIST_SEARCH_PLACEHOLDER)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '정렬' })).not.toBeInTheDocument();
+    const createLink = screen.getByRole('link', { name: 'VOC 생성' });
+    expect(createLink).toHaveClass('bg-surface-raised');
+    expect(createLink).not.toHaveClass('bg-accent-primary');
   });
 
   it('shows the Korean denied reason and links to 내 VOC for a 403', async () => {
@@ -684,6 +692,16 @@ describe('useInboxRoute', () => {
     expect(myVocsLink).toHaveAttribute('data-search', JSON.stringify({ view: 'my' }));
   });
 
+  it('uses a neutral unassigned badge in the Inbox unassigned tab', async () => {
+    useVocListMock.mockReturnValue(pagesResult(MOCK_VOC_ITEMS));
+    searchState = { view: 'inbox', tab: 'unassigned' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const badge = await screen.findAllByText('담당자 없음');
+    expect(badge[0]).toHaveClass('bg-surface-canvas', 'text-text-muted');
+    expect(badge[0]).not.toHaveClass('bg-accent-danger/10', 'text-accent-danger');
+  });
+
   it('adds a request-access CTA only when the Inbox error provides the permission', async () => {
     useVocListMock.mockReturnValue({
       data: undefined,
@@ -698,7 +716,7 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC 수신함');
+    const panel = await screen.findByRole('heading', { name: 'VOC 수신함', level: 4 });
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'request_access');
     const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
     expect(screen.getAllByRole('button', { name: '권한 요청하기' })).toHaveLength(1);

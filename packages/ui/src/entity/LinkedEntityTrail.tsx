@@ -48,9 +48,10 @@ export type EntityNodeRef =
 export interface LinkedEntityTrailProps {
   nodes: EntityNodeRef[];
   className?: string;
+  nodeIconClassName?: string;
 }
 
-export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) {
+export function LinkedEntityTrail({ nodes, className, nodeIconClassName }: LinkedEntityTrailProps) {
   if (nodes.length === 0) {
     return (
       <div className={cn('flex items-center gap-2', className)}>
@@ -79,6 +80,7 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
             <EntityIconBadge
               type={iconType}
               size={22}
+              {...(nodeIconClassName !== undefined ? { className: nodeIconClassName } : {})}
               aria-label={node.display_id ?? node.id}
             />
             {(node.title ?? node.meta) && (

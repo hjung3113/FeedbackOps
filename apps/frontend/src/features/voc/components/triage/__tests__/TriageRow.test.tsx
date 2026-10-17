@@ -51,20 +51,17 @@ describe('TriageRow', () => {
     expect(screen.getByText('Analytics Area 미지정')).toBeInTheDocument();
   });
 
-  it('uses danger tone only for missing owner while area and similar count stay neutral', () => {
+  it('uses danger tone only for missing owner and keeps the area while omitting the row peer count', () => {
     render(
       <TriageRow voc={{ ...BASE_VOC, similar_count: 3 }} selected={false} onSelect={vi.fn()} />,
     );
 
     const owner = screen.getByText('담당자 없음');
     expect(owner).toHaveClass('text-accent-danger', 'bg-accent-danger/10');
-    for (const text of ['Analytics Area 미지정', '같은 Managed System의 VOC 3건']) {
-      const item = screen.getByText(text);
-      expect(item).toHaveClass('text-text-muted');
-      expect(item).not.toHaveClass('text-text-danger');
-      expect(item).not.toHaveClass('text-text-warning');
-      expect(item).not.toHaveClass('text-accent-primary');
-    }
+    const area = screen.getByText('Analytics Area 미지정');
+    expect(area).toHaveClass('text-text-muted');
+    expect(area).not.toHaveClass('text-text-danger', 'text-text-warning', 'text-accent-primary');
+    expect(screen.queryByText('같은 Managed System의 VOC 3건')).not.toBeInTheDocument();
   });
 
   it('describes postponed status, missing owner and missing Analytics Area on focus', () => {

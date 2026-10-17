@@ -1,6 +1,5 @@
 // IdentitySection — shared title block + status pill + reporter/time meta line.
-// Verbose badge stack + FieldRow '제출자' / '제출 시각' relocated to a single
-// compact metadata strip below the body card.
+// Managed System and source context live in the compact strip below the body.
 // Reference: docs/design-prototype/screen-voc.jsx overview panel title.
 
 import { useMe } from '@/lib/auth/useMe';
@@ -8,13 +7,7 @@ import { GLOSSARY } from '@/lib/copy/glossary';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { formatRelativeTime } from '@/lib/format/datetime';
 import type { VocDetailEnvelope } from '@fops/shared';
-import {
-  ManagedSystemPill,
-  OutlineBadge,
-  PanelTitleBlock,
-  ReporterStatusBadge,
-  SeverityBadge,
-} from '@fops/ui';
+import { ManagedSystemPill, OutlineBadge, PanelTitleBlock, ReporterStatusBadge } from '@fops/ui';
 import type * as React from 'react';
 
 // ── Source context labels ────────────────────────────────────────────────────
@@ -68,42 +61,21 @@ export function IdentitySection({
 }
 
 // ── Metadata strip ───────────────────────────────────────────────────────────
-// Compact chip array (severity / managed-system / analytics-area / source-context).
-// Rendered by VocDetailPanel immediately below the DescriptionSection so the
-// information stays visible but no longer competes with the title.
+// Compact chip array (managed-system / source-context). Severity stays in the
+// row badge and Triage block; Analytics Area stays in Triage details.
 export interface IdentityMetadataStripProps {
   voc: VocDetailEnvelope;
-  analyticsAreaName?: string | null | undefined;
 }
 
-export function IdentityMetadataStrip({
-  voc,
-  analyticsAreaName,
-}: IdentityMetadataStripProps): React.ReactElement | null {
+export function IdentityMetadataStrip({ voc }: IdentityMetadataStripProps): React.ReactElement {
   const managedSystem = useManagedSystem(voc.primary_managed_system_id);
 
   const sourceContextLabel = SOURCE_CONTEXT_LABELS[voc.source_context] ?? voc.source_context;
 
-  const hasSeverity = voc.severity != null;
-  // `undefined` means the reporter arm redacted the field (#337), not "no area".
-  // `!== null` alone would let a redacted envelope render an empty chip.
-  const hasAnalyticsArea = voc.analytics_area_id != null;
-  const hasManagedSystem = managedSystem !== null;
-  const severity = voc.severity;
-  const analyticsAreaId = voc.analytics_area_id;
-
-  if (!hasSeverity && !hasManagedSystem && !hasAnalyticsArea) {
-    // Source context always renders, so we always have at least one chip.
-  }
-
   return (
     <div className="flex flex-wrap gap-2 mt-3 text-xs">
-      {hasSeverity && severity != null && <SeverityBadge severity={severity} />}
-      {hasManagedSystem && (
+      {managedSystem !== null && (
         <ManagedSystemPill name={managedSystem.name} mark={managedSystem.mark} />
-      )}
-      {hasAnalyticsArea && analyticsAreaId !== null && (
-        <OutlineBadge>{analyticsAreaName ?? 'Analytics Area'}</OutlineBadge>
       )}
       <OutlineBadge>{sourceContextLabel}</OutlineBadge>
     </div>

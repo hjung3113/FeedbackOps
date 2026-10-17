@@ -8,6 +8,8 @@ export const SEMANTIC_VOC_RECOMMENDATIONS_NOTICE =
   '자동 클러스터링은 추천만 합니다. 확정이 필요합니다.';
 export const VOC_TRIAGE_SUMMARY_SECTION_LABEL = '요약 · 변경 사항';
 export const VOC_DETAIL_BODY_LABEL = '본문';
+export const VOC_SEVERITY_DISCLAIMER =
+  '심각도는 검토 후 운영팀이 결정합니다. 직접 설정할 수 없습니다.';
 
 // #821: one string for every "server search returned nothing" surface
 // (inbox list empty state and the Evidence VOC picker listbox).

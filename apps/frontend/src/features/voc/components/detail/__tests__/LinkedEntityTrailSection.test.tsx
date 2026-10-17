@@ -144,6 +144,11 @@ describe('<LinkedEntityTrailSection>', () => {
   it('renders an allowed Task only for an operator view', () => {
     render(<LinkedEntityTrailSection links={[allowedTaskLink()]} isReporterContext={false} />);
     expect(screen.getByTestId('linked-task-allowed')).toHaveTextContent('운영자 전용 Task');
+    const nodeIcon = screen
+      .getByTestId('linked-task-allowed')
+      .querySelector('[data-entity-type="task"]');
+    expect(nodeIcon).toHaveClass('font-medium');
+    expect(nodeIcon).not.toHaveClass('font-semibold');
   });
 
   it('opens the linked Task from an allowed trail node', async () => {

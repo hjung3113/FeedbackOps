@@ -18,13 +18,15 @@ import { fetchNavCounts } from '@/lib/api/nav';
 import { fetchCapabilityScope } from '@/lib/api/permissions';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
+import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { NavCounts } from '@/lib/layout/AppSidebar';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
-import { PermissionBlockedPanel } from '@fops/ui';
+import { Button, PermissionBlockedPanel } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { ArrowRight, Plus } from 'lucide-react';
 import type * as React from 'react';
 import { useCallback, useState } from 'react';
 import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
@@ -210,7 +212,23 @@ export function TriageRoute(): React.ReactElement {
           ? PERMISSION_BLOCKED_REASONS.vocTriageManagedSystem
           : PERMISSION_BLOCKED_REASONS.vocTriage;
     return (
-      <div className="flex items-center justify-center h-full p-6">
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
+        <div className="flex items-center gap-2">
+          <Button asChild variant="secondary" size="sm" spacing="compact">
+            <Link to="/vocs" search={{ action: 'create' }}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {createLabel('VOC')}
+            </Link>
+          </Button>
+          {panelState === 'blocked_not_requestable' && (
+            <Button asChild variant="secondary" size="sm" spacing="compact">
+              <Link to="/vocs" search={{ view: 'my' }}>
+                {GLOSSARY.myVocs}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          )}
+        </div>
         {panelState === 'request_access' && capability !== undefined ? (
           <RequestAccessButton
             capability={capability}
