@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { listPageSchema } from '../list-page.js';
+import { reporterFacingStatusEnumSchema } from '../vocs/list-item.js';
 
 import { taskStatusSchema } from './status.js';
 
@@ -82,6 +83,9 @@ export const taskDetailSourceSchema = z
             id: z.string().uuid(),
             display_id: z.string(),
             title: z.string(),
+            // Reporter-facing state machine, separate from Task status (ADR-0005);
+            // only the allowed variant carries it.
+            reporter_facing_status: reporterFacingStatusEnumSchema,
           })
           .strict(),
         z.object({ visibility_state: z.literal('summary_visible') }).strict(),

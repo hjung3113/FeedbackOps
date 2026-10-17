@@ -25,19 +25,16 @@ import { useTaskRequestDecision } from './useTaskRequestDecision';
 import { useTaskRequestPanelController } from './useTaskRequestPanelController';
 
 // ADR-0057 A2 amendment: keep panel navigation in Korean and preserve domain nouns.
-export function buildTaskRequestSections(
-  showDecisionSummary: boolean,
-  hasFindingSource: boolean,
-): PanelSection[] {
+export function buildTaskRequestSections(showDecisionSummary: boolean): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
     showDecisionSummary
       ? { id: 'outcome', label: '결정 요약' }
       : { id: 'decision', label: TASK_REQUEST_REVIEW_DECISION_LABEL },
-    hasFindingSource ? { id: 'source', label: '출처' } : null,
+    { id: 'source', label: '출처' },
     { id: 'properties', label: '속성' },
     { id: 'audit', label: '이력' },
-  ].filter((section): section is PanelSection => section !== null);
+  ];
 }
 
 interface TaskRequestPanelProps {
@@ -95,7 +92,7 @@ export function TaskRequestPanel({
       ].filter((id): id is string => id !== undefined),
     ),
   ];
-  const sections = buildTaskRequestSections(showDecisionSummary, item.source_type === 'finding');
+  const sections = buildTaskRequestSections(showDecisionSummary);
 
   // Task Request has no impact field; omit the prototype's status-derived row (#585).
   return (
@@ -154,9 +151,7 @@ export function TaskRequestPanel({
           />
         )}
 
-        {item.source_type === 'finding' && (
-          <TaskRequestSourceSection item={item} sourceFinding={sourceFindingQuery.data} />
-        )}
+        <TaskRequestSourceSection item={item} sourceFinding={sourceFindingQuery.data} />
 
         <TaskRequestPropertiesSection
           item={item}

@@ -21,7 +21,7 @@ const cases = [
   },
   {
     panel: 'Task Request',
-    sections: buildTaskRequestSections(false, true),
+    sections: buildTaskRequestSections(false),
     expected: [
       ['overview', '요약'],
       ['decision', '검토 결정'],
@@ -32,10 +32,11 @@ const cases = [
   },
   {
     panel: 'Task Request outcome',
-    sections: buildTaskRequestSections(true, false),
+    sections: buildTaskRequestSections(true),
     expected: [
       ['overview', '요약'],
       ['outcome', '결정 요약'],
+      ['source', '출처'],
       ['properties', '속성'],
       ['audit', '이력'],
     ],

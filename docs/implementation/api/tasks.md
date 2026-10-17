@@ -273,7 +273,9 @@ source resolution:
     (finding, task_request, requested_task) when present; for a Finding-sourced
     request, prefer its own source Finding (#773), otherwise the newest active link
   - source.voc is the backend's VOC visibility verdict (#378), never synthesized
-    by the FE: allowed = { visibility_state, id, display_id, title };
+    by the FE: allowed = { visibility_state, id, display_id, title,
+    reporter_facing_status } (the VOC's reporter-facing status, shown in Task
+    detail as a separate fact, never as Task status; ADR-0005, #1242);
     summary_visible and denied = { visibility_state } only; hidden = the key is
     omitted. The verdict is the VOC detail read decision, so an actor whose
     VOC detail read would be 404 (including a non-reporter Admin with an explicit

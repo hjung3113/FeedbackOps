@@ -560,3 +560,20 @@ describe('TaskRequestPanel next actions', () => {
     expect(findingDisplayId).toHaveClass('whitespace-nowrap', 'shrink-0');
   });
 });
+
+// Regression for #1243: the panel itself must mount the source section for VOC /
+// VOC Cluster origins; the old Finding-only guard hid these sources in the panel
+// while section-level tests still passed.
+describe('TaskRequestPanel source section mounting', () => {
+  it.each(['voc', 'voc_cluster'] as const)(
+    'mounts the payload source section for %s requests',
+    async (sourceType) => {
+      renderInRouter({ ...request, source_type: sourceType });
+
+      const heading = await screen.findByRole('heading', {
+        name: `출처 ${sourceType === 'voc' ? 'VOC' : 'VOC Cluster'}`,
+      });
+      expect(heading.closest('section')).toHaveAttribute('data-anchor', 'source');
+    },
+  );
+});

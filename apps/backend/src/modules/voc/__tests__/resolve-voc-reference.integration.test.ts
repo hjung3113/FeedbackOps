@@ -144,6 +144,7 @@ describe.skipIf(!runIntegration)('resolveVocReference mapping (#378)', () => {
       id: voc.id,
       display_id: voc.displayId,
       title,
+      reporter_facing_status: 'received',
     });
   });
 
@@ -164,6 +165,7 @@ describe.skipIf(!runIntegration)('resolveVocReference mapping (#378)', () => {
       id: voc.id,
       display_id: voc.displayId,
       title,
+      reporter_facing_status: 'received',
     });
   });
 
@@ -236,6 +238,7 @@ describe.skipIf(!runIntegration)('resolveVocReference mapping (#378)', () => {
       id: voc.id,
       display_id: voc.displayId,
       title,
+      reporter_facing_status: 'received',
     });
   });
 

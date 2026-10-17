@@ -13,6 +13,7 @@
 // ETag header: weak W/"<voc.updated_at-ISO>". ADR-0031 disables conditional
 // detail 304 responses because similarity is peer-derived.
 
+import type { ReporterFacingStatusEnum } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { EntityLinksService } from '../entity-links/index.js';
 import type { CheckService } from '../permissions/check-service.js';
@@ -42,7 +43,13 @@ export interface ReadActorContext {
  * duplicated permission predicates (see #423 regression).
  */
 export type VocReferenceResolution =
-  | { visibility_state: 'allowed'; id: string; display_id: string; title: string }
+  | {
+      visibility_state: 'allowed';
+      id: string;
+      display_id: string;
+      title: string;
+      reporter_facing_status: ReporterFacingStatusEnum;
+    }
   | { visibility_state: 'summary_visible' }
   | { visibility_state: 'denied' }
   | { visibility_state: 'hidden' };
