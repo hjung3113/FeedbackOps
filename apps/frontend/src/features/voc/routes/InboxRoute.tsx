@@ -338,6 +338,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const deniedMsScoped =
     isPermissionDenied(listError) &&
     typeof listError.envelope.requestable_permission?.managed_system_id === 'string';
+  const inboxPermissionBlocked = view === 'inbox' && isPermissionDenied(listError);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -428,63 +429,76 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const list = (
     <>
       <ListToolbar
-        {...(view === 'inbox'
+        {...(view === 'inbox' && !inboxPermissionBlocked
           ? {
               tabs: INBOX_TABS,
               activeTab,
               onTabChange: handleTabChange,
             }
-          : { title: GLOSSARY.myVocs })}
+          : { title: view === 'my' ? GLOSSARY.myVocs : 'VOC 수신함' })}
         action={
-          <div className="flex items-center gap-2">
-            {/* #821: server-side text search on GET /vocs. The box is a local
-                draft; useCommittedSearchDraft writes the URL q on debounce or
-                Enter/blur (#864). */}
-            <SearchInput
-              placeholder={LIST_SEARCH_PLACEHOLDER}
-              value={draft}
-              onValueChange={setDraft}
-              onCommit={commit}
-            />
-            <VocAreaFilterSelect
-              value={area}
-              managedSystemId={search.managedSystem}
-              onChange={handleAreaChange}
-            />
-            <ListFilterButton
-              categories={
-                view === 'my'
-                  ? FILTER_CATEGORIES.filter((category) => category.key !== 'filter.severity')
-                  : FILTER_CATEGORIES
-              }
-              values={currentFilters}
-              onChange={handleFiltersChange}
-            />
-            <ListSortButton
-              options={
-                view === 'my'
-                  ? SORT_OPTIONS.filter((option) => !option.value.startsWith('severity:'))
-                  : SORT_OPTIONS
-              }
-              value={currentSort}
-              defaultValue={DEFAULT_SORT}
-              onChange={handleSortChange}
-            />
-            {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
-            <Button asChild variant="primary" size="sm" spacing="compact">
+          inboxPermissionBlocked ? (
+            <Button asChild variant="secondary" size="sm" spacing="compact">
               <Link to="/vocs" search={{ action: 'create' }}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {createLabel('VOC')}
               </Link>
             </Button>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {/* #821: server-side text search on GET /vocs. The box is a local
+                draft; useCommittedSearchDraft writes the URL q on debounce or
+                Enter/blur (#864). */}
+              <SearchInput
+                placeholder={LIST_SEARCH_PLACEHOLDER}
+                value={draft}
+                onValueChange={setDraft}
+                onCommit={commit}
+              />
+              <VocAreaFilterSelect
+                value={area}
+                managedSystemId={search.managedSystem}
+                onChange={handleAreaChange}
+              />
+              <ListFilterButton
+                categories={
+                  view === 'my'
+                    ? FILTER_CATEGORIES.filter((category) => category.key !== 'filter.severity')
+                    : FILTER_CATEGORIES
+                }
+                values={currentFilters}
+                onChange={handleFiltersChange}
+              />
+              <ListSortButton
+                options={
+                  view === 'my'
+                    ? SORT_OPTIONS.filter((option) => !option.value.startsWith('severity:'))
+                    : SORT_OPTIONS
+                }
+                value={currentSort}
+                defaultValue={DEFAULT_SORT}
+                onChange={handleSortChange}
+              />
+              {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
+              <Button asChild variant="primary" size="sm" spacing="compact">
+                <Link to="/vocs" search={{ action: 'create' }}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  {createLabel('VOC')}
+                </Link>
+              </Button>
+            </div>
+          )
         }
       />
-      <ActiveFilterBar
-        items={area === undefined ? [] : [{ key: 'area', label: areaLabel, onRemove: removeArea }]}
-        onClearAll={removeArea}
-        className="mx-4 my-2"
-      />
+      {!inboxPermissionBlocked && (
+        <ActiveFilterBar
+          items={
+            area === undefined ? [] : [{ key: 'area', label: areaLabel, onRemove: removeArea }]
+          }
+          onClearAll={removeArea}
+          className="mx-4 my-2"
+        />
+      )}
       {outOfScopeBanner}
       {isPermissionDenied(listError) ? (
         <div className="m-4 space-y-3">
@@ -521,8 +535,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               reason={PERMISSION_BLOCKED_REASONS.vocInbox}
             />
           )}
-          {view === 'inbox' &&
-          typeof listError.envelope.requestable_permission?.managed_system_id !== 'string' ? (
+          {view === 'inbox' && listError.envelope.requestable_permission === undefined ? (
             <Button
               asChild
               variant="subtle"
@@ -551,6 +564,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
             selectedId={search.selected ?? null}
             onSelect={handleRowSelect}
             view={view}
+            {...(view === 'inbox' && activeTab === 'unassigned'
+              ? { unassignedBadgeTone: 'neutral' as const }
+              : {})}
             searching={isSearching}
             areaFiltered={view === 'inbox' && area !== undefined}
             areaLabel={areaLabel}

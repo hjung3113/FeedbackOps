@@ -17,4 +17,14 @@ describe('UnassignedBadge', () => {
 
     expect(screen.getByText('검토자 없음')).toBeInTheDocument();
   });
+
+  it('uses a neutral tone when requested', () => {
+    render(<UnassignedBadge tone="neutral" />);
+
+    expect(screen.getByText('담당자 없음')).toHaveClass('bg-surface-canvas', 'text-text-muted');
+    expect(screen.getByText('담당자 없음')).not.toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
+  });
 });

@@ -9,8 +9,11 @@ import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { TriageRoute } from '@/features/voc/routes/TriageRoute';
 import { VOC_DEFAULT_VIEW } from '@/features/voc/routes/voc-search';
 import type { VocSearch } from '@/features/voc/routes/voc-search';
+import { fetchNavCounts } from '@/lib/api/nav';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
 import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
 
@@ -21,6 +24,22 @@ export function VocRouteShell() {
   // This works in both the file-route context and test harnesses that mount
   // this component as the route component.
   const search = useSearch({ strict: false }) as VocSearch;
+  const navCountsQuery = useQuery({
+    queryKey: [...NAV_COUNTS_QUERY_KEY, search.managedSystem] as const,
+    queryFn: ({ signal }) =>
+      fetchNavCounts({
+        signal,
+        ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+      }),
+    enabled: search.action === 'create',
+    retry: false,
+  });
+  // Match AppRail: while counts are unavailable, keep the Inbox destination;
+  // an omitted key in a settled counts response means this actor has no Inbox.
+  const createBackView =
+    navCountsQuery.data === undefined || navCountsQuery.data.counts['voc.inbox'] !== undefined
+      ? 'inbox'
+      : 'my';
 
   // Per-view shell selection. spec voc.md §2 + ADR-0020 §taxonomy lock.
   if (search.action === 'create') {
@@ -32,11 +51,11 @@ export function VocRouteShell() {
             <div className="flex items-center gap-2">
               <Link
                 to="/vocs"
-                search={{ view: 'inbox' }}
+                search={{ view: createBackView }}
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-text-muted hover:bg-surface-card hover:text-text-primary"
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                <span>{GLOSSARY.inbox}</span>
+                <span>{createBackView === 'inbox' ? GLOSSARY.inbox : GLOSSARY.myVocs}</span>
               </Link>
               <span className="inline-flex items-center gap-1 rounded-md bg-accent-primary/10 px-2 py-1 text-xs font-medium text-accent-primary">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" aria-hidden />
@@ -46,7 +65,7 @@ export function VocRouteShell() {
           ),
         }}
       >
-        <CreateRoute />
+        <CreateRoute backView={createBackView} />
       </PageShell>
     );
   }

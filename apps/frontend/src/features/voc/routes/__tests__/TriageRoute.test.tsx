@@ -3,6 +3,7 @@
 // REV-1 #9: user role without voc.triage capability gets PermissionBlockedPanel.
 // TDD RED: written before TriageRoute.tsx implementation exists.
 
+import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
@@ -33,12 +34,14 @@ vi.mock('@tanstack/react-router', () => ({
     children,
     to,
     className,
+    search,
   }: {
     children: React.ReactNode;
     to: string;
     className?: string;
+    search?: unknown;
   }) => (
-    <a href={to} className={className}>
+    <a href={to} data-search={JSON.stringify(search)} className={className}>
       {children}
     </a>
   ),
@@ -122,11 +125,13 @@ vi.mock('@fops/ui', async (importOriginal) => {
     PermissionBlockedPanel: ({
       category,
       reason,
+      state,
     }: {
       category: string;
       reason?: string;
+      state?: string;
     }) => (
-      <div data-testid="permission-blocked-panel">
+      <div data-testid="permission-blocked-panel" data-state={state}>
         <span>{category}</span>
         {reason && <span>{reason}</span>}
       </div>
@@ -227,6 +232,10 @@ describe('TriageRoute', () => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Triage VOC 2').length).toBeGreaterThanOrEqual(1);
     });
+    expect(screen.getAllByText('담당자 없음')[0]).toHaveClass(
+      'bg-surface-canvas',
+      'text-text-muted',
+    );
   });
 
   it('shows the whole queue total and both loaded tab counts', async () => {
@@ -408,6 +417,7 @@ describe('TriageRoute', () => {
   // PermissionBlockedPanel instead of the queue. The gate is now driven by
   // the authoritative usePermissionCheck decision, not by role_level.
   it('[#9] no voc.triage capability: renders PermissionBlockedPanel instead of the queue', async () => {
+    searchState = { view: 'triage', managedSystem: 'ms-1' };
     vi.mocked(usePermissionCheck).mockReturnValue({
       isPending: false,
       isError: false,
@@ -425,6 +435,17 @@ describe('TriageRoute', () => {
       // The component is from @fops/ui; check for its container testid or blocked text.
       expect(screen.queryByText('Triage VOC 1')).not.toBeInTheDocument();
     });
+
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /Analytics Area/ })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(LIST_SEARCH_PLACEHOLDER)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '정렬' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'VOC 생성' })).toHaveClass('bg-surface-raised');
+    expect(screen.getByRole('link', { name: '내 VOC' })).toHaveAttribute(
+      'data-search',
+      JSON.stringify({ view: 'my' }),
+    );
 
     // The queue items must NOT be rendered for user-role actor
     expect(screen.queryByText('Triage VOC 1')).not.toBeInTheDocument();

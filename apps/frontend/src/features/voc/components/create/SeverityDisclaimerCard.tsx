@@ -1,31 +1,20 @@
-// SeverityDisclaimerCard — static info card explaining that severity is set
-// by ops staff, not by the reporter.
+// SeverityDisclaimerCard — one muted line explaining that ops staff sets
+// severity after review.
 
-import * as React from 'react';
-import { Card, CardContent, cn } from '@fops/ui';
-import { Shield } from 'lucide-react';
+import { VOC_SEVERITY_DISCLAIMER } from '@/lib/copy/voc';
+import { cn } from '@fops/ui';
+import type * as React from 'react';
 
 export interface SeverityDisclaimerCardProps {
   className?: string;
 }
 
-export function SeverityDisclaimerCard({ className }: SeverityDisclaimerCardProps): React.ReactElement {
+export function SeverityDisclaimerCard({
+  className,
+}: SeverityDisclaimerCardProps): React.ReactElement {
   return (
-    <Card
-      padding="compact"
-      className={cn(
-        // oxlint-disable-next-line shadcn/no-restyle -- owner-approved 5% primary tint distinguishes the severity ownership notice
-        'bg-accent-primary/5',
-        className,
-      )}
-    >
-      <CardContent padding="none">
-        <span className="sr-only">심각도 안내</span>
-        <p className="text-xs leading-relaxed text-text-secondary">
-          <Shield className="mr-1 inline h-3 w-3 align-text-bottom text-accent-primary" aria-hidden />
-          심각도는 검토 후 운영팀이 결정합니다. 직접 설정할 수 없습니다.
-        </p>
-      </CardContent>
-    </Card>
+    <p className={cn('text-xs leading-relaxed text-text-muted', className)}>
+      {VOC_SEVERITY_DISCLAIMER}
+    </p>
   );
 }

@@ -131,6 +131,7 @@ export function TriageQueue({
               key={voc.id}
               voc={voc}
               showPostponedMarker={activeTab !== 'waiting'}
+              {...(activeTab === 'unassigned' ? { unassignedBadgeTone: 'neutral' as const } : {})}
               selected={voc.id === selectedId}
               onSelect={() => {
                 onSelect(voc.id);

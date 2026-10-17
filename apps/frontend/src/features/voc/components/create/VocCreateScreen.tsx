@@ -1,6 +1,6 @@
 // VocCreateScreen — two-column form for VOC creation.
 // C4+C5 of Slice 3 #19.
-// Left column: react-hook-form wired fields. Right column: reporter info + disclaimer.
+// Left column: react-hook-form wired fields. Right column: reporter and recommendation info.
 
 import type * as React from 'react';
 import { Link } from '@tanstack/react-router';
@@ -58,6 +58,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
     <div className="flex h-full flex-col">
       {/* Main two-column area */}
       <div className="flex-1 overflow-auto px-4 py-5 md:px-6">
+        <SeverityDisclaimerCard className="mb-4" />
         <div className="grid gap-6 lg:grid-cols-12">
           {/* Left column — single compact form card */}
           <form
@@ -245,7 +246,6 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
             <ReporterCard />
             <SemanticVocPanel form={form} />
             <SimilarVocPanel managedSystemId={selectedMs} />
-            <SeverityDisclaimerCard />
           </div>
         </div>
       </div>

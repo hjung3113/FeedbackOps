@@ -14,6 +14,7 @@
 // AppFrame test helpers mock the DetailPanelSlotContext so that
 // useDetailPanelSlot inside the shells does not throw.
 
+import { VOC_SEVERITY_DISCLAIMER } from '@/lib/copy/voc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -96,7 +97,7 @@ describe('vocSearchSchema', () => {
 // ---- Shell selection integration tests ----
 
 // Stub fetch: /me → 200 (authed) so beforeLoad in _authed does not redirect.
-function stubFetchMe() {
+function stubFetchMe(navCounts: Record<string, number> = { 'voc.inbox': 0 }) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.endsWith('/me')) {
@@ -113,6 +114,12 @@ function stubFetchMe() {
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       );
+    }
+    if (url.includes('/nav/counts')) {
+      return new Response(JSON.stringify({ counts: navCounts }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     }
     return new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
@@ -247,6 +254,39 @@ describe('/vocs route shell selection', () => {
     await waitFor(() => {
       expect(screen.getByText('새 VOC 작성')).toBeInTheDocument();
     });
+    const backLink = screen.getByRole('link', { name: '수신함' });
+    expect(backLink).toHaveAttribute('href', '/vocs?view=inbox');
+  });
+
+  test('places the severity help line below the create title and before the form', async () => {
+    stubFetchMe();
+    const { router, qc } = buildHarness({ initialPath: '/vocs?action=create' });
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const title = await screen.findByRole('heading', { name: '새 VOC 작성' });
+    const helpLine = await screen.findByText(VOC_SEVERITY_DISCLAIMER);
+    const formTitle = screen.getByRole('textbox', { name: '제목' });
+    expect(title.compareDocumentPosition(helpLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      helpLine.compareDocumentPosition(formTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  test('uses 내 VOC as the create back link when nav counts omit Inbox', async () => {
+    stubFetchMe({});
+    const { router, qc } = buildHarness({ initialPath: '/vocs?action=create' });
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const backLink = await screen.findByRole('link', { name: '내 VOC' });
+    expect(backLink).toHaveAttribute('href', '/vocs?view=my');
   });
 
   test('defaults to Inbox when no view param supplied', async () => {

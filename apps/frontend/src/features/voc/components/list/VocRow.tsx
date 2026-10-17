@@ -1,8 +1,8 @@
 /**
  * VocRow — single-select row for the VOC inbox list.
  *
- * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a severity
- * indicator lead, a title line (id · title), a meta line
+ * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a severity-colored
+ * left stripe, a title line (id · title), a meta line
  * (reporter-status badge · severity badge · managed system · area/"No area" ·
  * time · linked finding), and a trailing identity column (owner avatar /
  * shared unassigned badge + reporter avatar).
@@ -11,7 +11,7 @@
  * `--color-neon-lime`) plus a tinted row background — NOT a full ring. Mirrored here.
  *
  * Absent severity is reporter-hidden; null is operator-visible but unassigned.
- * Only the badge names a triaged row's severity; its indicators are decorative.
+ * The badge names severity while the left stripe supplies the row color.
  *
  * HOOK-IN-MAP NOTE: VocRow calls no data hooks. VocList lifts the managed-system,
  * actor (owner/reporter), and analytics-area lookups to single map queries and
@@ -27,7 +27,6 @@ import {
   ManagedSystemPill,
   ReporterStatusBadge,
   SeverityBadge,
-  SeverityIndicator,
   UnassignedBadge,
   UserAvatar,
 } from '@fops/ui';
@@ -66,6 +65,8 @@ export interface VocRowProps {
   permissionLimited?: boolean;
   /** Hides the internal unassigned-ownership cue in a reporter-only My VOCs row. */
   showOwnerMissing?: boolean;
+  /** Neutralizes the unassigned cue in the Inbox unassigned tab only. */
+  unassignedBadgeTone?: 'danger' | 'neutral';
   /**
    * Optional resolver for the MS pill — caller (VocList) calls useManagedSystem
    * per row and passes the result in. Decouples primitive from the hook.
@@ -90,6 +91,7 @@ export function VocRow({
   onSelect,
   permissionLimited,
   showOwnerMissing = true,
+  unassignedBadgeTone,
   managedSystem,
   owner,
   reporter,
@@ -142,13 +144,6 @@ export function VocRow({
         aria-hidden="true"
         className={cn('absolute left-0 top-0 bottom-0 w-row-accent rounded-r-sm', severityBarClass)}
       />
-
-      {/* LEAD: severity indicator. */}
-      <div className="flex items-center gap-3 shrink-0">
-        {voc.severity !== undefined && (
-          <SeverityIndicator severity={voc.severity} decorative={voc.severity !== null} />
-        )}
-      </div>
 
       {/* TITLE + META column */}
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
@@ -207,7 +202,7 @@ export function VocRow({
       {permissionLimited !== true && (
         <div className="flex items-center gap-2 shrink-0">
           {showOwnerMissing && ownerMissing ? (
-            <UnassignedBadge />
+            <UnassignedBadge tone={unassignedBadgeTone ?? 'danger'} />
           ) : owner !== null && owner !== undefined ? (
             <UserAvatar user={owner} size="sm" />
           ) : null}

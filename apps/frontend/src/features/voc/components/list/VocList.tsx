@@ -116,6 +116,8 @@ export interface VocListProps {
   onRetry?: () => void;
   /** Opens the route-owned VOC create flow from an empty list state. */
   onCreate?: () => void;
+  /** Neutralizes the unassigned cue for the Inbox unassigned tab. */
+  unassignedBadgeTone?: 'danger' | 'neutral';
 }
 
 const SKELETON_COUNT = 10;
@@ -155,6 +157,7 @@ function VocListContent({
   areaLabel,
   onRetry,
   onCreate,
+  unassignedBadgeTone,
 }: VocListProps) {
   const msMap = useManagedSystemMap();
   const areaMap = useAnalyticsAreaMap();
@@ -245,6 +248,7 @@ function VocListContent({
           reporter: actorMap[voc.reporter_id] ?? null,
           areaName:
             voc.analytics_area_id !== null ? (areaMap[voc.analytics_area_id] ?? null) : null,
+          ...(unassignedBadgeTone !== undefined ? { unassignedBadgeTone } : {}),
         };
 
         return view === 'my' ? (
