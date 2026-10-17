@@ -91,3 +91,14 @@ it.each([
   expect(screen.getByText(expected)).toBeInTheDocument();
   expect(screen.queryByText('범위 내 권한 필요')).not.toBeInTheDocument();
 });
+
+it('renders undecided body values as muted text without badges', () => {
+  renderProperties({ ...item, assigned_reviewer_actor_id: item.requester_actor_id });
+
+  const undecided = screen.getByText('미결정');
+  const notApproved = screen.getByText('아직 승인되지 않음');
+  expect(undecided).toHaveClass('text-text-muted');
+  expect(notApproved).toHaveClass('text-text-muted');
+  expect(undecided).not.toHaveClass('rounded', 'border');
+  expect(notApproved).not.toHaveClass('rounded', 'border');
+});

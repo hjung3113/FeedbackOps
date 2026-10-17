@@ -224,9 +224,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
 
   const summary = React.useMemo(
     () => ({
-      total: countItems.length,
       inFlight: countItems.reduce((acc, milestone) => acc + milestone.progress.in_flight, 0),
-      released: countItems.filter((milestone) => milestone.status === 'released').length,
     }),
     [countItems],
   );
@@ -389,18 +387,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
 
             {/* Summary strip above the list; values come from the unfiltered list.
               Evidence linked is pinned to exactly 0 — the list DTO carries no
-              evidence field (approved B2c plan). Slice C owns the per-row mini
-              timeline, so only the prototype's schedule-risk label renders. */}
+              evidence field (approved B2c plan). Status totals are already in tabs. */}
             <div
               className="flex items-stretch gap-4.5 border-b border-border-subtle bg-surface-canvas px-5 py-3"
               data-testid="milestones-summary"
             >
-              <SummaryCell
-                label="Milestones"
-                value={countsUnavailable ? null : summary.total}
-                testId="milestone-summary-total"
-              />
-              <SummaryDivider />
               <SummaryCell
                 label={GLOSSARY.tasksInFlight}
                 value={countsUnavailable ? null : summary.inFlight}
@@ -413,15 +404,6 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                 value={0}
                 testId="milestone-summary-evidence-linked"
               />
-              <SummaryDivider />
-              <SummaryCell
-                label={GLOSSARY.milestoneStatusReleased}
-                value={countsUnavailable ? null : summary.released}
-                // #750: keep the prototype's emerald hue and use its AA label token for small text.
-                valueClassName="text-text-success-label"
-                testId="milestone-summary-released"
-              />
-              {/* #670: the prototype's schedule-risk string is designer guidance, not shipped copy. */}
               <div className="flex-1" />
             </div>
 

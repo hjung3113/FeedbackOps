@@ -3,7 +3,6 @@ import type { MilestoneStatusFilter } from '@fops/shared';
 import type { PanelSection } from '@fops/ui';
 
 // ADR-0057 A2 amendment localizes Korean navigation; Timeline stays Slice C.
-// MilestoneDetailContent appends the child-row count to Tasks when loaded.
 export const SECTIONS: PanelSection[] = [
   { id: 'overview', label: '요약' },
   { id: 'tasks', label: 'Tasks' },

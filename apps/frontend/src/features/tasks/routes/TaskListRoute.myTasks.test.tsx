@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { TasksRouteView } from '@/routes/_authed/tasks';
 import { type TaskDto, listTasksQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -159,6 +160,20 @@ describe('TaskListRoute My Tasks view', () => {
     expect(screen.getByText('87건')).toBeInTheDocument();
     // A first-page refetch may land after the cursor read under load; assert the cursor read happened.
     expect(queries.map((query) => query.cursor)).toContain('next');
+  });
+
+  it.each([
+    { view: 'my' as const, showsAssignee: false },
+    { view: 'backlog' as const, showsAssignee: true },
+  ])('shows assignee metadata only in the $view view', async ({ view, showsAssignee }) => {
+    renderWithClient(<TasksRouteView search={{ view }} />);
+
+    expect(await screen.findByText(task.title)).toBeInTheDocument();
+    if (showsAssignee) {
+      expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
+    } else {
+      expect(screen.queryByText(GLOSSARY.unknownUser)).not.toBeInTheDocument();
+    }
   });
 
   it.each([

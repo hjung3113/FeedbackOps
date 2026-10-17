@@ -85,13 +85,8 @@ export function MilestoneDetailContent({
 
           {/* Progress strip — real child-Task buckets from progress (B1c); planned tasks are prototype-only. */}
           <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-text-primary">
-                Task {milestone.progress.total}개 중 {milestone.progress.released_done}개 Released
-              </span>
-              <span className="text-sm font-semibold tabular-nums text-text-secondary">
-                {milestone.progress.percent}%
-              </span>
+            <div className="text-sm font-medium text-text-primary">
+              Released {milestone.progress.released_done}/{milestone.progress.total}
             </div>
             {/* Decorative bar — the strip's text already carries the numbers. */}
             <ProgressMeter
@@ -103,28 +98,6 @@ export function MilestoneDetailContent({
               fillShape="square"
               semantics="decorative"
             />
-            <div className="flex items-center gap-2.5 text-xs text-text-muted">
-              <span>
-                <span className="font-semibold tabular-nums text-text-secondary">
-                  {milestone.progress.released_done}
-                </span>{' '}
-                Released/Done
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                <span className="font-semibold tabular-nums text-text-secondary">
-                  {milestone.progress.in_flight}
-                </span>{' '}
-                진행 중
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                <span className="font-semibold tabular-nums text-text-secondary">
-                  {milestone.progress.queued}
-                </span>{' '}
-                대기 중
-              </span>
-            </div>
           </div>
 
           {/* Why this milestone exists — keep the plain-text contract in NestedTextBlock. */}
@@ -146,8 +119,6 @@ export function MilestoneDetailContent({
 
           <MilestonePropertiesPresenter
             milestone={milestone}
-            managedSystemName={managedSystemName}
-            areaName={areaName}
             ownerName={ownerName}
             titleEdit={titleEdit}
             statusEdit={statusEdit}

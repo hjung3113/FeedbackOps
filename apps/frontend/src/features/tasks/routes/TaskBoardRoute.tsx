@@ -4,6 +4,7 @@ import { listMilestones } from '@/lib/api/milestones';
 import { getTask } from '@/lib/api/tasks';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { LIST_SEARCH_EMPTY_LABEL, LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
@@ -512,12 +513,20 @@ export function TaskBoardRoute({
     .find((error) => isPermissionDenied(error));
   if (deniedError) {
     return (
-      <PermissionBlockedPanel
-        state="denied"
-        category="Task board"
-        reason={PERMISSION_BLOCKED_REASONS.taskList}
-        className="m-4"
-      />
+      <div className="m-4 flex flex-col items-start gap-3">
+        <PermissionBlockedPanel
+          state="denied"
+          category="Task board"
+          reason={PERMISSION_BLOCKED_REASONS.taskList}
+        />
+        <Link
+          to="/vocs"
+          search={{ view: 'my' }}
+          className="text-sm font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
+        >
+          {GLOSSARY.myVocs}
+        </Link>
+      </div>
     );
   }
   const boardLoading = states.every(({ pending }) => pending);

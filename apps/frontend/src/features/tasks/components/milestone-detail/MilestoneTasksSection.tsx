@@ -22,9 +22,7 @@ export function MilestoneTasksSection({
     // The prototype's Add task action has no #514 writer behind it, so the
     // section ships read-only; assign/unassign lives on the Task detail.
     <div data-anchor="tasks" className="mb-8">
-      <MilestonePanelSectionTitle>
-        {childTasks === undefined ? 'Tasks' : `Tasks · ${childTasks.length}`}
-      </MilestonePanelSectionTitle>
+      <MilestonePanelSectionTitle>Tasks</MilestonePanelSectionTitle>
       {error !== null ? (
         isPermissionDenied(error) ? (
           // B2d fixup F1 — a denied child-list read is the permission contract, not an outage.

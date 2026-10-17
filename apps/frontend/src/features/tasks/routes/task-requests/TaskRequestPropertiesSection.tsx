@@ -88,15 +88,13 @@ export function TaskRequestPropertiesSection({
             {...(reviewer.email !== undefined ? { sub: reviewer.email } : {})}
           />
         ) : item.assigned_reviewer_actor_id || item.assigned_reviewer_team_id ? (
-          <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
-            {RESPONSIBILITY_COPY.undecided}
-          </span>
+          <span className="text-text-muted">{RESPONSIBILITY_COPY.undecided}</span>
         ) : (
           <UnassignedBadge label="검토자 없음" />
         )}
       </FieldRow>
       <FieldRow label="본인 승인">
-        <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
+        <span className="text-text-muted">
           {item.status === 'approved' || item.status === 'converted'
             ? item.reviewer_actor_id === item.requester_actor_id
               ? TASK_REQUEST_COPY.selfApproved
