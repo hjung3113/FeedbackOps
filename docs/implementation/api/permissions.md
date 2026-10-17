@@ -385,7 +385,9 @@ provenance/revoke metadata and full unique scope tuple, exclude superseded rows
 from all effective readers and seed checks, and keep old-ID revoke 409.
 The next permission check observes the revocation immediately; a revoked grant
 is requestable again, and so is an expired grant (#767), while an explicit active
-deny remains non-requestable.
+deny remains non-requestable. `workspace.admin` is the exception: it is never
+ordinarily requestable (ADR-0066 O3), so its no-grant, expired and revoked denies
+carry `requestable: null` and map to `blocked_non_requestable` (#1239).
 
 ## Proposed requester and selected-read contracts (ADR-0066)
 
