@@ -169,6 +169,30 @@ const findings = [
 ];
 
 const useFindingsListMock = vi.hoisted(() => vi.fn());
+const requestAccessFlowMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/features/admin/permissions/request-access-button', () => ({
+  RequestAccessButton: ({
+    capability,
+    managedSystemId,
+    returnRouteIntent,
+    renderTrigger,
+  }: {
+    capability: string;
+    managedSystemId?: string;
+    returnRouteIntent: string;
+    renderTrigger: (open: () => void) => React.ReactNode;
+  }) => (
+    <div
+      data-testid="request-access-flow"
+      data-capability={capability}
+      data-managed-system-id={managedSystemId}
+      data-return-route-intent={returnRouteIntent}
+    >
+      {renderTrigger(() => requestAccessFlowMock())}
+    </div>
+  ),
+}));
 
 vi.mock('@/features/findings/hooks/useFindingsList', () => ({
   useFindingsPages: (...args: unknown[]) => {
@@ -305,6 +329,61 @@ describe('FindingsListPage', () => {
     );
     expect(screen.getByTestId('finding-row-FND-101')).toHaveAttribute('data-selected', 'true');
   });
+
+  it.each([
+    {
+      kind: 'requestable',
+      permission: {
+        permission: 'finding.read',
+        managed_system_id: '99999999-9999-9999-9999-999999999999',
+      },
+      state: 'request_access',
+    },
+    { kind: 'not requestable', permission: undefined, state: 'blocked_not_requestable' },
+  ] as const)(
+    'hides list controls and shows the recovery action when Findings access is $kind',
+    async ({ permission, state }) => {
+      useFindingsListMock.mockReturnValue({
+        data: undefined,
+        isPending: false,
+        isError: true,
+        isSuccess: false,
+        error: new ApiError(403, {
+          code: 'permission.denied',
+          message: 'finding.read required',
+          ...(permission !== undefined ? { requestable_permission: permission } : {}),
+        }),
+        refetch: vi.fn(),
+      });
+
+      await renderFindingsPage('/findings?q=결제&status=active&execution=none&assignment=assigned');
+
+      expect(await screen.findByTestId('permission-blocked')).toHaveAttribute('data-state', state);
+      expect(screen.queryByTestId('list-shell-tabs')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByText(/상태:/)).not.toBeInTheDocument();
+
+      if (permission !== undefined) {
+        const requestFlow = screen.getByTestId('request-access-flow');
+        expect(requestFlow).toHaveAttribute('data-capability', permission.permission);
+        expect(requestFlow).toHaveAttribute('data-return-route-intent', '/findings');
+        const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
+        expect(requestButton).toHaveClass('bg-surface-raised');
+        expect(requestButton).not.toHaveClass('bg-accent-primary');
+        fireEvent.click(requestButton);
+        expect(requestAccessFlowMock).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('link', { name: '내 VOC' })).not.toBeInTheDocument();
+      } else {
+        expect(screen.getByRole('link', { name: '내 VOC' })).toHaveAttribute(
+          'href',
+          '/vocs?view=my',
+        );
+      }
+    },
+  );
 
   it('redirects a direct Finding URL to the selected list panel and preserves returnTo', async () => {
     const findingId = '11111111-1111-1111-1111-111111111111';
@@ -472,7 +551,10 @@ describe('FindingsListPage', () => {
     });
     await renderFindingsPage();
 
-    expect(screen.getByTestId('permission-blocked')).toHaveAttribute('data-state', 'denied');
+    expect(screen.getByTestId('permission-blocked')).toHaveAttribute(
+      'data-state',
+      'blocked_not_requestable',
+    );
     expect(
       screen.getByText(
         'Finding 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',

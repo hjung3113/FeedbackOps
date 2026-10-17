@@ -863,22 +863,22 @@ describe("/admin/permissions/requests", () => {
     );
     expect(screen.getAllByRole("tab")).toHaveLength(5);
     expect(
-      within(screen.getByTestId("permission-requests-list")).getByText(
-        "workspace.read",
-      ),
+      within(screen.getByTestId("permission-requests-list")).getByText("워크스페이스 전체 읽기", {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole("tab", { name: /^승인됨\s*,\s*1$/ }));
     await waitFor(() =>
       expect(
-        within(screen.getByTestId("permission-requests-list")).getByText(
-          "workspace.admin",
-        ),
+        within(screen.getByTestId("permission-requests-list")).getByText("워크스페이스 관리자 권한", {
+          exact: false,
+        }),
       ).toBeInTheDocument(),
     );
     expect(
-      within(screen.getByTestId("permission-requests-list")).queryByText(
-        "workspace.read",
-      ),
+      within(screen.getByTestId("permission-requests-list")).queryByText("워크스페이스 전체 읽기", {
+        exact: false,
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -920,7 +920,7 @@ describe("/admin/permissions/requests", () => {
     await waitFor(() =>
       expect(
         screen.getByTestId("permission-request-detail-panel"),
-      ).toHaveTextContent("workspace.admin"),
+      ).toHaveTextContent("워크스페이스 관리자 권한"),
     );
   });
 

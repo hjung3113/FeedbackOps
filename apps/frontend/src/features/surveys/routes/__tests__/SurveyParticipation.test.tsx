@@ -1,3 +1,5 @@
+import { DOCUMENT_TITLE_COPY } from '@/lib/copy/document-titles';
+import { DocumentTitleProvider } from '@/lib/router/document-title';
 import {
   type AnswerableSurveysResponse,
   type MySurveyResponsesResponse,
@@ -8,6 +10,14 @@ import {
   surveyResponseSubmissionSchema,
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
@@ -806,6 +816,36 @@ describe('respondent form', () => {
       expect(screen.queryAllByRole('link', { name: /Q3 사용성 진단/ })).toHaveLength(0);
     });
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+  });
+});
+
+describe('respond route document title', () => {
+  it('replaces the not-found title after the routed Survey form loads', async () => {
+    installFetch({ form: formDto });
+    const rootRoute = createRootRoute({
+      component: () => (
+        <DocumentTitleProvider>
+          <Outlet />
+        </DocumentTitleProvider>
+      ),
+    });
+    const respondRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/surveys/$surveyId/respond',
+      component: () => <RespondSurveyPage surveyId={surveyId} />,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([respondRoute]),
+      history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}/respond`] }),
+    });
+    await router.load();
+
+    renderWithQuery(<RouterProvider router={router} />);
+
+    expect(await screen.findByTestId('survey-respondent-form')).toBeInTheDocument();
+    expect(document.title).not.toContain(DOCUMENT_TITLE_COPY.notFound);
+    await waitFor(() => expect(document.title).toContain(formDto.survey.title));
+    expect(document.title).not.toContain(DOCUMENT_TITLE_COPY.notFound);
   });
 });
 

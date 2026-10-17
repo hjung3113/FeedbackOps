@@ -59,12 +59,12 @@ function clusterDisplayId(data: {
 }
 
 // ADR-0057 A2 amendment localizes Korean navigation and preserves domain nouns.
-export function buildVocClusterDetailSections(memberCount: number): PanelSection[] {
+export function buildVocClusterDetailSections(): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
     { id: 'why', label: VOC_CLUSTER_GROUPING_REASON_LABEL },
     { id: 'execution', label: '실행' },
-    { id: 'members', label: '멤버', count: memberCount },
+    { id: 'members', label: '멤버' },
     { id: 'properties', label: '속성' },
   ];
 }
@@ -191,14 +191,13 @@ export function VocClusterDetailPanel({
       />
       <DetailPanelSectionNav
         scrollRef={sectionScrollRef}
-        sections={buildVocClusterDetailSections(data.member_count)}
+        sections={buildVocClusterDetailSections()}
       />
       <div ref={sectionScrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div className="flex flex-col gap-6">
           <section data-anchor="overview" className="flex flex-col gap-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <OutlineBadge>VOC Cluster</OutlineBadge>
                 <ClusterStatusBadge status={data.status} surface="detail" />
                 {data.severity && (
                   <SeverityBadge
@@ -273,13 +272,15 @@ export function VocClusterDetailPanel({
                     </div>
                     <div className="min-w-0">
                       <span className="text-xs text-text-muted">{finding.display_id}</span>
-                      <p className="mt-1 text-sm font-medium text-text-primary">
-                        {(
-                          finding as LinkedFindingDto & {
-                            title?: string | null;
-                          }
-                        ).title ?? finding.display_id}
-                      </p>
+                      {(
+                        finding as LinkedFindingDto & {
+                          title?: string | null;
+                        }
+                      ).title?.trim() ? (
+                        <p className="mt-1 text-sm font-medium text-text-primary">
+                          {(finding as LinkedFindingDto & { title?: string | null }).title}
+                        </p>
+                      ) : null}
                     </div>
                     <Link
                       to="/findings/$findingId"
@@ -455,12 +456,12 @@ export function VocClusterDetailPanel({
         className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-wrap items-center gap-2"
         data-testid="cluster-cta-footer"
       >
-        {canMutate ? (
+        {canMutate || linkedFindings.length > 0 ? (
           <>
             {/* Confirm button — only shown when draft */}
-            {data.status === 'draft' && (
+            {canMutate && data.status === 'draft' && (
               <Button
-                variant="default"
+                variant={linkedFindings.length > 0 ? 'secondary' : 'default'}
                 size="sm"
                 onClick={handleConfirm}
                 disabled={confirmMutation.isPending}
@@ -469,23 +470,37 @@ export function VocClusterDetailPanel({
                 확정
               </Button>
             )}
-            {/* Create Finding CTA */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreateFindingOpen(true)}
-              data-testid="cluster-create-finding-button"
-            >
-              Finding 생성
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRequestTaskOpen(true)}
-              data-testid="cluster-request-task-button"
-            >
-              Task 요청
-            </Button>
+            {linkedFindings[0] !== undefined && (
+              <Button asChild variant="primary" size="sm">
+                <Link
+                  to="/findings/$findingId"
+                  params={{ findingId: linkedFindings[0].id }}
+                  data-testid="cluster-open-finding-button"
+                >
+                  Finding 열기
+                </Link>
+              </Button>
+            )}
+            {canMutate && (
+              <Button
+                variant={linkedFindings.length > 0 ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setCreateFindingOpen(true)}
+                data-testid="cluster-create-finding-button"
+              >
+                Finding 생성
+              </Button>
+            )}
+            {canMutate && (
+              <Button
+                variant={linkedFindings.length > 0 ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setRequestTaskOpen(true)}
+                data-testid="cluster-request-task-button"
+              >
+                Task 요청
+              </Button>
+            )}
           </>
         ) : (
           <span className="text-xs text-text-muted" data-testid="cluster-cta-hint">

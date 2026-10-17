@@ -15,6 +15,9 @@ const workspaceActors = vi.hoisted(() => ({
 const findingSourceType = vi.hoisted(() => ({
   value: 'manual' as 'voc' | 'voc_cluster' | 'survey' | 'survey_response' | 'manual',
 }));
+const findingLinkedTask = vi.hoisted(() => ({
+  id: '20000000-0000-0000-0000-000000000002' as string | null,
+}));
 const navigate = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -43,8 +46,9 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
 }));
 
+let permissionState = 'approved';
 vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
-  usePermissionCheck: () => ({ data: { state: 'approved' } }),
+  usePermissionCheck: () => ({ data: { state: permissionState } }),
 }));
 
 vi.mock('@/features/findings/hooks/useEvidenceHighlights', () => ({
@@ -69,7 +73,7 @@ vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
       confidence: 'medium',
       status: 'active',
       analytics_area_id: null,
-      linked_task_id: '20000000-0000-0000-0000-000000000002',
+      linked_task_id: findingLinkedTask.id,
       linked_milestone_id: null,
       created_by: '40000000-0000-0000-0000-000000000004',
       created_at: '2026-07-10T00:00:00.000Z',
@@ -110,8 +114,9 @@ vi.mock('@/lib/api/managed-systems', () => ({
   })),
 }));
 
+let roleLevel = 'admin';
 vi.mock('@/lib/auth/useMe', () => ({
-  useMe: () => ({ data: { actor: { role_level: 'admin' } } }),
+  useMe: () => ({ data: { actor: { role_level: roleLevel } } }),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -180,6 +185,7 @@ describe('FindingDetailPanel', () => {
     useVocClusterDetailMock.mockReset();
     useVocClusterDetailMock.mockReturnValue({ data: undefined });
     findingSourceType.value = 'manual';
+    findingLinkedTask.id = '20000000-0000-0000-0000-000000000002';
     workspaceActors.actors = [
       { id: '40000000-0000-0000-0000-000000000004', display_name: '분석가' },
     ];
@@ -242,6 +248,63 @@ describe('FindingDetailPanel', () => {
     expect(findingTitle.parentElement).toHaveClass('px-0');
     expect(screen.getByText('FIN-179')).toBeInTheDocument();
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('puts execution before Evidence and makes the linked Task the single primary action', async () => {
+    const linkedFinding = {
+      ...mediumFinding,
+      linked_task_id: '20000000-0000-0000-0000-000000000002',
+    };
+    renderWithClient(<FullFindingDetail finding={linkedFinding} />);
+
+    const detail = screen.getByTestId('finding-detail-panel');
+    const anchors = [...detail.querySelectorAll<HTMLElement>('[data-anchor]')].map((anchor) =>
+      anchor.getAttribute('data-anchor'),
+    );
+    expect(anchors.indexOf('execution')).toBeLessThan(anchors.indexOf('evidence'));
+    for (const repeatedHeading of [
+      '소스 / 심각도 / 신뢰도',
+      '주요 Managed System',
+      '영향 Analytics Area',
+    ]) {
+      expect(screen.queryByRole('heading', { name: repeatedHeading })).not.toBeInTheDocument();
+    }
+
+    const primaryGroup = await screen.findByRole('group', { name: '주요 실행' });
+    const taskLink = within(primaryGroup).getByRole('link', { name: 'Task 열기' });
+    expect(taskLink).toHaveClass('bg-accent-primary');
+    expect(within(primaryGroup).getAllByRole('link')).toHaveLength(1);
+    expect(
+      within(primaryGroup).queryByRole('button', { name: 'Task 요청' }),
+    ).not.toBeInTheDocument();
+    const requestTask = within(screen.getByRole('group', { name: '보조 작업' })).getByRole(
+      'button',
+      { name: 'Task 요청' },
+    );
+    expect(requestTask).toHaveAttribute('data-testid', 'request-task-btn');
+    expect(requestTask).toBeEnabled();
+    expect(requestTask).not.toHaveClass('bg-accent-primary');
+    const footer = detail.querySelector('.sticky.bottom-0');
+    expect(footer?.querySelectorAll('.bg-accent-primary')).toHaveLength(1);
+  });
+
+  it('disables the secondary Task 요청 button when the permission check denies it', async () => {
+    permissionState = 'denied';
+    roleLevel = 'developer';
+    try {
+      renderWithClient(
+        <FullFindingDetail
+          finding={{ ...mediumFinding, linked_task_id: '20000000-0000-0000-0000-000000000002' }}
+        />,
+      );
+
+      const primaryGroup = await screen.findByRole('group', { name: '주요 실행' });
+      expect(within(primaryGroup).getByRole('link', { name: 'Task 열기' })).toBeVisible();
+      expect(screen.getByTestId('request-task-btn')).toBeDisabled();
+    } finally {
+      permissionState = 'approved';
+      roleLevel = 'admin';
+    }
   });
 
   it('keeps linked Task identity accessible and its move affordance on one line', async () => {
@@ -482,7 +545,7 @@ describe('FindingDetailPanel', () => {
   );
 
   it('keeps one primary execution action and groups the remaining actions as secondary', async () => {
-    renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
+    renderWithClient(<FullFindingDetail finding={mediumFinding} />);
 
     await screen.findByTestId('request-task-btn');
     const primaryGroup = screen.getByRole('group', { name: '주요 실행' });
@@ -506,6 +569,7 @@ describe('FindingDetailPanel', () => {
 
   it('submits a Task Request from the inline draft card with the Finding contract fields', async () => {
     const user = userEvent.setup();
+    findingLinkedTask.id = null;
     apiClientMock.mockReset();
     apiClientMock.mockResolvedValue({ data: { id: 'task-request-1' } });
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
@@ -546,6 +610,7 @@ describe('FindingDetailPanel', () => {
 
   it('drops an open draft when the selection moves to another Finding', async () => {
     const user = userEvent.setup();
+    findingLinkedTask.id = null;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const panel = (findingId: string) => (
       <QueryClientProvider client={queryClient}>

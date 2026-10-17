@@ -36,6 +36,7 @@ describe('document screen titles', () => {
     ['/integration/evidence', {}, 'Evidence'],
     ['/surveys', {}, DOCUMENT_TITLE_COPY.surveys.list],
     ['/surveys/survey-1', {}, DOCUMENT_TITLE_COPY.surveys.detail],
+    ['/surveys/survey-1/respond', {}, DOCUMENT_TITLE_COPY.surveys.respond],
     ['/surveys/survey-1/results', {}, DOCUMENT_TITLE_COPY.surveys.results],
     ['/surveys/survey-1/follow-up', {}, DOCUMENT_TITLE_COPY.surveys.followUp],
     ['/admin/managed-systems', {}, DOCUMENT_TITLE_COPY.admin.managedSystems],

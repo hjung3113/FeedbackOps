@@ -304,11 +304,6 @@ function ClusterListBody({
           activeTab={activeTab}
           onTabChange={(next) => onTabChange(next as typeof activeTab)}
           tabsAriaLabel="Cluster 필터"
-          action={
-            activeTab === 'suggestions' ? undefined : (
-              <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
-            )
-          }
         />
       ) : null}
 

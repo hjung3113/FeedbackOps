@@ -156,8 +156,10 @@ describe('useFindingDetailController', () => {
     expect(result.current.canManage).toBe(true);
     expect(result.current.markNotActionableDisabled).toBe(false);
     // #377: the progress-note section is the last detail section.
-    expect(result.current.sections).toHaveLength(7);
-    expect(result.current.sections[6]).toEqual({ id: 'notes', label: '진행 메모' });
+    expect(result.current.sections).toHaveLength(8);
+    expect(result.current.sections[1]).toEqual({ id: 'metadata', label: '소스 / 심각도 / 신뢰도' });
+    expect(result.current.sections[2]).toEqual({ id: 'execution', label: '실행' });
+    expect(result.current.sections[7]).toEqual({ id: 'notes', label: '진행 메모' });
   });
 
   it('permission denied: gated action flags go false (positive twin above proves the gate)', () => {

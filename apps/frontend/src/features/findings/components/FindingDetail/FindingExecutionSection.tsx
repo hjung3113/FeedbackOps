@@ -214,9 +214,11 @@ export function FindingExecutionRequestDraftSlot({
 export function FindingExecutionRequestActions({
   controller,
   canManage,
+  linkedTaskId,
 }: {
   controller: FindingExecutionSectionController;
   canManage: boolean;
+  linkedTaskId: string | null;
 }): React.ReactElement | null {
   const { requestedTaskRequestsState, pendingTaskRequest, setRequestTaskOpen } = controller;
   if (requestedTaskRequestsState !== 'loaded') return null;
@@ -224,7 +226,13 @@ export function FindingExecutionRequestActions({
   return (
     <fieldset className="m-0 min-w-0 border-0 p-0">
       <legend className="sr-only">주요 실행</legend>
-      {pendingTaskRequest ? (
+      {linkedTaskId !== null ? (
+        <Button asChild variant="primary" size="sm">
+          <Link to="/tasks" search={{ view: 'backlog', param: linkedTaskId }}>
+            Task 열기
+          </Link>
+        </Button>
+      ) : pendingTaskRequest ? (
         <Button asChild variant="primary" size="sm">
           <Link to="/tasks" search={{ view: 'requests', param: pendingTaskRequest.id }}>
             Task Request 보기

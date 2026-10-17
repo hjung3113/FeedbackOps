@@ -33,7 +33,9 @@ describe('PermissionRequestDetail identity', () => {
     );
 
     expect(screen.getByText('김하나 · Finding 관리')).toBeInTheDocument();
-    expect(screen.getByText('finding.manage')).toHaveClass('font-mono', 'text-text-muted');
+    expect(screen.getByText('Finding 관리')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage')).not.toBeInTheDocument();
+    expect(screen.queryByText('상태', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('김하나')).toBeInTheDocument();
     expect(screen.getByText('Billing Ops')).toBeInTheDocument();
     expect(screen.getByText('10000000').closest('header')).toBeNull();

@@ -54,7 +54,7 @@ const cases = [
   },
   {
     panel: 'Cluster',
-    sections: buildVocClusterDetailSections(6),
+    sections: buildVocClusterDetailSections(),
     expected: [
       ['overview', '요약'],
       ['why', '그룹화 사유'],
@@ -79,6 +79,7 @@ const cases = [
     expected: [
       ['summary', '요약'],
       ['metadata', '소스 / 심각도 / 신뢰도'],
+      ['execution', '실행'],
       ['evidence', 'Evidence'],
       ['managed-system', 'Managed System'],
       ['analytics-area', 'Analytics Area'],
