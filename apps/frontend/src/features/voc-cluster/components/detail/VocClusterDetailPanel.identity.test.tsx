@@ -28,7 +28,7 @@ const clusterState = vi.hoisted(() => ({
     primary_managed_system_id: '40000000-0000-0000-0000-000000000004',
     member_count: 0,
     members: [],
-    linked_findings: [] as Array<LinkedFindingDto & { title?: string | null }>,
+    linked_findings: [] as LinkedFindingDto[],
     created_by: '50000000-0000-0000-0000-000000000005',
     created_at: '2026-07-10T00:00:00.000Z',
     updated_at: '2026-07-10T00:00:00.000Z',
@@ -135,19 +135,16 @@ describe('VocClusterDetailPanel identity', () => {
     }
   });
 
-  it.each([
-    { title: null, expectedCount: 1 },
-    { title: '결제 오류 분석', expectedCount: 1 },
-  ])('renders a linked Finding id once when its title is $title', ({ title, expectedCount }) => {
+  it('renders a linked Finding id once', () => {
     const findingId = '60000000-0000-0000-0000-000000000006';
     clusterState.data.linked_findings = [
-      { id: findingId, display_id: 'FIN-1240', status: 'active', title },
+      { id: findingId, display_id: 'FIN-1240', status: 'active' },
     ];
 
     render(<VocClusterDetailPanel clusterId={cluster.id} />);
 
     const findingCard = screen.getByTestId(`cluster-linked-finding-${findingId}`);
-    expect(within(findingCard).getAllByText('FIN-1240')).toHaveLength(expectedCount);
+    expect(within(findingCard).getAllByText('FIN-1240')).toHaveLength(1);
     const overview = screen
       .getByTestId('cluster-detail-title')
       .closest<HTMLElement>('[data-anchor="overview"]');
@@ -162,7 +159,7 @@ describe('VocClusterDetailPanel identity', () => {
     const findingId = '60000000-0000-0000-0000-000000000006';
     clusterState.roleLevel = 'admin';
     clusterState.data.linked_findings = [
-      { id: findingId, display_id: 'FIN-1240', status: 'active', title: '결제 오류 분석' },
+      { id: findingId, display_id: 'FIN-1240', status: 'active' },
     ];
 
     render(

@@ -57,14 +57,6 @@ export interface SidebarNavActionEntry {
 
 export type SidebarNavItem = SidebarNavEntry | SidebarNavActionEntry;
 
-export interface SidebarFooterItem {
-  id: string;
-  label: string;
-  href?: string;
-  icon: React.ReactNode;
-  disabled?: boolean;
-}
-
 export interface ManagedSystemScopeOption {
   id: string;
   name: string;
@@ -73,7 +65,6 @@ export interface ManagedSystemScopeOption {
 
 export interface AppSidebarProps {
   entries: SidebarNavItem[];
-  footerItems?: SidebarFooterItem[];
   systemLabel?: string;
   systemSubtitle?: string;
   className?: string;
@@ -101,7 +92,6 @@ export interface AppSidebarProps {
 }
 
 const STORAGE_KEY = 'appSidebarCollapsed';
-const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [];
 
 function readInitialCollapsed(defaultValue: boolean): boolean {
   if (typeof window === 'undefined') return defaultValue;
@@ -115,7 +105,6 @@ function readInitialCollapsed(defaultValue: boolean): boolean {
 
 export function AppSidebar({
   entries,
-  footerItems = DEFAULT_FOOTER_ITEMS,
   systemLabel = 'VOC',
   systemSubtitle = '고객 피드백',
   className,
@@ -298,15 +287,6 @@ export function AppSidebar({
           )}
         </div>
       </nav>
-      {footerItems.length > 0 && (
-        <div className="border-t border-border-subtle p-2" data-testid="sidebar-footer">
-          <div className="flex flex-col gap-0.5">
-            {footerItems.map((item) => (
-              <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
-            ))}
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
@@ -446,19 +426,6 @@ function NavCountBadge({ entryId, count }: { entryId: string; count: number }) {
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {
   return <span className={cn('inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-micro font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
-}
-
-function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; collapsed: boolean }) {
-  const props = { className: cn(navItemClass(collapsed), item.disabled && 'opacity-60 cursor-not-allowed'), 'data-testid': `sidebar-footer-${item.id}`, title: collapsed ? item.label : undefined, 'aria-label': collapsed ? item.label : undefined };
-  if (item.href && !item.disabled) {
-    return (
-      <InternalLink href={item.href} {...props}>
-        <span className="shrink-0">{item.icon}</span>
-        {!collapsed && <span className="truncate">{item.label}</span>}
-      </InternalLink>
-    );
-  }
-  return <button type="button" disabled={item.disabled} {...props}><span className="shrink-0">{item.icon}</span>{!collapsed && <span className="truncate">{item.label}</span>}</button>;
 }
 
 function navItemClass(collapsed: boolean, active = false, contextActive = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary', contextActive && !active && 'font-medium text-text-primary'); }

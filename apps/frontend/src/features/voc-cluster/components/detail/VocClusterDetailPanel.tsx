@@ -1,7 +1,6 @@
 // VOC Cluster detail panel: detail query, role gate, Execution / Members /
 // Properties sections, CTA footer, and cross-system flow mounts.
 
-import type { LinkedFindingDto } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -272,15 +271,6 @@ export function VocClusterDetailPanel({
                     </div>
                     <div className="min-w-0">
                       <span className="text-xs text-text-muted">{finding.display_id}</span>
-                      {(
-                        finding as LinkedFindingDto & {
-                          title?: string | null;
-                        }
-                      ).title?.trim() ? (
-                        <p className="mt-1 text-sm font-medium text-text-primary">
-                          {(finding as LinkedFindingDto & { title?: string | null }).title}
-                        </p>
-                      ) : null}
                     </div>
                     <Link
                       to="/findings/$findingId"

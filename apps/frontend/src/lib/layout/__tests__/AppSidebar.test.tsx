@@ -287,45 +287,6 @@ describe('AppSidebar', () => {
     expect(remove).toHaveBeenCalledWith('view-1');
   });
 
-  it('renders footer items and keeps collapsed icons accessible', () => {
-    render(
-      <AppSidebar
-        entries={entries}
-        defaultCollapsed={true}
-        footerItems={[
-          {
-            id: 'help-center',
-            label: 'Help center',
-            href: '/help',
-            icon: <Inbox className="h-4 w-4" />,
-          },
-          {
-            id: 'invite-member',
-            label: 'Invite member',
-            icon: <Plus className="h-4 w-4" />,
-            disabled: true,
-          },
-        ]}
-      />,
-    );
-
-    const help = screen.getByTestId('sidebar-footer-help-center');
-    const invite = screen.getByTestId('sidebar-footer-invite-member');
-
-    expect(help).toHaveAttribute('href', '/help');
-    expect(help).toHaveAttribute('title', 'Help center');
-    expect(help).toHaveAttribute('aria-label', 'Help center');
-    expect(help.querySelector('svg')).not.toBeNull();
-    expect(help.textContent).toBe('');
-
-    expect(invite).toHaveAttribute('type', 'button');
-    expect(invite).toBeDisabled();
-    expect(invite).toHaveAttribute('title', 'Invite member');
-    expect(invite).toHaveAttribute('aria-label', 'Invite member');
-    expect(invite.querySelector('svg')).not.toBeNull();
-    expect(invite.textContent).toBe('');
-  });
-
   it.each([true, false])('hides Invite member for isAdmin=%s', (isAdmin) => {
     render(<AppSidebar entries={entries} isAdmin={isAdmin} />);
 
