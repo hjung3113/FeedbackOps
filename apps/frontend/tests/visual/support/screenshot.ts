@@ -1,9 +1,10 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { type Locator, type Page, expect } from '@playwright/test';
 
 export async function expectVisual(
   page: Page,
   finalState: Locator,
   name: string,
+  options?: { mask?: Locator[] },
 ): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await expect(finalState).toBeVisible();
@@ -14,5 +15,6 @@ export async function expectVisual(
     caret: 'hide',
     scale: 'css',
     maxDiffPixelRatio: 0.0002,
+    ...(options?.mask ? { mask: options.mask } : {}),
   });
 }

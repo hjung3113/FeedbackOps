@@ -203,7 +203,9 @@ describe('TaskBoardRoute keyboard dragging', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task를 집었습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task를 집었습니다.'),
+    );
     // A refetch that empties the board removes the DnD subtree mid-drag (a failed background
     // refetch keeps it: the loaded columns stay available).
     vi.mocked(listTasks).mockImplementation(boardList([]));
@@ -240,7 +242,9 @@ describe('TaskBoardRoute keyboard dragging', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task를 집었습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task를 집었습니다.'),
+    );
     for (const code of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
       const duringDrag = new KeyboardEvent('keydown', {
         key: code,
@@ -285,7 +289,9 @@ describe('TaskBoardRoute keyboard dragging', () => {
     });
     card.focus();
     fireEvent.keyDown(card, { key: ' ', code: 'Space' });
-    expect(liveMessages).toContain('TASK-1000 Task를 집었습니다. 현재 열: Backlog.');
+    await waitFor(() =>
+      expect(liveMessages).toContain('TASK-1000 Task를 집었습니다. 현재 열: Backlog.'),
+    );
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -293,14 +299,24 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(
       screen.getByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('status').textContent).toBe(
-      'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+      ),
     );
 
     fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
-    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 Todo 열 위에 있습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task가 Todo 열 위에 있습니다.',
+      ),
+    );
     fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
-    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 Doing 열 위에 있습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task가 Doing 열 위에 있습니다.',
+      ),
+    );
     fireEvent.keyDown(document, { key: ' ', code: 'Space' });
 
     await waitFor(() =>
@@ -319,7 +335,11 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(
       screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task를 Doing 열에 놓았습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task를 Doing 열에 놓았습니다.',
+      ),
+    );
   });
 
   it('reaches every column in one press on an overflowing board and prevents native arrows only during drag', async () => {
@@ -491,7 +511,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
       await act(async () => {
         await Promise.resolve();
       });
-      expect(screen.getByRole('status')).toHaveTextContent('Reopened 열 위에');
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Reopened 열 위에'));
     }
     for (const status of ['Released', 'Done', 'Review', 'Doing', 'Todo', 'Backlog'])
       await press('ArrowLeft', status);
@@ -629,14 +649,22 @@ describe('TaskBoardRoute keyboard dragging', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+      ),
     );
     fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
-    expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task가 Todo 열 위에 있습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'TASK-1000 Task가 Todo 열 위에 있습니다.',
+      ),
+    );
     fireEvent.keyDown(document, { key: 'ArrowLeft', code: 'ArrowLeft' });
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'TASK-1000 Task가 Backlog 열 위에 있습니다.',
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'TASK-1000 Task가 Backlog 열 위에 있습니다.',
+      ),
     );
   });
 
@@ -670,7 +698,9 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(
       screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task 이동을 취소했습니다.');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task 이동을 취소했습니다.'),
+    );
     expect(card).toHaveFocus();
   });
 
@@ -1113,10 +1143,12 @@ describe('TaskBoardRoute keyboard dragging', () => {
         const direction = 'ArrowRight';
         fireEvent.keyDown(document, { key: direction, code: direction });
       }
-      expect(screen.getByRole('status').textContent).toBe(
-        move === 0
-          ? 'TASK-1000 Task가 Doing 열 위에 있습니다.'
-          : 'TASK-1000 Task가 Todo 열 위에 있습니다.',
+      await waitFor(() =>
+        expect(screen.getByRole('status').textContent).toBe(
+          move === 0
+            ? 'TASK-1000 Task가 Doing 열 위에 있습니다.'
+            : 'TASK-1000 Task가 Todo 열 위에 있습니다.',
+        ),
       );
       fireEvent.keyDown(document, { key: ' ', code: 'Space' });
       await act(async () => {
@@ -1159,8 +1191,10 @@ describe('TaskBoardRoute keyboard dragging', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByRole('status').textContent).toBe(
-      'TASK-1000 Task를 Backlog 열에 놓았습니다.',
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task를 Backlog 열에 놓았습니다.',
+      ),
     );
     expect(updateTaskStatus).not.toHaveBeenCalled();
     expect(card).toHaveFocus();
@@ -1185,15 +1219,19 @@ describe('TaskBoardRoute keyboard dragging', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     fireEvent.keyDown(document, { key: 'ArrowLeft', code: 'ArrowLeft' });
-    expect(screen.getByRole('status').textContent).toBe(
-      'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+      ),
     );
     fireEvent.keyDown(document, { key: ' ', code: 'Space' });
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByRole('status').textContent).toBe(
-      'TASK-1000 Task를 Backlog 열에 놓았습니다.',
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'TASK-1000 Task를 Backlog 열에 놓았습니다.',
+      ),
     );
     expect(updateTaskStatus).not.toHaveBeenCalled();
     expect(card).toHaveFocus();
