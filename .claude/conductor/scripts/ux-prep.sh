@@ -3,13 +3,13 @@
 # ux-prep.sh <n> <worktree> [--baseline <checkout>] [--scale] [--targets <href,href,...>] [--no-perf]
 # Background UX/perf prep (run it with run_in_background as soon as the code review launches): creates or reuses
 # the issue DB (verify-db.sh), seeds only when the [preview] fixtures are gone (app-preview.py --seed on the
-# baseline start, plus SEED_MODE=scale with --scale), starts or reuses the <n>-develop (baseline checkout,
-# default $WAVE_STATE/baseline) and <n>-branch previews on the issue DB, curls every target on both, probes the
+# baseline start, restarting it if live, plus SEED_MODE=scale with --scale), starts or reuses the
+# <n>-develop (baseline checkout, default $WAVE_STATE/baseline) and <n>-branch previews, curls targets and probes the
 # Ego Lite bridge with one automatic restart, then runs nav-perf.sh --reset-db <n> unless --no-perf. Steps chain
 # and stop at the first failure; each logs under $WAVE_STATE/ux-prep-<n>/ and the summary JSON (also written to
 # $WAVE_STATE/ux-prep-<n>.json) is the last stdout line. Perf is skipped ("skipped: host busy") while vitest,
-# integration tests, a reviewer (danger-full-access), ego-browser nodejs or another nav-perf.sh runs. The previews
-# are left running for the UX reviewer: stop them with `app-preview.py stop <n>-develop` and
+# integration tests, ego-browser nodejs or another nav-perf.sh runs, excluding this process and its ancestors.
+# The previews are left running for the UX reviewer: stop them with `app-preview.py stop <n>-develop` and
 # `app-preview.py stop <n>-branch`, and only then rebase the worktree or refresh the baseline. Needs WAVE_STATE.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -144,13 +144,13 @@ ensure_preview() {  # ensure_preview <label> <checkout> <seed yes|no>: prints th
   local label=$1 checkout=$2 do_seed=$3 state log
   log=$logdir/preview-$label.log
   state=$(preview_state "$label") || return 1
-  if [ "$state" != absent ] && [ "$state" != dead ]; then
+  if [ "$state" != absent ] && [ "$state" != dead ] && [ "$do_seed" != yes ]; then
     echo "reusing running preview $label at $state" >&2
     printf '%s\n' "$state"
     return 0
   fi
-  if [ "$state" = dead ]; then
-    echo "preview $label has a state file but no live process; stopping it before start" >&2
+  if [ "$state" != absent ]; then
+    echo "stopping preview $label before start (state=$state, seed=$do_seed)" >&2
     python3 "$here/app-preview.py" stop "$label" >>"$log" 2>&1 || return 1
   fi
   set -- start "$checkout" --backend --env "$env_file" --name "$label"
@@ -161,8 +161,11 @@ import json, sys
 d = json.loads(sys.stdin.read())
 if not d.get("ok"):
     sys.exit(1)
+if sys.argv[1] == "yes" and d.get("fixtures", {}).get("ok") is not True:
+    print("seeded preview start did not confirm fixtures.ok:true", file=sys.stderr)
+    sys.exit(1)
 print(d["url"])
-'
+' "$do_seed"
 }
 
 run_scale_seed() {  # SEED_MODE=scale from the baseline backend, after --seed has returned
@@ -184,7 +187,6 @@ step_previews() {
   local do_seed=no
   if [ "$seed_needed" = yes ]; then
     do_seed=yes
-    seeded=true
     echo 'seeding: the baseline start runs the personas seed and the [preview] fixtures'
   else
     echo 'not seeding: the [preview] fixtures are already present'
@@ -194,6 +196,7 @@ step_previews() {
   if [ "$do_seed" = yes ] && [ "$scale" = yes ]; then
     run_scale_seed || return 1
   fi
+  if [ "$do_seed" = yes ]; then seeded=true; fi
   branch_url=$(ensure_preview "$n-branch" "$worktree" no) || return 1
   echo "branch preview: $branch_url"
 }
@@ -222,7 +225,11 @@ step_probe() {
   fi
   echo 'bridge probe failed; restarting Ego Lite once' >&2
   local pids pid i
-  pids=$(pgrep -f 'ego lite' || true)
+  pids=$(ps -axo pid=,command= | awk '{
+    pid = $1
+    sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "")
+    if (index($0, "/Applications/ego lite.app/Contents/MacOS/ego lite") == 1) print pid
+  }') || return 1
   while read -r pid; do
     [ -n "$pid" ] || continue
     kill -TERM "$pid" 2>/dev/null || true
@@ -239,15 +246,33 @@ step_probe() {
   return 1
 }
 
+host_busy() {
+  local ancestor=$PPID ancestors=" $$ $PPID " parent pid pids
+  while [ "$ancestor" -gt 1 ]; do
+    parent=$(ps -o ppid= -p "$ancestor" | tr -d '[:space:]') || break
+    case "$parent" in ''|*[!0-9]*|0) break ;; esac
+    case "$ancestors" in *" $parent "*) break ;; esac
+    ancestors+="$parent "
+    ancestor=$parent
+  done
+  pids=$(pgrep -f 'vitest|test:integration|ego-browser nodejs|nav-perf\.sh' || true)
+  while read -r pid; do
+    [ -n "$pid" ] || continue
+    case "$ancestors" in *" $pid "*) continue ;; esac
+    return 0
+  done <<< "$pids"
+  return 1
+}
+
 step_perf() {
   if [ "$want_perf" = no ]; then
     perf_skipped='skipped: --no-perf'
     echo 'perf skipped (--no-perf)'
     return 0
   fi
-  if pgrep -f 'vitest|test:integration|danger-full-access|ego-browser nodejs|nav-perf\.sh' >/dev/null; then
+  if host_busy; then
     perf_skipped='skipped: host busy'
-    echo 'perf skipped: the host is busy (vitest, integration, a reviewer, ego-browser or another nav-perf)'
+    echo 'perf skipped: the host is busy (vitest, integration, ego-browser or another nav-perf)'
     return 0
   fi
   echo "nav-perf: develop=$dev_url branch=$branch_url out=$perf_out reset-db=$n"
