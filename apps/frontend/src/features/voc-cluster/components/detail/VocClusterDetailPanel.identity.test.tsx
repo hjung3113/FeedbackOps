@@ -137,7 +137,9 @@ describe('VocClusterDetailPanel identity', () => {
 
   it('renders a linked Finding id once', () => {
     const findingId = '60000000-0000-0000-0000-000000000006';
-    clusterState.data.linked_findings = [{ id: findingId, display_id: 'FIN-1240', status: 'active' }];
+    clusterState.data.linked_findings = [
+      { id: findingId, display_id: 'FIN-1240', status: 'active' },
+    ];
 
     render(<VocClusterDetailPanel clusterId={cluster.id} />);
 
