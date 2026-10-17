@@ -25,6 +25,7 @@ export const HOME_COPY = {
   // so the panel stays and only the promise of a destination goes away.
   queueHeading: '복구 · 후속 조치 큐',
   noZeroQueueItems: '처리할 항목 없음',
+  summaryError: '홈 요약을 불러올 수 없습니다.',
   assignedToYou: '내게 배정됨',
   myVocs: GLOSSARY.myVocs,
   coverage: '커버리지 신호',

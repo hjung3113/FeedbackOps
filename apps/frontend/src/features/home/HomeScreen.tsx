@@ -205,7 +205,7 @@ export function HomeScreen({
                   <OpenRequestsPanel requests={permissionRequests} />
                 )}
                 {summary.isError && (
-                  <p className="text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+                  <p className="text-sm text-accent-danger">{HOME_COPY.summaryError}</p>
                 )}
                 {hasSummaryActivity && (
                   <HomeSummary
@@ -229,7 +229,7 @@ export function HomeScreen({
                   </div>
                 )}
                 {summary.isError ? (
-                  <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+                  <p className="mb-5 text-sm text-accent-danger">{HOME_COPY.summaryError}</p>
                 ) : (
                   <HomeSummary
                     summary={summary.data}
@@ -408,9 +408,7 @@ function HomeSummary({
       {visibleKpiKeys.length > 0 && (
         <div className="mb-8 flex flex-wrap gap-2" data-testid="home-kpis">
           {visibleKpiKeys.map((key) => {
-            if (kpis === undefined) return null;
-            const value = kpis[key];
-            if (value === undefined) return null;
+            const value = kpis?.[key];
             return (
               <div
                 key={key}

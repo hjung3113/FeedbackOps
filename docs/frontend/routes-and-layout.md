@@ -114,9 +114,8 @@ Navigation is a discovery surface; backend permission checks remain authoritativ
 ```text
 - Domain destinations (Home, VOC, Findings, Tasks, Integration, Surveys) stay visible to every Actor.
   Their route data and actions remain permission-gated by their owning contracts.
-- The Admin rail entry, `관리자` sidebar entries (Managed Systems, Analytics Areas, Permission requests,
-  Workspace settings), and Workspace settings footer link appear only after `workspace.admin` is
-  approved by `/me/permissions/check`.
+- The Admin rail entry and `관리자` sidebar entries (Managed Systems, Analytics Areas, Permission requests,
+  Workspace settings) appear only after `workspace.admin` is approved by `/me/permissions/check`.
 - Keep those Admin entries hidden while the capability check is pending, failed, or not approved.
 - Direct links to Admin routes still render their route-level blocked panel when the Actor is not approved; navigation visibility does not replace `PermissionGate`.
 ```

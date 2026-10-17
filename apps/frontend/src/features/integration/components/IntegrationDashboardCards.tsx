@@ -38,26 +38,16 @@ const QUEUE_COPY: Record<QueueId, { title: string; detail: string }> = {
   },
 };
 
-const QUEUE_SEVERITY_TONE: Record<
-  DashboardQueue['severity'],
-  { label: string; count: string; badge: string }
-> = {
-  urgent: {
-    label: '복구',
-    count: 'text-accent-danger',
-    badge: 'bg-accent-danger/10 text-accent-danger',
-  },
-  warn: {
-    label: '후속 조치',
-    count: 'text-accent-warn',
-    badge: 'bg-accent-warn/10 text-accent-warn',
-  },
-  info: {
-    label: '검토',
-    count: 'text-text-primary',
-    badge: 'bg-accent-info/10 text-accent-info',
-  },
+const QUEUE_SEVERITY_COUNT_TONE: Record<DashboardQueue['severity'], string> = {
+  urgent: 'text-accent-danger',
+  warn: 'text-accent-warn',
+  info: 'text-text-primary',
 };
+
+const INFO_QUEUE_BADGE = {
+  label: '검토',
+  className: 'bg-accent-info/10 text-accent-info',
+} as const;
 
 export const INTEGRATION_DASHBOARD_QUEUE_ORDER: readonly QueueId[] = [
   'unassigned-voc',
@@ -76,7 +66,7 @@ export function IntegrationDashboardQueueCard({
   managedSystemId?: string;
 }): React.ReactElement {
   const copy = QUEUE_COPY[queue.id];
-  const tone = QUEUE_SEVERITY_TONE[queue.severity];
+  const countTone = QUEUE_SEVERITY_COUNT_TONE[queue.severity];
   const secondaryActionLabel =
     queue.secondary_action === null
       ? null
@@ -94,22 +84,22 @@ export function IntegrationDashboardQueueCard({
         </div>
         {queue.severity === 'info' && (
           <span
-            className={`shrink-0 rounded px-1.5 py-1 text-caption font-medium uppercase ${tone.badge}`}
+            className={`shrink-0 rounded px-1.5 py-1 text-caption font-medium uppercase ${INFO_QUEUE_BADGE.className}`}
           >
-            {tone.label}
+            {INFO_QUEUE_BADGE.label}
           </span>
         )}
       </div>
 
       <div
-        className={`mt-3 text-3xl font-semibold tabular-nums ${tone.count}`}
+        className={`mt-3 text-3xl font-semibold tabular-nums ${countTone}`}
         data-testid={`integration-queue-count-${queue.id}`}
       >
         {queue.count}
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
-        {queue.secondary_action !== null && secondaryActionLabel !== '미배정 VOC 보기' ? (
+        {queue.secondary_action !== null && queue.secondary_action.intent !== 'bulk_assign' ? (
           <InternalLink
             className="min-w-0 truncate text-xs text-text-secondary hover:text-text-primary"
             data-testid={`integration-queue-secondary-${queue.id}`}
