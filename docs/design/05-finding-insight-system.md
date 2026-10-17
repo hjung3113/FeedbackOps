@@ -243,7 +243,7 @@ succeeds. While the read is loading, show muted `확인 중…`; on failure, sho
 Korean error and `다시 시도`. Show `—` only after a successful empty read. While
 the result is unknown, hide the primary execution action and keep secondary
 actions available. A successful read with a linked Task makes `Task 열기` the
-single primary; a successful empty read makes `Task 요청` primary; a pending
+single primary and keeps `Task 요청` as secondary; a successful empty read makes `Task 요청` primary; a pending
 Task Request makes `Task Request 보기` primary and `Task 요청` secondary.
 
 Finding-to-Milestone and Finding-to-Work-Initiative actions are future

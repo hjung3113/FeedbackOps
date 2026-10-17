@@ -1,5 +1,6 @@
 import { expect, test } from './support/visual-test';
 
+import { getCapabilityDisplayLabel } from '../../src/lib/copy/capabilities';
 import {
   PERMISSION_EXPIRATION_VISUAL_DATE,
   PERMISSION_IDS,
@@ -7,6 +8,8 @@ import {
 } from './fixtures/permissions';
 import { installMockApi, parsePermissionDecisionBody } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
+
+const label = getCapabilityDisplayLabel;
 
 test.describe('/admin/permissions/requests visual harness', () => {
   for (const scenario of permissionVisualScenarios) {
@@ -108,9 +111,9 @@ test.describe('/admin/permissions/requests visual harness', () => {
       'aria-selected',
       'true',
     );
-    await expect(list.getByText('workspace.admin', { exact: true })).toBeVisible();
-    await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();
-    await expect(detail).toContainText('workspace.admin');
+    await expect(list.getByText(label('workspace.admin'), { exact: true })).toBeVisible();
+    await expect(list.getByText(label('workspace.read'), { exact: true })).toBeVisible();
+    await expect(detail).toContainText(label('workspace.admin'));
     await expect(detail.getByTestId('permission-decision-section')).toBeVisible();
     await expectVisual(page, detail, 'permission-requests-console-populated.png');
   });
@@ -127,7 +130,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     const requestedDate = PERMISSION_EXPIRATION_VISUAL_DATE.slice(0, 10);
     // #684: display uses the shared ko-KR date; the date input keeps the ISO value.
     const requestedDateLabel = '2026. 12. 31.';
-    await list.getByText('workspace.read', { exact: true }).click();
+    await list.getByText(label('workspace.read'), { exact: true }).click();
     await expect(list.getByText(`만료 ${requestedDateLabel}`, { exact: true })).toBeVisible();
     await expect(detail.getByText(requestedDateLabel, { exact: true })).toBeVisible();
     // #589: an unknown Managed System scope shows a type label + short id, never the full UUID.
@@ -175,9 +178,9 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect.poll(() => mock.postedRequests).toHaveLength(0);
     await page
       .getByTestId('permission-requests-list')
-      .getByText('workspace.read', { exact: true })
+      .getByText(label('workspace.read'), { exact: true })
       .click();
-    await expect(detail).toContainText('workspace.read');
+    await expect(detail).toContainText(label('workspace.read'));
     await expect(detail.getByLabel('사유 · 선택')).toBeVisible();
     await detail.getByRole('button', { name: '승인', exact: true }).click();
     await detail.getByTestId('permission-decision-submit').click();
@@ -225,7 +228,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await page.goto('/admin/permissions/requests');
     await page
       .getByTestId('permission-requests-list')
-      .getByText('task.self_approve_request', { exact: true })
+      .getByText(label('task.self_approve_request'), { exact: true })
       .click();
 
     const detail = page.getByTestId('permission-request-detail-panel');
@@ -278,7 +281,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await page.goto('/admin/permissions/requests');
     await page
       .getByTestId('permission-requests-list')
-      .getByText('workspace.read', { exact: true })
+      .getByText(label('workspace.read'), { exact: true })
       .click();
 
     const detail = page.getByTestId('permission-request-detail-panel');
@@ -297,7 +300,9 @@ test.describe('/admin/permissions/requests visual harness', () => {
         },
       ]);
     await expect(
-      page.getByTestId('permission-requests-list').getByText('workspace.read', { exact: true }),
+      page
+        .getByTestId('permission-requests-list')
+        .getByText(label('workspace.read'), { exact: true }),
     ).toHaveCount(0);
   });
 
@@ -310,10 +315,10 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await page.getByRole('tab', { name: /^승인됨\s*,\s*1$/ }).click();
 
     const list = page.getByTestId('permission-requests-list');
-    await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();
-    await expect(list.getByText('workspace.admin', { exact: true })).toHaveCount(0);
-    await expect(list.getByText('voc.triage', { exact: true })).toHaveCount(0);
-    await expect(list.getByText('finding.manage', { exact: true })).toHaveCount(0);
+    await expect(list.getByText(label('workspace.read'), { exact: true })).toBeVisible();
+    await expect(list.getByText(label('workspace.admin'), { exact: true })).toHaveCount(0);
+    await expect(list.getByText(label('voc.triage'), { exact: true })).toHaveCount(0);
+    await expect(list.getByText(label('finding.manage'), { exact: true })).toHaveCount(0);
     await expect(page.getByTestId('permission-request-detail-panel')).toContainText('승인됨');
     await expect(page.getByTestId('permission-decision-section')).toHaveCount(0);
   });

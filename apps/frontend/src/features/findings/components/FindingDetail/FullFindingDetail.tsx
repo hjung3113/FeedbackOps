@@ -252,7 +252,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           />
           <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
             <legend className="sr-only">보조 작업</legend>
-            {executionController.pendingTaskRequest && (
+            {(executionController.pendingTaskRequest || finding.linked_task_id !== null) && (
               <Button
                 variant="outline"
                 size="sm"

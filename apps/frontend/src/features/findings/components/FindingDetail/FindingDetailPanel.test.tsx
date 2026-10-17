@@ -46,8 +46,9 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
 }));
 
+let permissionState = 'approved';
 vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
-  usePermissionCheck: () => ({ data: { state: 'approved' } }),
+  usePermissionCheck: () => ({ data: { state: permissionState } }),
 }));
 
 vi.mock('@/features/findings/hooks/useEvidenceHighlights', () => ({
@@ -113,8 +114,9 @@ vi.mock('@/lib/api/managed-systems', () => ({
   })),
 }));
 
+let roleLevel = 'admin';
 vi.mock('@/lib/auth/useMe', () => ({
-  useMe: () => ({ data: { actor: { role_level: 'admin' } } }),
+  useMe: () => ({ data: { actor: { role_level: roleLevel } } }),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -272,9 +274,37 @@ describe('FindingDetailPanel', () => {
     const taskLink = within(primaryGroup).getByRole('link', { name: 'Task 열기' });
     expect(taskLink).toHaveClass('bg-accent-primary');
     expect(within(primaryGroup).getAllByRole('link')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Task 요청' })).not.toBeInTheDocument();
+    expect(
+      within(primaryGroup).queryByRole('button', { name: 'Task 요청' }),
+    ).not.toBeInTheDocument();
+    const requestTask = within(screen.getByRole('group', { name: '보조 작업' })).getByRole(
+      'button',
+      { name: 'Task 요청' },
+    );
+    expect(requestTask).toHaveAttribute('data-testid', 'request-task-btn');
+    expect(requestTask).toBeEnabled();
+    expect(requestTask).not.toHaveClass('bg-accent-primary');
     const footer = detail.querySelector('.sticky.bottom-0');
     expect(footer?.querySelectorAll('.bg-accent-primary')).toHaveLength(1);
+  });
+
+  it('disables the secondary Task 요청 button when the permission check denies it', async () => {
+    permissionState = 'denied';
+    roleLevel = 'developer';
+    try {
+      renderWithClient(
+        <FullFindingDetail
+          finding={{ ...mediumFinding, linked_task_id: '20000000-0000-0000-0000-000000000002' }}
+        />,
+      );
+
+      const primaryGroup = await screen.findByRole('group', { name: '주요 실행' });
+      expect(within(primaryGroup).getByRole('link', { name: 'Task 열기' })).toBeVisible();
+      expect(screen.getByTestId('request-task-btn')).toBeDisabled();
+    } finally {
+      permissionState = 'approved';
+      roleLevel = 'admin';
+    }
   });
 
   it('keeps linked Task identity accessible and its move affordance on one line', async () => {
