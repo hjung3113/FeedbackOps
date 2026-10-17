@@ -41,6 +41,14 @@ vi.mock('@fops/ui', async () => {
 const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
+  // The blocked-state 내 VOC link (#1238 item 7), stubbed as in TaskBoardRoute.test.tsx.
+  Link: ({
+    to,
+    search,
+    children,
+  }: { to: string; search: { view: string }; children: React.ReactNode }) => (
+    <a href={`${to}?view=${search.view}`}>{children}</a>
+  ),
 }));
 
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({

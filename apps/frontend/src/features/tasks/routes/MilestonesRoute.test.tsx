@@ -444,7 +444,9 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     // The filtered list itself stays successful; rows remain rendered.
     expect(screen.getByText('MLS-1021')).toBeInTheDocument();
     // Retained totals are unavailable, not zero.
-    expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('—');
+    await waitFor(() =>
+      expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('—'),
+    );
     // Evidence linked is pinned to exactly 0 and is not counts-derived.
     expect(screen.getByTestId('milestone-summary-evidence-linked')).toHaveTextContent('0');
     // Tab badges disappear instead of showing retained distributions.
