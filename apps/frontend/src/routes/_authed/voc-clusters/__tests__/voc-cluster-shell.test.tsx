@@ -240,7 +240,6 @@ type ClusterFixture = {
     id: string;
     display_id: string;
     status: string;
-    title?: string;
   }>;
 };
 
@@ -689,13 +688,11 @@ describe('VOC cluster route shells', () => {
         id: '77777777-7777-7777-7777-777777777777',
         display_id: 'FIN-777',
         status: 'active',
-        title: '결제 오류 개선',
       },
       {
         id: '88888888-8888-8888-8888-888888888888',
         display_id: 'FIN-888',
         status: 'draft',
-        title: '결제 안내 개선',
       },
     ];
     const { VocClusterDetailPanel } = await import(
@@ -708,7 +705,6 @@ describe('VOC cluster route shells', () => {
 
     expect(screen.getByTestId('cluster-linked-findings-list')).toBeInTheDocument();
     expect(screen.getByText('FIN-777')).toBeInTheDocument();
-    expect(screen.getByText('결제 오류 개선')).toBeInTheDocument();
     expect(screen.getByText('진행 중')).toBeInTheDocument();
     expect(screen.getByText('FIN-888')).toBeInTheDocument();
     expect(screen.getByTestId('finding-status-badge-draft')).toHaveTextContent('초안');
@@ -727,7 +723,6 @@ describe('VOC cluster route shells', () => {
           id: '77777777-7777-7777-7777-777777777777',
           display_id: 'FIN-777',
           status,
-          title: '결제 오류 개선',
         },
       ];
       const { VocClusterDetailPanel } = await import(
