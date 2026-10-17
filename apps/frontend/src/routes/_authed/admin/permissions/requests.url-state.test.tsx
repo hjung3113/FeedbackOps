@@ -194,7 +194,7 @@ describe('/admin/permissions/requests URL state', () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.admin',
+        '워크스페이스 관리자 권한',
       ),
     );
     // The active tab's list rendered — restore is not detail-only.
@@ -228,7 +228,7 @@ describe('/admin/permissions/requests URL state', () => {
     });
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.admin',
+        '워크스페이스 관리자 권한',
       ),
     );
     expect(router.history.length).toBe(lengthBefore + 1);
@@ -238,7 +238,7 @@ describe('/admin/permissions/requests URL state', () => {
     const router = renderUrlState('/admin/permissions/requests');
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.read',
+        '워크스페이스 전체 읽기',
       ),
     );
     const lengthBefore = router.history.length;
@@ -252,7 +252,7 @@ describe('/admin/permissions/requests URL state', () => {
       });
     });
     expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.read',
+      '워크스페이스 전체 읽기',
     );
     expect(router.history.length).toBe(lengthBefore + 1);
   });
@@ -302,7 +302,7 @@ describe('/admin/permissions/requests URL state', () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.read',
+        '워크스페이스 전체 읽기',
       ),
     );
     expect(
@@ -327,7 +327,7 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.history.length).toBe(1);
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.admin',
+        '워크스페이스 관리자 권한',
       ),
     );
     expect(
@@ -339,7 +339,7 @@ describe('/admin/permissions/requests URL state', () => {
     const router = renderUrlState(`/admin/permissions/requests?tab=all&selected=${APPROVED_ID}`);
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-        'workspace.admin',
+        '워크스페이스 관리자 권한',
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));

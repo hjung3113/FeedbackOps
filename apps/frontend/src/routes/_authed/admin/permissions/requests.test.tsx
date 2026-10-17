@@ -920,7 +920,7 @@ describe("/admin/permissions/requests", () => {
     await waitFor(() =>
       expect(
         screen.getByTestId("permission-request-detail-panel"),
-      ).toHaveTextContent("workspace.admin"),
+      ).toHaveTextContent("워크스페이스 관리자 권한"),
     );
   });
 

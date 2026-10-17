@@ -151,9 +151,9 @@ describe('permission request risk review', () => {
     expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
       '민감한 권한 · 워크스페이스 관리자 권한',
     );
-    const requestInfo = screen.getByText('요청 정보').closest('section');
-    if (!requestInfo) throw new Error('Request info section is missing');
-    expect(within(requestInfo).getByText('승인됨')).toBeInTheDocument();
+    const header = screen.getByTestId('permission-request-detail-panel').querySelector('header');
+    if (!header) throw new Error('Detail header is missing');
+    expect(within(header).getByText('승인됨')).toBeInTheDocument();
   });
 
   it.each(['approved', 'rejected', 'cancelled'] as const)(
