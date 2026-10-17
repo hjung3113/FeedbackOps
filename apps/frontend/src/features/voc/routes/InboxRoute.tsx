@@ -9,7 +9,7 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
+import { VOC_INBOX_LABEL, VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
 import { useCommittedSearchDraft } from '@/lib/useCommittedSearchDraft';
 import {
@@ -435,7 +435,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               activeTab,
               onTabChange: handleTabChange,
             }
-          : { title: view === 'my' ? GLOSSARY.myVocs : 'VOC 수신함' })}
+          : { title: view === 'my' ? GLOSSARY.myVocs : VOC_INBOX_LABEL })}
         action={
           inboxPermissionBlocked ? (
             <Button asChild variant="secondary" size="sm" spacing="compact">
@@ -515,7 +515,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
                 <PermissionBlockedPanel
                   // The server marks the capability requestable, so its panel state owns the CTA.
                   state="request_access"
-                  category="VOC 수신함"
+                  category={VOC_INBOX_LABEL}
                   // #562 copy: a named Managed System means this selected scope is out of reach.
                   reason={
                     deniedMsScoped
@@ -531,7 +531,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
               // -> blocked_not_requestable (#562).
               state="blocked_not_requestable"
-              category="VOC 수신함"
+              category={VOC_INBOX_LABEL}
               reason={PERMISSION_BLOCKED_REASONS.vocInbox}
             />
           )}

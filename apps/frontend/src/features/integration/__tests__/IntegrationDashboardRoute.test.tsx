@@ -344,6 +344,45 @@ describe('integration action dashboard route', () => {
     },
   );
 
+  test('hides the bulk-assign secondary link by intent instead of its label', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...SUMMARY,
+      action_queues: [
+        {
+          ...queueFixtures[0],
+          secondary_action: {
+            label: 'Updated server copy',
+            route: '/vocs?view=inbox&tab=unassigned&action=bulk_assign',
+            intent: 'bulk_assign',
+          },
+        },
+        {
+          ...queueFixtures[1],
+          secondary_action: {
+            label: '미배정 VOC 보기',
+            route: '/findings?selected=finding-a&action=review',
+            intent: 'unrecognized_intent',
+          },
+        },
+      ],
+    });
+    await renderDashboard('/integration', async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/dashboard/summary')) return response(summary);
+      if (url.includes('/managed-systems')) return managedSystemsResponse();
+      return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
+    });
+
+    const bulkAssignCard = await screen.findByTestId('integration-queue-card-unassigned-voc');
+    expect(
+      within(bulkAssignCard).queryByTestId('integration-queue-secondary-unassigned-voc'),
+    ).not.toBeInTheDocument();
+    const otherIntentAction = await screen.findByTestId(
+      'integration-queue-secondary-actionable-finding-no-execution',
+    );
+    expect(otherIntentAction).toHaveTextContent('미배정 VOC 보기');
+  });
+
   test('omits an absent queue while preserving an explicit zero count', async () => {
     const summary = dashboardSummarySchema.parse({
       ...SUMMARY,
