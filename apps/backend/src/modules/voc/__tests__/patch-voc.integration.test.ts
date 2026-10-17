@@ -194,7 +194,13 @@ async function getAuditTypes(vocId: string): Promise<string[]> {
   const ops = createDb(MIGRATE_URL);
   try {
     const rows = await ops.pool.query<{ event_type: string }>(
-      'select event_type from core.audit_log where subject_id = $1 order by created_at asc',
+      // Same-transaction rows tie on created_at: id is defaultRandom()
+      // (core.ts:210) and created_at is defaultNow() (core.ts:225), so neither
+      // encodes insert order. ctid does: core.audit_log is append-only for
+      // fops_app (UPDATE denied by role grants), so ctid order == insert order
+      // and the sequence below becomes deterministic.
+      `select event_type from core.audit_log where subject_id = $1
+       order by created_at asc, ctid asc`,
       [vocId],
     );
     return rows.rows.map((r) => r.event_type);

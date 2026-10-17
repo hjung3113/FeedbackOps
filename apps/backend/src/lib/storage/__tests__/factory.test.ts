@@ -5,15 +5,17 @@
 // never appears in `redactConfig()` output, the structured
 // `storage: materialized` line, or any JSON-stringified view of the config.
 
+import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { mockClient } from 'aws-sdk-client-mock';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { JobLog } from '../../job-log.js';
 import {
+  type StorageEnv,
   __resetStorageForTests,
   getStorage,
   parseStorageEnv,
   redactConfig,
-  type StorageEnv,
 } from '../factory.js';
 
 const VALID_ENV: StorageEnv = {
@@ -30,9 +32,17 @@ describe('factory', () => {
     __resetStorageForTests();
   });
 
+  // #1192: factory.ts constructs the S3Client internally on first use, so the
+  // stub must sit on the class (prototype send), not an instance. Without it
+  // the `minio` endpoint went to DNS + SDK default retries, which could exceed
+  // vitest's 5 s test timeout; the line under test is logged in materialize()
+  // before send() runs either way.
+  const s3Mock = mockClient(S3Client);
+
   afterEach(() => {
     __resetStorageForTests();
     vi.restoreAllMocks();
+    s3Mock.reset();
   });
 
   it('parses STORAGE_S3_* env and returns singleton', () => {
@@ -92,6 +102,8 @@ describe('factory', () => {
       STORAGE_S3_ENDPOINT: 'http://user:pw@minio:9000/x',
     };
     const backend = getStorage(env, { log });
+    // Fail before any network I/O so the test cannot hang on DNS (#1192).
+    s3Mock.on(HeadObjectCommand).rejects(new Error('unit test: send mocked to fail'));
     // Lazy init: the line fires on the first method call — and only then.
     await backend.exists('any-key').catch(() => {
       /* expected: no MinIO running in unit tests */

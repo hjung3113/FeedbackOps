@@ -147,3 +147,11 @@ blocker (#1062). Its non-blockers are below the release cut line, listed item by
 | Recovery reconcile batching (PS-5): the outcome phase recounts the Survey's responses per response inside each 100-response page | Measured 2026-10-17 on the real code: page lock hold median/max 134/273 ms at 1k responses, 189/390 ms at 5k, 323/840 ms at 20k; full sweeps 1.5 s / 10.5 s / 65 s with the lock released between pages. Repair commands wait at most one page, under one second even at 20k | A Survey passes about 20k responses, or a page holds the lock longer than one second, or Admins report slow recovery repairs |
 | Links inventory search and entity lookup (B-2) | Already #1219; VOC detail now shows the execution trail directly (#1225) | See #1219 |
 | Seed has no permission requests, so the gate's first Admin pass could not exercise decisions | The conductor filed requests and the decisions passed in a follow-up run | The release gate is automated, or the scale seed is next revised |
+
+### Slice 64 — Test reliability (2026-10-18)
+
+Accepted limit from #1192. Not implemented.
+
+| Deferred item | Reason | Reopen when |
+| --- | --- | --- |
+| Recovery visual specs mask the queue's tab list and refresh button (`recovery.visual.spec.ts`), so that row's text is not pixel-compared | After force-loading its Pretendard subsets, the row's anti-aliasing still varied between runs (1 failure in 5 stable runs); the rest of the frame is still compared, and the tabs' markup and labels stay covered by DOM tests | The residual rendering variation is understood (compositing or a fractional offset), or a regression in that row slips past the DOM tests |
