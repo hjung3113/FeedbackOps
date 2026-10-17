@@ -57,7 +57,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Panel | detail, blocked, create | loading, dirty, error | close is keyboard reachable |
 | DetailPanelHeader | VOC, Finding, Task Request, Task, Milestone, Survey, Cluster | record id available or omitted | kind chip uses its accent and dot; non-Milestone headers retain the accent stripe; fullscreen toggle sits before close inside the detail slot |
 | DetailPanelReadingColumn | detail slot, Triage | expanded, collapsed, no fullscreen context | expanded: centred 60rem column with bordered gutters; otherwise `contents`, so the panel stays mounted across the toggle |
-| UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone includes text |
+| UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone (default) includes text; `tone="neutral"` only inside unassigned views (Inbox `tab=unassigned`, Triage unassigned) |
 | Toolbar | view, action, bulk | default, selection-active | one primary action maximum |
 
 ## Composed Components

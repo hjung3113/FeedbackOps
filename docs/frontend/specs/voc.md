@@ -397,7 +397,7 @@ Surface keys NOT consumed by VOC (listed for completeness — checked in other s
 - `execution` → Finding spec
 - `linkedVoc` → Task spec
 
-`<PermissionBlockedPanel state="request_access">` renders its CTA only when the caller supplies `onRequestAccess`. Where it is wired (for example the Inbox list 403 that carries `requestable_permission`), the CTA opens the request-access dialog (`RequestAccessButton`: required reason, optional expiration, `POST /permission-requests`). The Admin route's strict search schema accepts only `tab` and `selected`.
+`<PermissionBlockedPanel state="request_access">` renders its CTA only when the caller supplies `onRequestAccess`. Where it is wired (for example the Inbox list 403 that carries `requestable_permission`), the CTA opens the request-access dialog (`RequestAccessButton`: required reason, optional expiration, `POST /permission-requests`). The Admin route's strict search schema accepts only `tab` and `selected`. When the Inbox list 403s (`view=inbox`), the blocked chrome drops the tab strip (title `VOC 수신함`), search, filter/sort, and the active-filter bar, renders the create action as a secondary button, and shows the `내 VOC` shortcut only when the 403 carries no `requestable_permission`; a blocked Triage console adds the same secondary create button plus `내 VOC` only in the `blocked_not_requestable` state.
 
 Production adapter (`apps/frontend/src/lib/cross-system/getPermissionDecision.ts`; returns `null` for a missing key or a schema failure):
 
@@ -567,7 +567,7 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 |---|---|---|---|
 | `/vocs?view=inbox&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png` (full-page: `voc-inbox-detail-full.png`) | Reporter pill vs internal squared badge separation; 60px default row height; sticky `+ New VOC` action in toolbar; 3-tab composer; sticky next-action footer; entity trail action panel | Detail panel rhythm matches screenshot; Linked execution section sits above abstract trail; Compose tabs are visually distinct (megaphone icon for public) |
 | `/vocs?view=triage&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-triage-console.png` | Expanded 96px rows; severity color bar; "Owner 없음" / "Area 미지정" red/amber meta tags; out-of-scope summary peek banner; 4-second undo toast bottom-center; "큐가 비었습니다 · 현재 범위에 Triage할 VOC가 없습니다" whole-queue empty state only when the queue total is a known 0, tab-scoped "이 탭에 해당하는 VOC가 없습니다" empty state otherwise | Severity picker uses 4 chips with helper tooltips; Triage 결과 미리보기 card mirrors the screenshot's labels |
-| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + same-Managed-System peer card + severity-disclaimer card in sidebar; Source segmented control (no proxy sub-fields are built) |
+| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + same-Managed-System peer card in sidebar; muted severity help line above the form (`심각도는 검토 후 운영팀이 결정합니다. 직접 설정할 수 없습니다.`); header back link returns to 수신함, or 내 VOC when settled nav counts omit the Inbox key; Source segmented control (no proxy sub-fields are built) |
 | `/vocs?view=my&selected=<id>` | reuse inbox baseline | Same as inbox but with `reporter_id=me` filter applied | Empty state copy differs ("내가 제출한 VOC가 없습니다") |
 
 **Acceptance use** (per HANDOFF §5): for clean-room implementation, compare against the screenshots only after the source docs are followed; never let the implementation regress from the contract because the screenshot is missing.
@@ -597,9 +597,12 @@ The committed search draft hook is shared at `apps/frontend/src/lib/useCommitted
 tabs for every actor. Restored bookmarks and saved views drop severity filters,
 severity sorting, and these tabs from the URL before fetching with My VOC defaults.
 Absent wire severity renders no indicator or badge and a
-neutral row bar. Visible null severity announces `심각도 미지정`; standalone
-indicators use `심각도 낮음/중간/높음/심각`. Badge indicators are decorative,
-so a triaged row announces severity once through its badge.
+neutral row bar. Visible null severity renders the same neutral row bar with no
+standalone indicator and no `심각도 미지정` announcement. Severity is encoded
+once per view: the list row announces it only through its `SeverityBadge`
+(`심각도 낮음/중간/높음/심각`; the severity-colored left stripe is decorative),
+and the detail panel keeps severity in the Triage block — the metadata strip
+below the body carries only Managed System and source context.
 
 ### Detail follow-up trail and primary action (#1225)
 

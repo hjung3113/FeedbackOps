@@ -408,6 +408,7 @@ Rules:
 - Each node has object type, title, status, and jump action.
 - Missing expected link is shown as a dashed placeholder with CTA only when policy or workflow configuration expects it.
 - Permission-hidden node uses summary-visible contract when available.
+- `iconTone` defaults to `default`; `iconTone="quiet"` lowers the node icon weight (font-medium badge) so trail marks stop competing with surrounding text — the VOC detail trail section opts in.
 - Compact surfaces use LinkedEntityTrail as preview only; full linked-object details belong in the linked object's DetailPanel or route.
 ```
 
@@ -532,7 +533,7 @@ Rules:
 ```text
 - Signal badges are secondary unless they represent urgent action.
 - Critical and blocked states must remain distinguishable for color-blind users through icon or label.
-- Use the shared UnassignedBadge for missing owners and reviewers: danger text on a faint danger background, default label `담당자 없음`, reviewer label `검토자 없음`.
+- Use the shared UnassignedBadge for missing owners and reviewers: danger text on a faint danger background, default label `담당자 없음`, reviewer label `검토자 없음`. `tone="neutral"` (bordered muted chip) is reserved for the Inbox `tab=unassigned` and Triage `activeTab=unassigned` rows; every other consumer keeps the danger default.
 ```
 
 ### RichContentEditor
