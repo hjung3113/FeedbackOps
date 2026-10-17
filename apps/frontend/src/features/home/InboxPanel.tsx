@@ -62,8 +62,12 @@ function reportMutationError(error: ApiError): void {
   toast.error(mapUnknownError(error).message);
 }
 
-function notificationSummary(summary: string): string {
-  return isCapability(summary) ? getCapabilityDisplayLabel(summary) : summary;
+// Permission notifications carry the raw capability key as the subject title.
+function subjectRefTitle(notification: NotificationDto, title: string): string {
+  const carriesCapability =
+    notification.subject_type === 'permission_request' ||
+    notification.subject_type === 'permission_grant';
+  return carriesCapability && isCapability(title) ? getCapabilityDisplayLabel(title) : title;
 }
 
 export function InboxPanel(): React.ReactElement {
@@ -203,7 +207,7 @@ function NotificationRow({
   const targetLocation = target === null ? null : new URL(target, 'http://feedbackops.local');
   const subjectTitle =
     notification.subject_ref?.visibility_state === 'allowed'
-      ? notification.subject_ref.title
+      ? subjectRefTitle(notification, notification.subject_ref.title)
       : null;
   const titleTooltipOnArchive =
     subjectTitle !== null && targetLocation === null && notification.read_at !== null;
@@ -228,9 +232,7 @@ function NotificationRow({
           <span className="shrink-0 text-caption font-medium tracking-wide text-text-muted">
             {HOME_INBOX_COPY.categories[notification.subject_type]}
           </span>
-          <span className="truncate text-sm text-text-primary">
-            {notificationSummary(notification.summary)}
-          </span>
+          <span className="truncate text-sm text-text-primary">{notification.summary}</span>
         </span>
         {notification.subject_ref ? (
           <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
@@ -239,7 +241,7 @@ function NotificationRow({
                 <span className="shrink-0 font-mono text-caption text-text-muted">
                   {notification.subject_ref.display_id}
                 </span>
-                <span className="truncate">{notification.subject_ref.title}</span>
+                <span className="truncate">{subjectTitle}</span>
               </>
             ) : (
               <span>{HOME_INBOX_COPY.subjectUnavailable}</span>

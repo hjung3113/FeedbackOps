@@ -81,7 +81,7 @@ describe('AppSidebar', () => {
   });
 
   it('does not render a footer wrapper for a non-admin actor', () => {
-    render(<AppSidebar entries={entries} canAccessWorkspaceAdmin={false} />);
+    render(<AppSidebar entries={entries} />);
 
     expect(screen.queryByTestId('sidebar-footer')).not.toBeInTheDocument();
   });
@@ -292,7 +292,6 @@ describe('AppSidebar', () => {
       <AppSidebar
         entries={entries}
         defaultCollapsed={true}
-        canAccessWorkspaceAdmin={true}
         footerItems={[
           {
             id: 'help-center',

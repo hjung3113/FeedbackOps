@@ -71,6 +71,8 @@ function installFetch(
     taskItems?: unknown[];
     taskRequestItems?: unknown[];
     answerableSurveys?: unknown;
+    personalWorkStatus?: number;
+    summaryStatus?: number;
   } = {},
 ): ReturnType<typeof vi.fn> {
   let unreadCountRequests = 0;
@@ -97,8 +99,24 @@ function installFetch(
       );
     if (url.startsWith('/dashboard/summary')) {
       if (options.pendingSummary) return new Promise<Response>(() => {});
+      if (options.summaryStatus !== undefined)
+        return new Response(JSON.stringify({ code: 'internal.unexpected', message: 'x' }), {
+          status: options.summaryStatus,
+        });
       return new Response(JSON.stringify(summary), { status: 200 });
     }
+    if (
+      options.personalWorkStatus !== undefined &&
+      (url.startsWith('/tasks') || url.startsWith('/task-requests'))
+    )
+      return new Response(
+        JSON.stringify(
+          options.personalWorkStatus === 403
+            ? { code: 'permission.denied', message: 'finding.manage capability required' }
+            : { code: 'internal.unexpected', message: 'x' },
+        ),
+        { status: options.personalWorkStatus },
+      );
     if (url.startsWith('/tasks'))
       return new Response(JSON.stringify({ items: options.taskItems ?? [] }), { status: 200 });
     if (url.startsWith('/task-requests'))
@@ -1201,6 +1219,47 @@ describe('HomeScreen route content', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /VOC 조회/ })).toHaveFocus());
   });
 
+  it('keeps the panel and focuses its heading after withdrawal removes the last row', async () => {
+    const detail = ownerDetailFixture();
+    let rows = [detail];
+    const emptySummary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: {},
+      action_queues: [],
+      coverage: [],
+    });
+    const base = installFetch(emptySummary, { roleLevel: 'user' });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: rows }));
+      if (url.endsWith('/cancel')) {
+        rows = [];
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 9,
+            status: 'cancelled',
+            updated_at: detail.updated_at,
+          }),
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    fireEvent.click(screen.getByRole('button', { name: '요청 철회' }));
+    fireEvent.click(
+      within(screen.getByTestId('owner-withdraw-confirmation')).getByRole('button', {
+        name: '요청 철회',
+      }),
+    );
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('요청이 철회되었습니다.'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: '열린 요청' })).toHaveFocus());
+  });
+
   it('withdrawal confirmation replaces the edit form and 취소 returns to it', async () => {
     const detail = ownerDetailFixture();
     const base = installFetch();
@@ -1490,12 +1549,12 @@ describe('HomeScreen route content', () => {
     expect(input).toHaveFocus();
   });
 
-  it('collapses the empty open permission request section after the query resolves', async () => {
+  it('keeps the empty open permission request panel mounted after the query resolves', async () => {
     installFetch();
     renderHome();
     await screen.findByTestId('home-action-queues');
-    expect(screen.queryByRole('heading', { name: '열린 요청' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('home-open-requests-list')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '열린 요청' })).toBeInTheDocument();
+    expect(screen.getByText('열린 요청이 없습니다.')).toBeInTheDocument();
   });
 
   // #280 removed the *promise* of a My Work screen, not the live rows beneath
@@ -1576,6 +1635,41 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByTestId('home-coverage')).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-my-work')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '열린 요청' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { status: 403, reporterEmpty: true },
+    { status: 500, reporterEmpty: false },
+  ])(
+    'treats a $status personal-work response as reporter-empty: $reporterEmpty',
+    async ({ status, reporterEmpty }) => {
+      const emptySummary = dashboardSummarySchema.parse({
+        ...response,
+        kpis: {},
+        action_queues: [],
+        coverage: [],
+      });
+      installFetch(emptySummary, { roleLevel: 'user', personalWorkStatus: status });
+      renderHome();
+
+      await screen.findByRole('heading', { name: '응답할 Survey' });
+      await waitFor(() =>
+        expect(screen.queryByTestId('home-reporter-empty') !== null).toBe(reporterEmpty),
+      );
+      if (reporterEmpty) expect(screen.getByRole('link', { name: '내 VOC' })).toBeInTheDocument();
+    },
+  );
+
+  it('keeps independently loaded sections when the summary request fails', async () => {
+    installFetch(response, {
+      summaryStatus: 500,
+      taskItems: [{ id: 'task-a1', display_id: 'TSK-701', title: '담당 Task', status: 'doing' }],
+    });
+    renderHome();
+
+    expect(await screen.findByText('홈 요약을 불러올 수 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('TSK-701 — 담당 Task')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '응답할 Survey' })).toBeInTheDocument();
   });
 
   it('requests only the current Actor assigned-reviewer queue and keeps scope-wide summary', async () => {
@@ -1686,12 +1780,15 @@ describe('HomeScreen route content', () => {
     );
   });
 
-  it('hides the dashboard greeting and actions on the Inbox tab', async () => {
+  it('keeps the page heading but hides the dashboard subtitle and actions on the Inbox tab', async () => {
     installFetch(response);
     renderHome('/home?tab=inbox');
 
     await screen.findByTestId('home-inbox-list');
-    expect(screen.queryByRole('heading', { name: '안녕하세요, 지원님' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: '안녕하세요, 지원님' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/운영 큐/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '큐 새로고침' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'VOC 생성' })).not.toBeInTheDocument();
   });

@@ -307,7 +307,7 @@ describe('/admin/settings route', () => {
   });
 
   test('renders one workspace settings destination in Admin navigation', () => {
-    render(<AppSidebar entries={NAV_TREE.admin} canAccessWorkspaceAdmin={true} />);
+    render(<AppSidebar entries={NAV_TREE.admin} />);
     const settings = screen.getAllByRole('link', { name: '워크스페이스 설정' });
     expect(settings).toHaveLength(1);
     expect(settings[0]).toHaveAttribute('href', '/admin/settings');

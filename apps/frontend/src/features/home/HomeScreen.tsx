@@ -26,6 +26,7 @@ import {
   fetchTaskRequests,
   listTasks,
 } from '@/lib/api';
+import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
@@ -120,13 +121,21 @@ export function HomeScreen({
     (summary.data.action_queues.some((queue) => queue.count > 0) ||
       summary.data.coverage.length > 0 ||
       Object.values(summary.data.kpis ?? {}).some((count) => count !== undefined && count > 0));
+  // A User actor gets 403 from the Task queries: that is "no personal data", not "not loaded".
+  // Loading and other errors keep the normal layout.
+  const personalWorkSettled = [myTasks, pendingRequests].every(
+    (query) => query.isSuccess || isPermissionDenied(query.error),
+  );
+  // Once a Permission Request has shown, its panel stays mounted so the withdraw focus fallback survives.
+  const [sawPermissionRequests, setSawPermissionRequests] = React.useState(false);
+  if (permissionRequests.length > 0 && !sawPermissionRequests) setSawPermissionRequests(true);
   const operatorSectionsEmpty =
     summary.isSuccess &&
-    myTasks.isSuccess &&
-    pendingRequests.isSuccess &&
+    personalWorkSettled &&
     openPermissionRequests.isSuccess &&
     !hasSummaryActivity &&
     !hasPersonalAssignments &&
+    !sawPermissionRequests &&
     permissionRequests.length === 0;
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['dashboard-summary', managedSystemId] });
@@ -144,16 +153,18 @@ export function HomeScreen({
     >
       <PageShell contentClassName="max-w-none" detailPanel={activeTab === 'dashboard' ? recovery?.detailPanel : undefined}>
         <section data-testid="home-screen">
-          {activeTab === 'dashboard' && (
-            <header className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-                  {HOME_COPY.title(actorName)}
-                </h1>
+          <header className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-text-primary">
+                {HOME_COPY.title(actorName)}
+              </h1>
+              {activeTab === 'dashboard' && (
                 <p className="mt-3 text-sm text-text-muted">
                   {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
                 </p>
-              </div>
+              )}
+            </div>
+            {activeTab === 'dashboard' && (
               <div className="flex shrink-0 gap-2">
                 <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -166,8 +177,8 @@ export function HomeScreen({
                   </InternalLink>
                 </Button>
               </div>
-            </header>
-          )}
+            )}
+          </header>
           {activeTab === 'dashboard' && (
             <RecoveryFreshness
               computedAt={summary.data?.computed_at}
@@ -188,9 +199,7 @@ export function HomeScreen({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard" className="mt-0">
-            {summary.isError ? (
-              <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
-            ) : operatorSectionsEmpty ? (
+            {operatorSectionsEmpty ? (
               <div className="space-y-7" data-testid="home-reporter-empty">
                 <AnswerableSurveysPanel />
                 <InternalLink
@@ -209,10 +218,14 @@ export function HomeScreen({
                     <MyWorkPanel tasks={assignedTasks} requests={assignedRequests} />
                   </div>
                 )}
-                <HomeSummary
-                  summary={summary.data}
-                  {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-                />
+                {summary.isError ? (
+                  <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+                ) : (
+                  <HomeSummary
+                    summary={summary.data}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
                 {(!hasPersonalAssignments || (summary.data?.coverage.length ?? 0) > 0) && (
                   <div
                     className={`mt-9 grid gap-7 ${
@@ -232,11 +245,9 @@ export function HomeScreen({
                     )}
                   </div>
                 )}
-                {permissionRequests.length > 0 && (
-                  <div className="mt-9">
-                    <OpenRequestsPanel requests={permissionRequests} />
-                  </div>
-                )}
+                <div className="mt-9">
+                  <OpenRequestsPanel requests={permissionRequests} />
+                </div>
                 {recovery?.queue}
                 <div className="mt-9">
                   <AnswerableSurveysPanel />

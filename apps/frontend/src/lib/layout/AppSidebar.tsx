@@ -37,7 +37,6 @@ export interface SidebarNavEntry {
   countKey?: NavCountKey;
   /** Explicit, route-owned count. Undefined is deliberately not rendered. */
   count?: number;
-  urgent?: boolean;
   disabled?: boolean;
   trailing?: React.ReactNode;
 }
@@ -87,7 +86,6 @@ export interface AppSidebarProps {
   isAdmin?: boolean;
   /** Whether the actor's current scope is workspace-wide, rather than a granted union. */
   workspaceWideScope?: boolean;
-  canAccessWorkspaceAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
   /**
@@ -128,7 +126,6 @@ export function AppSidebar({
   scopeControlEnabled = true,
   isAdmin = true,
   workspaceWideScope = isAdmin,
-  canAccessWorkspaceAdmin = false,
   onManagedSystemChange,
   savedViews = [],
   savedViewSurface,
@@ -153,9 +150,6 @@ export function AppSidebar({
         : null
     : null;
   const scopeAccessibleName = scopeQualifier ? `${scopeName}, ${scopeQualifier}` : scopeName;
-  const visibleFooterItems = footerItems.filter(
-    (item) => item.id !== 'workspace-settings' || canAccessWorkspaceAdmin,
-  );
 
   const toggle = React.useCallback(() => {
     setCollapsed((prev) => {
@@ -286,7 +280,7 @@ export function AppSidebar({
                 >
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate" title={entry.label}>{entry.label}</span>}
-                  {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
+                  {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} />}
                   {!collapsed && entry.trailing}
                 </InternalLink>
               )}
@@ -304,10 +298,10 @@ export function AppSidebar({
           )}
         </div>
       </nav>
-      {visibleFooterItems.length > 0 && (
+      {footerItems.length > 0 && (
         <div className="border-t border-border-subtle p-2" data-testid="sidebar-footer">
           <div className="flex flex-col gap-0.5">
-            {visibleFooterItems.map((item) => (
+            {footerItems.map((item) => (
               <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
             ))}
           </div>
@@ -446,8 +440,8 @@ function SavedViewsSection({
   );
 }
 
-function NavCountBadge({ entryId, count, urgent }: { entryId: string; count: number; urgent?: boolean }) {
-  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-caption font-semibold tabular-nums text-text-secondary', urgent && count > 0 && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
+function NavCountBadge({ entryId, count }: { entryId: string; count: number }) {
+  return <span className="rounded-full bg-surface-row-selected px-1.5 py-0.5 text-caption font-semibold tabular-nums text-text-secondary" data-testid={`sidebar-count-${entryId}`}>{count}</span>;
 }
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {

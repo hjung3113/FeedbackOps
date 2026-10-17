@@ -155,7 +155,6 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     scopeControlEnabled,
     isAdmin,
     workspaceWideScope: isAdmin && (grantsQuery.data?.scope.kind === 'all' || awaitingInitialScope),
-    canAccessWorkspaceAdmin,
     onManagedSystemChange: changeManagedSystem,
     ...(counts !== undefined ? { counts } : {}),
     ...(selectedManagedSystemId !== undefined ? { selectedManagedSystemId } : {}),
