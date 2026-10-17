@@ -46,6 +46,17 @@ describe.skipIf(!enabled)('preview scale seed through runSeed', () => {
         )
         .then((r) => r.rows[0].n as number),
     ]);
+  const invalidEvidenceCounts = async () =>
+    handle.pool.query(
+      `select f.id from finding.findings f
+      left join core.entity_links_app l on l.target_type='finding' and l.target_id=f.id
+        and l.source_type='voc' and l.relation_type='evidence_of'
+      where f.workspace_id=$1 group by f.id
+      having count(l.id) not between 2 and 15 or count(l.id)<>f.evidence_count
+        or (select count(*) from finding.evidence_highlights h
+          where h.workspace_id=f.workspace_id and h.finding_id=f.id)<>f.evidence_count`,
+      [workspace],
+    );
 
   beforeAll(async () => {
     handle = createDb(process.env.DATABASE_URL ?? '');
@@ -92,6 +103,7 @@ describe.skipIf(!enabled)('preview scale seed through runSeed', () => {
         for (const table of [
           'task.tasks',
           'task_request.task_requests',
+          'finding.evidence_highlights',
           'finding.findings',
           'task.milestones',
           'voc_cluster.voc_clusters',
@@ -126,14 +138,7 @@ describe.skipIf(!enabled)('preview scale seed through runSeed', () => {
     expect(totals[7]).toBeLessThanOrEqual(5500);
     expect(totals[8]).toBeGreaterThanOrEqual(180);
     expect(totals[8]).toBeLessThanOrEqual(1201);
-    const invalidEvidence = await handle.pool.query(
-      `select f.id from finding.findings f
-      left join core.entity_links_app l on l.target_type='finding' and l.target_id=f.id
-        and l.source_type='voc' and l.relation_type='evidence_of'
-      where f.workspace_id=$1 group by f.id
-      having count(l.id) not between 2 and 15 or count(l.id)<>f.evidence_count`,
-      [workspace],
-    );
+    const invalidEvidence = await invalidEvidenceCounts();
     expect(invalidEvidence.rows).toEqual([]);
     const invalidMembers = await handle.pool.query(
       `select c.id from voc_cluster.voc_clusters c
@@ -176,6 +181,7 @@ describe.skipIf(!enabled)('preview scale seed through runSeed', () => {
     );
     await runSeed(handle);
     expect(await snapshot()).toEqual(before);
+    expect((await invalidEvidenceCounts()).rows).toEqual([]);
   }, 120_000);
 
   it('allocates unique display IDs and advances all counters beyond their suffixes (e)', async () => {
