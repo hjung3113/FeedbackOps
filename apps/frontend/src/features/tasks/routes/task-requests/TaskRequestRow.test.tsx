@@ -1,6 +1,7 @@
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import { type TaskRequestDto, taskRequestStatusSchema } from '@fops/shared';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { TaskRequestRow } from './TaskRequestRow';
@@ -92,6 +93,26 @@ describe('TaskRequestRow identity', () => {
     expect(screen.getByText('Evidence · 7')).toBeInTheDocument();
     expect(screen.queryByText('Evidence 1')).not.toBeInTheDocument();
     expect(screen.queryByText('40000000')).not.toBeInTheDocument();
+  });
+
+  it('keeps requester and creation date in muted secondary text', () => {
+    render(
+      <TaskRequestRow
+        item={REQUEST}
+        selected={false}
+        names={{ actorsById: {}, managedSystemsById: {} }}
+        onSelect={() => undefined}
+      />,
+    );
+
+    const row = screen.getByRole('button', { name: /REQ-42/ });
+    expect(within(row).getByText('알 수 없는 사용자')).toHaveClass(
+      'font-normal',
+      'text-text-muted',
+    );
+    expect(within(row).getByText(formatShortDateTime(REQUEST.created_at))).toHaveClass(
+      'text-text-muted',
+    );
   });
 
   it('omits the trailing separator when the created date is missing', () => {

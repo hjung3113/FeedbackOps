@@ -8,11 +8,12 @@ import { expect, test } from './support/visual-test';
 //   detail panel (param=sso):
 //     - section titles 11px with 10px wrapper bottom rhythm (prototype
 //       styles.css .panel-section-title 11px; panel.jsx title wrapper 10px)
-//     - progress headline and source finding title 13px (prototype --text-sm)
+//     - progress line and source finding title 13px (prototype --text-sm)
 //     - source card gap 6px, card top 10px, id margin-right 6px
-//     - Managed System pill / Analytics Area / Evidence badges compact:
+//     - title block Managed System pill / Analytics Area / Evidence badges compact:
 //       11px, weight 500, 4px radius, 20px height, transparent + shadow-subtle,
-//       pill dot 6×6 in the semantic --managed-system-* token color
+//       pill dot 6×6 in the semantic --managed-system-* token color; Properties
+//       keeps only the owner chip, since scope badges already sit in the title.
 //     - Owner avatar 18px circle, white 9px initial, semantic fallback fill
 //   list row (MLS-1019):
 //     - row title 13px / weight 600 with visible 8px badge gaps, truncation kept
@@ -86,7 +87,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
         throw new Error('Expected the source finding title and id');
       }
 
-      const headline = findByOwnText('Task 1개 중 0개 Released');
+      const headline = findByOwnText('Released 0/1');
 
       // Title block (Overview) — pill and area badge next to the h2.
       const heading = Array.from(root.querySelectorAll('h2')).find(
@@ -94,6 +95,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
       );
       if (heading === undefined) throw new Error('Expected the milestone h2');
       const titlePill = findByOwnText('Power BI');
+      const areaBadge = findByOwnText('Product Usage');
 
       // Source header action — prototype .btn-sm: 24px high, 12px label,
       // 11px arrow (styles.css .btn-sm; screen-milestones.jsx source header).
@@ -111,26 +113,18 @@ test.describe('milestone fidelity (final pixel pass)', () => {
               })(),
       };
 
-      // Properties — pill, area badge, owner chip avatar.
-      const msLabel = findByOwnText('Managed System');
-      const msValue = msLabel.parentElement?.querySelector(':scope > div');
-      const areaLabel = findByOwnText('Analytics Area');
-      const areaValue = areaLabel.parentElement?.querySelector(':scope > div');
+      // Properties — only the owner chip remains; scope badges live in the title block.
       const ownerLabel = findByOwnText('담당자');
       const ownerValue = ownerLabel.parentElement?.querySelector(':scope > div');
       const ownerChip = ownerValue?.firstElementChild;
       const ownerAvatar = ownerChip?.firstElementChild;
       const ownerName = ownerChip?.children[1];
-      const propertiesPill = msValue?.firstElementChild;
-      const propertiesBadge = areaValue?.firstElementChild;
       if (
         !(ownerChip instanceof HTMLElement) ||
         !(ownerAvatar instanceof HTMLElement) ||
-        !(ownerName instanceof HTMLElement) ||
-        !(propertiesPill instanceof HTMLElement) ||
-        !(propertiesBadge instanceof HTMLElement)
+        !(ownerName instanceof HTMLElement)
       ) {
-        throw new Error('Expected the Properties pill, badge, and owner chip');
+        throw new Error('Expected the Properties owner chip');
       }
 
       const pillCss = (pill: HTMLElement, dotToken: string) => {
@@ -182,8 +176,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
           cardRowGap: getComputedStyle(sourceCard).rowGap,
         },
         titlePill: pillCss(titlePill, '--managed-system-power-bi'),
-        propertiesPill: pillCss(propertiesPill, '--managed-system-power-bi'),
-        propertiesBadge: badgeCss(propertiesBadge),
+        areaBadge: badgeCss(areaBadge),
         evidenceBadge: evidenceBadge instanceof HTMLElement ? badgeCss(evidenceBadge) : null,
         ownerName: {
           fontSize: getComputedStyle(ownerName).fontSize,
@@ -211,7 +204,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
         .toBe(expectedMargin);
     }
 
-    // Progress headline and source finding title: 13px.
+    // Progress line and source finding title: 13px.
     expect.soft(captured.headlineSize, 'progress headline font').toBe('13px');
     // Source header action: .btn-sm 24px high, 12px label, 11px arrow.
     expect.soft(captured.openButton.height, 'open finding height').toBe('24px');
@@ -235,10 +228,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
       color: captured.secondary,
       background: 'rgba(0, 0, 0, 0)',
     };
-    for (const [surface, pill] of [
-      ['title block', captured.titlePill],
-      ['properties', captured.propertiesPill],
-    ] as const) {
+    for (const [surface, pill] of [['title block', captured.titlePill]] as const) {
       expect.soft(pill.fontSize, `${surface} pill font`).toBe(expectedPill.fontSize);
       expect.soft(pill.fontWeight, `${surface} pill weight`).toBe(expectedPill.fontWeight);
       expect.soft(pill.borderRadius, `${surface} pill radius`).toBe(expectedPill.borderRadius);
@@ -263,7 +253,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
       color: captured.muted,
       background: 'rgba(0, 0, 0, 0)',
     };
-    expect.soft(captured.propertiesBadge, 'area badge').toEqual(expectedBadge);
+    expect.soft(captured.areaBadge, 'title block area badge').toEqual(expectedBadge);
     expect.soft(captured.evidenceBadge, 'evidence badge').toEqual(expectedBadge);
 
     // Owner avatar: 18px circle, white 9px initial, semantic fallback fill.
@@ -460,11 +450,8 @@ test.describe('milestone fidelity (final pixel pass)', () => {
     expect.soft(captured.avatar.radius, 'row avatar radius').toBe('9999px');
     expect.soft(captured.avatar.initial, 'row avatar initial').toBe('김');
 
-    // Meta line: 10px icons, 10px gap.
-    expect.soft(captured.metaIcons, 'meta icon sizes').toEqual([
-      { width: '10px', height: '10px' },
-      { width: '10px', height: '10px' },
-    ]);
+    // Meta line: one 10px icon, 10px gap.
+    expect.soft(captured.metaIcons, 'meta icon sizes').toEqual([{ width: '10px', height: '10px' }]);
     expect.soft(captured.metaGap, 'meta gap').toBe('10px');
   });
 });

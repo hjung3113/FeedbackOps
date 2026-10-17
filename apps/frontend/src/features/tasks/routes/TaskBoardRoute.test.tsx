@@ -357,6 +357,10 @@ describe('TaskBoardRoute', () => {
     expect(
       screen.queryByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
     ).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('제목 또는 ID')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '그룹화' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '내 VOC' })).toHaveAttribute('href', '/vocs?view=my');
   });
 
   it('keeps a non-permission board failure unavailable', async () => {

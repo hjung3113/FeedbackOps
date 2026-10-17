@@ -1,7 +1,7 @@
 import type { MilestoneDto } from '@fops/shared';
 import type { AvatarUser } from '@fops/ui';
 import { ObjectRow } from '@fops/ui';
-import { Flag, ListChecks } from 'lucide-react';
+import { Flag } from 'lucide-react';
 import {
   MilestoneManagedSystemPill,
   MilestoneOutlineBadge,
@@ -23,7 +23,7 @@ export interface MilestoneRowProps {
 // Row anatomy per the approved B2c plan and the prototype's three-line
 // hierarchy (screen-milestones.jsx MilestoneRow): line 1 = flag · display id ·
 // title · status · Managed System · optional Analytics Area; line 2 = one-line
-// why; line 3 = task count · released ratio · target date. The source-Finding
+// why; line 3 = released ratio · target date. The source-Finding
 // chip and per-row evidence count are intentionally omitted (the list DTO
 // carries neither); the mini timeline is Slice C.
 export function MilestoneRow({
@@ -59,11 +59,6 @@ export function MilestoneRow({
         {milestone.why}
       </div>
       <div className="flex flex-wrap items-center gap-2.5 text-xs text-text-muted">
-        <span className="inline-flex items-center gap-1">
-          <ListChecks className="h-2.5 w-2.5" aria-hidden="true" />
-          <span className="tabular-nums">{milestone.progress.total}</span>
-        </span>
-        <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />
         <span className="tabular-nums">
           Released {milestone.progress.released_done}/{milestone.progress.total}
         </span>

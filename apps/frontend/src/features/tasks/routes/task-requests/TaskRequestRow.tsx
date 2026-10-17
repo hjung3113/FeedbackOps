@@ -113,7 +113,7 @@ export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: Task
   if (item.created_at) {
     metaParts.push({
       key: 'created-at',
-      node: <span>{formatShortDateTime(item.created_at)}</span>,
+      node: <span className="text-text-muted">{formatShortDateTime(item.created_at)}</span>,
     });
   }
   const sourceTitle = item.source?.title?.trim() ? item.source.title : null;
@@ -147,7 +147,10 @@ export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: Task
       trailing={
         <>
           <span className="text-xs text-text-muted">
-            요청자 <span>{requester?.display_name ?? GLOSSARY.unknownUser}</span>
+            요청자{' '}
+            <span className="font-normal text-text-muted">
+              {requester?.display_name ?? GLOSSARY.unknownUser}
+            </span>
             {!requester && (
               <span className="block font-mono text-text-muted">
                 {shortId(item.requester_actor_id)}

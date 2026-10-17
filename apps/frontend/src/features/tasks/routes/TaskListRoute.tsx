@@ -34,7 +34,7 @@ import {
   UnassignedBadge,
 } from '@fops/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import {
   resolveTaskAssignee,
@@ -194,7 +194,9 @@ export function TaskListRoute({
       onSelectionChange,
     },
   );
-  const total = tasksQuery.data?.pages[0]?.page?.total;
+  const listPermissionDenied = !tasksQuery.isLoading && isPermissionDenied(tasksQuery.error);
+  // A denied refetch keeps the cached pages; the blocked state shows no count derived from them.
+  const total = listPermissionDenied ? undefined : tasksQuery.data?.pages[0]?.page?.total;
   const me = useMe();
   const detailQuery = useQuery({
     queryKey: ['task', selectedId],
@@ -246,7 +248,7 @@ export function TaskListRoute({
   return (
     <ListShell
       toolbar={{
-        actions: (
+        actions: listPermissionDenied ? null : (
           <SearchInput
             placeholder={LIST_SEARCH_PLACEHOLDER}
             value={draft}
@@ -262,7 +264,7 @@ export function TaskListRoute({
         ),
       }}
       tabs={
-        view === 'my' ? (
+        view === 'my' && !listPermissionDenied ? (
           <div className="mx-5 my-2">
             <Select
               value={filters.status ?? filters.status_group ?? 'all'}
@@ -299,20 +301,30 @@ export function TaskListRoute({
       }
       list={
         <>
-          <ActiveFilterBar
-            items={activeFilters}
-            onClearAll={() => removeFilters(FILTER_KEYS)}
-            className="mx-5 my-2"
-          />
+          {!listPermissionDenied ? (
+            <ActiveFilterBar
+              items={activeFilters}
+              onClearAll={() => removeFilters(FILTER_KEYS)}
+              className="mx-5 my-2"
+            />
+          ) : null}
           {tasksQuery.isLoading ? (
             <div className="p-4 text-sm text-text-muted">Task를 불러오는 중…</div>
-          ) : isPermissionDenied(tasksQuery.error) ? (
-            <PermissionBlockedPanel
-              state="denied"
-              category="Task 목록"
-              reason={PERMISSION_BLOCKED_REASONS.taskList}
-              className="m-4"
-            />
+          ) : listPermissionDenied ? (
+            <div className="m-4 flex flex-col items-start gap-3">
+              <PermissionBlockedPanel
+                state="denied"
+                category="Task 목록"
+                reason={PERMISSION_BLOCKED_REASONS.taskList}
+              />
+              <Link
+                to="/vocs"
+                search={{ view: 'my' }}
+                className="text-sm font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
+              >
+                {GLOSSARY.myVocs}
+              </Link>
+            </div>
           ) : tasksQuery.error && !tasksQuery.isFetchNextPageError ? (
             <ListStateMessage
               variant="error"
@@ -338,20 +350,24 @@ export function TaskListRoute({
                     meta={
                       <>
                         <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
-                        {dot()}
-                        <span>
-                          {task.assignee_actor_id ? (
-                            assignee.kind === 'resolved' ? (
-                              assignee.displayName
-                            ) : (
-                              GLOSSARY.unknownUser
-                            )
-                          ) : task.assignee_team_id ? (
-                            taskTeamMark(task.assignee_team_id, teamNames)
-                          ) : (
-                            <UnassignedBadge />
-                          )}
-                        </span>
+                        {view !== 'my' ? (
+                          <>
+                            {dot()}
+                            <span>
+                              {task.assignee_actor_id ? (
+                                assignee.kind === 'resolved' ? (
+                                  assignee.displayName
+                                ) : (
+                                  GLOSSARY.unknownUser
+                                )
+                              ) : task.assignee_team_id ? (
+                                taskTeamMark(task.assignee_team_id, teamNames)
+                              ) : (
+                                <UnassignedBadge />
+                              )}
+                            </span>
+                          </>
+                        ) : null}
                         {dot()}
                         <span>
                           {managedSystemNamesById.get(task.primary_managed_system_id) ??

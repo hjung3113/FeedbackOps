@@ -66,10 +66,10 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(page.getByRole('tab', { name: /^릴리스됨/ })).toContainText('1');
 
     const summary = page.getByTestId('milestones-summary');
-    await expect(summary).toContainText('Milestones');
     await expect(summary).toContainText('진행 중 Task');
     await expect(summary).toContainText('Evidence 연결');
-    await expect(summary).toContainText('릴리스됨');
+    await expect(summary).not.toContainText('Milestones');
+    await expect(summary).not.toContainText('릴리스됨');
     await expect(summary).not.toContainText('Schedule risk'); // #670: the prototype annotation is gone
     await expect(page.getByTestId('milestone-summary-evidence-linked')).toHaveText('0');
   });
@@ -81,7 +81,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
     await expect(page.getByText('이 Milestone의 목적')).toBeVisible();
-    await expect(page.getByText('Task 1개 중 0개 Released')).toBeVisible();
+    await expect(
+      page.getByTestId('milestone-detail-scroll').getByText('Released 0/1', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText('FIN-181')).toBeVisible();
     // #675: panel section labels follow the Korean chrome policy (Evidence stays English).
     for (const label of ['요약', 'Evidence', '이력']) {
@@ -106,7 +108,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     expect(page.url()).not.toContain('param=');
   });
 
-  // #514 B2d-tasks — the detail panel's Tasks section: header count, the
+  // #514 B2d-tasks — the detail panel's Tasks section: count-free heading and
   // child row (priority, display id, title, internal status, due date in the
   // G-columns estimate slot per ADR-0050 choice a, updated stamp, assignee),
   // and no Add task control. Text assertions only; B2-pixel owns PNGs.
@@ -124,13 +126,12 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(ssoRow).toContainText('Product Usage');
 
     const summary = page.getByTestId('milestones-summary');
-    await expect(summary.getByTestId('milestone-summary-total')).toHaveText('5');
     await expect(summary.getByTestId('milestone-summary-in-flight')).toHaveText('2');
 
     await expect(page.getByRole('button', { name: /^Tasks/ })).toContainText('1');
 
     const tasksSection = page.locator('[data-anchor="tasks"]');
-    await expect(tasksSection.getByText('Tasks · 1')).toBeVisible();
+    await expect(tasksSection.getByRole('heading', { name: 'Tasks' })).toBeVisible();
     await expect(tasksSection).toContainText('TASK-902');
     await expect(tasksSection).toContainText('Power BI 임베디드 SSO 재인증 핸들러 구현');
     await expect(tasksSection).toContainText('Doing');
@@ -351,34 +352,14 @@ test.describe('/tasks?view=milestones visual harness', () => {
     expect(css.hasLeadingStripe).toBe(false);
   });
 
-  // Finding 2 — the Released summary value used the non-existent `text-success`
-  // utility and rendered black; it must consume the --text-success token.
-  test('cp-pixel: renders the Released summary value in the semantic success label color (#750)', async ({
-    page,
-  }) => {
-    await installMockApi(page, { milestones: true });
-    await page.goto('/tasks?view=milestones');
-
-    const releasedValue = page.getByTestId('milestone-summary-released');
-    await expect(releasedValue).toBeVisible();
-    const { color, successRgb } = await releasedValue.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { color: cs.color, successRgb: cs.getPropertyValue('--text-success-label').trim() };
-    });
-    const [r, g, b] = parseTriplet(successRgb);
-    expect(color).toBe(`rgb(${r}, ${g}, ${b})`);
-  });
-
   test('cp-pixel: keeps the zero-progress track visible against its card', async ({ page }) => {
     await installMockApi(page, { milestones: true });
     await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
 
     const detail = page.getByTestId('app-detail-slot');
-    await expect(detail.getByText('0%', { exact: true })).toBeVisible();
+    await expect(detail.getByText('Released 0/1', { exact: true })).toBeVisible();
 
-    const progressCard = detail
-      .getByText('Task 1개 중 0개 Released', { exact: true })
-      .locator('xpath=../..');
+    const progressCard = detail.getByText('Released 0/1', { exact: true }).locator('xpath=..');
     const track = progressCard.locator('div[aria-hidden="true"]');
     await expect(track).toHaveCount(1);
     const trackCss = await track.evaluate((el) => {
@@ -401,14 +382,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     const detail = page.getByTestId('app-detail-slot');
     await expect(detail.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
-    const propertyLabels = [
-      'Managed System',
-      'Analytics Area',
-      '담당자',
-      '시작일',
-      '목표일',
-      '생성일',
-    ];
+    await expect(detail.getByText('Power BI', { exact: true })).toHaveCount(1);
+    await expect(detail.getByText('Product Usage', { exact: true })).toHaveCount(1);
+    const propertyLabels = ['담당자', '시작일', '목표일', '생성일'];
     await Promise.all(
       propertyLabels.map((label) => expect(detail.getByText(label, { exact: true })).toBeVisible()),
     );
