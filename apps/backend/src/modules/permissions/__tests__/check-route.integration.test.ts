@@ -9,6 +9,7 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { checkSurveyManage } from '../../surveys/authorization.js';
 import { createCheckService } from '../check-service.js';
 
@@ -77,7 +78,7 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     expect(body.decision).toEqual({ allow: true, via: 'role' });
   });
 
-  it('user + workspace.admin → state=request_access', async () => {
+  it('user + workspace.admin → state=blocked_non_requestable', async () => {
     const cookie = await loginAs(app, 'mock-user-1');
     const res = await app.inject({
       method: 'GET',
@@ -86,10 +87,81 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.state).toBe('request_access');
+    expect(body.state).toBe('blocked_non_requestable');
     expect(body.decision.allow).toBe(false);
     expect(body.decision.reason).toBe('no_grant');
-    expect(body.decision.requestable).toEqual([{ workspace_id: WORKSPACE_ID }]);
+    expect(body.decision.requestable).toBeNull();
+  });
+
+  // ADR-0066 O3: ordinary workspace.admin requests are rejected by the server,
+  // so no deny path may offer one (#1239). finding.manage is the control.
+  // The Developer is created here: the default SEED_MODE=core has no personas.
+  async function seedDeveloper(suffix: string) {
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, suffix);
+    const admin = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const adminId = admin.rows[0]?.id;
+    if (!adminId) throw new Error('mock-admin-1 missing');
+    return { ...developer, adminId };
+  }
+
+  it.each([
+    { name: 'no grant', reason: 'no_grant', grant: null },
+    { name: 'expired grant', reason: 'grant_expired', grant: { expired: true, revoked: false } },
+    { name: 'revoked grant', reason: 'grant_revoked', grant: { expired: false, revoked: true } },
+  ])(
+    'developer + workspace.admin with $name → blocked_non_requestable',
+    async ({ reason, grant }) => {
+      const dev = await seedDeveloper(`1239-${reason}`);
+      if (grant) {
+        await dbHandle.pool.query(
+          `insert into permission.permission_grants
+             (workspace_id, actor_id, capability, granted_by_actor_id, expires_at, revoked_at, revoked_by_actor_id)
+           values ($1, $2, 'workspace.admin', $3,
+                   case when $4::boolean then now() - interval '1 second' end,
+                   case when $5::boolean then now() end,
+                   case when $5::boolean then $3::uuid end)`,
+          [WORKSPACE_ID, dev.id, dev.adminId, grant.expired, grant.revoked],
+        );
+      }
+      const cookie = await loginAs(app, dev.externalId);
+      const check = () =>
+        app.inject({
+          method: 'GET',
+          url: '/me/permissions/check?capability=workspace.admin',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+        });
+      const res = await check();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().state).toBe('blocked_non_requestable');
+      expect(res.json().decision).toEqual({ allow: false, reason, requestable: null });
+
+      // An open pending request still wins over the non-requestable state.
+      await dbHandle.pool.query(
+        `insert into permission.permission_requests
+           (workspace_id, requester_actor_id, requested_capability, requested_managed_system_id, reason, status)
+         values ($1, $2, 'workspace.admin', null, 'seed test', 'pending')`,
+        [WORKSPACE_ID, dev.id],
+      );
+      const pending = await check();
+      expect(pending.json().state).toBe('pending_request');
+      expect(pending.json().decision.requestable).toBeNull();
+    },
+  );
+
+  it('developer + finding.manage without a scope keeps its workspace requestable', async () => {
+    const dev = await seedDeveloper('1239-control');
+    const cookie = await loginAs(app, dev.externalId);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/check?capability=finding.manage',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().state).toBe('request_access');
+    expect(res.json().decision.requestable).toEqual([{ workspace_id: WORKSPACE_ID }]);
   });
 
   it('user + workspace.read → state=approved', async () => {
@@ -114,9 +186,9 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
 
   // F-004: open-request lookup matches the requested managed_system_id
   // (or null) tuple, not capability alone. A user with a workspace-scoped
-  // pending request should still see `request_access` when probing a
-  // different MS scope.
-  it('user with workspace-scoped pending request → MS-scoped probe still shows request_access', async () => {
+  // pending request should not see it when probing a different MS scope
+  // (workspace.admin is not requestable, so that probe is non-requestable).
+  it('user with workspace-scoped pending request → MS-scoped probe does not see it', async () => {
     const cookie = await loginAs(app, 'mock-user-1');
     // Seed a pending workspace-level (null MS) request directly via SQL so
     // we don't rely on the POST path (under separate test).
@@ -141,7 +213,7 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().state).toBe('request_access');
+    expect(res.json().state).toBe('blocked_non_requestable');
 
     // Whereas a workspace-level (no MS) probe SHOULD match → pending_request.
     const res2 = await app.inject({

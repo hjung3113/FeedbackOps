@@ -33,6 +33,7 @@ import type { Db } from '../../db/client.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
+import { isOrdinarilyRequestable } from './supported-scope-policy.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Decision shape — locked verbatim by issue #4. Do not extend without an
@@ -227,26 +228,22 @@ export function createCheckService(deps: CheckServiceDeps) {
     // If we saw a revoked or expired grant earlier and nothing else allowed,
     // surface that distinct reason. Revoked takes precedence over expired
     // because revocation is an intentional action vs. passive expiry.
+    // A capability that cannot be requested ordinarily (workspace.admin) carries
+    // no requestable scope on any of these denies, like explicit_deny.
+    const requestableScope: RequestableScope[] | null = isOrdinarilyRequestable(capability)
+      ? [{ workspace_id: actor.workspace_id }]
+      : null;
     if (sawRevoked) {
-      return {
-        allow: false,
-        reason: 'grant_revoked',
-        requestable: [{ workspace_id: actor.workspace_id }],
-      };
+      return { allow: false, reason: 'grant_revoked', requestable: requestableScope };
     }
     if (sawExpired) {
-      return {
-        allow: false,
-        reason: 'grant_expired',
-        requestable: [{ workspace_id: actor.workspace_id }],
-      };
+      return { allow: false, reason: 'grant_expired', requestable: requestableScope };
     }
 
     // (6) requestable computation (Slice 1): no explicit deny here, so the
     // actor MAY request workspace-only scope on this capability. Slice 2
     // extends with MS scope candidates.
-    const requestable: RequestableScope[] = [{ workspace_id: actor.workspace_id }];
-    return { allow: false, reason: 'no_grant', requestable };
+    return { allow: false, reason: 'no_grant', requestable: requestableScope };
   }
 
   async function capabilityScope(

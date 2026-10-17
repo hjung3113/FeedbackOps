@@ -364,7 +364,12 @@ role-derived capabilities.
 The permission check treats a revoked grant or an expired grant as requestable
 using the same workspace scope as `no_grant`. The state mapper returns
 `pending_request` when the Actor has an open request for that capability and
-otherwise returns `revoked` or `expired`, respectively. A revoke notification
+otherwise returns `revoked` or `expired`, respectively. `workspace.admin` is
+not ordinarily requestable (`isOrdinarilyRequestable`, the rule
+`validateSupportedScope` enforces), so its `no_grant`, `grant_expired` and
+`grant_revoked` denies carry `requestable: null` and, with no open request, the
+state is `blocked_non_requestable` instead of `request_access` / `expired` /
+`revoked`. A revoke notification
 goes to the grant's Actor; deny lift sends no notification. There is no migration
 or grant change for these commands.
 Domain responses treat `grant_revoked` and `grant_expired` like `no_grant`
