@@ -107,12 +107,7 @@ export function PermissionRequestDetail({
               <span className="font-mono text-xs text-text-muted">{shortId(request.id)}</span>
             </FieldRow>
             <FieldRow label="요청 권한" inset="none">
-              <span className="flex flex-col gap-0.5">
-                <span>{getCapabilityDisplayLabel(request.requested_capability)}</span>
-                <span className="font-mono text-xs text-text-muted">
-                  {request.requested_capability}
-                </span>
-              </span>
+              <span>{getCapabilityDisplayLabel(request.requested_capability)}</span>
             </FieldRow>
             <FieldRow label="범위" inset="none">
               <span className="flex flex-col gap-0.5">
@@ -134,9 +129,6 @@ export function PermissionRequestDetail({
                   ? formatDateOnly(request.requested_expiration.slice(0, 10))
                   : '만료 없음'}
               </span>
-            </FieldRow>
-            <FieldRow label="상태" inset="none">
-              <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
             </FieldRow>
             <FieldRow label="요청 일시" inset="none">
               <span>{formatDateTime(request.created_at)}</span>

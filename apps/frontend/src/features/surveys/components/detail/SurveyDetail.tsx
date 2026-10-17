@@ -8,7 +8,7 @@ import * as React from 'react';
 import { useCloseSurvey } from '../../hooks/useSurveys';
 import type { Survey } from '../../types';
 import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
-import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
+import { SurveyStatusBadge } from '../SurveyStatusBadge';
 import { SurveyStatusConfirmationDialog } from '../SurveyStatusConfirmationDialog';
 
 export function SurveyDetail({
@@ -81,16 +81,6 @@ export function SurveyDetail({
             </div>
           )}
         </div>
-        {!canEditQuestions && (
-          <section className="mt-6 px-5">
-            <h2 className="mb-2 text-sm font-medium">Survey 빌더</h2>
-            <p className="text-sm text-text-muted">
-              {survey.status === 'draft'
-                ? 'Survey 관리 권한이 없습니다.'
-                : `${surveyStatusLabel(survey.status)} 상태 — 질문 변경은 잠겨 있습니다.`}
-            </p>
-          </section>
-        )}
         <section className="mt-6 px-5">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-sm font-medium">결과 요약</h2>
@@ -107,6 +97,16 @@ export function SurveyDetail({
             응답이 수집되면 요약과 패턴이 여기에 표시됩니다.
           </p>
         </section>
+        {!canEditQuestions && (
+          <section className="mt-6 px-5">
+            <h2 className="mb-2 text-sm font-medium">Survey 빌더</h2>
+            <p className="text-xs text-text-muted">
+              {survey.status === 'draft'
+                ? 'Survey 관리 권한이 없습니다.'
+                : '질문 변경은 잠겨 있습니다.'}
+            </p>
+          </section>
+        )}
         <section className="mt-6 px-5">
           <h2 className="mb-2 text-sm font-medium">질문</h2>
           {questions.length ? (

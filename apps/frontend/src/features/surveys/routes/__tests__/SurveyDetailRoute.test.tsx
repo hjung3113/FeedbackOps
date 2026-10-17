@@ -1,5 +1,13 @@
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
@@ -149,6 +157,54 @@ describe('/surveys/:surveyId route', () => {
 
     expect(screen.getByTestId('survey-list')).toBeInTheDocument();
     expect(screen.getByText('Q3 사용성 진단')).toBeInTheDocument();
+  });
+
+  it('shows results before the locked builder note and keeps the note muted', async () => {
+    const openSurvey = { ...survey, status: 'open' as const };
+    useSurvey.mockReturnValue({ data: openSurvey, isLoading: false, isError: false });
+    useSurveyManageGate.mockReturnValue({ canManage: false, gateState: 'absent' });
+    useSurveys.mockReturnValue({ data: [openSurvey], isLoading: false, error: null });
+
+    const rootRoute = createRootRoute({ component: () => <Outlet /> });
+    const surveyRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/surveys/$surveyId',
+      component: () => (
+        <DetailPanelHost>
+          <SurveyDetailRoute />
+        </DetailPanelHost>
+      ),
+    });
+    const resultsRoute = createRoute({
+      getParentRoute: () => surveyRoute,
+      path: '/results',
+      component: () => null,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([surveyRoute.addChildren([resultsRoute])]),
+      history: createMemoryHistory({ initialEntries: ['/surveys/survey-1'] }),
+    });
+    await router.load();
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const detail = screen.getByTestId('survey-detail');
+    const sections = [...detail.querySelectorAll('section')];
+    const resultsIndex = sections.findIndex((section) =>
+      within(section).queryByRole('heading', { name: '결과 요약' }),
+    );
+    const builderIndex = sections.findIndex((section) =>
+      within(section).queryByRole('heading', { name: 'Survey 빌더' }),
+    );
+    expect(resultsIndex).toBeGreaterThanOrEqual(0);
+    expect(resultsIndex).toBeLessThan(builderIndex);
+    expect(within(detail).getByRole('link', { name: /결과 요약 보기/ })).toBeInTheDocument();
+    const lockedNote = within(detail).getByText('질문 변경은 잠겨 있습니다.');
+    expect(lockedNote).toHaveClass('text-xs', 'text-text-muted');
   });
 
   it('wires successful lookups into the survey detail and builder routes', () => {

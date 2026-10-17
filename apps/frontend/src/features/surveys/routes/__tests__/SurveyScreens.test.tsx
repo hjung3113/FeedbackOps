@@ -694,7 +694,7 @@ describe('Survey screens', () => {
     expect(screen.queryByText('closed', { exact: true })).not.toBeInTheDocument();
     builderView.unmount();
     renderDetailWithRouter(closedSurvey, true);
-    expect(await screen.findByText('종료됨 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
     expect(screen.getByText('종료됨')).toBeInTheDocument();
     expect(screen.queryByText('closed', { exact: true })).not.toBeInTheDocument();
   });

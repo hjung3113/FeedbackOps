@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import { useFindingsPages, useFindingsTotal } from '@/features/findings/hooks/useFindingsList';
@@ -29,6 +30,7 @@ import { type FindingDto, listFindingsQuerySchema } from '@fops/shared';
 import {
   ActiveFilterBar,
   type AvatarUser,
+  Button,
   Checkbox,
   ListShell,
   ObjectRow,
@@ -268,6 +270,8 @@ function FindingsListShell({
     (listQuery.isError && !listQuery.isFetchNextPageError) ||
     (checkUnfiltered && unfilteredQuery.isError);
   const stateIsPending = listQuery.isPending || (checkUnfiltered && unfilteredQuery.isPending);
+  const permissionError = isPermissionDenied(stateError) ? stateError : null;
+  const isReadDenied = stateIsError && permissionError !== null;
   const isFilteredEmpty =
     checkUnfiltered && unfilteredQuery.isSuccess && (unfilteredQuery.data?.page?.total ?? 0) > 0;
   const retryList = React.useCallback((): void => {
@@ -360,71 +364,73 @@ function FindingsListShell({
   return (
     <ListShell
       toolbar={{
-        actions: (
+        actions: !isReadDenied ? (
           <SearchInput
             placeholder={LIST_SEARCH_PLACEHOLDER}
             value={draft}
             onValueChange={setDraft}
             onCommit={commit}
           />
-        ),
+        ) : undefined,
         title: 'Findings',
         subtitle: 'VOC Evidence에서 실행 후보로 승격된 Finding을 검토합니다.',
       }}
       tabs={
-        <div className="mx-5 my-2 flex items-center gap-3">
-          <Select
-            value={assignment ?? 'all'}
-            onValueChange={(value) => {
-              void navigate({
-                to: '/findings',
-                search: ({ assignment: _assignment, ...rest }) =>
-                  value === 'all'
-                    ? rest
-                    : { ...rest, assignment: value as 'assigned' | 'unassigned' },
-              });
-            }}
-          >
-            <SelectTrigger density="compact" className="w-fit" aria-label={OWNER_COPY.filter}>
-              <span className="mr-1 text-text-muted">{GLOSSARY.owner}:</span>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{OWNER_COPY.all}</SelectItem>
-              <SelectItem value="assigned">{OWNER_COPY.assigned}</SelectItem>
-              <SelectItem value="unassigned">{OWNER_COPY.unassigned}</SelectItem>
-            </SelectContent>
-          </Select>
-          {(
-            [
-              ['execution', 'none', '실행 연결 없음'],
-              ['status', 'active', FINDING_STATUS_LABELS.active],
-            ] as const
-          ).map(([key, value, label]) => (
-            <label
-              key={key}
-              htmlFor={`${filterId}-${key}`}
-              className="flex items-center gap-2 text-sm"
+        !isReadDenied ? (
+          <div className="mx-5 my-2 flex items-center gap-3">
+            <Select
+              value={assignment ?? 'all'}
+              onValueChange={(value) => {
+                void navigate({
+                  to: '/findings',
+                  search: ({ assignment: _assignment, ...rest }) =>
+                    value === 'all'
+                      ? rest
+                      : { ...rest, assignment: value as 'assigned' | 'unassigned' },
+                });
+              }}
             >
-              <Checkbox
-                id={`${filterId}-${key}`}
-                checked={(key === 'execution' ? execution : status) === value}
-                onCheckedChange={(checked) => {
-                  void navigate({
-                    to: '/findings',
-                    search: (previous) => {
-                      const next = { ...previous };
-                      if (checked === true) return { ...next, [key]: value };
-                      delete next[key];
-                      return next;
-                    },
-                  });
-                }}
-              />
-              {label}
-            </label>
-          ))}
-        </div>
+              <SelectTrigger density="compact" className="w-fit" aria-label={OWNER_COPY.filter}>
+                <span className="mr-1 text-text-muted">{GLOSSARY.owner}:</span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{OWNER_COPY.all}</SelectItem>
+                <SelectItem value="assigned">{OWNER_COPY.assigned}</SelectItem>
+                <SelectItem value="unassigned">{OWNER_COPY.unassigned}</SelectItem>
+              </SelectContent>
+            </Select>
+            {(
+              [
+                ['execution', 'none', '실행 연결 없음'],
+                ['status', 'active', FINDING_STATUS_LABELS.active],
+              ] as const
+            ).map(([key, value, label]) => (
+              <label
+                key={key}
+                htmlFor={`${filterId}-${key}`}
+                className="flex items-center gap-2 text-sm"
+              >
+                <Checkbox
+                  id={`${filterId}-${key}`}
+                  checked={(key === 'execution' ? execution : status) === value}
+                  onCheckedChange={(checked) => {
+                    void navigate({
+                      to: '/findings',
+                      search: (previous) => {
+                        const next = { ...previous };
+                        if (checked === true) return { ...next, [key]: value };
+                        delete next[key];
+                        return next;
+                      },
+                    });
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        ) : undefined
       }
       list={
         <>
@@ -439,13 +445,15 @@ function FindingsListShell({
             isFilteredEmpty={isFilteredEmpty}
             assignmentFiltered={assignment !== undefined}
             filterBar={
-              <ActiveFilterBar
-                items={activeFilters}
-                onClearAll={onResetFilters}
-                className="mx-5 my-2"
-              />
+              !isReadDenied ? (
+                <ActiveFilterBar
+                  items={activeFilters}
+                  onClearAll={onResetFilters}
+                  className="mx-5 my-2"
+                />
+              ) : null
             }
-            hasFilterBar={activeFilters.length > 0}
+            hasFilterBar={!isReadDenied && activeFilters.length > 0}
             filterDescription={
               analyticsAreaId !== undefined || status !== undefined
                 ? [
@@ -568,7 +576,8 @@ function FindingsListBody({
   onRetry: () => void;
   onResetFilters: () => void;
 }): React.ReactElement {
-  const isReadDenied = isError && isPermissionDenied(error);
+  const permissionError = isPermissionDenied(error) ? error : null;
+  const isReadDenied = isError && permissionError !== null;
 
   return (
     <section className="flex min-h-full flex-col">
@@ -591,12 +600,48 @@ function FindingsListBody({
           <SkeletonRows count={3} size="compact" />
         </div>
       ) : isError && isPermissionDenied(error) ? (
-        <PermissionBlockedPanel
-          state="denied"
-          category="Findings"
-          reason={PERMISSION_BLOCKED_REASONS.findingsList}
-          className="m-4"
-        />
+        permissionError?.envelope.requestable_permission ? (
+          <RequestAccessButton
+            capability={permissionError.envelope.requestable_permission.permission}
+            returnRouteIntent="/findings"
+            {...(typeof permissionError.envelope.requestable_permission.managed_system_id ===
+            'string'
+              ? {
+                  managedSystemId:
+                    permissionError.envelope.requestable_permission.managed_system_id,
+                }
+              : {})}
+            renderTrigger={(onRequestAccess) => (
+              <div className="m-4 space-y-3">
+                <PermissionBlockedPanel
+                  state="request_access"
+                  category="Findings"
+                  reason={PERMISSION_BLOCKED_REASONS.findingsList}
+                />
+                <Button variant="secondary" size="sm" onClick={onRequestAccess}>
+                  권한 요청하기
+                </Button>
+              </div>
+            )}
+          />
+        ) : (
+          <div className="m-4 space-y-3">
+            <PermissionBlockedPanel
+              state="blocked_not_requestable"
+              category="Findings"
+              reason={PERMISSION_BLOCKED_REASONS.findingsList}
+            />
+            <Button
+              asChild
+              variant="secondary"
+              size="sm"
+              spacing="compact"
+              data-testid="findings-denied-my-vocs"
+            >
+              <InternalLink href="/vocs?view=my">{GLOSSARY.myVocs}</InternalLink>
+            </Button>
+          </div>
+        )
       ) : isError ? (
         <div data-testid="finding-list-error" className="p-4">
           <ListStateMessage

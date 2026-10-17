@@ -7,6 +7,7 @@ import {
   respondentIdentityNotice,
 } from '@/lib/copy/survey-participation';
 import { formatDate } from '@/lib/format/datetime';
+import { useDocumentTitle } from '@/lib/router/document-title';
 import {
   type AnswerableSurveysResponse,
   type MySurveyResponsesResponse,
@@ -285,6 +286,11 @@ function ParticipationListLoading({ testId }: { testId: string }) {
 export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
   const form = useSurveyRespondentForm(surveyId);
   const submit = useSubmitSurveyResponse(surveyId);
+  useDocumentTitle(
+    form.isSuccess && !form.isFetching && form.data?.survey.id === surveyId
+      ? form.data.survey.title
+      : null,
+  );
   const [answers, setAnswers] = React.useState<Record<string, RespondentAnswer>>({});
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [validationSummary, setValidationSummary] = React.useState<string | null>(null);

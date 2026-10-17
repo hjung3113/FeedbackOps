@@ -2,6 +2,7 @@ import { ADMIN_PERMISSIONS_COPY } from './admin-permissions';
 import { EVIDENCE_COPY } from './evidence';
 import { GLOSSARY } from './glossary';
 import { ROUTER_FALLBACK_COPY } from './router';
+import { SURVEY_PARTICIPATION_COPY } from './survey-participation';
 
 export const DOCUMENT_TITLE_COPY = {
   app: 'FeedbackOps',
@@ -31,6 +32,7 @@ export const DOCUMENT_TITLE_COPY = {
   surveys: {
     list: 'Surveys',
     detail: 'Surveys',
+    respond: SURVEY_PARTICIPATION_COPY.respond,
     results: '결과',
     followUp: '후속 조치',
   },
@@ -73,6 +75,7 @@ export function getDocumentScreenTitle(pathname: string, search: RouteSearch): s
   if (pathname === '/integration/links') return DOCUMENT_TITLE_COPY.integration.links;
   if (pathname === '/integration/evidence') return DOCUMENT_TITLE_COPY.integration.evidence;
   if (pathname === '/surveys') return DOCUMENT_TITLE_COPY.surveys.list;
+  if (/^\/surveys\/[^/]+\/respond$/.test(pathname)) return DOCUMENT_TITLE_COPY.surveys.respond;
   if (/^\/surveys\/[^/]+\/results$/.test(pathname)) return DOCUMENT_TITLE_COPY.surveys.results;
   if (/^\/surveys\/[^/]+\/follow-up$/.test(pathname)) {
     return DOCUMENT_TITLE_COPY.surveys.followUp;

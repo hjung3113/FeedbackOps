@@ -160,6 +160,7 @@ describe('VocClusterListShell tab counts (#706)', () => {
         expect(await screen.findByTestId('cluster-empty-state')).toBeInTheDocument();
       } else {
         expect(await screen.findByText(draftNoFinding.title)).toBeInTheDocument();
+        expect(screen.queryByText('3개', { exact: true })).not.toBeInTheDocument();
       }
 
       if (state === 'pending' || state === 'failed') {
