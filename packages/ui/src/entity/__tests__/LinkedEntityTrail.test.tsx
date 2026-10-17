@@ -51,3 +51,19 @@ describe('LinkedEntityTrail — non-empty nodes', () => {
     expect(container.querySelector('[data-entity-type="survey"]')).not.toBeNull();
   });
 });
+
+describe('LinkedEntityTrail — iconTone', () => {
+  const node: EntityNodeRef[] = [{ type: 'task', id: 'task-1', display_id: 'T-001' }];
+
+  it.each([
+    ['default', 'font-semibold', 'font-medium'],
+    ['quiet', 'font-medium', 'font-semibold'],
+  ] as const)('%s tone pins the node icon weight', (tone, weight, otherWeight) => {
+    const { container } = render(
+      <LinkedEntityTrail {...(tone === 'quiet' ? { iconTone: 'quiet' } : {})} nodes={node} />,
+    );
+    const badge = container.querySelector('[data-entity-type="task"]');
+    expect(badge).toHaveClass(weight);
+    expect(badge).not.toHaveClass(otherWeight);
+  });
+});

@@ -2,12 +2,20 @@ import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { createPermissionRequestSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TriageRoute } from '../TriageRoute';
 
 let search: Record<string, string> = {};
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactRouter>()),
+  // The blocked states render TanStack Links (VOC 생성 / 내 VOC) like every
+  // sibling route; stub Link because this harness mounts TriageRoute bare.
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
   useSearch: () => search,
   useNavigate: () => vi.fn(),
 }));

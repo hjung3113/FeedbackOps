@@ -44,7 +44,7 @@ describe('<SimilarVocSection>', () => {
     expect(screen.getByText('같은 Managed System의 VOC')).toBeInTheDocument();
     expect(screen.getByText('4건')).toBeInTheDocument();
     const countBadge = screen.getByText('4건').closest('.rounded-full');
-    expect(countBadge).toHaveClass('border', 'text-text-muted', 'font-medium');
+    expect(countBadge).toHaveClass('border', 'text-text-primary');
     expect(countBadge).not.toHaveClass('bg-accent-primary/10', 'text-accent-primary');
     expect(screen.getByLabelText('같은 Managed System의 VOC 4건')).toBeInTheDocument();
     expect(screen.getByText('VOC-0002')).toBeInTheDocument();

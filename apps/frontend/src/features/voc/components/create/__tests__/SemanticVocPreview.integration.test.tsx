@@ -1,3 +1,4 @@
+import { VOC_SEVERITY_DISCLAIMER } from '@/lib/copy/voc';
 import { similarityPreviewRequestSchema, similarityPreviewResponseSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -222,9 +223,15 @@ test.each(['loading', 'unavailable', 'error'])(
     expect(screen.queryByRole('button', { name: '유사 VOC 확인' })).not.toBeInTheDocument();
     assertHeuristic();
     const rightColumn = screen.getByTestId('similar-voc-panel').parentElement;
-    expect(rightColumn?.children).toHaveLength(3);
+    expect(rightColumn?.children).toHaveLength(2);
     expect(within(rightColumn as HTMLElement).getByText('제출자')).toBeInTheDocument();
-    expect(within(rightColumn as HTMLElement).getByText('심각도 안내')).toBeInTheDocument();
+    // #1236 item 6: the severity disclaimer card became a muted help line under
+    // the page title — above the two-column grid, not inside the right column.
+    const helpLine = screen.getByText(VOC_SEVERITY_DISCLAIMER);
+    expect(
+      (rightColumn as HTMLElement).compareDocumentPosition(helpLine) &
+        Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
     expect(previewRequests()).toHaveLength(0);
     expect(
       requests.filter(

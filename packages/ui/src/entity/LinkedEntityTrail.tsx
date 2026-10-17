@@ -48,10 +48,15 @@ export type EntityNodeRef =
 export interface LinkedEntityTrailProps {
   nodes: EntityNodeRef[];
   className?: string;
-  nodeIconClassName?: string;
+  /** 'quiet' drops the node icon weight so trail marks stop competing with row text. */
+  iconTone?: 'default' | 'quiet';
 }
 
-export function LinkedEntityTrail({ nodes, className, nodeIconClassName }: LinkedEntityTrailProps) {
+export function LinkedEntityTrail({
+  nodes,
+  className,
+  iconTone = 'default',
+}: LinkedEntityTrailProps) {
   if (nodes.length === 0) {
     return (
       <div className={cn('flex items-center gap-2', className)}>
@@ -80,7 +85,7 @@ export function LinkedEntityTrail({ nodes, className, nodeIconClassName }: Linke
             <EntityIconBadge
               type={iconType}
               size={22}
-              {...(nodeIconClassName !== undefined ? { className: nodeIconClassName } : {})}
+              {...(iconTone === 'quiet' ? { className: 'font-medium' } : {})}
               aria-label={node.display_id ?? node.id}
             />
             {(node.title ?? node.meta) && (

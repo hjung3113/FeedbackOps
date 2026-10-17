@@ -43,7 +43,7 @@ export function SimilarVocSection({
     <section className="mb-8" aria-label={formatSameManagedSystemVocCount(similarCount)}>
       <div className="flex items-start justify-between gap-3">
         <PanelSectionTitle className="mb-3.5">{SAME_MANAGED_SYSTEM_VOC_LABEL}</PanelSectionTitle>
-        <OutlineBadge className="gap-1 text-text-muted font-medium">
+        <OutlineBadge>
           <Layers className="h-3 w-3" aria-hidden="true" />
           {similarCount}건
         </OutlineBadge>
