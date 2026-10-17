@@ -73,6 +73,7 @@ function installFetch(
     answerableSurveys?: unknown;
     personalWorkStatus?: number;
     summaryStatus?: number;
+    permissionRequests?: unknown[];
   } = {},
 ): ReturnType<typeof vi.fn> {
   let unreadCountRequests = 0;
@@ -124,7 +125,9 @@ function installFetch(
         status: 200,
       });
     if (url.startsWith('/permission-requests/mine'))
-      return new Response(JSON.stringify({ requests: [] }), { status: 200 });
+      return new Response(JSON.stringify({ requests: options.permissionRequests ?? [] }), {
+        status: 200,
+      });
     if (url.startsWith('/notifications')) {
       const notificationUrl = new URL(url, 'http://localhost');
       if (notificationUrl.searchParams.has('limit')) {
@@ -1615,28 +1618,6 @@ describe('HomeScreen route content', () => {
     },
   );
 
-  it('leads with answerable Surveys and 내 VOC when operator data is empty', async () => {
-    const emptySummary = dashboardSummarySchema.parse({
-      ...response,
-      kpis: {},
-      action_queues: [],
-      coverage: [],
-    });
-    installFetch(emptySummary, { roleLevel: 'user' });
-    renderHome();
-
-    await screen.findByTestId('home-reporter-empty');
-    const surveys = await screen.findByRole('heading', { name: '응답할 Survey' });
-    const myVocs = screen.getByRole('link', { name: '내 VOC' });
-    expect(myVocs).toHaveAttribute('href', '/vocs?view=my');
-    expect(surveys.compareDocumentPosition(myVocs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.queryByTestId('home-kpis')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('home-action-queues')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('home-coverage')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('home-my-work')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '열린 요청' })).not.toBeInTheDocument();
-  });
-
   it.each([
     { status: 403, reporterEmpty: true },
     { status: 500, reporterEmpty: false },
@@ -1654,9 +1635,73 @@ describe('HomeScreen route content', () => {
 
       await screen.findByRole('heading', { name: '응답할 Survey' });
       await waitFor(() =>
-        expect(screen.queryByTestId('home-reporter-empty') !== null).toBe(reporterEmpty),
+        expect(screen.queryByTestId('home-reporter-layout') !== null).toBe(reporterEmpty),
       );
       if (reporterEmpty) expect(screen.getByRole('link', { name: '내 VOC' })).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['nothing else', {}],
+    [
+      'one open permission request',
+      {
+        permissionRequests: [
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            revision: 1,
+            requested_expiration: null,
+            updated_at: '2026-10-13T00:00:00.000Z',
+            return_route_intent: '/home',
+            requested_capability: 'finding.manage',
+            requested_managed_system_id: null,
+            reason: 'Need it',
+            requested_object_type: null,
+            requested_object_id: null,
+            source_object_type: null,
+            source_object_id: null,
+            source_action_id: null,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          },
+        ],
+      },
+    ],
+    ['a non-empty action queue', { summary: response }],
+  ] as const)(
+    'leads a reporter with Survey and 내 VOC when personal work is denied and the actor has %s',
+    async (caseName, extra) => {
+      const emptySummary = dashboardSummarySchema.parse({
+        ...response,
+        kpis: {},
+        action_queues: [],
+        coverage: [],
+      });
+      const { summary, ...fetchOptions } = extra as { summary?: unknown };
+      installFetch(summary ?? emptySummary, {
+        roleLevel: 'user',
+        personalWorkStatus: 403,
+        ...fetchOptions,
+      });
+      renderHome();
+
+      const surveys = await screen.findByRole('heading', { name: '응답할 Survey' });
+      const myVocs = await screen.findByRole('link', { name: '내 VOC' });
+      expect(screen.queryByText('내게 배정됨')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('home-my-work')).not.toBeInTheDocument();
+      const later = Array.from(
+        document.querySelectorAll(
+          '[data-testid="home-open-requests-list"], [data-testid="home-action-queues"]',
+        ),
+      );
+      expect(later.length).toBe(caseName === 'nothing else' ? 0 : 1);
+      for (const element of [myVocs, ...later]) {
+        expect(
+          surveys.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+      }
+      if (caseName === 'one open permission request')
+        expect(await screen.findByText('Finding 관리')).toBeInTheDocument();
     },
   );
 

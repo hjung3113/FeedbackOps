@@ -121,22 +121,14 @@ export function HomeScreen({
     (summary.data.action_queues.some((queue) => queue.count > 0) ||
       summary.data.coverage.length > 0 ||
       Object.values(summary.data.kpis ?? {}).some((count) => count !== undefined && count > 0));
-  // A User actor gets 403 from the Task queries: that is "no personal data", not "not loaded".
-  // Loading and other errors keep the normal layout.
-  const personalWorkSettled = [myTasks, pendingRequests].every(
-    (query) => query.isSuccess || isPermissionDenied(query.error),
+  // A User actor gets 403 from both personal-work queries: that actor holds no Tasks, so Home leads
+  // with Survey and 내 VOC. Loading and other errors keep the operator layout.
+  const personalWorkDenied = [myTasks, pendingRequests].every((query) =>
+    isPermissionDenied(query.error),
   );
   // Once a Permission Request has shown, its panel stays mounted so the withdraw focus fallback survives.
   const [sawPermissionRequests, setSawPermissionRequests] = React.useState(false);
   if (permissionRequests.length > 0 && !sawPermissionRequests) setSawPermissionRequests(true);
-  const operatorSectionsEmpty =
-    summary.isSuccess &&
-    personalWorkSettled &&
-    openPermissionRequests.isSuccess &&
-    !hasSummaryActivity &&
-    !hasPersonalAssignments &&
-    !sawPermissionRequests &&
-    permissionRequests.length === 0;
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['dashboard-summary', managedSystemId] });
   };
@@ -199,8 +191,8 @@ export function HomeScreen({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard" className="mt-0">
-            {operatorSectionsEmpty ? (
-              <div className="space-y-7" data-testid="home-reporter-empty">
+            {personalWorkDenied ? (
+              <div className="space-y-7" data-testid="home-reporter-layout">
                 <AnswerableSurveysPanel />
                 <InternalLink
                   href="/vocs?view=my"
@@ -209,6 +201,24 @@ export function HomeScreen({
                   {HOME_COPY.myVocs}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </InternalLink>
+                {(permissionRequests.length > 0 || sawPermissionRequests) && (
+                  <OpenRequestsPanel requests={permissionRequests} />
+                )}
+                {summary.isError && (
+                  <p className="text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+                )}
+                {hasSummaryActivity && (
+                  <HomeSummary
+                    summary={summary.data}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {summary.data !== undefined && summary.data.coverage.length > 0 && (
+                  <CoveragePanel
+                    coverage={summary.data.coverage}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
                 {recovery?.queue}
               </div>
             ) : (
