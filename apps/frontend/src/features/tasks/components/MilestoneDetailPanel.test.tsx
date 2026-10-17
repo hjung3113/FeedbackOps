@@ -596,8 +596,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
   });
 
   // B2d fixup F1 — the milestone and child reads have separate lifetimes:
-    // after a successful child read, a denied refetch must clear the retained
-    // count from the nav (same terminal-error contract as
+  // after a successful child read, a denied refetch must clear the retained
+  // count from the nav (same terminal-error contract as
   // the milestone read, R2-1) before showing the blocked panel.
   it('clears the retained count when a successful child read is denied on refetch', async () => {
     vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
