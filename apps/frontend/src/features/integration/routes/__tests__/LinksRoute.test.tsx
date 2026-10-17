@@ -207,8 +207,8 @@ describe('integration links route', () => {
       expect(screen.getByRole('tab', { name: /^전체\s*,\s*2$/ })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /^활성\s*,\s*1$/ })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /^분리됨\s*,\s*1$/ })).toBeInTheDocument();
-      expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-      expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.getByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.getByText(`${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
       expect(screen.getAllByText('운영자')).toHaveLength(2);
       expect(screen.getAllByText(/업데이트/)).toHaveLength(2);
@@ -242,8 +242,8 @@ describe('integration links route', () => {
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_A }));
-    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-    expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(screen.getByText(`${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
   });
 
   test('shows a true-empty Entity Link message without a filter-reset action', async () => {
@@ -284,7 +284,7 @@ describe('integration links route', () => {
     const attemptsBeforeRetry = urls.filter((url) => url.includes('/entity-links')).length;
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
-    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     const attemptsAfterRetry = urls.filter((url) => url.includes('/entity-links')).length;
     expect(attemptsAfterRetry).toBeGreaterThan(attemptsBeforeRetry);
   });
@@ -330,8 +330,8 @@ describe('integration links route', () => {
 
     await waitFor(() => {
       expect(urls.some((url) => url.includes('status=detached'))).toBe(true);
-      expect(screen.queryByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).not.toBeInTheDocument();
-      expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.queryByText(`${LINK_A.slice(0, 8)}`)).not.toBeInTheDocument();
+      expect(screen.getByText(`${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
     });
   });
@@ -367,11 +367,11 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /^활성\s*,\s*2$/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
 
-    expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(VOC_D.slice(0, 8))).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByRole('tab', { name: /^활성\s*,\s*2$/ })).toBeInTheDocument();
     expect(
@@ -392,16 +392,16 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
-    expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(VOC_D.slice(0, 8))).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: /^활성/ }));
 
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ status: 'active' });
-      expect(screen.queryByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
-      expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.queryByText(VOC_D.slice(0, 8))).not.toBeInTheDocument();
+      expect(screen.getByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     });
     expect(
       urls.some((rawUrl) => {
@@ -424,7 +424,7 @@ describe('integration links route', () => {
 
     const loadSecondPage = async () => {
       await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
-      expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+      expect(await screen.findByText(VOC_D.slice(0, 8))).toBeInTheDocument();
     };
     const allFirstPageRequests = () =>
       urls.filter((rawUrl) => {
@@ -446,13 +446,13 @@ describe('integration links route', () => {
     const expectAllFirstPageReloaded = async (previousRequestCount: number) => {
       await waitFor(() => {
         expect(router.state.location.search).toEqual({});
-        expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-        expect(screen.queryByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
+        expect(screen.getByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+        expect(screen.queryByText(VOC_D.slice(0, 8))).not.toBeInTheDocument();
         expect(allFirstPageRequests()).toHaveLength(previousRequestCount + 1);
       });
     };
 
-    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     await loadSecondPage();
     const afterInitialLoad = allFirstPageRequests().length;
     await userEvent.click(screen.getByRole('tab', { name: /^활성/ }));
@@ -532,6 +532,30 @@ describe('integration links route', () => {
       expect(screen.getByRole('tab', { name: /^취소됨\s*,\s*0$/ })).toBeInTheDocument();
     },
   );
+
+  test.each([0, 3])('marks the stale tab urgent only when its count is %i', async (staleCount) => {
+    const urls: string[] = [];
+    stubFetch(urls, [], undefined, () => ({
+      items: [],
+      page: {
+        has_more: false,
+        status_counts: { active: 0, stale: staleCount, detached: 0, revoked: 0 },
+      },
+    }));
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const staleTab = await screen.findByRole('tab', {
+      name: new RegExp(`^오래됨\\s*,\\s*${staleCount}$`),
+    });
+    if (staleCount > 0) expect(staleTab).toHaveClass('text-text-danger-label');
+    else expect(staleTab).not.toHaveClass('text-text-danger-label');
+  });
 
   test('recovers from a failed read through a no-data refetch to real zero counts', async () => {
     const urls: string[] = [];

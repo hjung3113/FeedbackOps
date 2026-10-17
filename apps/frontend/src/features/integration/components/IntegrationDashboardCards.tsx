@@ -10,32 +10,31 @@ import type * as React from 'react';
 type DashboardQueue = DashboardSummary['action_queues'][number];
 type QueueId = DashboardQueue['id'];
 
-const QUEUE_COPY: Record<QueueId, { title: string; detail: (count: number) => string }> = {
+const QUEUE_COPY: Record<QueueId, { title: string; detail: string }> = {
   'unassigned-voc': {
     title: '미배정 VOC',
-    detail: (count) =>
-      `담당자가 지정되지 않은 VOC가 ${count}건 누적되어 있습니다. 우선 분류와 담당 배정이 필요합니다.`,
+    detail: '담당자가 지정되지 않은 VOC의 우선 분류와 담당 배정이 필요합니다.',
   },
   'high-severity-unlinked': {
     title: GLOSSARY.highNoLink,
-    detail: () => '높음·심각 심각도인 VOC 중 Finding 연결이 없는 항목.',
+    detail: '높음·심각 심각도인 VOC 중 Finding 연결이 없는 항목.',
   },
   'actionable-finding-no-execution': {
     title: '실행 계획 없는 Finding',
-    detail: () => '진행 중 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
+    detail: '진행 중 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
   },
   'released-task-unresolved-voc': {
     title: 'Released Task · 미해결 VOC',
-    detail: () =>
+    detail:
       'Task는 Released지만 연결된 공개 상태가 해결됨이 아닙니다. 공개 업데이트 검토가 필요합니다.',
   },
   'bad-outcome-no-followup': {
     title: '후속 조치 없는 부정 성과 Survey',
-    detail: () => '부정 성과 Survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
+    detail: '부정 성과 Survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
   },
   'permission-requests-pending': {
     title: '검토 대기 중인 권한 요청',
-    detail: () => '워크스페이스 관리자 검토를 기다리는 상위 권한 요청.',
+    detail: '워크스페이스 관리자 검토를 기다리는 상위 권한 요청.',
   },
 };
 
@@ -78,6 +77,10 @@ export function IntegrationDashboardQueueCard({
 }): React.ReactElement {
   const copy = QUEUE_COPY[queue.id];
   const tone = QUEUE_SEVERITY_TONE[queue.severity];
+  const secondaryActionLabel =
+    queue.secondary_action === null
+      ? null
+      : dashboardActionLabel(queue.secondary_action.intent, queue.secondary_action.label);
 
   return (
     <article
@@ -87,13 +90,15 @@ export function IntegrationDashboardQueueCard({
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-medium text-text-primary">{copy.title}</h3>
-          <p className="mt-1 text-xs leading-5 text-text-muted">{copy.detail(queue.count)}</p>
+          <p className="mt-1 text-xs leading-5 text-text-muted">{copy.detail}</p>
         </div>
-        <span
-          className={`shrink-0 rounded px-1.5 py-1 text-caption font-medium uppercase ${tone.badge}`}
-        >
-          {tone.label}
-        </span>
+        {queue.severity === 'info' && (
+          <span
+            className={`shrink-0 rounded px-1.5 py-1 text-caption font-medium uppercase ${tone.badge}`}
+          >
+            {tone.label}
+          </span>
+        )}
       </div>
 
       <div
@@ -104,13 +109,13 @@ export function IntegrationDashboardQueueCard({
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
-        {queue.secondary_action !== null ? (
+        {queue.secondary_action !== null && secondaryActionLabel !== '미배정 VOC 보기' ? (
           <InternalLink
             className="min-w-0 truncate text-xs text-text-secondary hover:text-text-primary"
             data-testid={`integration-queue-secondary-${queue.id}`}
             href={hrefWithManagedSystem(queue.secondary_action.route, managedSystemId)}
           >
-            {dashboardActionLabel(queue.secondary_action.intent, queue.secondary_action.label)}
+            {secondaryActionLabel}
           </InternalLink>
         ) : (
           <span />
@@ -134,7 +139,6 @@ export function IntegrationDashboardQueueCard({
 export interface IntegrationJumpCardProps {
   href: string;
   title: string;
-  description: string;
   icon: React.ReactNode;
   stat?: string;
   statLabel?: string;
@@ -146,7 +150,6 @@ export interface IntegrationJumpCardProps {
 export function IntegrationJumpCard({
   href,
   title,
-  description,
   icon,
   stat,
   statLabel,
@@ -156,50 +159,36 @@ export function IntegrationJumpCard({
 }: IntegrationJumpCardProps): React.ReactElement {
   const primary = (
     <InternalLink
-      className={
-        secondaryLink
-          ? 'flex min-h-32 flex-1 flex-col gap-3 rounded-md p-4 hover:bg-surface-row-hover'
-          : 'flex min-h-32 flex-col gap-3 rounded-md border border-border-subtle bg-surface-card p-4 hover:bg-surface-row-hover'
-      }
+      className="inline-flex items-center gap-2 text-sm font-medium text-text-secondary hover:text-text-primary"
       data-testid={testId}
       href={href}
     >
-      <span className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-primary/10 text-accent-primary">
-          {icon}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-text-primary">{title}</span>
-          {stat !== undefined && statLabel !== undefined && (
-            <span className="block text-xs text-text-muted">{statLabel}</span>
-          )}
-        </span>
-        {stat !== undefined && (
+      <span className="inline-flex items-center text-accent-primary">{icon}</span>
+      <span>{title}</span>
+      {stat !== undefined && (
+        <>
+          {statLabel !== undefined && <span className="text-xs text-text-muted">{statLabel}</span>}
           <span
             className={
               statMuted === true
-                ? 'text-sm font-medium text-text-muted'
-                : 'text-lg font-semibold tabular-nums text-text-primary'
+                ? 'text-xs font-medium text-text-muted'
+                : 'text-xs font-semibold tabular-nums text-text-secondary'
             }
             data-testid={`${testId}-stat`}
           >
             {stat}
           </span>
-        )}
-      </span>
-      <span className="text-xs leading-5 text-text-muted">{description}</span>
-      <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-accent-primary">
-        열기 <ArrowRight className="h-3 w-3" aria-hidden="true" />
-      </span>
+        </>
+      )}
     </InternalLink>
   );
   if (!secondaryLink) return primary;
   return (
-    <div className="relative flex flex-col rounded-md border border-border-subtle bg-surface-card">
+    <div className="flex flex-wrap items-center gap-3">
       {primary}
       <InternalLink
         href={secondaryLink.href}
-        className="absolute right-4 bottom-4 inline-flex items-center gap-1 text-xs text-accent-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
+        className="inline-flex items-center gap-1 text-xs text-accent-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
       >
         {secondaryLink.label}
         <ArrowRight className="h-3 w-3" aria-hidden="true" />

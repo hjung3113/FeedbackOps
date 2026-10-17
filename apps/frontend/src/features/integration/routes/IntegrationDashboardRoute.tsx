@@ -23,6 +23,9 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { COVERAGE_NO_DATA_LABEL, INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
 import { EVIDENCE_COPY } from '@/lib/copy/evidence';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { HOME_COPY, HOME_QUEUE_COPY } from '@/lib/copy/home';
+import { InternalLink } from '@/lib/router/InternalLink';
+import { hrefWithManagedSystem } from '@/lib/router/managed-system-href';
 import {
   INTEGRATION_DASHBOARD_QUEUE_ORDER,
   IntegrationDashboardQueueCard,
@@ -80,6 +83,8 @@ export function IntegrationDashboardRoute({
       return queue === undefined ? [] : [queue];
     });
   }, [summary.data?.action_queues]);
+  const activeQueues = React.useMemo(() => queues.filter((queue) => queue.count > 0), [queues]);
+  const zeroQueues = React.useMemo(() => queues.filter((queue) => queue.count === 0), [queues]);
 
   const coveragePercent = React.useMemo(() => {
     if (summary.isError) return undefined;
@@ -147,14 +152,16 @@ export function IntegrationDashboardRoute({
         />
 
         <div className="mb-9">
-          <div className="mb-3.5 flex items-center justify-between">
-            <PanelSectionTitle className="mb-0">복구 · 후속 조치 큐</PanelSectionTitle>
-            {gapCount !== undefined && (
-              <span className="text-xs text-text-muted">
-                <span data-testid="integration-dashboard-gap-count">{gapCount}</span>건
-              </span>
-            )}
-          </div>
+          {activeQueues.length > 0 && (
+            <div className="mb-3.5 flex items-center justify-between">
+              <PanelSectionTitle className="mb-0">복구 · 후속 조치 큐</PanelSectionTitle>
+              {gapCount !== undefined && (
+                <span className="text-xs text-text-muted">
+                  <span data-testid="integration-dashboard-gap-count">{gapCount}</span>건
+                </span>
+              )}
+            </div>
+          )}
           {summary.isPending ? (
             <div
               className="grid grid-cols-1 gap-3 xl:grid-cols-3"
@@ -185,17 +192,35 @@ export function IntegrationDashboardRoute({
               title="이 범위에서 표시할 큐가 없습니다."
               body="역할과 Managed System 범위에서 반환된 큐 데이터만 표시됩니다."
             />
-          ) : (
+          ) : activeQueues.length > 0 ? (
             <div
               className="grid grid-cols-1 gap-3 xl:grid-cols-3"
               data-testid="integration-dashboard-queues"
             >
-              {queues.map((queue) => (
+              {activeQueues.map((queue) => (
                 <IntegrationDashboardQueueCard
                   key={queue.id}
                   queue={queue}
                   {...(managedSystemId !== undefined ? { managedSystemId } : {})}
                 />
+              ))}
+            </div>
+          ) : null}
+          {summary.isSuccess && zeroQueues.length > 0 && (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-2"
+              data-testid="integration-zero-queues"
+            >
+              <span className="text-xs text-text-muted">{HOME_COPY.noZeroQueueItems}</span>
+              {zeroQueues.map((queue) => (
+                <InternalLink
+                  className="inline-flex items-center rounded-full border border-border-subtle bg-surface-card px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
+                  data-testid={`integration-zero-queue-${queue.id}`}
+                  href={hrefWithManagedSystem(queue.next_action.route, managedSystemId)}
+                  key={queue.id}
+                >
+                  {HOME_QUEUE_COPY[queue.id].title} 0
+                </InternalLink>
               ))}
             </div>
           )}
@@ -207,14 +232,12 @@ export function IntegrationDashboardRoute({
             <IntegrationJumpCard
               href={`/integration/evidence${surfaceScopeSearch}`}
               title={EVIDENCE_COPY.title}
-              description={EVIDENCE_COPY.description}
               icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-evidence"
             />
             <IntegrationJumpCard
               href={`/integration/coverage${surfaceScopeSearch}`}
               title={GLOSSARY.coverage}
-              description="VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다."
               icon={<Layers className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-coverage"
               secondaryLink={{
@@ -233,7 +256,6 @@ export function IntegrationDashboardRoute({
             <IntegrationJumpCard
               href={`/integration/links${surfaceScopeSearch}`}
               title={GLOSSARY.entityLinks}
-              description="VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다."
               icon={<Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-links"
             />

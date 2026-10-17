@@ -245,28 +245,43 @@ describe('integration action dashboard route', () => {
         expectedPrimaryLabels[id],
       );
     }
-    expect(screen.getByTestId('integration-queue-secondary-unassigned-voc')).toHaveTextContent(
-      '미배정 VOC 보기',
+    const unassignedCard = within(screen.getByTestId('integration-queue-card-unassigned-voc'));
+    expect(unassignedCard.queryByText('복구', { exact: true })).toBeNull();
+    expect(unassignedCard.getByTestId('integration-queue-count-unassigned-voc')).toHaveTextContent(
+      '12',
     );
-    expect(screen.getByTestId('integration-queue-secondary-unassigned-voc')).toHaveAttribute(
-      'href',
-      expect.stringContaining('/vocs?view=inbox&tab=unassigned'),
-    );
+    expect(unassignedCard.queryByText(/12건/)).toBeNull();
+    expect(
+      within(
+        screen.getByTestId('integration-queue-card-actionable-finding-no-execution'),
+      ).queryByText('후속 조치', { exact: true }),
+    ).toBeNull();
+    expect(
+      screen
+        .getAllByRole('link')
+        .filter(
+          (link) =>
+            link.textContent?.includes('VOC 검토') &&
+            link.getAttribute('href') === queueFixtures[0].next_action.route,
+        ),
+    ).toHaveLength(1);
+    expect(screen.queryByRole('link', { name: '미배정 VOC 보기' })).toBeNull();
 
     expect(screen.getByTestId('integration-dashboard-gap-count').textContent).toBe('34');
     const surfaces = within(screen.getByTestId('integration-surfaces'));
     expect(surfaces.getByRole('link', { name: /커버리지/ })).toBeVisible();
     expect(surfaces.getByRole('link', { name: /엔티티 링크/ })).toBeVisible();
-    expect(
-      surfaces.getByText(
-        'VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다.',
-      ),
-    ).toBeVisible();
-    expect(
-      surfaces.getByText(
-        'VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다.',
-      ),
-    ).toBeVisible();
+    for (const testId of [
+      'integration-surface-evidence',
+      'integration-surface-coverage',
+      'integration-surface-links',
+    ]) {
+      expect(surfaces.getByTestId(testId)).not.toHaveClass(
+        'rounded-md',
+        'border',
+        'bg-surface-card',
+      );
+    }
     expect(surfaces.getByRole('link', { name: /Evidence/ })).toHaveAttribute(
       'href',
       '/integration/evidence',
@@ -344,12 +359,20 @@ describe('integration action dashboard route', () => {
       return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
     });
 
-    expect(await screen.findByTestId('integration-queue-count-unassigned-voc')).toHaveTextContent(
-      '0',
+    const zeroStrip = await screen.findByTestId('integration-zero-queues');
+    expect(zeroStrip).toHaveTextContent('처리할 항목 없음');
+    expect(screen.getByTestId('integration-zero-queue-unassigned-voc')).toHaveTextContent(
+      '미배정 VOC 0',
+    );
+    expect(screen.getByTestId('integration-zero-queue-unassigned-voc')).toHaveAttribute(
+      'href',
+      queueFixtures[0].next_action.route,
     );
     expect(
-      screen.getByTestId('integration-queue-count-released-task-unresolved-voc').textContent,
-    ).toBe('0');
+      screen.getByTestId('integration-zero-queue-released-task-unresolved-voc'),
+    ).toHaveTextContent('Released Task · 미해결 VOC 0');
+    expect(screen.queryByTestId('integration-queue-card-unassigned-voc')).toBeNull();
+    expect(screen.queryByTestId('integration-queue-card-released-task-unresolved-voc')).toBeNull();
     expect(screen.queryByTestId('integration-queue-card-high-severity-unlinked')).toBeNull();
   });
 
@@ -591,7 +614,7 @@ test('Evidence entry preserves Managed System without inventing a count (#1107)'
   await renderDashboard(`/integration?managedSystem=${MS_A}`);
   const card = await screen.findByTestId('integration-surface-evidence');
   expect(card.getAttribute('href')).toBe(`/integration/evidence?managedSystem=${MS_A}`);
-  expect(within(card).getByText('Finding에 저장된 Evidence를 찾습니다.')).toBeVisible();
+  expect(within(card).getByText('Evidence')).toBeVisible();
   expect(screen.queryByTestId('integration-surface-evidence-stat')).toBeNull();
 });
 
@@ -607,11 +630,27 @@ test.each(queueFixtures.map((queue) => [queue.id, queue.next_action.route] as co
 );
 
 test('queue card secondary link keeps the selected Managed System (#1179)', async () => {
-  await renderDashboard(`/integration?managedSystem=${MS_A}`);
-  const queue = queueFixtures.find((entry) => entry.id === 'unassigned-voc');
+  const secondaryAction = {
+    label: 'Keep secondary action',
+    route: '/vocs?view=inbox&tab=unassigned&action=keep',
+    intent: 'unrecognized_intent',
+  };
+  const summary = dashboardSummarySchema.parse({
+    ...SUMMARY,
+    action_queues: [
+      { ...queueFixtures[0], secondary_action: secondaryAction },
+      ...queueFixtures.slice(1),
+    ],
+  });
+  await renderDashboard(`/integration?managedSystem=${MS_A}`, async (input) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/dashboard/summary')) return response(summary);
+    if (url.includes('/managed-systems')) return managedSystemsResponse();
+    return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
+  });
   expect(await screen.findByTestId('integration-queue-secondary-unassigned-voc')).toHaveAttribute(
     'href',
-    `${queue?.secondary_action.route}&managedSystem=${MS_A}`,
+    `${secondaryAction.route}&managedSystem=${MS_A}`,
   );
 });
 

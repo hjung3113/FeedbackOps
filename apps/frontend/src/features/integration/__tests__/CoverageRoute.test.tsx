@@ -490,6 +490,29 @@ describe('integration coverage route', () => {
     expect(screen.getByTestId(`coverage-cell-${MS_B}-finding-execution`).textContent).toBe('—');
   });
 
+  test('renders a zero Survey follow-up queue neutrally while keeping no_data explicit', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...NO_DATA_SUMMARY,
+      action_queues: [
+        {
+          id: 'bad-outcome-no-followup',
+          severity: 'urgent',
+          count: 0,
+          next_action: { label: 'Review', route: '/surveys?follow_up=needed', intent: 'review' },
+          secondary_action: null,
+        },
+      ],
+    });
+    await renderCoverage('/integration/coverage', summary);
+
+    const surveyQueue = screen.getByTestId('coverage-queue-row-bad-outcome-no-followup');
+    expect(within(surveyQueue).getByText('0', { exact: true })).toHaveClass('text-text-muted');
+    expect(within(surveyQueue).getByText('0', { exact: true })).not.toHaveClass(
+      'text-accent-danger',
+    );
+    expect(screen.getByTestId('coverage-percent-voc-task')).toHaveTextContent('집계 대상 없음');
+  });
+
   // #1087 UX: the action list leads with rows that need action — no-data rows
   // sort after rows with a denominator, ties keep the server order.
   test('sorts no-data coverage signals after rows with a denominator', async () => {

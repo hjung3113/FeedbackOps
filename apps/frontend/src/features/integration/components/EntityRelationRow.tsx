@@ -86,7 +86,7 @@ export function EntityRelationRow({
       data-testid={testId}
     >
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        <EntityIconBadge type={iconTypeFor(link.source_type)} size={18} />
+        <EntityIconBadge type={iconTypeFor(link.source_type)} size={18} className="opacity-70" />
         <span
           className={
             source.displayId
@@ -106,7 +106,7 @@ export function EntityRelationRow({
         <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        <EntityIconBadge type={iconTypeFor(link.target_type)} size={18} />
+        <EntityIconBadge type={iconTypeFor(link.target_type)} size={18} className="opacity-70" />
         <span
           className={
             target.displayId

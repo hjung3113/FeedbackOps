@@ -149,6 +149,12 @@ const SEVERITY_TONE: Record<
   },
 };
 
+const ZERO_QUEUE_TONE = {
+  icon: <Shield className="h-3.5 w-3.5" aria-hidden="true" />,
+  text: 'text-text-muted',
+  chip: 'bg-surface-canvas text-text-muted',
+} as const;
+
 export function CoverageRoute(): React.ReactElement {
   const search = useSearch({ strict: false }) as CoverageSearch;
   const isAreas = search.view === 'areas';
@@ -473,7 +479,8 @@ export function CoverageRoute(): React.ReactElement {
                   data-testid="coverage-queues"
                 >
                   {(summary.data?.action_queues ?? []).map((queue) => {
-                    const tone = SEVERITY_TONE[queue.severity];
+                    const tone =
+                      queue.count === 0 ? ZERO_QUEUE_TONE : SEVERITY_TONE[queue.severity];
                     const href = hopHref(hopRoute(queue.id), queue.id, managedSystem);
                     const CoverageQueueLink: React.ElementType =
                       href === undefined ? 'a' : InternalLink;

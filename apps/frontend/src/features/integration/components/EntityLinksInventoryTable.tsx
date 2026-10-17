@@ -130,27 +130,21 @@ export function EntityLinksInventoryTable({
 
   return (
     <>
-      <div aria-label="엔티티 링크 목록" role="list" className="min-w-full">
+      <ul aria-label="엔티티 링크 목록" className="m-0 min-w-full list-none p-0">
         {items.map((link) => {
           const managedSystem = managedSystemsById[link.managed_system_id];
           const actor = actorsById[link.created_by];
           const [sourceLabel, targetLabel] = entityLinkEndpointPrimaryLabels(link);
           return (
-            <div
+            <li
               key={link.id}
-              role="listitem"
               className={cn(
                 'grid grid-cols-(--entity-link-row-columns) min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
                 link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
               )}
               style={{ '--entity-link-row-columns': 'auto minmax(0, 1fr)' } as React.CSSProperties}
             >
-              <div
-                className="flex items-center"
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-              >
+              <div className="flex items-center">
                 <Checkbox aria-label={`${sourceLabel} → ${targetLabel} 선택`} />
               </div>
               <div className="flex min-w-0 flex-col justify-center gap-1">
@@ -160,9 +154,7 @@ export function EntityLinksInventoryTable({
                   <LinkStatusBadge status={link.status} />
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
-                  <span className="font-mono text-xs text-text-muted">
-                    {GLOSSARY.entityLinks} {shortId(link.id)}
-                  </span>
+                  <span className="font-mono text-xs text-text-muted">{shortId(link.id)}</span>
                   <RowDot />
                   {managedSystem !== undefined ? (
                     <ManagedSystemPill
@@ -193,10 +185,10 @@ export function EntityLinksInventoryTable({
                   <span>업데이트 {formatTimestamp(link.updated_at)}</span>
                 </div>
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
       {loadMoreControl}
     </>
   );

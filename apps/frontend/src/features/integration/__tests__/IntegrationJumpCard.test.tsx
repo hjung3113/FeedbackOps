@@ -8,7 +8,6 @@ it.each(['', '&managedSystem=a1111111-1111-4111-8111-111111111111'])(
       <IntegrationJumpCard
         href="/integration/coverage"
         title="Coverage"
-        description="coverage"
         icon={null}
         testId="coverage-card"
         secondaryLink={{
@@ -22,8 +21,8 @@ it.each(['', '&managedSystem=a1111111-1111-4111-8111-111111111111'])(
     expect(primary).toHaveAttribute('href', '/integration/coverage');
     expect(secondary).toHaveAttribute('href', `/integration/coverage?view=areas${scope}`);
     expect(primary.contains(secondary)).toBe(false);
-    expect(primary.parentElement).toHaveClass('relative');
-    expect(secondary).toHaveClass('absolute', 'bottom-4', 'right-4');
+    expect(primary.parentElement).not.toHaveClass('rounded-md', 'border', 'bg-surface-card');
+    expect(secondary.parentElement).not.toHaveClass('rounded-md', 'border', 'bg-surface-card');
     expect(secondary.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   },
 );
