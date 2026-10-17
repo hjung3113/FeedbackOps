@@ -52,11 +52,11 @@ describe('PermissionRequestsScreen identity', () => {
     consoleState.managedSystemNames = { '30000000-0000-0000-0000-000000000003': 'Billing Ops' };
   });
 
-  it('leads with the requester and readable capability while retaining the raw key as metadata', () => {
+  it('leads with the requester and readable capability and omits the raw key from the row', () => {
     render(<PermissionRequestsScreen />);
 
     expect(screen.getByText('김하나 · Finding 관리')).toBeInTheDocument();
-    expect(screen.getByText('finding.manage')).toHaveClass('font-mono', 'text-text-muted');
+    expect(screen.queryByText('finding.manage')).not.toBeInTheDocument();
     expect(screen.getByText('권한 요청')).toBeInTheDocument();
     expect(screen.getByText('Billing Ops')).toBeInTheDocument();
     expect(screen.queryByText('20000000')).not.toBeInTheDocument();

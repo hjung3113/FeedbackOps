@@ -199,10 +199,14 @@ describe('/admin/permissions/requests URL state', () => {
     );
     // The active tab's list rendered — restore is not detail-only.
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 관리자 권한', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId('permission-requests-list')).queryByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).queryByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).not.toBeInTheDocument();
     expect(router.state.location.search).toEqual({
       tab: 'approved',
@@ -274,7 +278,9 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.history.length).toBe(lengthBefore + 1);
     // Rows still rendered → the closed-panel assertion is not vacuous.
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -306,7 +312,9 @@ describe('/admin/permissions/requests URL state', () => {
       ),
     );
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -331,7 +339,9 @@ describe('/admin/permissions/requests URL state', () => {
       ),
     );
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 관리자 권한', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -351,7 +361,9 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.state.location.search).toEqual({ tab: 'all' });
     expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument();
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -374,7 +386,9 @@ describe('/admin/permissions/requests URL state', () => {
     expect(router.state.location.search).toEqual({});
     expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument();
     expect(
-      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+      within(screen.getByTestId('permission-requests-list')).getByText('워크스페이스 전체 읽기', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
   });
 

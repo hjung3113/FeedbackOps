@@ -132,8 +132,6 @@ function PermissionRequestRow({
       badges={<OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>}
       meta={
         <>
-          <span className="font-mono text-text-muted">{request.requested_capability}</span>
-          <span>·</span>
           <span>
             {request.requested_managed_system_id
               ? (managedSystemName ?? 'Managed System')
