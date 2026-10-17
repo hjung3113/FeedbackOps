@@ -1,7 +1,7 @@
 import { NAV_TREE } from '@/routes/_authed';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Database, Inbox, Plus, Settings } from 'lucide-react';
+import { Database, Inbox, Plus } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
 
@@ -81,7 +81,7 @@ describe('AppSidebar', () => {
   });
 
   it('does not render a footer wrapper for a non-admin actor', () => {
-    render(<AppSidebar entries={entries} canAccessWorkspaceAdmin={false} />);
+    render(<AppSidebar entries={entries} />);
 
     expect(screen.queryByTestId('sidebar-footer')).not.toBeInTheDocument();
   });
@@ -292,13 +292,12 @@ describe('AppSidebar', () => {
       <AppSidebar
         entries={entries}
         defaultCollapsed={true}
-        canAccessWorkspaceAdmin={true}
         footerItems={[
           {
-            id: 'workspace-settings',
-            label: 'Workspace settings',
-            href: '/admin/placeholder',
-            icon: <Settings className="h-4 w-4" />,
+            id: 'help-center',
+            label: 'Help center',
+            href: '/help',
+            icon: <Inbox className="h-4 w-4" />,
           },
           {
             id: 'invite-member',
@@ -310,14 +309,14 @@ describe('AppSidebar', () => {
       />,
     );
 
-    const settings = screen.getByTestId('sidebar-footer-workspace-settings');
+    const help = screen.getByTestId('sidebar-footer-help-center');
     const invite = screen.getByTestId('sidebar-footer-invite-member');
 
-    expect(settings).toHaveAttribute('href', '/admin/placeholder');
-    expect(settings).toHaveAttribute('title', 'Workspace settings');
-    expect(settings).toHaveAttribute('aria-label', 'Workspace settings');
-    expect(settings.querySelector('svg')).not.toBeNull();
-    expect(settings.textContent).toBe('');
+    expect(help).toHaveAttribute('href', '/help');
+    expect(help).toHaveAttribute('title', 'Help center');
+    expect(help).toHaveAttribute('aria-label', 'Help center');
+    expect(help.querySelector('svg')).not.toBeNull();
+    expect(help.textContent).toBe('');
 
     expect(invite).toHaveAttribute('type', 'button');
     expect(invite).toBeDisabled();
@@ -358,6 +357,15 @@ describe('AppSidebar', () => {
     expect(milestonesLink).toHaveTextContent('Milestones');
     expect(screen.queryByTestId('sidebar-count-milestones')).not.toBeInTheDocument();
     expect(milestonesLink).not.toHaveTextContent('0');
+  });
+
+  it('keeps the Triage unassigned sidebar count neutral', () => {
+    render(<AppSidebar entries={NAV_TREE.voc} counts={{ 'voc.tab.unassigned': 3 }} />);
+
+    const badge = screen.getByTestId('sidebar-count-unassigned');
+    expect(badge).toHaveTextContent('3');
+    expect(badge.className).toContain('bg-surface-row-selected');
+    expect(badge.className).not.toContain('text-accent-danger');
   });
 
   it('distinguishes an absent count from an explicit zero count', () => {

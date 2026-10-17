@@ -1,4 +1,4 @@
-import type { NotificationDto } from '@fops/shared';
+import { type NotificationDto, isCapability } from '@fops/shared';
 import {
   Button,
   SkeletonRows,
@@ -24,6 +24,7 @@ import {
   markNotificationRead,
   notificationsQueryKey,
 } from '@/lib/api';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import { formatRelativeTime } from '@/lib/format/datetime';
 
@@ -59,6 +60,14 @@ export function notificationTarget(notification: NotificationDto): string | null
 
 function reportMutationError(error: ApiError): void {
   toast.error(mapUnknownError(error).message);
+}
+
+// Permission notifications carry the raw capability key as the subject title.
+function subjectRefTitle(notification: NotificationDto, title: string): string {
+  const carriesCapability =
+    notification.subject_type === 'permission_request' ||
+    notification.subject_type === 'permission_grant';
+  return carriesCapability && isCapability(title) ? getCapabilityDisplayLabel(title) : title;
 }
 
 export function InboxPanel(): React.ReactElement {
@@ -198,7 +207,7 @@ function NotificationRow({
   const targetLocation = target === null ? null : new URL(target, 'http://feedbackops.local');
   const subjectTitle =
     notification.subject_ref?.visibility_state === 'allowed'
-      ? notification.subject_ref.title
+      ? subjectRefTitle(notification, notification.subject_ref.title)
       : null;
   const titleTooltipOnArchive =
     subjectTitle !== null && targetLocation === null && notification.read_at !== null;
@@ -229,8 +238,10 @@ function NotificationRow({
           <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
             {notification.subject_ref.visibility_state === 'allowed' ? (
               <>
-                <span className="shrink-0 font-mono">{notification.subject_ref.display_id}</span>
-                <span className="truncate">{notification.subject_ref.title}</span>
+                <span className="shrink-0 font-mono text-caption text-text-muted">
+                  {notification.subject_ref.display_id}
+                </span>
+                <span className="truncate">{subjectTitle}</span>
               </>
             ) : (
               <span>{HOME_INBOX_COPY.subjectUnavailable}</span>

@@ -2,8 +2,6 @@ import type { DashboardSummary } from '@fops/shared';
 
 import { GLOSSARY } from './glossary';
 
-import { COVERAGE_METRIC_LABELS } from './coverage';
-
 import { DASHBOARD_QUEUE_ACTION_LABELS } from './dashboard-actions';
 
 export const HOME_COPY = {
@@ -19,9 +17,8 @@ export const HOME_COPY = {
       }
       return '현재 확인할 운영 큐가 없습니다.';
     }
-    const count = queues.reduce((total, queue) => total + queue.count, 0);
-    if (count === 0) return '현재 확인할 운영 큐가 없습니다.';
-    return `오늘 워크스페이스에 ${count}개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.`;
+    if (!queues.some((queue) => queue.count > 0)) return '현재 확인할 운영 큐가 없습니다.';
+    return '오늘 확인할 운영 큐가 있습니다. 우선순위가 높은 큐부터 확인하세요.';
   },
   // #280: the "My work" heading pointed at a My Work screen that is out of the
   // MVP. The rows below it are live (assigned Tasks + pending Task Requests),
@@ -29,6 +26,7 @@ export const HOME_COPY = {
   queueHeading: '복구 · 후속 조치 큐',
   noZeroQueueItems: '처리할 항목 없음',
   assignedToYou: '내게 배정됨',
+  myVocs: GLOSSARY.myVocs,
   coverage: '커버리지 신호',
   openRequests: '열린 요청',
   noOpenRequests: '열린 요청이 없습니다.',
@@ -42,7 +40,6 @@ export const HOME_KPI_COPY = {
   active_finding: '활성 Finding',
   pending_request: '대기 중 Task Request',
   tasks_in_flight: GLOSSARY.tasksInFlight,
-  coverage_percent: COVERAGE_METRIC_LABELS['voc-task'],
 } as const;
 
 export const HOME_QUEUE_COPY: Record<

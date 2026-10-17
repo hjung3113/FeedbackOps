@@ -265,9 +265,38 @@ describe('InboxPanel', () => {
     );
     expect(within(allowedRow).getByText('VOC-0123')).toBeInTheDocument();
     expect(within(allowedRow).getByText('Could not submit the form')).toBeInTheDocument();
+    expect(within(allowedRow).getByText('VOC-0123')).toHaveClass(
+      'font-mono',
+      'text-caption',
+      'text-text-muted',
+    );
     expect(within(unavailableRow).getByText('접근할 수 없는 항목')).toBeInTheDocument();
     expect(within(unavailableRow).queryByText('Could not submit the form')).not.toBeInTheDocument();
   });
+
+  it.each(['permission_request', 'permission_grant'] as const)(
+    'shows the shared capability label for a %s subject title carrying a raw key',
+    async (subjectType) => {
+      installNotificationFetch([
+        makeNotification({
+          event_type: 'permission_request.submitted',
+          subject_type: subjectType,
+          summary: '새 권한 요청이 접수되었습니다.',
+          detail: {},
+          subject_ref: {
+            visibility_state: 'allowed',
+            display_id: 'a1b2c3d4',
+            title: 'workspace.admin',
+          },
+        }),
+      ]);
+      renderInbox();
+
+      const row = await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
+      expect(row).toHaveTextContent('워크스페이스 관리자 권한');
+      expect(row).not.toHaveTextContent('workspace.admin');
+    },
+  );
 
   it.each([
     { subjectState: 'allowed', interaction: 'hover', shouldShowTooltip: true },

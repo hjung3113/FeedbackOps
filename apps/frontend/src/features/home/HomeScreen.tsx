@@ -26,6 +26,7 @@ import {
   fetchTaskRequests,
   listTasks,
 } from '@/lib/api';
+import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
@@ -111,6 +112,23 @@ export function HomeScreen({
     retry: false,
   });
   const actorName = me.data?.actor.display_name ?? '지원';
+  const assignedTasks = myTasks.data?.items ?? [];
+  const assignedRequests = pendingRequests.data?.items ?? [];
+  const permissionRequests = openPermissionRequests.data?.requests ?? [];
+  const hasPersonalAssignments = assignedTasks.length > 0 || assignedRequests.length > 0;
+  const hasSummaryActivity =
+    summary.data !== undefined &&
+    (summary.data.action_queues.some((queue) => queue.count > 0) ||
+      summary.data.coverage.length > 0 ||
+      Object.values(summary.data.kpis ?? {}).some((count) => count !== undefined && count > 0));
+  // A User actor gets 403 from both personal-work queries: that actor holds no Tasks, so Home leads
+  // with Survey and 내 VOC. Loading and other errors keep the operator layout.
+  const personalWorkDenied = [myTasks, pendingRequests].every((query) =>
+    isPermissionDenied(query.error),
+  );
+  // Once a Permission Request has shown, its panel stays mounted so the withdraw focus fallback survives.
+  const [sawPermissionRequests, setSawPermissionRequests] = React.useState(false);
+  if (permissionRequests.length > 0 && !sawPermissionRequests) setSawPermissionRequests(true);
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['dashboard-summary', managedSystemId] });
   };
@@ -132,22 +150,26 @@ export function HomeScreen({
               <h1 className="text-xl font-semibold tracking-tight text-text-primary">
                 {HOME_COPY.title(actorName)}
               </h1>
-              <p className="mt-3 text-sm text-text-muted">
-                {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
-              </p>
+              {activeTab === 'dashboard' && (
+                <p className="mt-3 text-sm text-text-muted">
+                  {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
+                </p>
+              )}
             </div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
-                <RefreshCw className="h-3.5 w-3.5" />
-                {HOME_COPY.refresh}
-              </Button>
-              <Button asChild variant="primary" size="sm">
-                <InternalLink href="/vocs?action=create">
-                  <Plus className="h-3.5 w-3.5" />
-                  {HOME_COPY.newVoc}
-                </InternalLink>
-              </Button>
-            </div>
+            {activeTab === 'dashboard' && (
+              <div className="flex shrink-0 gap-2">
+                <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {HOME_COPY.refresh}
+                </Button>
+                <Button asChild variant="primary" size="sm">
+                  <InternalLink href="/vocs?action=create">
+                    <Plus className="h-3.5 w-3.5" />
+                    {HOME_COPY.newVoc}
+                  </InternalLink>
+                </Button>
+              </div>
+            )}
           </header>
           {activeTab === 'dashboard' && (
             <RecoveryFreshness
@@ -169,39 +191,79 @@ export function HomeScreen({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard" className="mt-0">
-            {summary.isError ? (
-              <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+            {personalWorkDenied ? (
+              <div className="space-y-7" data-testid="home-reporter-layout">
+                <AnswerableSurveysPanel />
+                <InternalLink
+                  href="/vocs?view=my"
+                  className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
+                >
+                  {HOME_COPY.myVocs}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </InternalLink>
+                {(permissionRequests.length > 0 || sawPermissionRequests) && (
+                  <OpenRequestsPanel requests={permissionRequests} />
+                )}
+                {summary.isError && (
+                  <p className="text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+                )}
+                {hasSummaryActivity && (
+                  <HomeSummary
+                    summary={summary.data}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {summary.data !== undefined && summary.data.coverage.length > 0 && (
+                  <CoveragePanel
+                    coverage={summary.data.coverage}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {recovery?.queue}
+              </div>
             ) : (
-              <HomeSummary
-                summary={summary.data}
-                {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-              />
+              <>
+                {hasPersonalAssignments && (
+                  <div className="mb-9">
+                    <MyWorkPanel tasks={assignedTasks} requests={assignedRequests} />
+                  </div>
+                )}
+                {summary.isError ? (
+                  <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
+                ) : (
+                  <HomeSummary
+                    summary={summary.data}
+                    {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                  />
+                )}
+                {(!hasPersonalAssignments || (summary.data?.coverage.length ?? 0) > 0) && (
+                  <div
+                    className={`mt-9 grid gap-7 ${
+                      !hasPersonalAssignments && (summary.data?.coverage.length ?? 0) > 0
+                        ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+                        : 'grid-cols-1'
+                    }`}
+                  >
+                    {!hasPersonalAssignments && (
+                      <MyWorkPanel tasks={assignedTasks} requests={assignedRequests} />
+                    )}
+                    {summary.data !== undefined && summary.data.coverage.length > 0 && (
+                      <CoveragePanel
+                        coverage={summary.data.coverage}
+                        {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                      />
+                    )}
+                  </div>
+                )}
+                <div className="mt-9">
+                  <OpenRequestsPanel requests={permissionRequests} />
+                </div>
+                {recovery?.queue}
+                <div className="mt-9">
+                  <AnswerableSurveysPanel />
+                </div>
+              </>
             )}
-            <div
-              className={`mt-9 grid gap-7 ${
-                summary.data !== undefined && summary.data.coverage.length > 0
-                  ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
-                  : 'grid-cols-1'
-              }`}
-            >
-              <MyWorkPanel
-                tasks={myTasks.data?.items ?? []}
-                requests={pendingRequests.data?.items ?? []}
-              />
-              {summary.data !== undefined && summary.data.coverage.length > 0 && (
-                <CoveragePanel
-                  coverage={summary.data.coverage}
-                  {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-                />
-              )}
-            </div>
-            <div className="mt-9">
-              <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
-            </div>
-            {recovery?.queue}
-            <div className="mt-9">
-              <AnswerableSurveysPanel />
-            </div>
           </TabsContent>
           <TabsContent value="inbox" className="mt-0">
             <InboxPanel />
@@ -340,30 +402,15 @@ function HomeSummary({
   const activeQueues = queues.filter((queue) => queue.count > 0);
   const zeroQueues = queues.filter((queue) => queue.count === 0);
   const kpiKeys = Object.keys(HOME_KPI_COPY) as Array<keyof typeof HOME_KPI_COPY>;
-  // #1087 UX: the chip answers from the same voc-task signal row the panel
-  // below uses — an empty denominator is 집계 대상 없음, never a 0%.
-  const vocTaskNoData = summary?.coverage.some(
-    (item) => item.id === 'voc-task' && item.status === 'no_data',
-  );
+  const visibleKpiKeys = kpiKeys.filter((key) => kpis?.[key] !== undefined);
   return (
     <>
-      <div className="mb-8 flex flex-wrap gap-2" data-testid="home-kpis">
-        {kpis &&
-          kpiKeys.map((key) => {
+      {visibleKpiKeys.length > 0 && (
+        <div className="mb-8 flex flex-wrap gap-2" data-testid="home-kpis">
+          {visibleKpiKeys.map((key) => {
+            if (kpis === undefined) return null;
             const value = kpis[key];
             if (value === undefined) return null;
-            if (key === 'coverage_percent' && vocTaskNoData === true) {
-              return (
-                <div
-                  key={key}
-                  className="rounded-full border border-border-subtle bg-surface-card px-2.5 py-1 text-xs text-text-secondary"
-                  data-testid={`home-kpi-${key}`}
-                >
-                  <span>{HOME_KPI_COPY[key]}</span>
-                  <span className="ml-1.5 text-text-muted">{COVERAGE_NO_DATA_LABEL}</span>
-                </div>
-              );
-            }
             return (
               <div
                 key={key}
@@ -378,12 +425,13 @@ function HomeSummary({
                       : 'ml-1.5 font-semibold tabular-nums text-text-primary'
                   }
                 >
-                  {key === 'coverage_percent' ? `${value}%` : value}
+                  {value}
                 </span>
               </div>
             );
           })}
-      </div>
+        </div>
+      )}
       {/* #521 follows empty-state AC over the populated docs/design-prototype/screen-home.jsx example. */}
       {summary !== undefined && activeQueues.length > 0 && (
         <>

@@ -11,6 +11,7 @@ import {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import { NAV_TREE } from '@/routes/_authed';
 import { AppSidebar } from '../../../lib/layout/AppSidebar';
 import { AdminSettingsPage } from './settings';
 
@@ -305,11 +306,10 @@ describe('/admin/settings route', () => {
     expect(screen.getByRole('button', { name: '변경사항 저장' })).toBeDisabled();
   });
 
-  test('removes the placeholder destination from the default settings navigation', () => {
-    // #612: the footer link renders only for an actor approved for workspace.admin.
-    render(<AppSidebar entries={[]} canAccessWorkspaceAdmin={true} />);
-    const settings = screen.getByTestId('sidebar-footer-workspace-settings');
-    expect(settings).toHaveAttribute('href', '/admin/settings');
-    expect(settings).not.toHaveAttribute('href', '/admin/placeholder');
+  test('renders one workspace settings destination in Admin navigation', () => {
+    render(<AppSidebar entries={NAV_TREE.admin} />);
+    const settings = screen.getAllByRole('link', { name: '워크스페이스 설정' });
+    expect(settings).toHaveLength(1);
+    expect(settings[0]).toHaveAttribute('href', '/admin/settings');
   });
 });
