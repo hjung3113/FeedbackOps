@@ -4,6 +4,11 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 
+/** `workspace.admin` is granted only through the approval path, never requested ordinarily. */
+export function isOrdinarilyRequestable(capability: Capability): boolean {
+  return capability !== 'workspace.admin';
+}
+
 export async function supportedScopeCandidates(
   tx: Tx,
   workspaceId: string,
@@ -41,7 +46,7 @@ export async function validateSupportedScope(
   objectId: string | null,
   options: { approval?: boolean; field?: string } = {},
 ): Promise<void> {
-  if (!options.approval && capability === 'workspace.admin') {
+  if (!options.approval && !isOrdinarilyRequestable(capability)) {
     throw new HttpError('validation.failed', 'ordinary workspace.admin requests are unsupported', {
       fields: [{ path: ['requested_capability'], code: 'custom' }],
     });

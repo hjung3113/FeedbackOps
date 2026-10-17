@@ -499,7 +499,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       url: '/me/permissions/check?capability=workspace.admin',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
     });
-    expect(check.json()).toMatchObject({ state: 'request_access' });
+    expect(check.json()).toMatchObject({ state: 'blocked_non_requestable' });
   });
 
   it.each(['forbidden', 'allowed'] as const)(

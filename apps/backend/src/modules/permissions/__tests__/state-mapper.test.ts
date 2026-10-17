@@ -73,6 +73,26 @@ describe('toFrontendState', () => {
     );
   });
 
+  it.each(['grant_expired', 'grant_revoked'] as const)(
+    '%s with null requestable and no open request → blocked_non_requestable',
+    (reason) => {
+      expect(toFrontendState({ allow: false, reason, requestable: null }, null)).toBe(
+        'blocked_non_requestable',
+      );
+    },
+  );
+
+  it.each([
+    ['no_grant', { status: 'pending' }, 'pending_request'],
+    ['grant_expired', { status: 'needs_more_info' }, 'pending_request'],
+    ['grant_revoked', { status: 'pending' }, 'pending_request'],
+    ['no_grant', { status: 'rejected' }, 'rejected'],
+  ] as const)('%s with null requestable and a %j request → %s', (reason, openRequest, expected) => {
+    expect(toFrontendState({ allow: false, reason, requestable: null }, openRequest)).toBe(
+      expected,
+    );
+  });
+
   it('grant_expired without an open request → expired', () => {
     const d: Decision = {
       allow: false,
