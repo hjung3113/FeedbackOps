@@ -25,7 +25,7 @@ function buildHarness({ initialPath }: { initialPath: string }) {
     path: '/admin/managed-systems',
     component: ManagedSystemsAdminPage,
   });
-  // Stub target for the "검토 콘솔 열기" / "Review" links.
+  // Stub target for the review-console link.
   const reqRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin/permissions/requests',
@@ -179,6 +179,11 @@ describe('/admin/managed-systems route', () => {
     await waitFor(() =>
       expect(screen.getByTestId('ms-requests-count')).toHaveTextContent('결정 대기 중인 요청 3건'),
     );
+    const reviewConsoleLinks = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href') === '/admin/permissions/requests');
+    expect(reviewConsoleLinks).toHaveLength(1);
+    expect(reviewConsoleLinks[0]).toHaveTextContent('검토 콘솔 열기');
     expect(screen.getByTestId('ms-register-button')).toBeInTheDocument();
   });
 

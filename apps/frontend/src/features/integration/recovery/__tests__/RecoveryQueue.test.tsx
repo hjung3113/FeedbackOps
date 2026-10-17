@@ -186,6 +186,21 @@ it('restores independent detail on refresh and Back; keyboard close returns focu
   await mount(saved);
   await screen.findByRole('button', { name: '내 화면에서 1일 숨기기' });
 });
+it('leads recovery rows with source identity and keeps the reason secondary', async () => {
+  setup();
+  await mount();
+
+  const row = await screen.findByRole('button', { name: /VOC 담당자 배정이 필요/ });
+  const text = row.textContent ?? '';
+  expect(text.indexOf('VOC-1')).toBeGreaterThanOrEqual(0);
+  expect(text.indexOf('VOC-1')).toBeLessThan(text.indexOf('다운로드 오류'));
+  expect(text.indexOf('다운로드 오류')).toBeGreaterThanOrEqual(0);
+  expect(text.indexOf('다운로드 오류')).toBeLessThan(text.indexOf(item.reason));
+  const reason = Array.from(row.querySelectorAll('span')).find(
+    (span) => span.textContent === item.reason,
+  );
+  expect(reason).toHaveClass('text-text-muted');
+});
 it.each([
   ['내 화면에서 1일 숨기기', { action: 'snooze', days: 1 }],
   ['내 화면에서 7일 숨기기', { action: 'snooze', days: 7 }],
@@ -716,7 +731,9 @@ it('distinguishes Permission Request rows with the safe source identity and no e
   });
   await mount();
   const row = await screen.findByRole('button', { name: /Permission Request 검토가 필요/ });
-  expect(row).toHaveTextContent('요청자 이름 · Admin 검토 대기열');
+  expect(row).toHaveTextContent(
+    '요청자 이름Permission Request 검토가 필요합니다. · Admin 검토 대기열',
+  );
   expect(row.textContent).not.toContain(SOURCE);
   expect(row.textContent).not.toContain('· Permission Request');
 });

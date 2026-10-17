@@ -60,7 +60,11 @@ describe('EntityLinksInventoryTable identity', () => {
       row.textContent?.indexOf('TASK-1000') ?? -1,
     );
     expect(screen.getByRole('checkbox', { name: 'FIN-12 → TASK-1000 선택' })).toBeInTheDocument();
-    expect(screen.getByText('엔티티 링크 10000000')).toHaveClass('text-text-muted');
+    expect(screen.getByText('10000000', { exact: true })).toHaveClass('text-text-muted');
+    expect(screen.queryByText('엔티티 링크 10000000')).not.toBeInTheDocument();
+    expect(screen.getByText('활성')).toHaveClass('text-text-muted');
+    expect(screen.getByText('활성')).not.toHaveClass('text-text-success-label');
+    expect(row.querySelectorAll('[data-entity-type]')).toHaveLength(2);
     expect(screen.getByText('Managed System')).toBeInTheDocument();
     expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
     expect(

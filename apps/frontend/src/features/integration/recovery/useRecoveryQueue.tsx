@@ -324,49 +324,59 @@ export function useRecoveryQueue(
       ) : items?.length ? (
         <>
           <div>
-            {items.map((row) => (
-              <ObjectRow
-                key={row.key}
-                ref={(node) => {
-                  if (node) rows.current.set(row.item.recovery_item_id, node);
-                  else rows.current.delete(row.item.recovery_item_id);
-                }}
-                title={row.item.reason}
-                meta={
-                  <span>
-                    {[
-                      row.item.source?.display_id,
-                      row.item.source?.title,
-                      row.episode ? '' : row.item.responsible_actor_hint.label,
-                      row.resolution ? formatRecoveryTime(row.resolution) : '',
-                      !search.history && row.item.presentation.state === 'muted' ? COPY.muted : '',
-                      !search.history &&
-                      row.item.presentation.state === 'snoozed' &&
-                      row.item.presentation.snoozed_until
-                        ? COPY.snoozed(formatRecoveryTime(row.item.presentation.snoozed_until))
-                        : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    {row.episode && (
-                      <>
-                        {' '}
-                        · <span>{row.episode}</span>
-                      </>
-                    )}
-                  </span>
-                }
-                selected={selected === row.item.recovery_item_id}
-                onClick={(event) => {
-                  origin.current = {
-                    id: row.item.recovery_item_id,
-                    context,
-                    node: event.currentTarget,
-                  };
-                  update({ selected: row.item.recovery_item_id });
-                }}
-              />
-            ))}
+            {items.map((row) => {
+              const sourceTitle = row.item.source?.title;
+              return (
+                <ObjectRow
+                  key={row.key}
+                  ref={(node) => {
+                    if (node) rows.current.set(row.item.recovery_item_id, node);
+                    else rows.current.delete(row.item.recovery_item_id);
+                  }}
+                  {...(row.item.source?.display_id ? { id: row.item.source.display_id } : {})}
+                  title={sourceTitle ?? row.item.reason}
+                  meta={
+                    <span>
+                      {sourceTitle !== undefined && (
+                        <>
+                          <span className="text-text-muted">{row.item.reason}</span>
+                          {' · '}
+                        </>
+                      )}
+                      {[
+                        row.episode ? '' : row.item.responsible_actor_hint.label,
+                        row.resolution ? formatRecoveryTime(row.resolution) : '',
+                        !search.history && row.item.presentation.state === 'muted'
+                          ? COPY.muted
+                          : '',
+                        !search.history &&
+                        row.item.presentation.state === 'snoozed' &&
+                        row.item.presentation.snoozed_until
+                          ? COPY.snoozed(formatRecoveryTime(row.item.presentation.snoozed_until))
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      {row.episode && (
+                        <>
+                          {' '}
+                          · <span>{row.episode}</span>
+                        </>
+                      )}
+                    </span>
+                  }
+                  selected={selected === row.item.recovery_item_id}
+                  onClick={(event) => {
+                    origin.current = {
+                      id: row.item.recovery_item_id,
+                      context,
+                      node: event.currentTarget,
+                    };
+                    update({ selected: row.item.recovery_item_id });
+                  }}
+                />
+              );
+            })}
           </div>
           <ListLoadMore
             hasMore={!!current.hasNextPage}

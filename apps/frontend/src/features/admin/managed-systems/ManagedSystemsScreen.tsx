@@ -251,12 +251,6 @@ function ManagedSystemsBody({
               검토 대기 · 추가 정보 필요 · 고위험 · 직접 승인까지 검토 콘솔에서 확인합니다.
             </span>
           </div>
-          <Button variant="secondary" size="sm" asChild>
-            <Link to="/admin/permissions/requests" data-testid="ms-review-button">
-              <ArrowRight className="h-3 w-3" />
-              검토
-            </Link>
-          </Button>
         </div>
       </div>
 
