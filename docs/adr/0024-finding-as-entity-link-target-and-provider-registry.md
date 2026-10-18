@@ -72,7 +72,7 @@ Mixed readability (source VOC readable, target Finding not, or vice-versa) ⇒ `
 
 ### Section E — Trigger #1 fires only partially; what stays deferred
 
-**Finding has no reporter-facing summary.** `docs/design/05-finding-insight-system.md:215` ("Reporter cannot read internal Finding details by default") and `CONTEXT.md` ("Reporter Summary must not expose Finding detail") establish this. Therefore, in Slice 5:
+**Finding has no reporter-facing summary.** `docs/design/05-finding-insight-system.md:215` ("Reporter cannot read internal Finding details by default") and `GLOSSARY.md` ("Reporter Summary must not expose Finding detail") establish this. Therefore, in Slice 5:
 
 - `getReporterSummary(findingId)` is implemented as a provider method that **returns UNAVAILABLE** (`targetSummaryAvailable = false`); `evaluateLinkVisibility` already maps that to `hidden` — no evaluator change.
 - `summary_visible` stays **unreachable** for a `finding` target; ADR-0023 §F gains **no** `finding` summary member.
@@ -192,7 +192,7 @@ The link command hides an unreadable cluster or target as `404`, and requires
 - **Add a second hard-coded `finding` branch instead of the registry** — rejected: accrues the same debt #112 left, and forces cluster/survey/task to re-touch the same code (delivery-persona finding).
 - **Independent value CHECKs on entity_links** — rejected: would admit invalid tuples (`voc→voc evidence_of`, `finding→voc`, `finding→finding`).
 - **Compute `evidence_count` instead of storing** — rejected: `15:135` makes it a required stored field; drift is handled by same-transaction maintenance instead.
-- **Implement a Finding reporter summary now** — rejected: no doc defines one and CONTEXT.md forbids exposing Finding detail to reporters.
+- **Implement a Finding reporter summary now** — rejected: no doc defines one and GLOSSARY.md forbids exposing Finding detail to reporters.
 
 ## Amended 2026-10-13 — Survey-only provenance placement (ADR-0064)
 

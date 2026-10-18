@@ -58,7 +58,7 @@ compatibility, source visibility, links/audit and idempotent replay; explicit/nu
 fallback behavior follows ADR-0067. Assignment display/edit/filter belongs to the target
 surface, and configured team responsibility grants no cluster or target authority.
 
-## Human creation from a suggestion (ADR-0068; proposed/new)
+## Human creation from a suggestion (ADR-0068; implemented #1097)
 
 The separate VOC-owned resource and its normative endpoint contract are in
 [voc.md](voc.md) §VOC Cluster suggestions. Automatic pairs are never rows in

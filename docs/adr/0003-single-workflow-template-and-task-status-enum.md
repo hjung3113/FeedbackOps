@@ -4,7 +4,7 @@
 
 Accepted. Amended by ADR-0027 (seventh status `reopened`).
 
-FeedbackOps spans multiple Managed Systems (Tableau, Power BI, Looker, etc.) but MVP uses **one shared Workflow Template** across all of them rather than per-Managed-System customization. The canonical **Task Status** enum is fixed at `Backlog → Todo → Doing → Review → Done → Released` and lives in `docs/design/06-task-project-system.md`; CONTEXT.md must reference it, not redeclare it.
+FeedbackOps spans multiple Managed Systems (Tableau, Power BI, Looker, etc.) but MVP uses **one shared Workflow Template** across all of them rather than per-Managed-System customization. The canonical **Task Status** enum is fixed at `Backlog → Todo → Doing → Review → Done → Released` and lives in `docs/design/06-task-project-system.md`; GLOSSARY.md must reference it, not redeclare it.
 
 > Amended by ADR-0027: the enum gained a seventh value, Reopened (Backlog, Todo, Doing, Review, Done, Released, Reopened). The canonical list is docs/design/06-task-project-system.md.
 

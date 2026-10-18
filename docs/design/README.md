@@ -9,7 +9,7 @@
 - Product positioning, system map, non-negotiable interpretation rules.
 
 01-domain-model.md
-- Entity ownership and system boundaries. Glossary and stable invariants live in root `CONTEXT.md`.
+- Entity ownership and system boundaries. Glossary and stable invariants live in root `GLOSSARY.md`.
 
 02-requirements-matrix.md
 - Requirement IDs, scope status, dependencies, and forbidden requirements.

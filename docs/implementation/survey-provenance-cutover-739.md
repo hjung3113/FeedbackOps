@@ -1,8 +1,7 @@
 # #739 Survey provenance cutover contract
 
-ADR-0064 item 1 is implemented by `0059_survey_finding_provenance.sql`. Execution,
-real-role integration, rendered verification and coordinated #740 delivery remain
-conductor responsibilities. This migration alone does not close Slice 53.
+ADR-0064 item 1 is implemented by `0059_survey_finding_provenance.sql`; the cutover
+shipped with the coordinated #740 delivery in v1.0.0.
 
 ## Protected storage and #740 integration
 
@@ -147,7 +146,7 @@ both read-before-revoke/revoke-before-read and create-before-revoke/revoke-befor
 serializations. Actual execution is still required; static/typecheck success does not
 prove migration SQL, lock queue behavior or real role ACLs.
 
-Rendered checks remain conductor-owned: `FullFindingDetail.tsx`, `EvidenceHighlights.tsx`
+Rendered checks: `FullFindingDetail.tsx`, `EvidenceHighlights.tsx`
 and its test, `FindingRequestTaskDraftHost.tsx`, `SurveyResultsSummary.test.tsx` and the
 existing URL-selected Finding detail. Check active/unavailable text, useful metadata,
 Task Request defaults, Korean chrome/English nouns and desktop 1440 visual evidence.

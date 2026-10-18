@@ -80,7 +80,7 @@ RETURNING. Real-role conflict/concurrency verification is required before deploy
 
 Survey writes use Entity Links-owned narrow functions returning link ID/inserted
 state, not raw endpoint rows. Existing create-Finding writes `generated_finding`
-and `evidence_of`; proposed/new #816 attachment writes `evidence_of` only. Results
+and `evidence_of`; the #816 attachment writes `evidence_of` only. Results
 uses the Survey-owned safe derived-Finding reader under independent source/target
 Managed System gates; generic Survey detach remains unavailable. Raw app audit
 SELECT is also revoked without deleting Actor/subject/detail history. Survey-derived

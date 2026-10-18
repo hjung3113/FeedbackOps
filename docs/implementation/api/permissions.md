@@ -4,15 +4,12 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 
 ## Permission
 
-ADR-0066 (accepted 2026-10-13) amends this contract. #1080 implements requester
-edit/cancel/supplement revisions, required revisions for all Admin decisions,
-supported-scope narrowing, and corresponding audits. #1081 implements selected
-owner/Admin detail and explained risk. #1085 implements direct-grant options/writes
-and superseded-grant filtering; its migration and runtime verification remain
-conductor release checks.
-Deploy migration 0058 before these writers and roll out the #1083 revision
-consumers together, refreshing old clients. DB verification and the migration
-snapshot refresh remain conductor release checks.
+ADR-0066 (accepted 2026-10-13) amends this contract; it is implemented by
+#1080–#1086 (migration 0058 applied, #1083 revision consumers shipped). #1080
+implements requester edit/cancel/supplement revisions, required revisions for all
+Admin decisions, supported-scope narrowing, and corresponding audits. #1081
+implements selected owner/Admin detail and explained risk. #1085 implements
+direct-grant options/writes and superseded-grant filtering.
 Existing endpoints retain their other rules. Single-object scope is post-MVP;
 source objects remain provenance. FR-PERM-001/002 are the requirement anchors.
 
@@ -132,7 +129,7 @@ The strict request body accepts:
 
 ```ts
 {
-  expected_revision: positive_integer; // proposed/new, required
+  expected_revision: positive_integer; // required
   reason?: string; // 1–2000 characters
   requested_managed_system_id?: uuid | null;
   // Non-null object scope is unsupported; no object-scope mutation field (ADR-0066).
@@ -226,9 +223,9 @@ The strict approve body accepts:
 
 ```ts
 {
-  expected_revision: positive_integer; // proposed/new, required
+  expected_revision: positive_integer; // required
   reason?: string;
-  granted_managed_system_id?: uuid | null; // proposed/new narrowing override
+  granted_managed_system_id?: uuid | null; // narrowing override
   expiration?: iso8601 | null;
   self_approval?: {
     policy_citation: string;
@@ -268,8 +265,8 @@ inside the transaction. An unknown id or one from another workspace returns
 decidable; all four commands require expected_revision and compare it after
 locking in the idempotent run. Status/revision mismatch returns
 `409 conflict.stale_write` with authorized current_revision. Every successful
-decision advances revision and updated_at; responses below also add both fields
-(proposed/new). Unknown body
+decision advances revision and updated_at; responses below also add both fields.
+Unknown body
 keys, or a value over 2000 characters, return `422 validation.failed`. An
 invalid UUIDv4 `Idempotency-Key` returns `422 validation.malformed_idempotency_key`;
 a valid one stores and replays the `200` response for the same actor, key, and
@@ -389,9 +386,9 @@ deny remains non-requestable. `workspace.admin` is the exception: it is never
 ordinarily requestable (ADR-0066 O3), so its no-grant, expired and revoked denies
 carry `requestable: null` and map to `blocked_non_requestable` (#1239).
 
-## Proposed requester and selected-read contracts (ADR-0066)
+## Requester and selected-read contracts (ADR-0066; implemented #1080–#1083)
 
-All commands below use strict shared schemas (proposed/new under
+All commands below use strict shared schemas (under
 `packages/shared/src/permissions/`). IDs must be UUIDs; revision is a positive
 integer. Unknown keys, missing revision, malformed fields/unsupported scope or
 past resolved expiry return `422 validation.failed` with field paths. Malformed
@@ -406,7 +403,7 @@ hash action/ID/revision/body. Different-body reuse is 409
 `conflict.idempotency_key_reuse`. Transaction/audit/idempotency failure rolls back
 all writes. Read endpoints accept no Idempotency-Key and have no mutation tier.
 
-### `POST /permission-requests/:id/cancel` (proposed/new)
+### `POST /permission-requests/:id/cancel` (implemented #1080)
 
 Strict body `{ expected_revision: positive_integer, reason?: string }`; trim
 reason, max 2000, empty treated as omitted. Requester only; `pending` or
@@ -420,7 +417,7 @@ requester/capability/scope, reason if supplied and previous/resulting revisions.
 No grant, deny, entity link, notification, blocked-action execution or queue write;
 derived open Dashboard/mine counts lose this request. No owner-resolution effects.
 
-### `PATCH /permission-requests/:id` (proposed/new)
+### `PATCH /permission-requests/:id` (implemented #1080)
 
 Strict body `{ expected_revision, reason?, requested_managed_system_id?: uuid | null,
 requested_expiration?: iso8601 | null }`. Only `pending`; needs_more_info uses its

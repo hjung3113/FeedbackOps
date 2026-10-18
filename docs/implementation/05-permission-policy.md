@@ -5,11 +5,10 @@
 This file owns permission check order, audit event verbs, sensitive-capability rules, and permission-request decision mechanics.
 What the default user can do, and the capability matrix, live in docs/design/09-permission-access.md. Do not copy that matrix here.
 
-ADR-0066 (accepted 2026-10-13) adds proposed/new revision, withdrawal/edit,
-supported narrowing, selected risk detail, direct-grant and superseded-row behavior.
-#1080/#1081 implement requester revisions and selected reads; #1085 implements
-governed direct grants and superseded-row behavior. Runtime integration and release
-checks remain conductor-owned.
+ADR-0066 (accepted 2026-10-13) adds revision, withdrawal/edit,
+supported narrowing, selected risk detail, direct-grant and superseded-row behavior;
+all are implemented. #1080/#1081 implement requester revisions and selected reads;
+#1085 implements governed direct grants and superseded-row behavior.
 
 ## Role Level And Capability
 
@@ -345,7 +344,8 @@ task_created_from_request
 task_linked_to_request
 ```
 
-Expiry handling is not implemented yet. Its planned event remains:
+Read-time expiry is enforced at check time (`grant_expired`); the `permission_expired`
+event is not emitted:
 
 ```text
 permission_expired
@@ -501,7 +501,7 @@ Proposed strict audits (register in shared permission audit schemas and aggregat
   scope, revisions, and predecessor ID when reissuing. Requestless grants do not
   reuse request-decided notifications. Withdrawal emits no decided notification.
 
-## Safe Survey evidence reuse (ADR-0064; proposed/new #816 routes)
+## Safe Survey evidence reuse (ADR-0064; implemented #816)
 
 A Survey result reader may browse approved safe excerpt candidates with
 `survey.read` and attach with `finding.manage` on the target Finding, without

@@ -8,10 +8,10 @@ product
 
 FeedbackOps is an internal, AD-authenticated operating console for one Workspace — not a public-facing tool, not a marketing site, not a multi-tenant SaaS. Every screen serves an authenticated internal **Actor** working inside a known **Managed System** scope.
 
-Per `CONTEXT.md`, four real role contracts exist:
+Per `GLOSSARY.md`, four real role contracts exist:
 
 - **Admin** — Workspace-wide authority. Manages settings, permissions, Managed System Registry, Analytics Areas, operating policy, and approves Permission Requests. Lives mostly in `/admin/*` routes.
-- **Developer** — Mid-level Actor with one or more **Managed System Permission Scopes**. Triages VOC, investigates evidence, owns Findings, executes Task work, and closes the loop with Reporter Reply / Public Update. Lives in `/vocs?view=triage`, `/tasks/*`, `/findings`, `/integration/coverage`, and `/integration/links` (Evidence route planned).
+- **Developer** — Mid-level Actor with one or more **Managed System Permission Scopes**. Triages VOC, investigates evidence, owns Findings, executes Task work, and closes the loop with Reporter Reply / Public Update. Lives in `/vocs?view=triage`, `/tasks/*`, `/findings`, `/integration/evidence`, `/integration/coverage`, and `/integration/links`.
 - **User** — Lowest Role Level. Submits VOC, tracks own submissions in `/vocs?view=my`, responds to outcome surveys. Cannot triage, cannot see out-of-scope VOC bodies (only `out_of_scope_summary` peeks).
 - **Reporter** — Role-shaped, not Role-Level-shaped. The Actor who submitted a specific VOC. The system separates reporter-facing status from internal workflow status visually and structurally (Product Invariant).
 
@@ -19,7 +19,7 @@ Context of use is operational, not exploratory: the Actor opens FeedbackOps beca
 
 ## Product Purpose
 
-FeedbackOps closes the loop from internal voice-of-customer intake to documented outcome inside one Workspace. The cycle, per `CONTEXT.md` and `docs/design/00-product-overview.md`:
+FeedbackOps closes the loop from internal voice-of-customer intake to documented outcome inside one Workspace. The cycle, per `GLOSSARY.md` and `docs/design/00-product-overview.md`:
 
 1. **Intake** — any Actor submits a VOC against a Managed System (`/vocs?action=create`).
 2. **Triage** — Developers / Admins decide severity, owner, Analytics Area linkage, and cluster confirmation in the Triage Console (`/vocs?view=triage`), with optimistic mutations and a 4-second undo window.

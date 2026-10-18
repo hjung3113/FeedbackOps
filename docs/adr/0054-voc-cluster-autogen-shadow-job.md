@@ -46,7 +46,7 @@ or `system.` event types, and it does not call the cluster or recommendation
 mutation services. Sub-scope S — provisioning a per-workspace system actor and
 the first `system.` audit event — remains deferred.
 
-This is a shadow measurement only. ADR-0034 D3, FR-VOC-004, and `CONTEXT.md` do
+This is a shadow measurement only. ADR-0034 D3, FR-VOC-004, and `GLOSSARY.md` do
 not reopen; the existing no-auto-cluster assertion remains unchanged.
 
 ## Consequences

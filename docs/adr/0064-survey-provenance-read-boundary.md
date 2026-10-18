@@ -12,8 +12,9 @@ The same decisions are recorded on [#739](https://github.com/hjung3113/FeedbackO
 [#816](https://github.com/hjung3113/FeedbackOps/issues/816). The newer owner decisions
 supersede the October 3 optional-hardening disposition of #739/#740 and the audit-read
 disposition of #738. This ADR amends ADR-0033, ADR-0008, ADR-0015 and ADR-0024 on those decisions.
-Accepted is a contract status; #739/#740 must implement the cutover before delivery is claimed.
-All extensions, views, readers and endpoints introduced below are proposed/new, not shipped.
+Implemented: #739/#740 and #816 shipped the cutover in v1.0.0 (see
+`docs/implementation/survey-provenance-cutover-739.md`).
+The extensions, views, readers and endpoints introduced below shipped with those issues.
 
 ## Context
 

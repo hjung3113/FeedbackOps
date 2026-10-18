@@ -25,7 +25,7 @@ Root `AGENTS.md` → "Required Reading" and "Source Of Truth" decide what to rea
 - [Operator manual](USER-MANUAL.md) and [interactive Korean user guide](user-guide/), with the [guide index](user-guide/README.md).
 - [Production images and local OIDC check](implementation/release/oidc-and-images.md): image smoke, OIDC walkthrough, company IdP and Kubernetes settings.
 - [Code index](code-index.md) maps backend modules, frontend features, and shared packages.
-- [Domain vocabulary and stable invariants](../CONTEXT.md).
+- [Domain vocabulary and stable invariants](../GLOSSARY.md).
 
 Conflict resolution lives in root `AGENTS.md` → "Source Of Truth" (authority by subject + tiebreaks); this file only describes what each `docs/` directory contains.
 

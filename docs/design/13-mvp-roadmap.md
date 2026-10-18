@@ -7,14 +7,14 @@ This document defines release scope. System documents describe behavior; this do
 Implementation slice status is the GitHub milestones on `hjung3113/FeedbackOps`.
 This document groups release scope and includes short shipped/open notes for partially delivered items. It is not an execution queue.
 
-## Phase 1
+## Release status
 
-```text
-- VOC Cluster 제안 자동 생성 (shadow measurement and human-confirmed suggestions shipped in #1097 per ADR-0068; provider calibration/value evidence is post-MVP)
-- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester withdrawal/edit, revision-safe narrowed approval, governed direct grant and risk indicators shipped in #1080–#1086 per ADR-0066; active grant revoke and deny lifting shipped in #762 per ADR-0061; single-object authorization is post-MVP)
-- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; five editable bands/neutral empty state shipped in #1087/#1088 per ADR-0067)
-- Analytics Area별 리포트 (shipped in #1077–#1079 per ADR-0069)
-```
+MVP released: **v1.0.0 on 2026-10-17** and **v1.1.0 on 2026-10-18**. The Phase 1
+scope and the MVP Close-Out shipped, including the #739/#740/#816 Survey provenance
+cutover and safe reuse (#816 included), the Evidence inventory and route
+(`#1040/#1107/#1109` per ADR-0065), and the Release Value Gate run (passed on the
+second run, #1062). Public survey links stay rejected (ADR-0035/0036). Every item
+deferred or dropped is recorded in [14-post-mvp-backlog.md](14-post-mvp-backlog.md).
 
 ## Phase 2
 
@@ -28,37 +28,9 @@ This document groups release scope and includes short shipped/open notes for par
 - Executive Report
 ```
 
-## MVP Close-Out
+## Release Value Gate
 
-Decided by the owner on 2026-10-13. MVP closes when the remaining release scope ships and the Release Value Gate passes; after that release, new work comes from real use. Progress is the GitHub milestones Slice 53 to Slice 63.
-
-Scope:
-
-```text
-- Completed close-out dependencies: #739, #740, #816, #340, #1015, and #1012 are closed.
-- ADR-0059 D2 Survey templates, reuse, and dialog selection shipped in #1073–#1075; ADR-0067 D1/D3 responsibility defaults and bounded Dashboard recovery shipped in #1087–#1094. See Phase 1 above for current item-level statuses.
-- Evidence inventory, route, and approved excerpt attachment shipped (#816, #1040, #1107, #1109 per ADR-0065).
-- Release documentation and deferral record (#1186, #1065, #1066).
-- A whole-system review (architecture, docs, UI/UX, performance, Impeccable audit and critique), then hardening from its findings
-- Production images (backend, frontend, migration job) per ADR-0013, and a login check against an OIDC provider
-- Release docs: keep the docs that explain the project (design and decision records, the doc index, a code index, the glossary) and remove plan, review, and stale docs; the development environment stays intact because development continues after release
-```
-
-### Release obligations (Slice 63)
-
-- Measure PS-5 recovery reconcile lock hold on a high-response Survey. Done 2026-10-17: under one second per page even at 20k responses; batching deferred (`14-post-mvp-backlog.md` → Slice 63).
-- Run the Reporter persona and the full MVP Success Flow in the Release Value Gate. Done: passed on the second run with no blocker (#1062); non-blockers in #1227.
-
-Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected). Every item deferred or dropped before release is recorded in `14-post-mvp-backlog.md`.
-
-Survey privacy release claim (ADR-0064): trusted application authorization with
-named direct Finding/highlight/link/audit and generated cache copies closed by
-coordinated #739/#740. SQL-level unlinkability against stolen `fops_app`
-credentials is not guaranteed; permitted app-executable readers remain composable.
-ADR acceptance alone is not implementation completion. Safe #816 reuse and Evidence
-follow in Slice 54; public Survey links stay excluded.
-
-### Release Value Gate
+The gate below is the standing release-gate procedure for future releases.
 
 The release ships only when an adversarial product review finds no blocker. Product value comes first; code quality alone does not pass the gate.
 

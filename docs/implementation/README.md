@@ -35,7 +35,7 @@ Implementation should not start until these are reviewed for the target slice:
 ## Authority Rules
 
 ```text
-- Follow the root `AGENTS.md` Source Of Truth rules: CONTEXT.md owns vocabulary and invariants, and docs/adr/*.md own architectural decisions; ADR authority does not end when a decision is incorporated into design docs.
+- Follow the root `AGENTS.md` Source Of Truth rules: GLOSSARY.md owns vocabulary and invariants, and docs/adr/*.md own architectural decisions; ADR authority does not end when a decision is incorporated into design docs.
 - 04-database-and-migrations.md owns migration mechanism only.
 - docs/design/15-data-contracts.md is the field and enum authority.
 - docs/implementation/06-entity-linking-contract.md owns relation type meaning and visibility rules.

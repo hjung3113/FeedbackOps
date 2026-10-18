@@ -65,7 +65,7 @@ The fallback for a freshly provisioned Actor is `User`, which can submit their o
 
 ## Workspace resolution in MVP
 
-The Workspace glossary entry (CONTEXT.md) is multi-tenant first-class because the data contracts in `docs/design/15-data-contracts.md` carry `workspace_id` on every record. **MVP runs with a single seeded Workspace** whose ID is loaded from `WORKSPACE_ID` env var; every Actor and record is bound to that ID. The multi-tenant model is preserved in the schema so a later ADR can flip the resolution rule to claim-based (e.g. tenant id from `iss` or a custom claim) without a migration.
+The Workspace glossary entry (GLOSSARY.md) is multi-tenant first-class because the data contracts in `docs/design/15-data-contracts.md` carry `workspace_id` on every record. **MVP runs with a single seeded Workspace** whose ID is loaded from `WORKSPACE_ID` env var; every Actor and record is bound to that ID. The multi-tenant model is preserved in the schema so a later ADR can flip the resolution rule to claim-based (e.g. tenant id from `iss` or a custom claim) without a migration.
 
 ## What this ADR locks
 

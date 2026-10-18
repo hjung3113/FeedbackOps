@@ -88,11 +88,9 @@ conductor must inventory those before revocation.
 Application-permitted definer composition remains the accepted O1-A limit. Neither
 this cutover nor 0059 claims SQL unlinkability under stolen application credentials.
 
-## Conductor verification
+## Verification
 
-Worker writes/typechecks tests and runs existing rendered Links/Coverage/Results unit
-regressions; it does not execute migrations, DB commands or integration suites. Conductor
-must run the entire affected modules and full integration gate on a throwaway database
+Run the entire affected modules and full integration gate on a throwaway database
 with real app/migrate roles. Required paths include:
 
 - DB role-grants and canonical-read-boundary: effective raw/column denials, view/PUBLIC/
@@ -106,15 +104,15 @@ with real app/migrate roles. Required paths include:
   diagnostic correction/unrelated edits/rollback semantics, including #1085 new observers.
 - Tasks, Dashboard, VOC, Clusters, Coverage and Milestone ordinary route regressions;
   audit/link history observers use migrate while routes still boot as app.
-- Full static gates and local rendered 1440/visual verification under conductor ownership.
+- Full static gates and local rendered 1440/visual verification.
 
-The previously documented #739 standalone upgrade harness is absent; conductor must
-restore/replace and execute a real-role legacy upgrade/history check before declaring
-Slice 53 complete. See `survey-provenance-cutover-739.md`. Migration execution, deployed
+The previously documented #739 standalone upgrade harness is absent; a real-role
+legacy upgrade/history check remains a standing gap to restore/replace and execute.
+See `survey-provenance-cutover-739.md`. Migration execution, deployed
 ACLs, inherited role state, SQL view behavior and concurrency remain runtime-verification
 requirements; TypeScript success alone proves none of them.
 
-## #1109 approved attachment extension (0066; runtime verification pending)
+## #1109 approved attachment extension (0066)
 
 `0066_survey_evidence_attachment.sql` is a Drizzle-generated custom migration with
 journal and snapshot. It reuses both existing isolated mutator owners; no new role,
@@ -150,7 +148,7 @@ Safe candidate reads use repeatable-read snapshots and actual result aggregates;
 they never invoke audited personal Results. Existing reader/aggregate/view/audit
 owners receive no privileges, and raw app link/audit reads remain forbidden.
 
-Conductor must apply 0066 and run the real-role ACL, deferred consistency, attachment,
+Apply 0066 and run the real-role ACL, deferred consistency, attachment,
 rollback, replay, revoke and settings-threshold race tests plus existing personal
 creation/approval, ordinary VOC/note, linked-highlight and inventory regressions.
-Worker typechecks those tests; it does not establish runtime SQL or deployment success.
+Typechecking those tests does not establish runtime SQL or deployment success.

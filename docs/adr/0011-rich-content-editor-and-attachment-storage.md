@@ -6,7 +6,7 @@
 
 Accepted. Storage amended 2026-05-22.
 
-FeedbackOps has four rich-content surfaces (`VOC description`, `Reporter Reply`, `Public Update`, `Internal Comment`) that share one editor foundation per CONTEXT.md and `docs/design/15-data-contracts.md`. Each surface restricts toolbar actions and rendering separately. This ADR locks the editor choice, the attachment storage shape, and the Rich Table decision left open by the data contracts.
+FeedbackOps has four rich-content surfaces (`VOC description`, `Reporter Reply`, `Public Update`, `Internal Comment`) that share one editor foundation per GLOSSARY.md and `docs/design/15-data-contracts.md`. Each surface restricts toolbar actions and rendering separately. This ADR locks the editor choice, the attachment storage shape, and the Rich Table decision left open by the data contracts.
 
 ## Editor: TipTap
 
@@ -18,11 +18,11 @@ The frontend uses **TipTap** (ProseMirror-based) as the shared editor foundation
 
 Backend persistence is **TipTap JSON in a `jsonb` column**; the schema is versioned via a `schema_version` field inside the document so a future TipTap upgrade does not require a data migration day-one. Sanitization happens server-side using `@tiptap/html` to reject unknown nodes, attributes, and inline-style payloads.
 
-The editor configuration lives in `packages/ui/src/rich-content/` so all four surfaces import the same base and pass a `mode: 'voc' | 'reporter_reply' | 'public_update' | 'internal_comment'` to gate toolbar actions, embeds, and rendering — matching the relationship in CONTEXT.md: "Each rich-content surface may restrict toolbar actions, embeds, and rendering according to visibility and safety needs."
+The editor configuration lives in `packages/ui/src/rich-content/` so all four surfaces import the same base and pass a `mode: 'voc' | 'reporter_reply' | 'public_update' | 'internal_comment'` to gate toolbar actions, embeds, and rendering — matching the relationship in GLOSSARY.md: "Each rich-content surface may restrict toolbar actions, embeds, and rendering according to visibility and safety needs."
 
 ## Inline Attachments and storage abstraction
 
-Inline images (`Inline Attachment` in CONTEXT.md) and file attachments share one storage path. The backend exposes an `AttachmentStorage` interface in `apps/backend/src/modules/attachments`:
+Inline images (`Inline Attachment` in GLOSSARY.md) and file attachments share one storage path. The backend exposes an `AttachmentStorage` interface in `apps/backend/src/modules/attachments`:
 
 ```text
 AttachmentStorage

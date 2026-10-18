@@ -37,6 +37,7 @@ Questions left in merged PR bodies, decided by the owner. Smaller noted items fr
 | Deferred item | Reason | Reopen condition |
 | --- | --- | --- |
 | VOC bulk actions (assign owner, set severity, add to Cluster, create Finding) | No bulk endpoint; disabled stubs removed from the Inbox | When a bulk VOC command API is approved |
+| VOC detail kebab actions (mark read, subscribe, archive) | No backend endpoints; the shipped kebab renders them disabled with `이후 제공 예정입니다` | A personal workflow-action contract is approved (snooze/mute is the Slice 56 row below) |
 
 ### Slice 56 — ADR-0067 (2026-10-13)
 

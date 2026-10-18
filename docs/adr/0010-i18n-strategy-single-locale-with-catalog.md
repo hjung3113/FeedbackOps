@@ -20,7 +20,7 @@ original mechanism is kept at the bottom so the history is not silent.
 ## Where a string lives
 
 Wording still comes from the user-facing copy chain in root `AGENTS.md`
-(prototype, then `docs/frontend/specs/`, then `CONTEXT.md`). The code does
+(prototype, then `docs/frontend/specs/`, then `GLOSSARY.md`). The code does
 not look that wording up in a catalog.
 
 - **A string the component owns** sits in that component. The shared

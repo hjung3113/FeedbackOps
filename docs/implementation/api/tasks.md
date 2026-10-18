@@ -566,9 +566,9 @@ VOC read seam; omit unavailable cross-source report metrics instead of returning
 Task detail opens the approved linked VOC/review path, and publishing stays VOC-owned.
 The report introduces no Task Blocked state and never resolves VOC on Task release.
 
-## Survey-derived source summaries/defaults (ADR-0064; cutover pending)
+## Survey-derived source summaries/defaults (ADR-0064; implemented #739/#740)
 
-After #739/#740, Survey-derived Finding title/summary in Task source DTOs and
+Since #739/#740, Survey-derived Finding title/summary in Task source DTOs and
 Task Request draft defaults is deterministic source metadata only, never a copied
 excerpt. Excerpt display delegates to a fresh authorized Finding/Survey highlight
 projection with exact active approval and source/target checks. This does not

@@ -15,6 +15,9 @@ POST /findings/:id/evidence-highlights
 POST /findings/:id/link-evidence
 POST /findings/:id/request-task
 POST /findings/:id/link-task
+POST /findings/:id/survey-evidence
+GET /evidence-highlights
+GET /evidence-highlights/:id
 ```
 
 Finding is not independently created through `POST /findings` as of Slice 6.
@@ -255,11 +258,11 @@ not Task Request approval or work completion. Scope uses the existing elevated F
 
 ## Survey summaries and highlights — ADR-0064 cutover
 
-Accepted target contract, pending coordinated #739/#740: Survey-derived Finding
+Implemented by the coordinated #739/#740 cutover: Survey-derived Finding
 list/detail/provider and mutation DTOs contain deterministic source metadata only
 in title/summary and omit response IDs. Public parent `source_id` is NULL; exact
 response binding and historical generated text remain in Survey-owned protected
-extensions (proposed/new). New cached mutation bodies are metadata-only; confirmed
+extensions (migration 0059). New cached mutation bodies are metadata-only; confirmed
 legacy Survey cache copies are sanitized under ADR-0015's dated exception.
 Task Request/source defaults therefore never automatically propagate excerpts.
 
@@ -275,8 +278,8 @@ ordinary VOC/Cluster source IDs rather than revoke them globally.
 
 ## POST /findings/:id/survey-evidence — #1109 (ADR-0064)
 
-Backend and shared schemas are implemented by #1109; real-role migration and integration
-verification remain conductor-owned. The existing generic raw Survey attachment stays rejected.
+Implemented by #1109; migration `0066_survey_evidence_attachment.sql` is applied.
+The existing generic raw Survey attachment stays rejected.
 
 - **Request:** strict `{ approved_excerpt_id, analytics_area_id?, sentiment?,
   importance? }` using existing classification validation, required UUIDv4
@@ -316,10 +319,10 @@ verification remain conductor-owned. The existing generic raw Survey attachment 
   Use existing mutation rate limiting. Concurrent revoke/attach follows the
   shared response-lock ordering; preview eligibility never authorizes later submit.
 
-## Evidence inventory — ADR-0065 (#1106; runtime verification pending)
+## Evidence inventory — ADR-0065 (implemented #1106)
 
-The endpoints and independent strict inventory schemas are implemented by #1106;
-real-role runtime verification remains conductor-owned. These are Findings-owned
+The endpoints and independent strict inventory schemas are implemented by #1106.
+These are Findings-owned
 reads of stored highlights, not a standalone Evidence resource. ADR-0064 owns the Survey
 projection/read boundary; do not restore raw binding/link/audit access.
 
@@ -349,6 +352,9 @@ under a matching safe parent label but cannot itself affect membership/order/
 continuation. Survey attached highlights retain ADR-0064's linked audience;
 picker suppression does not retroactively tighten it. Batch hydration must
 preserve the same transaction snapshot/response-lock authorization as ADR-0064.
+Inventory scans at most 100 local candidates per hydration transaction, and each
+batch holds its complete response lock set in UUID order and releases it before
+another batch, preventing cross-batch lock inversions.
 No one-Survey-transaction-per-row or nested-endpoint fan-out.
 
 ### GET /evidence-highlights/:id
@@ -362,7 +368,7 @@ never treats page absence as a detail 404. Both inventory reads use existing
 read rate limiting (`rate_limited.actor`) and have no link/mutation/personal-read
 side effects.
 
-### Proposed/new strict inventory item
+### Strict inventory item
 
 - Local `id`, `finding_id`, target `primary_managed_system_id`, `source_type`,
   `analytics_area_id`, `sentiment`, `importance`, highlight `created_at`.

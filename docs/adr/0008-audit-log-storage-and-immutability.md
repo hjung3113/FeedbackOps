@@ -7,7 +7,7 @@ Accepted.
 Amended by [ADR-0064](0064-survey-provenance-read-boundary.md) (2026-10-13) on the decisions
 recorded in the dated amendment below; affected historical text is superseded.
 
-Sensitive Permission grants and uses, Permission Request decisions, Reporter-Facing VOC Status changes, Task Request approvals (including Task Request Self-Approval), workspace settings changes, and Managed System Registry edits must all be **audited** per `docs/implementation/05-permission-policy.md`, `docs/design/04-voc-system.md`, and CONTEXT.md invariants.
+Sensitive Permission grants and uses, Permission Request decisions, Reporter-Facing VOC Status changes, Task Request approvals (including Task Request Self-Approval), workspace settings changes, and Managed System Registry edits must all be **audited** per `docs/implementation/05-permission-policy.md`, `docs/design/04-voc-system.md`, and GLOSSARY.md invariants.
 
 ## Storage
 
