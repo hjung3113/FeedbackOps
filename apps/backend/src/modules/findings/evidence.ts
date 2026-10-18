@@ -16,7 +16,7 @@ import {
   resolveFindingSurveyHighlights,
   resolveSurveyAttachmentSelection,
 } from '../surveys/evidence-access.js';
-import { selectVocForUpdate } from '../voc/index.js';
+import { canReadVocAsSource, selectVocForUpdate } from '../voc/index.js';
 import { createEvidenceInventory } from './evidence-inventory.js';
 import { findFindingById } from './repo-read.js';
 import {
@@ -28,7 +28,7 @@ import {
   listVocSourceMeta,
   lockFindingById,
 } from './repo.js';
-import { canManageFinding, canReadFinding, canReadSourceVoc } from './service-shared.js';
+import { canManageFinding, canReadFinding } from './service-shared.js';
 import type { FindingsActor, FindingsServiceDeps } from './service.js';
 
 function evidenceHighlightToDto(
@@ -68,22 +68,6 @@ function evidenceHighlightToDto(
   };
 }
 
-async function sourceVocReadable(
-  deps: Pick<FindingsServiceDeps, 'checkService'>,
-  actor: FindingsActor,
-  input: { managedSystemId: string; reporterId: string | null },
-  options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (input.reporterId && actor.actor_id === input.reporterId) return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'voc.read',
-    { workspace_id: actor.workspace_id, managed_system_id: input.managedSystemId },
-    options,
-  );
-  return decision.allow;
-}
-
 export function createFindingEvidence(deps: FindingsServiceDeps) {
   async function assertHighlightSourceReadableForWrite(args: {
     actor: FindingsActor;
@@ -103,11 +87,10 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     if (!sourceVoc || sourceVoc.archivedAt !== null) {
       throw new HttpError('not_found.record', 'source voc not found');
     }
-    const readable = await canReadSourceVoc(
-      deps,
+    const readable = await canReadVocAsSource(
+      deps.checkService,
       args.actor,
-      sourceVoc.primaryManagedSystemId,
-      sourceVoc.reporterId,
+      { managedSystemId: sourceVoc.primaryManagedSystemId, reporterId: sourceVoc.reporterId },
       { tx: args.tx },
     );
     if (!readable) throw new HttpError('not_found.record', 'source voc not found');
@@ -320,12 +303,10 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
 
     const source = await resolveVocEndpoint(deps.db, args.actor.workspace_id, args.row.source_id);
     if (!source) return false;
-    return sourceVocReadable(
-      deps,
-      args.actor,
-      { managedSystemId: source.managed_system_id, reporterId: source.reporter_id },
-      undefined,
-    );
+    return canReadVocAsSource(deps.checkService, args.actor, {
+      managedSystemId: source.managed_system_id,
+      reporterId: source.reporter_id,
+    });
   }
 
   async function listEvidenceHighlights(args: {

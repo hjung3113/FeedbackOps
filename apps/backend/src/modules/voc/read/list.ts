@@ -6,13 +6,14 @@ import {
   actorEffectiveScope,
   actorReadScope,
   actorTriageScope,
+  inReporterArm,
 } from '../authorization.js';
 import { decodeCursor, encodeCursor } from '../cursor.js';
 import type { CountVocsQuery, VocGroupedCountArgs } from '../read-contract.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
 import * as repoRead from '../repo-read.js';
 import { mapRowToListItem } from './mappers.js';
-import { msInScope, resolveVocListScope } from './scope.js';
+import { resolveVocListScope } from './scope.js';
 
 // Applied to list and count paths so My VOC never becomes a severity oracle.
 function assertMySeverityQuery(query: CountVocsQuery & { sort?: string | undefined }): void {
@@ -260,7 +261,11 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
         attachmentCounts.get(r.id) ?? 0,
         similarCounts.get(r.id) ?? 0,
         view,
-        r.reporterId === actor.actor_id && !msInScope(effectiveScope, r.primaryManagedSystemId),
+        inReporterArm({
+          isReporter: r.reporterId === actor.actor_id,
+          effectiveScope,
+          managedSystemId: r.primaryManagedSystemId,
+        }),
       ),
     );
 

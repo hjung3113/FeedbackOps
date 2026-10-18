@@ -17,6 +17,7 @@ import {
   type ScopeActorContext,
   actorScopeForCapability,
 } from '../permissions/scope-service.js';
+import { msInScope } from './read/scope.js';
 
 export type { Scope };
 
@@ -52,6 +53,39 @@ export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite):
   }
   const unionIds = [...new Set([...readScope.managedSystemIds, ...triageScope.managedSystemIds])];
   return { kind: 'scoped', managedSystemIds: unionIds };
+}
+
+/**
+ * The reporter arm: the actor reported this VOC but holds neither `voc.read` nor
+ * `voc.triage` on its Managed System, so the projection omits `severity`.
+ * `effectiveScope` is the `voc.read` ∪ `voc.triage` union (`actorEffectiveScope`).
+ */
+export function inReporterArm(args: {
+  isReporter: boolean;
+  effectiveScope: Scope;
+  managedSystemId: string;
+}): boolean {
+  return args.isReporter && !msInScope(args.effectiveScope, args.managedSystemId);
+}
+
+/**
+ * The single source-VOC read rule: the reporter, or `voc.read` on the VOC's
+ * Managed System. `reporterId` is null when the VOC has no reporter.
+ */
+export async function canReadVocAsSource(
+  checkService: CheckService,
+  actor: ActorContextLite,
+  voc: { managedSystemId: string; reporterId: string | null },
+  options?: Parameters<CheckService['checkCapability']>[3],
+): Promise<boolean> {
+  if (voc.reporterId && actor.actor_id === voc.reporterId) return true;
+  const decision = await checkService.checkCapability(
+    actor,
+    'voc.read',
+    { workspace_id: actor.workspace_id, managed_system_id: voc.managedSystemId },
+    options,
+  );
+  return decision.allow;
 }
 
 /**

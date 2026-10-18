@@ -1,7 +1,7 @@
 import type { ResponsibilityDefaultFailure } from '@fops/shared';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { lockWorkspaceActor } from '../auth/index.js';
+import { findWorkspaceActor, lockWorkspaceActor } from '../auth/index.js';
 import { findResponsibilityTeam } from '../core/responsibility-read-projections.js';
 import {
   type LockedManagedSystem,
@@ -22,6 +22,7 @@ export async function validateOwner(
   ms: Pick<LockedManagedSystem, 'id'>,
   actorId: string | null,
   teamId: string | null,
+  { lock = true }: { lock?: boolean } = {},
 ): Promise<Category | null> {
   if (actorId && teamId) return 'invalid_pair';
   if (teamId) {
@@ -29,7 +30,11 @@ export async function validateOwner(
     return !team ? 'foreign_workspace' : team.archived_at ? 'archived_team' : null;
   }
   if (!actorId) return null;
-  const candidate = await lockWorkspaceActor(tx, { workspaceId, actorId });
+  // Commands lock the Actor row to serialise owner assignment against concurrent Actor
+  // changes; the advisory owner-candidates read passes `lock: false` and takes no row lock.
+  const candidate = lock
+    ? await lockWorkspaceActor(tx, { workspaceId, actorId })
+    : await findWorkspaceActor(tx, { workspaceId, actorId });
   if (!candidate) return 'foreign_workspace';
   if (candidate.actor_type !== 'internal_member') return 'ineligible_actor';
   const candidateActor = {

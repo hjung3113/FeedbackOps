@@ -56,23 +56,6 @@ export function toDto(
   return { ...base, source_type: sourceType, source_id: row.source_id } as FindingDto;
 }
 
-export async function canReadSourceVoc(
-  deps: Pick<FindingsServiceDeps, 'checkService'>,
-  actor: FindingsActor,
-  managedSystemId: string,
-  reporterId: string,
-  options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.actor_id === reporterId) return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'voc.read',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
-  return decision.allow;
-}
-
 export async function canManageFinding(
   deps: Pick<FindingsServiceDeps, 'checkService'>,
   actor: FindingsActor,
