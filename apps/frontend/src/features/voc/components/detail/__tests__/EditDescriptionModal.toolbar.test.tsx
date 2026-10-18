@@ -1,7 +1,7 @@
 // EditDescriptionModal — real RichEditor toolbar. The inline attach button is hidden here:
 // attachments go through the dropzone (`attachment_ids[]`), and an inline pick would be dropped.
 
-import { VocDescriptionToolbar } from '@/features/voc/components/create/VocDescriptionToolbar';
+import { vocDescriptionToolbar } from '@/features/voc/components/create/VocDescriptionToolbar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import type * as React from 'react';
@@ -39,13 +39,13 @@ describe('edit-description toolbar', () => {
     ).toBeInTheDocument();
   });
 
-  it('the default VocDescriptionToolbar still offers the attach button', async () => {
+  it('the default vocDescriptionToolbar() still offers the attach button', async () => {
     renderWithClient(
       <RichEditor
         surface="voc-description"
         value={null}
         onChange={() => {}}
-        toolbar={VocDescriptionToolbar}
+        toolbar={vocDescriptionToolbar()}
       />,
     );
     expect(await screen.findByRole('button', { name: '첨부 파일 추가' })).toBeInTheDocument();

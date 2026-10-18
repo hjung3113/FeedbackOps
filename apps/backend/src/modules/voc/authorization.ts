@@ -16,9 +16,9 @@ import {
   type Scope,
   type ScopeActorContext,
   actorScopeForCapability,
+  scopeIncludes,
   unionScopes,
 } from '../permissions/scope-service.js';
-import { msInScope } from './read/scope.js';
 
 export type { Scope };
 
@@ -61,7 +61,7 @@ export function inReporterArm(args: {
   effectiveScope: Scope;
   managedSystemId: string;
 }): boolean {
-  return args.isReporter && !msInScope(args.effectiveScope, args.managedSystemId);
+  return args.isReporter && !scopeIncludes(args.effectiveScope, args.managedSystemId);
 }
 
 /**
@@ -142,11 +142,7 @@ export function isVocVisibleToActor(
   actorId: string,
   voc: { primary_managed_system_id: string; reporter_id: string },
 ): boolean {
-  if (readScope.kind === 'all') return true;
-  return (
-    readScope.managedSystemIds.includes(voc.primary_managed_system_id) ||
-    voc.reporter_id === actorId
-  );
+  return scopeIncludes(readScope, voc.primary_managed_system_id) || voc.reporter_id === actorId;
 }
 
 /** Shared caller gate for triage mutation and advisory owner candidates. */
