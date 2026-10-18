@@ -2515,6 +2515,23 @@ describe.skipIf(!runIntegration)('VOC actionable ownership (#1172)', () => {
     });
   });
 
+  it('reads owner candidates without taking an Actor row lock', async () => {
+    const voc = await fixture(ids.reporter);
+    const holder = await handle.pool.connect();
+    try {
+      await holder.query('begin');
+      await holder.query('select 1 from core.actors where id=$1 for update', [ids.eligibleDev]);
+      const outcome = await Promise.race([
+        candidates(voc.id).then((response) => response.statusCode),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 2000)),
+      ]);
+      expect(outcome).toBe(200);
+    } finally {
+      await holder.query('rollback');
+      holder.release();
+    }
+  });
+
   it('matches PATCH denial for a visible reporter without triage; hides unreadable VOCs', async () => {
     const voc = await fixture();
     const response = await candidates(voc.id, reporterCookie);

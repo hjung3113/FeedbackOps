@@ -3,7 +3,12 @@ import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import { isRequestableDenial } from '../../permissions/index.js';
-import { actorEffectiveScope, actorReadScope, actorTriageScope } from '../authorization.js';
+import {
+  actorEffectiveScope,
+  actorReadScope,
+  actorTriageScope,
+  inReporterArm,
+} from '../authorization.js';
 import { readVocFollowUpState } from '../no-follow-up-repository.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
 import * as repoRead from '../repo-read.js';
@@ -45,7 +50,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
     const msInReadScope = msInScope(readScope, primaryMs);
     const msInEffectiveScope = msInScope(effectiveScope, primaryMs);
     const canTriage = msInScope(triageScope, primaryMs);
-    const isReporterArm = isReporter && !msInReadScope && !canTriage;
+    const isReporterArm = inReporterArm({
+      isReporter,
+      effectiveScope,
+      managedSystemId: primaryMs,
+    });
 
     // ── 4. Access matrix ─────────────────────────────────────────────────────
     const etag = `W/"${row.updatedAt.toISOString()}"`;
