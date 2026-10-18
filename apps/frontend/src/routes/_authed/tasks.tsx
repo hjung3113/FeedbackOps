@@ -2,6 +2,7 @@ import { MilestonesRoute } from '@/features/tasks/routes/MilestonesRoute';
 import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
 import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
+import { platformReturnField } from '@/lib/router/platform-return';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { listTasksQuerySchema, taskStatusSchema } from '@fops/shared';
@@ -11,6 +12,7 @@ import { z } from 'zod';
 export const tasksSearchSchema = z
   .object({
     returnTo: recoverySearchFields.returnTo,
+    platformReturn: platformReturnField,
     q: listTasksQuerySchema.shape.q,
     view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox', 'milestones']).optional(),
     param: z.string().optional(),

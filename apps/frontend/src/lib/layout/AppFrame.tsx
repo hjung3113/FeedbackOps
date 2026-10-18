@@ -11,6 +11,7 @@ import {
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
+import { isAllowedPlatformReturn } from '@/lib/router/platform-return';
 import {
   DetailPanelFullscreenContext,
   DetailPanelReadingColumn,
@@ -18,6 +19,7 @@ import {
   cn,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import * as React from 'react';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavItem } from './AppSidebar';
@@ -147,8 +149,21 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
   const deleteCurrentView = React.useCallback((id: string) => {
     return deleteSavedView(id).then(() => savedViewsQuery.refetch());
   }, [savedViewsQuery]);
+  // ADR-0071: read the validated search of the leaf match (routes without the
+  // field drop it); AppFrame re-renders with its route on every navigation.
+  const router = useRouter({ warn: false });
+  const platformReturn = (
+    router?.state.matches.at(-1)?.search as { platformReturn?: unknown } | undefined
+  )?.platformReturn;
+  const platformReturnUrl = isAllowedPlatformReturn(
+    platformReturn,
+    me.data?.platform_return_origins,
+  )
+    ? platformReturn
+    : undefined;
   const sidebarProps = {
     entries: visibleSidebarEntries,
+    ...(platformReturnUrl !== undefined ? { platformReturnUrl } : {}),
     systemLabel: systemMeta[activeDomain].label,
     systemSubtitle: systemMeta[activeDomain].subtitle,
     managedSystems,

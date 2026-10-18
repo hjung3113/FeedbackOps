@@ -11,6 +11,8 @@ export interface MeResponse {
     role_level: string;
   };
   workspace_id: string;
+  /** GET /me only (ADR-0071); absent from POST /auth/mock-login. Treat undefined as []. */
+  platform_return_origins?: string[];
 }
 
 export class UnauthenticatedError extends Error {

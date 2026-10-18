@@ -35,6 +35,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('AppSidebar platform return link', () => {
+  it('renders a same-tab link to the given URL with the fixed label', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        platformReturnUrl="https://platform.example.com/analytics?x=1"
+      />,
+    );
+    const link = screen.getByRole('link', { name: '플랫폼으로 돌아가기' });
+    expect(link).toHaveAttribute('href', 'https://platform.example.com/analytics?x=1');
+    expect(link).not.toHaveAttribute('target');
+  });
+
+  it('renders nothing without a platformReturnUrl', () => {
+    render(<AppSidebar entries={entries} />);
+    expect(screen.queryByRole('link', { name: '플랫폼으로 돌아가기' })).not.toBeInTheDocument();
+  });
+});
+
 describe('AppSidebar', () => {
   it('groups triage tabs under the Korean triage section and keeps No link in Inbox', () => {
     const triageViews = NAV_TREE.voc.filter((entry) => entry.section === 'Triage 보기');

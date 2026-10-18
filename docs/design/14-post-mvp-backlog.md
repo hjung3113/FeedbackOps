@@ -157,3 +157,12 @@ Accepted limit from #1192. Not implemented.
 | Deferred item | Reason | Reopen when |
 | --- | --- | --- |
 | Recovery visual specs mask the queue's tab list and refresh button (`recovery.visual.spec.ts`), so that row's text is not pixel-compared | After force-loading its Pretendard subsets, the row's anti-aliasing still varied between runs (1 failure in 5 stable runs); the rest of the frame is still compared, and the tabs' markup and labels stay covered by DOM tests | The residual rendering variation is understood (compositing or a fractional offset), or a regression in that row slips past the DOM tests |
+
+### Return-to-platform link (ADR-0071, 2026-10-19)
+
+Not implemented.
+
+| Deferred item | Reason | Reopen when |
+| --- | --- | --- |
+| Carry `platformReturn` across in-app navigation | Needs carry-over logic in every link and navigate call that rebuilds search; the request only needs the link on the arrival page | Platform users report losing the link after navigating |
+| Per-link origin menu label | One fixed label keeps copy and the contract small | The platform asks for a menu-specific label |

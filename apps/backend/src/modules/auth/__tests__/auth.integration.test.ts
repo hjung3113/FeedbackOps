@@ -81,6 +81,7 @@ describe.skipIf(!runIntegration)('Slice 1 #3 auth integration', () => {
     });
     expect(me.statusCode).toBe(200);
     expect(me.json().actor.external_id).toBe('mock-admin-1');
+    expect(me.json().platform_return_origins).toEqual([]);
 
     const logout = await app.inject({
       method: 'POST',
@@ -96,6 +97,38 @@ describe.skipIf(!runIntegration)('Slice 1 #3 auth integration', () => {
     });
     expect(meAfter.statusCode).toBe(401);
     expect(meAfter.json().code).toBe('auth.session_invalid');
+  });
+
+  it('GET /me returns the configured PLATFORM_RETURN_ORIGINS list', async () => {
+    const configured = await buildServer({
+      config: {
+        ...loadConfig(),
+        PLATFORM_RETURN_ORIGINS: 'https://a.example.com,https://b.example.com:8443',
+      },
+      dbHandle,
+    });
+    try {
+      await configured.ready();
+      const login = await configured.inject({
+        method: 'POST',
+        url: '/auth/mock-login',
+        headers: { 'user-agent': 'integration-test' },
+        payload: { external_id: 'mock-user-1' },
+      });
+      const cookie = extractSessionCookie(login.headers['set-cookie']);
+      const me = await configured.inject({
+        method: 'GET',
+        url: '/me',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(me.statusCode).toBe(200);
+      expect(me.json().platform_return_origins).toEqual([
+        'https://a.example.com',
+        'https://b.example.com:8443',
+      ]);
+    } finally {
+      await configured.close();
+    }
   });
 
   it('revoked session row → 401 auth.session_invalid', async () => {

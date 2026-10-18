@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ZodError, type ZodIssue } from 'zod';
 
 import { validateAttachmentOrigin } from '../config-attachment-origin.js';
-import { loadConfig } from '../config.js';
+import { loadConfig, platformReturnOriginsOf } from '../config.js';
 
 const originalEnvironment = { ...process.env };
 
@@ -102,5 +102,70 @@ describe('validateAttachmentOrigin', () => {
       /whitespace|;/,
     );
     expect(validateAttachmentOrigin('self', 'production')).toMatch(/quoted/);
+  });
+});
+
+// PLATFORM_RETURN_ORIGINS (ADR-0071): same origin grammar, list form, own messages.
+function platformOriginsIssue(
+  value: string | undefined,
+  nodeEnv: string,
+): ZodIssue | null | undefined {
+  for (const key of Object.keys(process.env)) delete process.env[key];
+  process.env.NODE_ENV = nodeEnv;
+  if (value !== undefined) process.env.PLATFORM_RETURN_ORIGINS = value;
+  try {
+    loadConfig();
+    return null;
+  } catch (err) {
+    if (!(err instanceof ZodError)) throw err;
+    return err.issues.find((issue) => issue.path.includes('PLATFORM_RETURN_ORIGINS'));
+  }
+}
+
+describe('PLATFORM_RETURN_ORIGINS', () => {
+  it.each([
+    [undefined, 'production', []],
+    ['', 'production', []],
+    ['https://platform.example.com', 'production', ['https://platform.example.com']],
+    [
+      'https://a.example.com,https://b.example.com:8443',
+      'production',
+      ['https://a.example.com', 'https://b.example.com:8443'],
+    ],
+    [
+      'http://localhost:5173,http://127.0.0.1:3000',
+      'development',
+      ['http://localhost:5173', 'http://127.0.0.1:3000'],
+    ],
+  ])('accepts %p in %s', (value, nodeEnv, expected) => {
+    expect(platformOriginsIssue(value, nodeEnv)).toBeNull();
+    expect(
+      platformReturnOriginsOf({
+        PLATFORM_RETURN_ORIGINS: value,
+        NODE_ENV: nodeEnv as 'production',
+      }),
+    ).toEqual(expected);
+  });
+
+  it.each([
+    ['http://platform.example.com', 'production'],
+    ['http://localhost:5173', 'production'],
+    ['https://platform.example.com/path', 'production'],
+    ['https://platform.example.com/', 'production'],
+    ['https://user:secret@platform.example.com', 'production'],
+    ['https://*.example.com', 'production'],
+    ['javascript:alert(1)', 'production'],
+    ['https://a.example.com,', 'production'],
+    ['https://a.example.com,,https://b.example.com', 'production'],
+    ['https://a.example.com, https://b.example.com', 'production'],
+    ['https://a.example.com,https://a.example.com', 'production'],
+    ["'self'", 'production'],
+  ])('rejects %p in %s without echoing it', (value, nodeEnv) => {
+    const issue = platformOriginsIssue(value, nodeEnv);
+    expect(issue?.path).toEqual(['PLATFORM_RETURN_ORIGINS']);
+    expect(issue?.message).toMatch(/^PLATFORM_RETURN_ORIGINS /);
+    expect(issue?.message).not.toContain('secret');
+    expect(issue?.message).not.toContain(value);
+    expect(issue?.message).not.toMatch(/CSP/);
   });
 });
