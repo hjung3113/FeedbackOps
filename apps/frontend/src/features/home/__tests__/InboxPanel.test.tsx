@@ -59,6 +59,12 @@ const TARGET_CASES: Array<{
     target: `/vocs?view=inbox&selected=${VOC_ID}`,
   },
   {
+    eventType: 'voc.public_update_posted',
+    subjectType: 'voc',
+    detail: { voc_id: VOC_ID },
+    target: `/vocs?view=my&selected=${encodeURIComponent(VOC_ID)}`,
+  },
+  {
     eventType: 'voc.severity_set_high_or_critical',
     subjectType: 'voc',
     detail: { voc_id: VOC_ID },
@@ -239,6 +245,9 @@ describe('notificationTarget', () => {
   it('treats a VOC event without a string detail.voc_id as having no destination', () => {
     expect(notificationTarget(makeNotification({ detail: {} }))).toBeNull();
     expect(notificationTarget(makeNotification({ detail: { voc_id: 42 } }))).toBeNull();
+    expect(
+      notificationTarget(makeNotification({ event_type: 'voc.public_update_posted', detail: {} })),
+    ).toBeNull();
   });
 });
 

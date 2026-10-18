@@ -108,7 +108,7 @@ rendered; the provider-free MVP does not wait for that evidence.
 | Frontend architecture review follow-ups (AF-4/AF-5) | The review follow-ups were not selected as release blockers; implementation is deferred with the remaining presentation and architecture polish. | A concrete caller or workflow shows that the current structure blocks a required change or causes a user-facing defect. |
 | Backend drift prevention for Released communication rules (#1166 BE half) | The backend maintenance-only consolidation is below the release cut line and has no user-facing behavior gap. | The duplicated rules diverge or cause a behavior defect, or a planned rule change cannot be made safely in the current structure. |
 | Backend test-deletion candidates (AB-6) | Removing tests would reduce assurance; no replacement coverage has been established for the candidates. | A review identifies redundant tests and verifies the remaining suite still covers the behavior they protect. |
-| Additional notification channels and per-actor delivery preferences | The in-app Reporter notification is itself post-MVP; its accepted scope is one notice per effective public change, with email, preferences, and unread markers excluded (#1182). | User evidence shows that in-app delivery prevents an actor from seeing a required notification, and the owner approves channel and preference rules. |
+| Additional notification channels and per-actor delivery preferences | The in-app Reporter notification (#1182) shipped with one notice per effective public change, with email, preferences, and unread markers excluded. | User evidence shows that in-app delivery prevents an actor from seeing a required notification, and the owner approves channel and preference rules. |
 | One-step Task Request self-approval (V2-2) | Approval and conversion remain separate commands by the owner decision in #1180; collapsing them would change the workflow and its review boundary. | Release use shows the separate approval and conversion steps prevent an actor from completing an authorized Task Request. |
 | Home feed expansion (V2-5) | The current Home action queues cover the MVP jobs; a broader feed has no demonstrated release need. | Release use shows a repeatable job that the existing queues cannot support. |
 | Remaining visual refinement follow-ups (IM-3/IM-8/IM-9/IM-10/IM-15) | The visual audit passed with nits; these refinements were grouped below the MVP release cut line. | A specific refinement is shown to impair accessibility, legibility, or completion of a release task. |
@@ -121,7 +121,6 @@ below that cut line and are on the GitHub Post-MVP milestone.
 
 | Deferred item | Reason | Reopen when |
 | --- | --- | --- |
-| In-app Reporter notification when a public change occurs (U1-13, #1182 part b) | below the cut line | Post-MVP planning |
 | Catalog cache identity and cleanup (#1185) | below the cut line | Post-MVP planning |
 | Recovery recorder helper and a single Core team reader (#1147) | below the cut line | Post-MVP planning |
 | Known flaky tests and background UX-prep script (#1205) | below the cut line | Post-MVP planning |
@@ -147,3 +146,11 @@ blocker (#1062). Its non-blockers are below the release cut line, listed item by
 | Recovery reconcile batching (PS-5): the outcome phase recounts the Survey's responses per response inside each 100-response page | Measured 2026-10-17 on the real code: page lock hold median/max 134/273 ms at 1k responses, 189/390 ms at 5k, 323/840 ms at 20k; full sweeps 1.5 s / 10.5 s / 65 s with the lock released between pages. Repair commands wait at most one page, under one second even at 20k | A Survey passes about 20k responses, or a page holds the lock longer than one second, or Admins report slow recovery repairs |
 | Links inventory search and entity lookup (B-2) | Already #1219; VOC detail now shows the execution trail directly (#1225) | See #1219 |
 | Seed has no permission requests, so the gate's first Admin pass could not exercise decisions | The conductor filed requests and the decisions passed in a follow-up run | The release gate is automated, or the scale seed is next revised |
+
+### Slice 64 — Test reliability (2026-10-18)
+
+Accepted limit from #1192. Not implemented.
+
+| Deferred item | Reason | Reopen when |
+| --- | --- | --- |
+| Recovery visual specs mask the queue's tab list and refresh button (`recovery.visual.spec.ts`), so that row's text is not pixel-compared | After force-loading its Pretendard subsets, the row's anti-aliasing still varied between runs (1 failure in 5 stable runs); the rest of the frame is still compared, and the tabs' markup and labels stay covered by DOM tests | The residual rendering variation is understood (compositing or a fractional offset), or a regression in that row slips past the DOM tests |

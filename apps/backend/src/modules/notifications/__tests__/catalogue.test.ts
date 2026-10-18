@@ -23,6 +23,7 @@ describe('notification catalogue', () => {
     expect(Object.keys(notificationCatalogue)).toEqual([
       'voc.assigned_to_me',
       'voc.reporter_replied',
+      'voc.public_update_posted',
       'voc.severity_set_high_or_critical',
       'task_request.approved',
       'task_request.rejected',
@@ -40,6 +41,7 @@ describe('notification catalogue', () => {
     ).toEqual({
       'voc.assigned_to_me': false,
       'voc.reporter_replied': false,
+      'voc.public_update_posted': false,
       'voc.severity_set_high_or_critical': true,
       'task_request.approved': false,
       'task_request.rejected': true,
@@ -59,6 +61,12 @@ describe('notification catalogue', () => {
     expect(notificationCatalogue['voc.reporter_replied'].summary()).toBe(
       'VOC에 작성자 답변이 등록되었습니다.',
     );
+    expect(
+      notificationCatalogue['voc.public_update_posted'].summary({ status_changed: true }),
+    ).toBe('VOC 진행 상태가 변경되었습니다.');
+    expect(
+      notificationCatalogue['voc.public_update_posted'].summary({ status_changed: false }),
+    ).toBe('VOC에 공개 업데이트가 등록되었습니다.');
     expect(
       notificationCatalogue['voc.severity_set_high_or_critical'].summary({ severity: 'high' }),
     ).toBe('VOC 심각도가 높음으로 설정되었습니다.');

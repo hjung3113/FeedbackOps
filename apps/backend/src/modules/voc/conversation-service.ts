@@ -272,6 +272,18 @@ export function createConversationService(deps: {
       });
     }
 
+    // 9b. Notify the Reporter (ADR-0014 amendment #1182); a self-post is excluded.
+    if (row.reporterId !== actor.actor_id) {
+      await deps.notify(tx, 'voc.public_update_posted', {
+        workspace_id: actor.workspace_id,
+        actor_ids: [row.reporterId],
+        subject_id: vocId,
+        correlation_id: randomUUID(),
+        detail: { voc_id: vocId, public_update_id: inserted.id },
+        params: { status_changed: statusWillChange },
+      });
+    }
+
     // 10. Refresh VocDetailEnvelope inside the same tx.
     const vocEnvelope = await deps.vocReadService.composeDetailEnvelope({
       tx,

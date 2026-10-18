@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const notificationEventTypeSchema = z.enum([
   'voc.assigned_to_me',
   'voc.reporter_replied',
+  'voc.public_update_posted',
   'voc.severity_set_high_or_critical',
   'task_request.approved',
   'task_request.rejected',
