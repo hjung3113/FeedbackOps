@@ -9,8 +9,9 @@ import {
 import { listVocsQuerySchema } from '../vocs/list-query.js';
 import { publicUpdateRequestSchema } from '../vocs/public-update-request.js';
 
-export const vocClusterStatusSchema = z.enum(['draft', 'confirmed']);
-export type VocClusterStatus = z.infer<typeof vocClusterStatusSchema>;
+import { vocClusterStatusSchema } from './status.js';
+
+export { vocClusterStatusSchema, type VocClusterStatus } from './status.js';
 
 export const createVocClusterRequestSchema = z
   .object({

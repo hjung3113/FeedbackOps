@@ -3,7 +3,7 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import { lockWorkspaceActor } from '../auth/index.js';
-import { readResponsibilityTeam } from '../core/read-projections.js';
+import { findResponsibilityTeam } from '../core/responsibility-read-projections.js';
 import { checkFindingManage } from '../findings/authorization.js';
 import { lockManagedSystem, recordResponsibilityDefaultFailure } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/index.js';
@@ -44,7 +44,7 @@ export async function resolveTaskResponsibility<W extends Workflow>(args: {
   async function failure(actorId: string | null, teamId: string | null): Promise<Category | null> {
     if (actorId && teamId) return 'invalid_pair';
     if (teamId) {
-      const team = await readResponsibilityTeam(tx, workspaceId, teamId);
+      const team = await findResponsibilityTeam(tx, workspaceId, teamId);
       return !team ? 'foreign_workspace' : team.archived_at ? 'archived_team' : null;
     }
     if (!actorId) return 'missing';
