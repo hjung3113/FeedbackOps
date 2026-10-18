@@ -7,6 +7,7 @@ export * from './permissions';
 export * from './actors';
 export * from './managed-systems';
 export * from './analytics-areas';
+export * from './analytics-areas-all';
 export * from './attachments';
 export * from './task-requests';
 export * from './tasks';

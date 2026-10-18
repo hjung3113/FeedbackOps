@@ -1,11 +1,10 @@
-import {
-  ApiError,
-  fetchAnalyticsAreas,
-  fetchCapabilityScope,
-  fetchManagedSystems,
-} from '@/lib/api';
+import { ApiError, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_START_COPY as COPY } from '@/lib/copy/survey-builder';
+import {
+  activeAnalyticsAreas,
+  analyticsAreasCatalogQuery,
+} from '@/lib/cross-system/analyticsAreasCatalog';
 import { searchDebounceMs } from '@/lib/forms/search-debounce';
 import {
   type SurveyCopySourceQuestion,
@@ -102,9 +101,8 @@ export function CreateSurveyDialog({
     retry: false,
   });
   const analyticsAreas = useQuery({
-    queryKey: ['analytics-areas', { managedSystemId: system, includeArchived: false }],
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({ managedSystemId: system, includeArchived: false, signal }),
+    ...analyticsAreasCatalogQuery(system),
+    select: activeAnalyticsAreas,
     enabled: open && Boolean(system),
     retry: false,
   });

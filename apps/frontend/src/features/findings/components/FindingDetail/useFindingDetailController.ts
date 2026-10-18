@@ -6,9 +6,9 @@
 
 import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -79,25 +79,14 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
         .map((actor) => ({ id: actor.id, name: actor.display_name })),
     [actors],
   );
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystemsQuery = useQuery(managedSystemsCatalogQuery());
   const managedSystemsById = React.useMemo(
     () => new Map((managedSystemsQuery.data?.items ?? []).map((ms) => [ms.id, ms.name])),
     [managedSystemsQuery.data?.items],
   );
-  const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', finding.primary_managed_system_id] as const,
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({
-        managedSystemId: finding.primary_managed_system_id,
-        includeArchived: true,
-        signal,
-      }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const analyticsAreasQuery = useQuery(
+    analyticsAreasCatalogQuery(finding.primary_managed_system_id),
+  );
   const analyticsAreasById = React.useMemo(
     () => new Map((analyticsAreasQuery.data?.items ?? []).map((area) => [area.id, area.name])),
     [analyticsAreasQuery.data?.items],

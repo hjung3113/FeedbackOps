@@ -1,4 +1,4 @@
-import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
+import { fetchDashboardSummary, isPermissionDenied } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { useMe } from '@/lib/auth/useMe';
 import { AREA_REPORT_COPY } from '@/lib/copy/area-report';
@@ -24,6 +24,7 @@ import { COVERAGE_NO_DATA_LABEL, INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/li
 import { EVIDENCE_COPY } from '@/lib/copy/evidence';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { HOME_COPY, HOME_QUEUE_COPY } from '@/lib/copy/home';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { hrefWithManagedSystem } from '@/lib/router/managed-system-href';
 import {
@@ -37,13 +38,6 @@ interface IntegrationDashboardSearch {
 }
 
 const SUMMARY_ERROR_TITLE = '연동 요약을 불러오지 못했습니다.';
-
-function isPermissionError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
-  );
-}
 
 export function IntegrationDashboardRoute({
   renderRequestAccess,
@@ -66,12 +60,7 @@ export function IntegrationDashboardRoute({
       }),
     retry: false,
   });
-  const systems = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-    retry: false,
-  });
+  const systems = useQuery({ ...managedSystemsCatalogQuery(), retry: false });
 
   const queues = React.useMemo(() => {
     const byId = new Map<
@@ -172,7 +161,7 @@ export function IntegrationDashboardRoute({
               ))}
             </div>
           ) : summary.isError ? (
-            isPermissionError(summary.error) ? (
+            isPermissionDenied(summary.error) ? (
               <div data-testid="integration-dashboard-blocked">
                 <PermissionBlockedPanel state="denied" category="연동 요약" />
               </div>

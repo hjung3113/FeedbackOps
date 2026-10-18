@@ -12,13 +12,14 @@
  */
 
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import {
   VOC_AREA_FILTER_EMPTY_COPY,
   VOC_LIST_LOAD_ERROR_LABELS,
   VOC_SEARCH_EMPTY_LABEL,
 } from '@/lib/copy/voc';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
@@ -34,11 +35,7 @@ import { VocRowSkeleton } from './VocRowSkeleton';
 // ---------------------------------------------------------------------------
 
 function useManagedSystemMap(): Record<string, ResolvedManagedSystem> {
-  const { data } = useQuery({
-    queryKey: ['managed-systems', 'all'],
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const { data } = useQuery(managedSystemsCatalogQuery());
 
   return useMemo(() => {
     if (!data) return {};
@@ -60,11 +57,7 @@ function useManagedSystemMap(): Record<string, ResolvedManagedSystem> {
 // ---------------------------------------------------------------------------
 
 function useAnalyticsAreaMap(): Record<string, string> {
-  const { data } = useQuery({
-    queryKey: ['analytics-areas', 'all'],
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const { data } = useQuery(analyticsAreasCatalogQuery());
 
   return useMemo(() => {
     if (!data) return {};

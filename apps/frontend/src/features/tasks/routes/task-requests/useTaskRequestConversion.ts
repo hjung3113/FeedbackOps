@@ -1,10 +1,10 @@
 import { convertTaskRequest, fetchPermissionCheck, resolveActors } from '@/lib/api';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { GENERIC_ERROR_MESSAGE, mapUnknownError } from '@/lib/api/errorMapper';
 import { listMilestones } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
 import { zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
@@ -145,15 +145,8 @@ export function useTaskRequestConversion({
   const canManage = currentRole === 'admin' || manageCheck.data?.state === 'approved';
 
   const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', item.primary_managed_system_id] as const,
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({
-        managedSystemId: item.primary_managed_system_id,
-        includeArchived: false,
-        signal,
-      }),
+    ...analyticsAreasCatalogQuery(item.primary_managed_system_id),
     enabled: convertOpen,
-    staleTime: 10 * 60 * 1000,
   });
   const activeAnalyticsAreaOptions = React.useMemo(
     () => analyticsAreasQuery.data?.items.filter((area) => area.archived_at === null),

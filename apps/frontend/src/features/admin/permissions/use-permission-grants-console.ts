@@ -1,12 +1,11 @@
+import { fetchPermissionDenies, fetchPermissionGrants } from '@/lib/api/permissions';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import type { PermissionDenyAdminItem, PermissionGrantAdminItem } from '@fops/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { fetchPermissionDenies, fetchPermissionGrants } from '@/lib/api/permissions';
-import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import type { PermissionDenyAdminItem, PermissionGrantAdminItem } from '@fops/shared';
-
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import type { PermissionGrantTab, PermissionGrantsSearch } from './permission-grants-search.js';
 import { permissionDeniesListKey, permissionGrantsListKey } from './useRevokePermission.js';
 
@@ -61,11 +60,7 @@ export function usePermissionGrantsConsole(): {
   const actorNames = Object.fromEntries(
     (actors.actors ?? []).map((actor) => [actor.id, actor.display_name]),
   );
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'],
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    retry: false,
-  });
+  const managedSystemsQuery = useQuery({ ...managedSystemsCatalogQuery(), retry: false });
   const managedSystemNames = Object.fromEntries(
     (managedSystemsQuery.data?.items ?? []).map((managedSystem) => [
       managedSystem.id,

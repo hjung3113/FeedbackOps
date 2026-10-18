@@ -1,6 +1,5 @@
 import {
   ApiError,
-  fetchManagedSystems,
   fetchPermissionRequestOwnerDetail,
   permissionRequestAdminDetailKey,
   permissionRequestOwnerDetailKey,
@@ -11,6 +10,7 @@ import { mapUnknownError } from '@/lib/api/errorMapper';
 import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { HOME_PERMISSION_COPY as COPY } from '@/lib/copy/home';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
 import { formatDateOnly } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
@@ -54,12 +54,7 @@ export function OwnerPermissionRequestDialog({
   });
   // UX: requesters read scope as system names elsewhere (sidebar, Admin detail);
   // the shipped ['managed-systems', 'all'] lookup resolves them, short ID only as fallback.
-  const managedSystems = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    retry: false,
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystems = useQuery({ ...managedSystemsCatalogQuery(), retry: false });
   const managedSystemNames = Object.fromEntries(
     (managedSystems.data?.items ?? []).map((system) => [system.id, system.name]),
   );

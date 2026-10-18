@@ -139,6 +139,8 @@ describe('TriagePanel Analytics Area and optional owner', () => {
     expect(fetchAnalyticsAreas).toHaveBeenCalledWith({
       managedSystemId: IDS.targetMs,
       includeArchived: true,
+      limit: 500,
+      offset: 0,
       signal: expect.any(AbortSignal),
     });
   });

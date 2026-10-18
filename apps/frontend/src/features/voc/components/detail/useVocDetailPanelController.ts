@@ -1,8 +1,8 @@
 import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type {
@@ -64,16 +64,7 @@ export function useVocDetailPanelController({
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
     [actors],
   );
-  const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', voc.primary_managed_system_id] as const,
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({
-        managedSystemId: voc.primary_managed_system_id,
-        includeArchived: true,
-        signal,
-      }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const analyticsAreasQuery = useQuery(analyticsAreasCatalogQuery(voc.primary_managed_system_id));
   const analyticsAreasById = React.useMemo(
     () => new Map((analyticsAreasQuery.data?.items ?? []).map((area) => [area.id, area.name])),
     [analyticsAreasQuery.data?.items],

@@ -230,7 +230,9 @@ describe('/admin/analytics-areas route', () => {
       analyticsAreas: [AA_TAB_PM, AA_PBI_SALES, ARCHIVED_AA],
       requests,
     });
-    await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument(),
+    );
     expect(screen.getByText('Analytics Area 2개 · Managed System 2개')).toBeInTheDocument();
     expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
 
@@ -239,7 +241,7 @@ describe('/admin/analytics-areas route', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Power BI' }));
 
     await waitFor(() => {
-      expect(requests).toContain('/analytics-areas?managed_system_id=ms-pbi');
+      expect(requests).toContain('/analytics-areas?managed_system_id=ms-pbi&limit=500&offset=0');
       expect(screen.getByTestId('aa-row-sales')).toBeInTheDocument();
       expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument();
       expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
@@ -250,14 +252,16 @@ describe('/admin/analytics-areas route', () => {
     fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
     fireEvent.click(await screen.findByRole('option', { name: '전체' }));
     await waitFor(() => {
-      expect(requests.filter((url) => url === '/analytics-areas').length).toBeGreaterThanOrEqual(2);
+      expect(
+        requests.filter((url) => url === '/analytics-areas?limit=500&offset=0').length,
+      ).toBeGreaterThanOrEqual(2);
       expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
       expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
     await waitFor(() => {
-      expect(requests).toContain('/analytics-areas?include_archived=true');
+      expect(requests).toContain('/analytics-areas?include_archived=true&limit=500&offset=0');
       expect(screen.getByTestId('aa-row-legacy-revenue')).toBeInTheDocument();
       expect(screen.getByText('Analytics Area 3개 · Managed System 2개')).toBeInTheDocument();
       expect(screen.getAllByTestId(/^aa-row-/)).toHaveLength(3);
@@ -265,7 +269,9 @@ describe('/admin/analytics-areas route', () => {
 
     fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
     await waitFor(() => {
-      expect(requests.filter((url) => url === '/analytics-areas').length).toBeGreaterThanOrEqual(3);
+      expect(
+        requests.filter((url) => url === '/analytics-areas?limit=500&offset=0').length,
+      ).toBeGreaterThanOrEqual(3);
       expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
     });
   });
@@ -277,9 +283,13 @@ describe('/admin/analytics-areas route', () => {
       analyticsAreas: [],
     });
     await waitFor(() => {
-      expect(screen.getByTestId('aa-empty-state')).toHaveTextContent('등록된 Managed System 이 없습니다.');
+      expect(screen.getByTestId('aa-empty-state')).toHaveTextContent(
+        '등록된 Managed System 이 없습니다.',
+      );
     });
-    expect(screen.queryByText('필터에 해당하는 Managed System이 없습니다.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('필터에 해당하는 Managed System이 없습니다.'),
+    ).not.toBeInTheDocument();
   });
 
   test('shows a filter-empty state when a selected archived Managed System is hidden', async () => {
@@ -288,7 +298,9 @@ describe('/admin/analytics-areas route', () => {
       managedSystems: [TABLEAU, ARCHIVED_POWERBI],
       analyticsAreas: [AA_TAB_PM, { ...AA_PBI_SALES, managed_system_id: 'ms-pbi' }],
     });
-    await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument(),
+    );
 
     fireEvent.click(screen.getByTestId('aa-filter-button'));
     fireEvent.click(screen.getByTestId('aa-filter-include-archived'));

@@ -1,6 +1,6 @@
 import { type QueryClient, useQuery } from '@tanstack/react-query';
 
-import { fetchAnalyticsAreas, fetchManagedSystems, resolveActors } from '../../../lib/api';
+import { fetchEveryAnalyticsAreaPage, fetchManagedSystems, resolveActors } from '../../../lib/api';
 
 export const AA_KEY = ['analytics-areas'] as const;
 
@@ -19,7 +19,7 @@ export function useAnalyticsAreasList(
   return useQuery({
     queryKey: [...AA_KEY, { managedSystemId, includeArchived }] as const,
     queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({
+      fetchEveryAnalyticsAreaPage({
         ...(managedSystemId ? { managedSystemId } : {}),
         includeArchived,
         signal,
