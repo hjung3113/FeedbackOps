@@ -1,3 +1,4 @@
+import { allowedPlatformReturnHref } from '@/lib/router/platform-return';
 import { NAV_TREE } from '@/routes/_authed';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -36,6 +37,16 @@ afterEach(() => {
 });
 
 describe('AppSidebar platform return link', () => {
+  it.each(['https:a.example/path', 'https:/a.example/path', 'https:\\a.example/path'])(
+    'resolves the validated %s to the allowlisted origin, never a relative link',
+    (raw) => {
+      const href = allowedPlatformReturnHref(raw, ['https://a.example']);
+      render(<AppSidebar entries={entries} platformReturnUrl={href as string} />);
+      const link = screen.getByRole('link', { name: '플랫폼으로 돌아가기' }) as HTMLAnchorElement;
+      expect(new URL(link.href).origin).toBe('https://a.example');
+    },
+  );
+
   it('renders a same-tab link to the given URL with the fixed label', () => {
     render(
       <AppSidebar

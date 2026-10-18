@@ -63,7 +63,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/admin/permissions/requests` | `tab`, `selected`, `returnTo` | `tab` for the pending tab; `selected` when none is selected; `returnTo` unless opened from a recovery queue |
 | `/admin/permissions/grants` | `tab`, `selected` | `tab` for grants; `selected` when none is selected |
 
-**Return to platform (ADR-0071).** `/vocs`, `/tasks`, `/surveys` and `/surveys/:surveyId` accept `platformReturn=:absoluteUrl` (at most 2048 characters). Every other route's strict schema drops it, and the internal `returnTo` key is unaffected. `AppSidebar` shows a `플랫폼으로 돌아가기` same-tab link above the nav sections only when the URL's origin is exactly one of `platform_return_origins` from `GET /me`; otherwise nothing renders. The key lives in the URL only: in-app navigation that rebuilds search may drop it.
+**Return to platform (ADR-0071).** `/vocs`, `/tasks`, `/surveys` and `/surveys/:surveyId` accept `platformReturn=:absoluteUrl` (at most 2048 characters). Every other route's strict schema drops it, and the internal `returnTo` key is unaffected. `AppSidebar` shows a `플랫폼으로 돌아가기` same-tab link above the nav sections only when the URL's origin is exactly one of `platform_return_origins` from `GET /me`; otherwise nothing renders. The Survey detail's child routes (`/results`, `/follow-up`) inherit the key in the URL but never render the link. The key lives in the URL only: in-app navigation that rebuilds search may drop it.
 
 Route naming rules:
 

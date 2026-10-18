@@ -11,7 +11,7 @@ import {
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
-import { isAllowedPlatformReturn } from '@/lib/router/platform-return';
+import { allowedPlatformReturnHref } from '@/lib/router/platform-return';
 import {
   DetailPanelFullscreenContext,
   DetailPanelReadingColumn,
@@ -19,7 +19,6 @@ import {
   cn,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from '@tanstack/react-router';
 import * as React from 'react';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavItem } from './AppSidebar';
@@ -29,6 +28,8 @@ import type { PaletteNavTree } from './command-palette/commands';
 export interface AppFrameProps {
   sidebarEntries: SidebarNavItem[];
   activeDomain: RailDomain;
+  /** Raw `platformReturn` of the committed leaf route (ADR-0071); checked against the allowlist here. */
+  platformReturn?: string;
   /**
    * NAV_TREE passthrough that arms the global command palette (#611). Routes
    * that do not pass it (e.g. RouteFallback's error frame) get no palette.
@@ -58,7 +59,7 @@ interface SlotEntry {
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
+export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, platformReturn, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
   const [expandedSlotKey, setExpandedSlotKey] = React.useState<string | null>(null);
   const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
@@ -149,18 +150,10 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
   const deleteCurrentView = React.useCallback((id: string) => {
     return deleteSavedView(id).then(() => savedViewsQuery.refetch());
   }, [savedViewsQuery]);
-  // ADR-0071: read the validated search of the leaf match (routes without the
-  // field drop it); AppFrame re-renders with its route on every navigation.
-  const router = useRouter({ warn: false });
-  const platformReturn = (
-    router?.state.matches.at(-1)?.search as { platformReturn?: unknown } | undefined
-  )?.platformReturn;
-  const platformReturnUrl = isAllowedPlatformReturn(
+  const platformReturnUrl = allowedPlatformReturnHref(
     platformReturn,
     me.data?.platform_return_origins,
-  )
-    ? platformReturn
-    : undefined;
+  );
   const sidebarProps = {
     entries: visibleSidebarEntries,
     ...(platformReturnUrl !== undefined ? { platformReturnUrl } : {}),

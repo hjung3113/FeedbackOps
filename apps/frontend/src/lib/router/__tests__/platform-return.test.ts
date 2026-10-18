@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isAllowedPlatformReturn, platformReturnField } from '../platform-return';
+import {
+  allowedPlatformReturnHref,
+  platformReturnField,
+  selectPlatformReturn,
+} from '../platform-return';
 
 describe('platformReturnField (syntactic)', () => {
   it.each([
@@ -25,7 +29,7 @@ describe('platformReturnField (syntactic)', () => {
   });
 });
 
-describe('isAllowedPlatformReturn (exact origin)', () => {
+describe('allowedPlatformReturnHref (exact origin)', () => {
   const origins = ['https://a.example', 'https://b.example:8443', 'http://localhost:5173'];
 
   it.each([
@@ -44,10 +48,50 @@ describe('isAllowedPlatformReturn (exact origin)', () => {
     [undefined, false],
     [42, false],
   ])('%s -> %s', (value, expected) => {
-    expect(isAllowedPlatformReturn(value, origins)).toBe(expected);
+    expect(allowedPlatformReturnHref(value, origins) !== undefined).toBe(expected);
+  });
+
+  it.each([
+    ['https://A.EXAMPLE:443/path?x=1', 'https://a.example/path?x=1'],
+    ['https:a.example/path', 'https://a.example/path'],
+    ['https:/a.example/path', 'https://a.example/path'],
+    ['https:\\a.example/path', 'https://a.example/path'],
+  ])('returns the absolute href for %s', (value, href) => {
+    expect(allowedPlatformReturnHref(value, origins)).toBe(href);
   });
 
   it.each([[undefined], [[]]])('is off when origins is %p', (list) => {
-    expect(isAllowedPlatformReturn('https://a.example/', list)).toBe(false);
+    expect(allowedPlatformReturnHref('https://a.example/', list)).toBeUndefined();
+  });
+});
+
+describe('selectPlatformReturn (leaf route restriction)', () => {
+  const search = { platformReturn: 'https://a.example/x' };
+
+  it.each([
+    ['/_authed/vocs'],
+    ['/_authed/tasks'],
+    ['/_authed/surveys/'],
+    ['/_authed/surveys/$surveyId'],
+  ])('returns the value on leaf %s', (routeId) => {
+    expect(
+      selectPlatformReturn([
+        { routeId: '/_authed', search: {} },
+        { routeId, search },
+      ]),
+    ).toBe(search.platformReturn);
+  });
+
+  it.each([
+    ['/_authed/surveys/$surveyId/results'],
+    ['/_authed/surveys/$surveyId/follow-up'],
+    ['/_authed/home'],
+  ])('returns undefined on leaf %s', (routeId) => {
+    expect(selectPlatformReturn([{ routeId, search }])).toBeUndefined();
+  });
+
+  it('returns undefined without the key or matches', () => {
+    expect(selectPlatformReturn([{ routeId: '/_authed/vocs', search: {} }])).toBeUndefined();
+    expect(selectPlatformReturn([])).toBeUndefined();
   });
 });

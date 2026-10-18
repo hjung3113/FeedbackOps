@@ -15,7 +15,7 @@ an open redirect: only origins the deployment explicitly trusts may ever become 
 
 1. **Key.** `platformReturn`: an absolute URL of at most 2048 characters. Only `/vocs`, `/tasks`,
    `/surveys` and `/surveys/$surveyId` accept it; every other route's strict search schema keeps
-   rejecting it. It is separate from the internal recovery `returnTo` key, whose behaviour is
+   rejecting it. The Survey detail's child routes (`/results`, `/follow-up`) inherit the key in the URL but never render the link. It is separate from the internal recovery `returnTo` key, whose behaviour is
    unchanged.
 2. **Allowlist.** Backend env `PLATFORM_RETURN_ORIGINS`: comma-separated canonical origins.
    Unset or empty means the feature is off. Each entry follows the `PUBLIC_ATTACHMENT_ORIGIN`
