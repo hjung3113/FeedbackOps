@@ -14,6 +14,7 @@ workspace before enqueueing jobs.
 | --- | --- | --- |
 | `voc.assigned_to_me` | `voc/commands/update-triage.ts` `updateVoc` (exposed via `voc/service.ts`) | The newly assigned user owner; team-only ownership has no Actor recipient. |
 | `voc.reporter_replied` | `voc/conversation-service.ts` `postReporterReply` | The current user owner, if set, plus every workspace Actor with `role_level = admin`. |
+| `voc.public_update_posted` (#1182) | `voc/conversation-service.ts` `postPublicUpdate` | The VOC's Reporter, once per posted Public Update or Reporter-facing status change (body only, body + status, or skip + status); in-app only, summary `VOC 진행 상태가 변경되었습니다.` when the status changed, otherwise `VOC에 공개 업데이트가 등록되었습니다.`; detail carries ids only. |
 | `voc.severity_set_high_or_critical` | `voc/commands/update-triage.ts` `updateVoc` (exposed via `voc/service.ts`) | On a change to `high` or `critical`, the current user owner, if set, plus every workspace Actor with `role_level = admin`. |
 | `task_request.approved`, `task_request.rejected`, `task_request.needs_more_evidence` | `task-requests/service.ts` `decideTaskRequest` | The Task Request creator (`requester_actor_id`), including self-approval. |
 | `task.assigned_to_me` | `tasks/service.ts` `convertTaskRequest` | The new assignee, only when `assignee_actor_id` is set. |
@@ -30,8 +31,9 @@ notifications remain.
 No notification is created for Permission Request `need_more_info`, Task Request `self_approval_denied`, idempotent
 replays, no-op Task Request decisions that already have the target status,
 no-op VOC owner or severity updates, `low`/`medium`/null VOC severity changes,
-`voc.assigned_to_me` or `task.released` for a team-only VOC (no user owner), or
-a `task.released` candidate insert skipped by its unique key. Team-only ownership
+`voc.assigned_to_me` or `task.released` for a team-only VOC (no user owner),
+a `task.released` candidate insert skipped by its unique key, or a Public Update
+posted by the VOC's own Reporter. Team-only ownership
 removes only the owner from `voc.reporter_replied` and
 `voc.severity_set_high_or_critical` recipients; workspace admins are still
 notified. The `task.released` policy excludes the releasing actor, Task
@@ -70,7 +72,7 @@ titles, and other free text stay in their domain records and audit events.
   They do not store a historical subject title or display id, so later reads
   reflect current authorization and current subject text.
 - `event_type` is one of `voc.assigned_to_me`, `voc.reporter_replied`,
-  `voc.severity_set_high_or_critical`, `task_request.approved`,
+  `voc.public_update_posted`, `voc.severity_set_high_or_critical`, `task_request.approved`,
   `task_request.rejected`, `task_request.needs_more_evidence`,
   `task.assigned_to_me`, `task.released`, `permission_request.submitted`,
   `permission_request.decided`, or `permission_grant.revoked`.

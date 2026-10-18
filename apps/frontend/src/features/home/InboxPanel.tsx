@@ -30,10 +30,10 @@ import { formatRelativeTime } from '@/lib/format/datetime';
 
 type InboxFilter = 'unread' | 'all';
 
-function vocTarget(notification: NotificationDto): string | null {
+function vocTarget(notification: NotificationDto, view = 'inbox'): string | null {
   const vocId = notification.detail['voc_id'];
   if (typeof vocId !== 'string') return null;
-  return `/vocs?view=inbox&selected=${encodeURIComponent(vocId)}`;
+  return `/vocs?view=${view}&selected=${encodeURIComponent(vocId)}`;
 }
 
 export function notificationTarget(notification: NotificationDto): string | null {
@@ -44,6 +44,8 @@ export function notificationTarget(notification: NotificationDto): string | null
     case 'voc.severity_set_high_or_critical':
     case 'task.released':
       return vocTarget(notification);
+    case 'voc.public_update_posted':
+      return vocTarget(notification, 'my');
     case 'task.assigned_to_me':
       return `/tasks?view=board&param=${subjectId}`;
     case 'task_request.approved':

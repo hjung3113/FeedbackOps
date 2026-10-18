@@ -185,3 +185,15 @@ decided above; there is no DB-configured rule UI.
 summary `권한이 취소되었습니다.`. Its subject reference is available to the
 grantee and workspace Admins; other Actors receive an unavailable reference.
 Lifting a deny does not notify.
+
+## Amendment 2026-10-18 (#1182)
+
+`voc.public_update_posted` notifies the VOC's Reporter in-app when a Public
+Update or a Reporter-facing status change is posted. One notice is created per
+public change: a body-only update, a body plus status change, and a skip plus
+status change each notify once. A Public Update posted by the Reporter on their
+own VOC creates no notice. The summary is fixed text (`VOC 진행 상태가
+변경되었습니다.` when the status changed, otherwise `VOC에 공개 업데이트가
+등록되었습니다.`) and the detail carries ids only. There is no email channel,
+no preference, and no unread marker for this event. Internal comments never
+notify the Reporter.
