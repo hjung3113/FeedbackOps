@@ -1,5 +1,6 @@
 import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { MyVocsRecoveryLink } from '@/components/MyVocsRecoveryLink';
 import { getTask, listTasks } from '@/lib/api';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
@@ -34,7 +35,7 @@ import {
   UnassignedBadge,
 } from '@fops/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import {
   resolveTaskAssignee,
@@ -317,13 +318,7 @@ export function TaskListRoute({
                 category="Task 목록"
                 reason={PERMISSION_BLOCKED_REASONS.taskList}
               />
-              <Link
-                to="/vocs"
-                search={{ view: 'my' }}
-                className="text-sm font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
-              >
-                {GLOSSARY.myVocs}
-              </Link>
+              <MyVocsRecoveryLink />
             </div>
           ) : tasksQuery.error && !tasksQuery.isFetchNextPageError ? (
             <ListStateMessage

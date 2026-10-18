@@ -1,4 +1,4 @@
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestAccessButton } from '@/features/admin/public';
 import type { RenderRecoveryAccess } from '@/features/integration/public';
 import { IntegrationDashboardRoute } from '@/features/integration/routes/IntegrationDashboardRoute';
 import { recoverySearchFields } from '@/lib/router/recovery-search';

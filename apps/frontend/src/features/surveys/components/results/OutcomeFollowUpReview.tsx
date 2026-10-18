@@ -1,4 +1,4 @@
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestAccessButton } from '@/features/admin/public';
 import { ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
 import { formatShortDate } from '@/lib/format/datetime';
