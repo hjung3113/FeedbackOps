@@ -11,7 +11,7 @@ import {
 } from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireIdempotencyKey } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
@@ -19,7 +19,6 @@ import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { FindingsService } from '../findings/service.js';
 import type { SurveysService } from './service.js';
-const v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const uuid = z.string().uuid();
 const options = z
   .array(z.object({ key: z.string().min(1), label: z.string().min(1) }).strict())
@@ -96,13 +95,6 @@ function actor(req: FastifyRequest) {
     workspace_id: req.session.workspace_id,
     role_level: req.session.role_level,
   } as const;
-}
-function key(h: Record<string, unknown>): string {
-  const x = h['idempotency-key'];
-  const k = Array.isArray(x) ? x[0] : x;
-  if (typeof k !== 'string' || !v4.test(k))
-    throw new HttpError('validation.malformed_idempotency_key', 'Idempotency-Key must be a UUIDv4');
-  return k;
 }
 function validId(id: string): boolean {
   return uuid.safeParse(id).success;
@@ -351,7 +343,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
         actor: actor(req),
         responseId: id,
         input: body,
-        idempotencyKey: key(req.headers as Record<string, unknown>),
+        idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
         requestHash: hashRequestBody({
           body,
           route: 'survey_response.create_finding',
@@ -443,7 +435,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
         actor: actor(req),
         surveyId: id,
         input: b,
-        idempotencyKey: key(req.headers as Record<string, unknown>),
+        idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
         requestHash: hashRequestBody({ body: b, route: 'survey.submit_response', surveyId: id }),
       });
       return reply.code(r.status).send(r.body);
@@ -455,7 +447,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     const r = await opts.surveysService.createSurvey({
       actor: actor(req),
       input: b,
-      idempotencyKey: key(req.headers as Record<string, unknown>),
+      idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
       requestHash: hashRequestBody({ ...b, route: 'survey.create' }),
     });
     return reply.code(r.status).send(r.body);
@@ -469,7 +461,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       actor: actor(req),
       surveyId: id,
       input: b,
-      idempotencyKey: key(req.headers as Record<string, unknown>),
+      idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
       requestHash: hashRequestBody({ body: b, route: 'survey.update', surveyId: id }),
     });
     return reply.code(r.status).send(r.body);
@@ -486,7 +478,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
         actor: actor(req),
         surveyId: id,
         questionIds: b.question_ids,
-        idempotencyKey: key(req.headers as Record<string, unknown>),
+        idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
         requestHash: hashRequestBody({ body: b, route: 'survey.questions.reorder', surveyId: id }),
       });
       return reply.code(r.status).send(r.body);
@@ -513,7 +505,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
           surveyId: p.id,
           ...(p.question_id ? { questionId: p.question_id } : {}),
           ...(b ? { input: b } : {}),
-          idempotencyKey: key(req.headers as Record<string, unknown>),
+          idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
           requestHash: hashRequestBody({
             body: b ?? {},
             route: op,
@@ -538,7 +530,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
         const r = (await opts.surveysService[fn]({
           actor: actor(req),
           surveyId: id,
-          idempotencyKey: key(req.headers as Record<string, unknown>),
+          idempotencyKey: requireIdempotencyKey(req.headers as Record<string, unknown>),
           requestHash: hashRequestBody({ route: `survey.${target}`, surveyId: id }),
         } as never)) as { status: number; body: unknown };
         return reply.code(r.status).send(r.body);

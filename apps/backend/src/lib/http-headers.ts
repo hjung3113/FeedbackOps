@@ -14,18 +14,25 @@ export const RFC4122_UUID_REGEX =
 
 const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-export function requireIdempotencyKey(headers: Record<string, unknown>): string {
+/** Optional-key routes: a missing or empty header is `undefined`; a malformed one throws. */
+export function optionalIdempotencyKey(headers: Record<string, unknown>): string | undefined {
   const raw = headers['idempotency-key'];
   const headerKey = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof headerKey !== 'string' || headerKey.length === 0) {
-    throw new HttpError('validation.failed', 'Idempotency-Key header required', {
-      fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }],
-    });
-  }
+  if (typeof headerKey !== 'string' || headerKey.length === 0) return undefined;
   if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
     throw new HttpError('validation.malformed_idempotency_key', 'Idempotency-Key must be a UUIDv4');
   }
   return headerKey;
+}
+
+export function requireIdempotencyKey(headers: Record<string, unknown>): string {
+  const key = optionalIdempotencyKey(headers);
+  if (key === undefined) {
+    throw new HttpError('validation.failed', 'Idempotency-Key header required', {
+      fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }],
+    });
+  }
+  return key;
 }
 
 /** voc. Non-empty string. Not a timestamp check. */

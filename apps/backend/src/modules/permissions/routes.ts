@@ -27,7 +27,7 @@ import {
   submitMoreInfoPermissionRequestSchema,
 } from '@fops/shared';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
-import { IDEMPOTENCY_KEY_REGEX } from '../../lib/http-headers.js';
+import { optionalIdempotencyKey } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -178,20 +178,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
-      // Validate optional Idempotency-Key header up-front.
-      const rawKey = req.headers['idempotency-key'];
-      const headerKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-      let idempotencyKey: string | undefined;
-      if (typeof headerKey === 'string' && headerKey.length > 0) {
-        if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
-          return sendError(
-            reply,
-            'validation.malformed_idempotency_key',
-            'Idempotency-Key must be a UUIDv4',
-          );
-        }
-        idempotencyKey = headerKey;
-      }
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
 
       const body = req.body as CreatePermissionRequest;
 
@@ -228,19 +215,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
-      const rawKey = req.headers['idempotency-key'];
-      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-      if (
-        typeof idempotencyKey === 'string' &&
-        idempotencyKey.length > 0 &&
-        !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
-      ) {
-        return sendError(
-          reply,
-          'validation.malformed_idempotency_key',
-          'Idempotency-Key must be a UUIDv4',
-        );
-      }
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
 
       const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
       if (!parsedParams.success) {
@@ -282,19 +257,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
-      const rawKey = req.headers['idempotency-key'];
-      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-      if (
-        typeof idempotencyKey === 'string' &&
-        idempotencyKey.length > 0 &&
-        !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
-      ) {
-        return sendError(
-          reply,
-          'validation.malformed_idempotency_key',
-          'Idempotency-Key must be a UUIDv4',
-        );
-      }
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
 
       const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
       if (!parsedParams.success) {
@@ -336,19 +299,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
-      const rawKey = req.headers['idempotency-key'];
-      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-      if (
-        typeof idempotencyKey === 'string' &&
-        idempotencyKey.length > 0 &&
-        !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
-      ) {
-        return sendError(
-          reply,
-          'validation.malformed_idempotency_key',
-          'Idempotency-Key must be a UUIDv4',
-        );
-      }
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
 
       const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
       if (!parsedParams.success) {
@@ -544,15 +495,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-      const rawKey = req.headers['idempotency-key'];
-      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-      if (idempotencyKey !== undefined && !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)) {
-        return sendError(
-          reply,
-          'validation.malformed_idempotency_key',
-          'Idempotency-Key must be a UUIDv4',
-        );
-      }
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
       const parsed = directPermissionGrantSchema.safeParse(req.body ?? {});
       if (!parsed.success)
         return sendError(reply, 'validation.failed', 'invalid direct grant', {
@@ -624,19 +567,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       handler: async (req, reply) => {
         const sess = req.session;
         if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-        const rawKey = req.headers['idempotency-key'];
-        const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-        if (
-          typeof idempotencyKey === 'string' &&
-          idempotencyKey.length > 0 &&
-          !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
-        ) {
-          return sendError(
-            reply,
-            'validation.malformed_idempotency_key',
-            'Idempotency-Key must be a UUIDv4',
-          );
-        }
+        const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
         const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
         if (!parsedParams.success) {
           return sendError(reply, 'validation.failed', 'invalid permission id', {
@@ -718,19 +649,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       handler: async (req, reply) => {
         const sess = req.session;
         if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-        const rawKey = req.headers['idempotency-key'];
-        const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-        if (
-          typeof idempotencyKey === 'string' &&
-          idempotencyKey.length > 0 &&
-          !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
-        ) {
-          return sendError(
-            reply,
-            'validation.malformed_idempotency_key',
-            'Idempotency-Key must be a UUIDv4',
-          );
-        }
+        const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
         const parsed = route.schema.safeParse(req.body ?? {});
         if (!parsed.success) {
           return sendError(reply, 'validation.failed', 'invalid request body', {

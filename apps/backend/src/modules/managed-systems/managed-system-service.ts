@@ -175,112 +175,88 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     const requestHash = hashRequestBody(body);
 
     return await db.transaction(async (tx) => {
-      if (options.idempotencyKey) {
-        // S-001: serialise concurrent first-time retries with the same
-        // (actor_id, key) so the loser blocks until the winner commits and
-        // then replays the stored response instead of colliding on the
-        // domain unique constraint. See ADR-0015 "Race surface" amendment.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${actor.actor_id}), hashtext(${options.idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(
+      const run = async () => {
+        await requireWorkspaceAdmin(checkService, actor, tx);
+
+        await validateResponsibilityDefault(
           tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
+          checkService,
+          actor.workspace_id,
+          undefined,
+          'owner',
+          body.default_owner_actor_id,
+          body.default_owner_team_id,
         );
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body as ManagedSystemDto };
-        }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
-          );
-        }
-      }
-
-      await requireWorkspaceAdmin(checkService, actor, tx);
-
-      await validateResponsibilityDefault(
-        tx,
-        checkService,
-        actor.workspace_id,
-        undefined,
-        'owner',
-        body.default_owner_actor_id,
-        body.default_owner_team_id,
-      );
-      await validateResponsibilityDefault(
-        tx,
-        checkService,
-        actor.workspace_id,
-        undefined,
-        'reviewer',
-        body.default_reviewer_actor_id,
-        body.default_reviewer_team_id,
-      );
-      let inserted: Row;
-      try {
-        const rows = await tx
-          .insert(managedSystems)
-          .values({
-            workspaceId: actor.workspace_id,
-            slug: body.slug,
-            name: body.name,
-            externalKey: body.external_key ?? null,
-            defaultOwnerActorId: body.default_owner_actor_id ?? null,
-            defaultOwnerTeamId: body.default_owner_team_id ?? null,
-            defaultReviewerActorId: body.default_reviewer_actor_id ?? null,
-            defaultReviewerTeamId: body.default_reviewer_team_id ?? null,
-          })
-          .returning();
-        const row = rows[0];
-        if (!row) {
-          throw new HttpError('internal.unexpected', 'managed_systems insert returned no row');
-        }
-        inserted = row;
-      } catch (err) {
-        const pgErr = err as DatabaseError;
-        if (pgErr?.code === '23505') {
-          throw new HttpError('conflict.duplicate_slug', 'slug already in use', {
-            fields: [{ path: ['slug'], code: 'duplicate_slug' }],
-          });
-        }
-        throw err;
-      }
-
-      await auditService.record(tx, {
-        workspace_id: actor.workspace_id,
-        actor_id: actor.actor_id,
-        event_type: REGISTERED,
-        subject_type: 'managed_system',
-        subject_id: inserted.id,
-        summary: `Managed System registered: ${inserted.slug}`,
-        detail: {
-          slug: inserted.slug,
-          name: inserted.name,
-          external_key: inserted.externalKey,
-          default_owner_actor_id: inserted.defaultOwnerActorId,
-          default_owner_team_id: inserted.defaultOwnerTeamId,
-          default_reviewer_actor_id: inserted.defaultReviewerActorId,
-          default_reviewer_team_id: inserted.defaultReviewerTeamId,
-        },
-      });
-
-      const dto = toDto(inserted);
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
+        await validateResponsibilityDefault(
           tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          201,
-          dto,
+          checkService,
+          actor.workspace_id,
+          undefined,
+          'reviewer',
+          body.default_reviewer_actor_id,
+          body.default_reviewer_team_id,
         );
-      }
-      return { status: 201, body: dto };
+        let inserted: Row;
+        try {
+          const rows = await tx
+            .insert(managedSystems)
+            .values({
+              workspaceId: actor.workspace_id,
+              slug: body.slug,
+              name: body.name,
+              externalKey: body.external_key ?? null,
+              defaultOwnerActorId: body.default_owner_actor_id ?? null,
+              defaultOwnerTeamId: body.default_owner_team_id ?? null,
+              defaultReviewerActorId: body.default_reviewer_actor_id ?? null,
+              defaultReviewerTeamId: body.default_reviewer_team_id ?? null,
+            })
+            .returning();
+          const row = rows[0];
+          if (!row) {
+            throw new HttpError('internal.unexpected', 'managed_systems insert returned no row');
+          }
+          inserted = row;
+        } catch (err) {
+          const pgErr = err as DatabaseError;
+          if (pgErr?.code === '23505') {
+            throw new HttpError('conflict.duplicate_slug', 'slug already in use', {
+              fields: [{ path: ['slug'], code: 'duplicate_slug' }],
+            });
+          }
+          throw err;
+        }
+
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: REGISTERED,
+          subject_type: 'managed_system',
+          subject_id: inserted.id,
+          summary: `Managed System registered: ${inserted.slug}`,
+          detail: {
+            slug: inserted.slug,
+            name: inserted.name,
+            external_key: inserted.externalKey,
+            default_owner_actor_id: inserted.defaultOwnerActorId,
+            default_owner_team_id: inserted.defaultOwnerTeamId,
+            default_reviewer_actor_id: inserted.defaultReviewerActorId,
+            default_reviewer_team_id: inserted.defaultReviewerTeamId,
+          },
+        });
+
+        const dto = toDto(inserted);
+        return { status: 201, body: dto };
+      };
+
+      return options.idempotencyKey
+        ? idempotencyService.runIdempotent(
+            tx,
+            actor.actor_id,
+            options.idempotencyKey,
+            requestHash,
+            run,
+          )
+        : run();
     });
   }
 
@@ -293,228 +269,199 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     const requestHash = hashRequestBody({ id, ...body });
 
     return await db.transaction(async (tx) => {
-      // S-001 advisory lock omitted: id-scoped update, no slug-uniqueness
-      // race surface to guard (the register path is the only carrier).
-      if (options.idempotencyKey) {
-        const hit = await idempotencyService.lookup(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-        );
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body as ManagedSystemDto };
+      const run = async () => {
+        await requireWorkspaceAdmin(checkService, actor, tx);
+
+        const existingRows = await tx
+          .select()
+          .from(managedSystems)
+          .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
+          .limit(1)
+          .for('update');
+        const existing = existingRows[0];
+        if (!existing) {
+          throw new HttpError('not_found.record', 'managed_system not found');
         }
-        if (hit.kind === 'mismatch') {
+
+        // ADR-0019 Section A: archived rows are immutable. Re-registration
+        // via slug reuse (ADR-0017:63) is the only path to "edit a retired
+        // registry entry" — the audit/historical record on the original row
+        // stays frozen.
+        if (existing.archivedAt !== null) {
           throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
+            'conflict.record_archived',
+            'managed_system is archived and cannot be updated',
+            { fields: [{ path: ['id'], code: 'record_archived' }] },
           );
         }
-      }
 
-      await requireWorkspaceAdmin(checkService, actor, tx);
+        // Build change diff. Slug is intentionally not in the body type;
+        // immutability is enforced at the route boundary (422).
+        const changes: Record<string, { from: string | null; to: string | null }> = {};
+        const patch: Partial<{
+          name: string;
+          externalKey: string | null;
+          defaultOwnerActorId: string | null;
+          defaultOwnerTeamId: string | null;
+          defaultReviewerActorId: string | null;
+          defaultReviewerTeamId: string | null;
+        }> = {};
 
-      const existingRows = await tx
-        .select()
-        .from(managedSystems)
-        .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
-        .limit(1)
-        .for('update');
-      const existing = existingRows[0];
-      if (!existing) {
-        throw new HttpError('not_found.record', 'managed_system not found');
-      }
+        if (body.name !== undefined && body.name !== existing.name) {
+          changes.name = { from: existing.name, to: body.name };
+          patch.name = body.name;
+        }
+        if (body.external_key !== undefined && body.external_key !== existing.externalKey) {
+          changes.external_key = { from: existing.externalKey, to: body.external_key ?? null };
+          patch.externalKey = body.external_key ?? null;
+        }
+        if (
+          body.default_owner_actor_id !== undefined &&
+          body.default_owner_actor_id !== existing.defaultOwnerActorId
+        ) {
+          changes.default_owner_actor_id = {
+            from: existing.defaultOwnerActorId,
+            to: body.default_owner_actor_id ?? null,
+          };
+          patch.defaultOwnerActorId = body.default_owner_actor_id ?? null;
+        }
+        if (
+          body.default_owner_team_id !== undefined &&
+          body.default_owner_team_id !== existing.defaultOwnerTeamId
+        ) {
+          changes.default_owner_team_id = {
+            from: existing.defaultOwnerTeamId,
+            to: body.default_owner_team_id ?? null,
+          };
+          patch.defaultOwnerTeamId = body.default_owner_team_id ?? null;
+        }
 
-      // ADR-0019 Section A: archived rows are immutable. Re-registration
-      // via slug reuse (ADR-0017:63) is the only path to "edit a retired
-      // registry entry" — the audit/historical record on the original row
-      // stays frozen.
-      if (existing.archivedAt !== null) {
-        throw new HttpError(
-          'conflict.record_archived',
-          'managed_system is archived and cannot be updated',
-          { fields: [{ path: ['id'], code: 'record_archived' }] },
-        );
-      }
+        if (
+          body.default_reviewer_actor_id !== undefined &&
+          body.default_reviewer_actor_id !== existing.defaultReviewerActorId
+        ) {
+          changes.default_reviewer_actor_id = {
+            from: existing.defaultReviewerActorId,
+            to: body.default_reviewer_actor_id ?? null,
+          };
+          patch.defaultReviewerActorId = body.default_reviewer_actor_id ?? null;
+        }
+        if (
+          body.default_reviewer_team_id !== undefined &&
+          body.default_reviewer_team_id !== existing.defaultReviewerTeamId
+        ) {
+          changes.default_reviewer_team_id = {
+            from: existing.defaultReviewerTeamId,
+            to: body.default_reviewer_team_id ?? null,
+          };
+          patch.defaultReviewerTeamId = body.default_reviewer_team_id ?? null;
+        }
+        if (body.default_owner_actor_id !== undefined || body.default_owner_team_id !== undefined) {
+          await validateResponsibilityDefault(
+            tx,
+            checkService,
+            actor.workspace_id,
+            id,
+            'owner',
+            body.default_owner_actor_id !== undefined
+              ? body.default_owner_actor_id
+              : existing.defaultOwnerActorId,
+            body.default_owner_team_id !== undefined
+              ? body.default_owner_team_id
+              : existing.defaultOwnerTeamId,
+          );
+        }
+        if (
+          body.default_reviewer_actor_id !== undefined ||
+          body.default_reviewer_team_id !== undefined
+        ) {
+          await validateResponsibilityDefault(
+            tx,
+            checkService,
+            actor.workspace_id,
+            id,
+            'reviewer',
+            body.default_reviewer_actor_id !== undefined
+              ? body.default_reviewer_actor_id
+              : existing.defaultReviewerActorId,
+            body.default_reviewer_team_id !== undefined
+              ? body.default_reviewer_team_id
+              : existing.defaultReviewerTeamId,
+          );
+        }
 
-      // Build change diff. Slug is intentionally not in the body type;
-      // immutability is enforced at the route boundary (422).
-      const changes: Record<string, { from: string | null; to: string | null }> = {};
-      const patch: Partial<{
-        name: string;
-        externalKey: string | null;
-        defaultOwnerActorId: string | null;
-        defaultOwnerTeamId: string | null;
-        defaultReviewerActorId: string | null;
-        defaultReviewerTeamId: string | null;
-      }> = {};
+        if (Object.keys(changes).length === 0) {
+          const dto = toDto(existing);
+          return { status: 200, body: dto };
+        }
 
-      if (body.name !== undefined && body.name !== existing.name) {
-        changes.name = { from: existing.name, to: body.name };
-        patch.name = body.name;
-      }
-      if (body.external_key !== undefined && body.external_key !== existing.externalKey) {
-        changes.external_key = { from: existing.externalKey, to: body.external_key ?? null };
-        patch.externalKey = body.external_key ?? null;
-      }
-      if (
-        body.default_owner_actor_id !== undefined &&
-        body.default_owner_actor_id !== existing.defaultOwnerActorId
-      ) {
-        changes.default_owner_actor_id = {
-          from: existing.defaultOwnerActorId,
-          to: body.default_owner_actor_id ?? null,
-        };
-        patch.defaultOwnerActorId = body.default_owner_actor_id ?? null;
-      }
-      if (
-        body.default_owner_team_id !== undefined &&
-        body.default_owner_team_id !== existing.defaultOwnerTeamId
-      ) {
-        changes.default_owner_team_id = {
-          from: existing.defaultOwnerTeamId,
-          to: body.default_owner_team_id ?? null,
-        };
-        patch.defaultOwnerTeamId = body.default_owner_team_id ?? null;
-      }
-
-      if (
-        body.default_reviewer_actor_id !== undefined &&
-        body.default_reviewer_actor_id !== existing.defaultReviewerActorId
-      ) {
-        changes.default_reviewer_actor_id = {
-          from: existing.defaultReviewerActorId,
-          to: body.default_reviewer_actor_id ?? null,
-        };
-        patch.defaultReviewerActorId = body.default_reviewer_actor_id ?? null;
-      }
-      if (
-        body.default_reviewer_team_id !== undefined &&
-        body.default_reviewer_team_id !== existing.defaultReviewerTeamId
-      ) {
-        changes.default_reviewer_team_id = {
-          from: existing.defaultReviewerTeamId,
-          to: body.default_reviewer_team_id ?? null,
-        };
-        patch.defaultReviewerTeamId = body.default_reviewer_team_id ?? null;
-      }
-      if (body.default_owner_actor_id !== undefined || body.default_owner_team_id !== undefined) {
-        await validateResponsibilityDefault(
-          tx,
-          checkService,
-          actor.workspace_id,
-          id,
-          'owner',
+        // Effective default_owner XOR check after the patch. The DB-level
+        // CHECK already enforces this, but emitting a clean validation error
+        // is friendlier than a 500 wrapping a 23514.
+        const effectiveActor =
           body.default_owner_actor_id !== undefined
             ? body.default_owner_actor_id
-            : existing.defaultOwnerActorId,
+            : existing.defaultOwnerActorId;
+        const effectiveTeam =
           body.default_owner_team_id !== undefined
             ? body.default_owner_team_id
-            : existing.defaultOwnerTeamId,
-        );
-      }
-      if (
-        body.default_reviewer_actor_id !== undefined ||
-        body.default_reviewer_team_id !== undefined
-      ) {
-        await validateResponsibilityDefault(
-          tx,
-          checkService,
-          actor.workspace_id,
-          id,
-          'reviewer',
-          body.default_reviewer_actor_id !== undefined
-            ? body.default_reviewer_actor_id
-            : existing.defaultReviewerActorId,
-          body.default_reviewer_team_id !== undefined
-            ? body.default_reviewer_team_id
-            : existing.defaultReviewerTeamId,
-        );
-      }
+            : existing.defaultOwnerTeamId;
+        if (effectiveActor && effectiveTeam) {
+          throw new HttpError(
+            'validation.failed',
+            'default_owner_actor_id and default_owner_team_id are mutually exclusive',
+            {
+              fields: [
+                { path: ['default_owner_actor_id'], code: 'mutually_exclusive' },
+                { path: ['default_owner_team_id'], code: 'mutually_exclusive' },
+              ],
+            },
+          );
+        }
 
-      if (Object.keys(changes).length === 0) {
-        const dto = toDto(existing);
-        if (options.idempotencyKey) {
-          await idempotencyService.record(
+        const updatedRows = await tx
+          .update(managedSystems)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
+          .returning();
+        const updated = updatedRows[0];
+        if (!updated) {
+          throw new HttpError('internal.unexpected', 'managed_systems update returned no row');
+        }
+
+        // The row is exclusively locked until commit. Do not use transaction-start now().
+        const changedAt = await tx.execute<{ changed_at: string }>(
+          sql`select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as changed_at`,
+        );
+        const configurationChangedAt = changedAt.rows[0]?.changed_at;
+        if (!configurationChangedAt) throw new HttpError('internal.unexpected', 'DB clock missing');
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: UPDATED,
+          subject_type: 'managed_system',
+          subject_id: id,
+          summary: `Managed System updated: ${updated.slug}`,
+          detail: {
+            managed_system_id: id,
+            changes,
+            configuration_changed_at: configurationChangedAt,
+          },
+        });
+
+        const dto = toDto(updated);
+        return { status: 200, body: dto };
+      };
+
+      return options.idempotencyKey
+        ? idempotencyService.runIdempotent(
             tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
-            200,
-            dto,
-          );
-        }
-        return { status: 200, body: dto };
-      }
-
-      // Effective default_owner XOR check after the patch. The DB-level
-      // CHECK already enforces this, but emitting a clean validation error
-      // is friendlier than a 500 wrapping a 23514.
-      const effectiveActor =
-        body.default_owner_actor_id !== undefined
-          ? body.default_owner_actor_id
-          : existing.defaultOwnerActorId;
-      const effectiveTeam =
-        body.default_owner_team_id !== undefined
-          ? body.default_owner_team_id
-          : existing.defaultOwnerTeamId;
-      if (effectiveActor && effectiveTeam) {
-        throw new HttpError(
-          'validation.failed',
-          'default_owner_actor_id and default_owner_team_id are mutually exclusive',
-          {
-            fields: [
-              { path: ['default_owner_actor_id'], code: 'mutually_exclusive' },
-              { path: ['default_owner_team_id'], code: 'mutually_exclusive' },
-            ],
-          },
-        );
-      }
-
-      const updatedRows = await tx
-        .update(managedSystems)
-        .set({ ...patch, updatedAt: new Date() })
-        .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
-        .returning();
-      const updated = updatedRows[0];
-      if (!updated) {
-        throw new HttpError('internal.unexpected', 'managed_systems update returned no row');
-      }
-
-      // The row is exclusively locked until commit. Do not use transaction-start now().
-      const changedAt = await tx.execute<{ changed_at: string }>(
-        sql`select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as changed_at`,
-      );
-      const configurationChangedAt = changedAt.rows[0]?.changed_at;
-      if (!configurationChangedAt) throw new HttpError('internal.unexpected', 'DB clock missing');
-      await auditService.record(tx, {
-        workspace_id: actor.workspace_id,
-        actor_id: actor.actor_id,
-        event_type: UPDATED,
-        subject_type: 'managed_system',
-        subject_id: id,
-        summary: `Managed System updated: ${updated.slug}`,
-        detail: {
-          managed_system_id: id,
-          changes,
-          configuration_changed_at: configurationChangedAt,
-        },
-      });
-
-      const dto = toDto(updated);
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          200,
-          dto,
-        );
-      }
-      return { status: 200, body: dto };
+            run,
+          )
+        : run();
     });
   }
 
@@ -528,104 +475,72 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     const requestHash = hashRequestBody({ id, op: 'archive' });
 
     return await db.transaction(async (tx) => {
-      // S-001 advisory lock omitted: id-scoped archive, no slug-uniqueness
-      // race surface to guard.
-      if (options.idempotencyKey) {
-        const hit = await idempotencyService.lookup(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-        );
-        if (hit.kind === 'match') {
-          return {
-            status: hit.status,
-            body: hit.body as ManagedSystemDto & { cascaded_analytics_area_ids: string[] },
-          };
+      const run = async () => {
+        await requireWorkspaceAdmin(checkService, actor, tx);
+
+        const existingRows = await tx
+          .select()
+          .from(managedSystems)
+          .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
+          .limit(1);
+        const existing = existingRows[0];
+        if (!existing) {
+          throw new HttpError('not_found.record', 'managed_system not found');
         }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
-          );
+
+        // Idempotent: already archived → return current state, no audit row,
+        // no cascade re-walk.
+        if (existing.archivedAt !== null) {
+          const body = { ...toDto(existing), cascaded_analytics_area_ids: [] as string[] };
+          return { status: 200, body };
         }
-      }
 
-      await requireWorkspaceAdmin(checkService, actor, tx);
+        const now = new Date();
+        const archivedRows = await tx
+          .update(managedSystems)
+          .set({ archivedAt: now, archivedByActorId: actor.actor_id, updatedAt: now })
+          .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
+          .returning();
+        const archived = archivedRows[0];
+        if (!archived) {
+          throw new HttpError('internal.unexpected', 'managed_systems archive returned no row');
+        }
 
-      const existingRows = await tx
-        .select()
-        .from(managedSystems)
-        .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
-        .limit(1);
-      const existing = existingRows[0];
-      if (!existing) {
-        throw new HttpError('not_found.record', 'managed_system not found');
-      }
+        // Cascade walk over child Analytics Areas (Slice 2 #11 activation).
+        // Each archived child gets its own `analytics_area_archived` audit
+        // row with `cascade_source_managed_system_id = id` so a single
+        // BI query can pivot from either direction. A failure in any child
+        // aborts the whole transaction.
+        const cascadedIds = await cascadeArchiveActiveChildren(tx, auditService, {
+          workspaceId: actor.workspace_id,
+          actorId: actor.actor_id,
+          managedSystemId: id,
+          now,
+        });
 
-      // Idempotent: already archived → return current state, no audit row,
-      // no cascade re-walk.
-      if (existing.archivedAt !== null) {
-        const body = { ...toDto(existing), cascaded_analytics_area_ids: [] as string[] };
-        if (options.idempotencyKey) {
-          await idempotencyService.record(
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: ARCHIVED,
+          subject_type: 'managed_system',
+          subject_id: id,
+          summary: `Managed System archived: ${archived.slug}`,
+          detail: { managed_system_id: id, cascaded_analytics_area_ids: cascadedIds },
+        });
+
+        const body = { ...toDto(archived), cascaded_analytics_area_ids: cascadedIds };
+        return { status: 200, body };
+      };
+
+      return options.idempotencyKey
+        ? idempotencyService.runIdempotent(
             tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
-            200,
-            body,
-          );
-        }
-        return { status: 200, body };
-      }
-
-      const now = new Date();
-      const archivedRows = await tx
-        .update(managedSystems)
-        .set({ archivedAt: now, archivedByActorId: actor.actor_id, updatedAt: now })
-        .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
-        .returning();
-      const archived = archivedRows[0];
-      if (!archived) {
-        throw new HttpError('internal.unexpected', 'managed_systems archive returned no row');
-      }
-
-      // Cascade walk over child Analytics Areas (Slice 2 #11 activation).
-      // Each archived child gets its own `analytics_area_archived` audit
-      // row with `cascade_source_managed_system_id = id` so a single
-      // BI query can pivot from either direction. A failure in any child
-      // aborts the whole transaction.
-      const cascadedIds = await cascadeArchiveActiveChildren(tx, auditService, {
-        workspaceId: actor.workspace_id,
-        actorId: actor.actor_id,
-        managedSystemId: id,
-        now,
-      });
-
-      await auditService.record(tx, {
-        workspace_id: actor.workspace_id,
-        actor_id: actor.actor_id,
-        event_type: ARCHIVED,
-        subject_type: 'managed_system',
-        subject_id: id,
-        summary: `Managed System archived: ${archived.slug}`,
-        detail: { managed_system_id: id, cascaded_analytics_area_ids: cascadedIds },
-      });
-
-      const body = { ...toDto(archived), cascaded_analytics_area_ids: cascadedIds };
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          200,
-          body,
-        );
-      }
-      return { status: 200, body };
+            run,
+          )
+        : run();
     });
   }
 
