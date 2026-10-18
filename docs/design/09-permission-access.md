@@ -169,7 +169,7 @@ Permission Request
 - reason
 - approver_id
 - status: pending / needs_more_info / approved / rejected / expired / revoked / cancelled
-- revision: positive integer, advances on every successful mutation (proposed/new, ADR-0066)
+- revision: positive integer, advances on every successful mutation (ADR-0066)
 - more_info_request optional
 - expires_at optional
 - created_at
@@ -223,7 +223,7 @@ Acceptance Criteria:
 - Approved permissions are scoped when scope is provided.
 ```
 
-Reopened and reconciled 2026-10-13 by ADR-0066 (owner #1041): supported-scope narrowing replaces the old policy prohibition; single-object enforcement is deferred. New lifecycle/read/direct-grant behavior is accepted, not implemented by this docs change.
+Reopened and reconciled 2026-10-13 by ADR-0066 (owner #1041, implemented #1080–#1086): supported-scope narrowing replaces the old policy prohibition; single-object enforcement is deferred.
 
 Status (ADR-0061, 2026-10-05): grant revocation and deny lifting ship with the
 Admin "활성 권한" screen in #762.
@@ -267,7 +267,7 @@ Acceptance Criteria:
 - Advanced policy language
 ```
 
-## MVP close-out review and direct grant (ADR-0066; proposed/new)
+## MVP close-out review and direct grant (ADR-0066; implemented #1080–#1086)
 
 Home's own open requests provide `수정`, `요청 철회`, and `보완 제출` only as allowed
 by owner-scoped detail. Withdrawal retains history; closing a form does not withdraw.
@@ -290,7 +290,7 @@ scope/error rules live in `docs/implementation/api/permissions.md` and `05-permi
 
 ## Approved Survey evidence reuse (ADR-0064)
 
-The proposed/new #816 safe picker/attachment grants no personal-response access:
+The #816 safe picker/attachment grants no personal-response access:
 Survey result readers select only currently suppression-visible approved excerpts
 and attach with `finding.manage` on the target. Source and target Managed System
 permissions are checked independently in one workspace. Existing role/deny rules

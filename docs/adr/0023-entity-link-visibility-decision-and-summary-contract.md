@@ -4,7 +4,7 @@
 
 Accepted. Amended by ADR-0024 (§C finding row) and ADR-0032 (§C, §E, §F: Task reporter summary).
 
-`docs/design/11-entity-linking.md` FR-LINK-002 locks that entity-link reads enforce all four stored visibility tokens (`internal_only`, `summary_visible`, `visible_to_reporter`, `admin_only`) on both source and target, and that the linked-object UI visibility is backend-decided. `docs/implementation/05-permission-policy.md` (Summary-Visible Contract) and `docs/implementation/06-entity-linking-contract.md` (Visibility Enforcement) sketch the summary fields. `CONTEXT.md:195` already canonicalises the per-request verdict vocabulary as **UI Visibility Decision** = `allowed | hidden | summary_visible | request_access | denied`.
+`docs/design/11-entity-linking.md` FR-LINK-002 locks that entity-link reads enforce all four stored visibility tokens (`internal_only`, `summary_visible`, `visible_to_reporter`, `admin_only`) on both source and target, and that the linked-object UI visibility is backend-decided. `docs/implementation/05-permission-policy.md` (Summary-Visible Contract) and `docs/implementation/06-entity-linking-contract.md` (Visibility Enforcement) sketch the summary fields. `GLOSSARY.md` → **UI Visibility Decision** already canonicalises the per-request verdict vocabulary as `allowed | hidden | summary_visible | request_access | denied`.
 
 Those documents leave the operative shape open: exactly which decision each (stored-token × actor) pair yields, what `summary_visible` exposes when the only linkable entity is `voc`, where the evaluator lives, and which fields the Task reporter summary canonically carries (the three docs disagree). This ADR locks those decisions for issue #115 (Slice 4.4) and is the human-signed `summary_visible` contract the issue's HITL gate required.
 
@@ -12,7 +12,7 @@ The grounding constraint: production entity links today are **VOC↔VOC `related
 
 ## Section A — Decision vocabulary and the hidden/denied boundary
 
-**Locked:** The backend-decided per-read verdict is the `CONTEXT.md:195` enum `allowed | hidden | summary_visible | request_access | denied`. Stored `visibility` (the four tokens) and the per-request decision are distinct: the decision is `f(stored visibility, actor scope, source readable?, target readable?, target summary available?)` and is never persisted.
+**Locked:** The backend-decided per-read verdict is the `GLOSSARY.md` → **UI Visibility Decision** enum `allowed | hidden | summary_visible | request_access | denied`. Stored `visibility` (the four tokens) and the per-request decision are distinct: the decision is `f(stored visibility, actor scope, source readable?, target readable?, target summary available?)` and is never persisted.
 
 The hidden/denied boundary:
 
@@ -105,6 +105,6 @@ The Frontend renders the backend-decided state (via `PermissionBlockedPanel` whe
 
 - A slice introduces a non-VOC link target (Task/Finding) with a reporter summary. That slice implements `getReporterSummary`, makes `summary_visible` reachable, and re-adds `request_access` plus its minimum-requestable-scope candidates — reopening Sections B and F.
   - **Partially fired by ADR-0032 (Slice 7a-1a).** See ADR-0032 for the Task summary and evaluator amendment; `request_access` remains deferred.
-  - **Partially fired by ADR-0024 (Slice 5).** Finding is the first non-VOC link target, but it has **no** reporter-facing summary (`05-finding-insight-system.md:215`, `CONTEXT.md`). ADR-0024 therefore amends Section C (adds the `finding`-target row) and registers a `getReporterSummary` that returns UNAVAILABLE, but does **not** make `summary_visible` reachable, does **not** add a `finding` member to Section F, and does **not** re-add `request_access`. Sections B and F stay as written here until a Finding reporter summary is actually introduced. See `docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md`.
+  - **Partially fired by ADR-0024 (Slice 5).** Finding is the first non-VOC link target, but it has **no** reporter-facing summary (`05-finding-insight-system.md:215`, `GLOSSARY.md`). ADR-0024 therefore amends Section C (adds the `finding`-target row) and registers a `getReporterSummary` that returns UNAVAILABLE, but does **not** make `summary_visible` reachable, does **not** add a `finding` member to Section F, and does **not** re-add `request_access`. Sections B and F stay as written here until a Finding reporter summary is actually introduced. See `docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md`.
 - Product approves reporter-facing VOC↔VOC visibility. That reopens the `visible_to_reporter` collapse in Section C.
 - `POST /entity-links` is unlocked beyond `internal_only`. That reopens the creation-side note in Section E.

@@ -25,7 +25,7 @@ core.notifications
 - archived_at     timestamptz null
 ```
 
-The Dashboard surface (CONTEXT.md: "action-queue surface") gains a sibling **Inbox tab** that reads from this table; the Dashboard tab continues to show actionable records inside the Actor's Managed System Permission Scope. The two are distinct surfaces in the same shell:
+The Dashboard surface (GLOSSARY.md: "action-queue surface") gains a sibling **Inbox tab** that reads from this table; the Dashboard tab continues to show actionable records inside the Actor's Managed System Permission Scope. The two are distinct surfaces in the same shell:
 
 - **Dashboard / actionable**: what *needs action* in my scope (matches `Dashboard` glossary entry).
 - **Dashboard / inbox**: events directed *at me* personally — assignments, replies on my VOC, approvals of my Task Request, permission decisions.

@@ -264,7 +264,7 @@ follow ADR-0067. These are adopted requirements, not measured PASS evidence.
 ## Analytics Area Report Contract — implemented by #1078 (ADR-0069)
 
 Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
-Backend/shared implemented by #1078; integration and scale verification remain conductor-owned.
+Backend/shared implemented by #1078; storage/read contract shipped in v1.0.0.
 This is a sibling read, not a replacement for the summary's VOC-only
 `analytics_areas` projection. Metric definitions and destinations: FR-DASH-002 in
 `docs/design/08-dashboard-system.md`.

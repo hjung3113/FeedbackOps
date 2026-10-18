@@ -1,8 +1,8 @@
 # Architecture Decision Records
 
-ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `CONTEXT.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
+ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `GLOSSARY.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
 
-**To add an ADR:** take the next number (highest below + 1; close-out slices reserved 0064–0070 for their ADRs), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the user-level `domain-modeling` skill's `ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
+**To add an ADR:** take the next number (highest below + 1; close-out slices reserved 0064–0070 for their ADRs), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Rejected`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the user-level `domain-modeling` skill's `ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
 
 ## Product scope and domain model
 
@@ -26,7 +26,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0048](0048-role-level-extension.md) Role Level extension — checklist for adding a role across enum, DB CHECK, local unions and domain gates. *Accepted*
 - [0056](0056-capability-based-admin-navigation.md) Capability-based Admin navigation — Admin entries appear only when `workspace.admin` is approved; direct links stay gated. *Accepted*
 - [0061](0061-admin-revoke-permission-grants-and-denies.md) Admin revokes active Permission grants and denies — revocation audit, notification, and re-request behavior. *Accepted*
-- [0066](0066-permission-request-lifecycle-and-direct-grant.md) Permission Request lifecycle and governed direct grants — requester withdrawal/edit, revision-safe narrowed approval, explained risk and direct-grant governance; single-object enforcement deferred. *Accepted (not implemented)*
+- [0066](0066-permission-request-lifecycle-and-direct-grant.md) Permission Request lifecycle and governed direct grants — requester withdrawal/edit, revision-safe narrowed approval, explained risk and direct-grant governance; single-object enforcement deferred. *Accepted and implemented (#1080–#1086)*
 
 ## Managed System registry, teams and display IDs
 
@@ -99,7 +99,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0053](0053-survey-result-response-state.md) Survey result response state — `none` / `below_threshold` / `visible` without exposing small counts. *Accepted*
 - [0055](0055-outcome-survey-follow-up-decisions.md) Outcome Survey follow-up — low-band poor-response classifier; Finding or no-follow-up decision clears the gap. *Accepted*
 
-- [0064](0064-survey-provenance-read-boundary.md) Survey provenance read boundary and safe approved-excerpt reuse — trusted application authorization, protected bindings, metadata-only Finding summaries, filtered link/audit access and suppression-aware reuse. *Accepted 2026-10-13; implementation pending #739/#740/#816*
+- [0064](0064-survey-provenance-read-boundary.md) Survey provenance read boundary and safe approved-excerpt reuse — trusted application authorization, protected bindings, metadata-only Finding summaries, filtered link/audit access and suppression-aware reuse. *Accepted 2026-10-13; implemented (#739/#740, #816)*
 - [0065](0065-evidence-inventory-and-approved-excerpt-reuse.md) Evidence inventory and approved Survey excerpt reuse — Findings-owned safe search inventory, Integration ListShell and Finding-local approved-excerpt picker. *Accepted and implemented (#739/#740, #816, #1040, #1107, #1109)*
 
 ## Notifications
@@ -133,3 +133,4 @@ These record where the product deliberately differs from `docs/design-prototype/
 - *Proposed* - not decided or not built; do not rely on it. *(not implemented)* means no code exists.
 - *Partially superseded* / *amended by* - part of the text is replaced; the superseding ADR or dated amendment wins for that part.
 - *Superseded by NNNN* - fully replaced; keep for history only.
+- *Rejected* - proposed and decided against; keep for history only (0035, 0036).

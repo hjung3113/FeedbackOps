@@ -1,4 +1,4 @@
-// Enum constants. Per ADR-0003/0004/0005 and CONTEXT.md Language.
+// Enum constants. Per ADR-0003/0004/0005 and GLOSSARY.md Language.
 // One canonical string list per enum; both apps import from here.
 
 // Storage form. DB CHECK constraint on core.actors.role_level matches this
@@ -13,7 +13,7 @@ export type RoleLevel = (typeof ROLE_LEVEL_VALUES)[number];
 export const ACTOR_TYPE_VALUES = ['internal_member', 'system'] as const;
 export type ActorType = (typeof ACTOR_TYPE_VALUES)[number];
 
-// Display form. CONTEXT.md prose uses Title-case for the *concept*; UI
+// Display form. GLOSSARY.md prose uses Title-case for the *concept*; UI
 // dropdowns and labels render through this map. Never compare against
 // these strings — they are not the storage form.
 export const ROLE_LEVEL_LABELS: Readonly<Record<RoleLevel, string>> = {

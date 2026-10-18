@@ -202,7 +202,7 @@ Every `survey_response`-source tuple, `(survey_response, finding, generated_find
 and `(survey_response, finding, evidence_of)`, is command-only: it is registered
 for DB validation and currently created by `POST /survey-responses/:id/create-finding`
 (which creates highlights per excerpt, with one active `evidence_of` link per
-response/Finding pair). ADR-0064 also accepts the proposed/new
+response/Finding pair). ADR-0064 also accepts the
 `POST /findings/:id/survey-evidence` for approval-selection attachment: it writes
 `evidence_of` only, never `generated_finding`. Generic
 `POST /entity-links` and generic link listings exclude every `survey_response`
@@ -252,7 +252,7 @@ PATCH /entity-links/:id
   calls the Findings-owned execution projection seam in that transaction to clear
   linked_task_id when no active requested_task link to a Task remains
 - hard delete is forbidden; after ADR-0064 cutover fops_app UPDATE uses the filtered
-  canonical-link view (proposed/new), not the raw core.entity_links table; no DELETE
+  canonical-link view, not the raw core.entity_links table; no DELETE
 ```
 
 Because the active uniqueness constraint is partial (`WHERE status='active'`),
@@ -304,7 +304,7 @@ Dashboard may query entity links to detect records missing relation types expect
 
 Dashboard must not treat every unlinked record as incomplete. Dashboard must deep-link users to owning module actions and must not mutate source lifecycle state directly.
 
-### Analytics Area report relation attribution (ADR-0069; implementation pending)
+### Analytics Area report relation attribution (ADR-0069; implemented #1077–#1079)
 
 Report source membership/counts use canonical active links and approved owner read projections,
 with Entity Linking visibility semantics. Finding handoff recognizes `requested_task` to Task Request
@@ -314,10 +314,10 @@ If required linked facts are unavailable, omit the cross-source metric instead o
 links as absent. Survey's safe aggregate classifier retains ADR-0055's approved resolution semantics
 without exposing linked Finding metadata or response-grain facts on the report.
 
-## ADR-0064 Survey boundary (accepted; #739/#740 implementation pending)
+## ADR-0064 Survey boundary (accepted; implemented #739/#740)
 
 Canonical `core.entity_links` retains original endpoints, all statuses, active
-uniqueness and detach history. A proposed/new column-listed owner-backed
+uniqueness and detach history. A column-listed owner-backed
 `security_barrier` updatable view with `WITH CHECK OPTION` excludes either
 `survey_response` endpoint in every status. Ordinary app SELECT/INSERT/UPDATE
 uses this view, no DELETE; raw table and surviving column ACLs are revoked.
@@ -330,7 +330,7 @@ Survey and target Finding may differ in Managed System, but both must be
 independently authorized in the same workspace. The old universal-equality
 module guide is superseded on this exception by ADR-0064.
 
-Results uses a proposed/new Survey-owned workspace+Survey-ID reader returning
+Results uses a Survey-owned workspace+Survey-ID reader returning
 candidate Finding IDs/target scope, not response UUIDs; the application applies
 source read/privacy and target Finding read. No personal grant is required just
 to discover accessible derived Findings. Generic Finding summaries remain
@@ -340,7 +340,7 @@ ADR-0064 amendment, preserving controlled operator history. Cutover must prove
 ordinary view conflict/RETURNING paths and concurrency before revoking grants;
 unsupported operations block rollout rather than justify restoring raw access.
 
-## Assistance is not a link endpoint (ADR-0068; proposed/new)
+## Assistance is not a link endpoint (ADR-0068; implemented #1097)
 
 VOC Cluster Suggestions and Draft Similar-VOC Preview are outside the registered
 entity-type/tuple vocabulary. Do not register suggestion or unsaved-draft providers,

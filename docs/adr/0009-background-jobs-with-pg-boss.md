@@ -8,7 +8,7 @@ FeedbackOps has work that must run outside the request lifecycle:
 
 - Creating a Public-Update review candidate when a Task moves to `Released` (ADR-0005 forbids automatic Reporter-Facing status writes).
 - Surfacing High Severity VOC follow-up gaps for Dashboard queues.
-- Applying Cluster bulk-update operations candidate-by-candidate (CONTEXT.md: bulk update behavior is candidate-only).
+- Applying Cluster bulk-update operations candidate-by-candidate (GLOSSARY.md: bulk update behavior is candidate-only).
 - Sending Surveys and closing them at their deadline (`docs/design/07-survey-system.md`).
 - Future audit-log archival once retention policy lands (ADR-0008).
 - Periodic entity-link integrity checks for Dashboard "missing link" queries (`docs/implementation/06-entity-linking-contract.md`).

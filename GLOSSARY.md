@@ -387,7 +387,7 @@ _Avoid_: Cluster member as a single bulk target, merged record, bare "candidate"
 - A record may appear in both an assigned-work view (because it is assigned to me) and **Dashboard** (because it is in my scope); these are independent views, not different storage.
 - Assigned-work views never widen beyond the current **Actor**; **Dashboard** never narrows to one assignee by default.
 - A **Permission Request** is created by the requesting **Actor** and decided by an **Admin** within the same **Workspace**.
-- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission. The requester may edit a pending ask or withdraw an open ask to `cancelled`, retaining identity and history (ADR-0066; accepted, implementation pending).
+- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission. The requester may edit a pending ask or withdraw an open ask to `cancelled`, retaining identity and history (ADR-0066; implemented #1080–#1086).
 - A governed direct **Permission Grant** uses the same supported scope and self-approval policy as approval; an overlapping Explicit Deny must be lifted explicitly, and a matching open ask goes through review. Neither path changes **Role Level** (ADR-0066).
 - **Sensitive Permission** grants and uses require a reason and are audited.
 - Rejected **Permission Requests** must not be immediately resubmitted for the same scope without new justification.

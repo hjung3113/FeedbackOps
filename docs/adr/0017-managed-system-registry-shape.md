@@ -6,7 +6,7 @@ Accepted. Amended by ADR-0019 and ADR-0067 (2026-10-13, reviewer routing inputs)
 
 **ADR-0019 (Sections A, B, D, E) amends the archived-row mutation policy, cascade-race recovery, and concurrency lock for this ADR. The decisions below remain in force; consult ADR-0019 for the additions.**
 
-`docs/implementation/04-database-and-migrations.md:104-110` locks the existence of `core.managed_systems` + `core.analytics_areas`, the AA→MS belonging rule, the workspace-plus-MS uniqueness intent for AA, and the "archive over hard delete" mandate. `docs/implementation/api/core.md` §Core / Managed System / Analytics Area locks the eight Slice 2 endpoints: `GET /managed-systems`, `POST /managed-systems`, `PATCH /managed-systems/:id`, `POST /managed-systems/:id/archive`, `GET /analytics-areas`, `POST /analytics-areas`, `PATCH /analytics-areas/:id`, `POST /analytics-areas/:id/archive`. Routes added later in that same section (`GET /actors`, `GET /actors/resolve`, `GET /workspace/settings`, `PATCH /workspace/settings`) are not part of those eight. `CONTEXT.md` (Managed System / Managed System Registry / Analytics Area / Default Owner) locks the domain vocabulary.
+`docs/implementation/04-database-and-migrations.md:104-110` locks the existence of `core.managed_systems` + `core.analytics_areas`, the AA→MS belonging rule, the workspace-plus-MS uniqueness intent for AA, and the "archive over hard delete" mandate. `docs/implementation/api/core.md` §Core / Managed System / Analytics Area locks the eight Slice 2 endpoints: `GET /managed-systems`, `POST /managed-systems`, `PATCH /managed-systems/:id`, `POST /managed-systems/:id/archive`, `GET /analytics-areas`, `POST /analytics-areas`, `PATCH /analytics-areas/:id`, `POST /analytics-areas/:id/archive`. Routes added later in that same section (`GET /actors`, `GET /actors/resolve`, `GET /workspace/settings`, `PATCH /workspace/settings`) are not part of those eight. `GLOSSARY.md` (Managed System / Managed System Registry / Analytics Area / Default Owner) locks the domain vocabulary.
 
 This ADR locks the three shape decisions those documents leave open: the identifier columns on `managed_systems`, the cascade semantics when a Managed System is archived, and the audit-event detail payload that records what happened.
 
@@ -23,7 +23,7 @@ external_key  text?    optional metadata reference into an upstream BI menu
 
 `slug` is the URL- and bookmark-friendly handle. `(workspace_id, slug)` is a partial unique index (`WHERE archived_at IS NULL`) so an archived slug can be reclaimed when the registry is cleaned up (see "Archive" below). Slug is immutable after create: changing it breaks operator bookmarks, dashboard filter URLs, and any external tooling that pinned the handle. `name` is the mutable display label and carries no uniqueness constraint beyond workspace scoping (operators may legitimately rename "Power BI" to "Microsoft Power BI" without invalidating links).
 
-`external_key` is the optional metadata reference that `CONTEXT.md:228` calls "external analytics menu identifiers are optional metadata only." It is **not** a sync key: nothing in the application keys reads, writes, or reconciles against it. Adding sync behaviour later would warrant a new ADR.
+`external_key` is the optional metadata reference that `GLOSSARY.md` → **Analytics Area** (Relationships) calls "external analytics menu identifiers are optional metadata only." It is **not** a sync key: nothing in the application keys reads, writes, or reconciles against it. Adding sync behaviour later would warrant a new ADR.
 
 All FK columns elsewhere in the system (`voc.managed_system_id`, `task.managed_system_id`, `permission_grants.managed_system_id`, …) carry the UUID. Clients may resolve a UUID from a slug via `GET /managed-systems?slug=<slug>` but the wire-format key is always the UUID.
 
@@ -31,7 +31,7 @@ UUID-only was rejected because operators eyeball filter URLs and bookmark dashbo
 
 ## Analytics Area: flat under Managed System, no parent AA
 
-Each Analytics Area row carries `managed_system_id` and no `parent_analytics_area_id`. The Slice 2 spec's "optional parent selector" refers to the **Managed System** as parent in the admin grouping list — not to an Analytics Area tree. `CONTEXT.md:225-228` mandates AA-belongs-to-exactly-one-MS but is silent on AA hierarchy, and Slice 2 exit criteria mentions only the AA→MS relationship.
+Each Analytics Area row carries `managed_system_id` and no `parent_analytics_area_id`. The Slice 2 spec's "optional parent selector" refers to the **Managed System** as parent in the admin grouping list — not to an Analytics Area tree. `GLOSSARY.md` → **Analytics Area** (Relationships) mandates AA-belongs-to-exactly-one-MS but is silent on AA hierarchy, and Slice 2 exit criteria mentions only the AA→MS relationship.
 
 Tree-shaped AAs were rejected because they multiply downstream policy questions (does a sub-AA inherit the parent's `owner_team_id`? does archiving a parent AA cascade?) that have no MVP answer. Operators who need visual grouping can use naming conventions (`menu/permissions`, `menu/usage`) and lexicographic sort. Adding `parent_analytics_area_id` later is a nullable column migration with no row backfill.
 
@@ -48,7 +48,7 @@ archived_at         timestamp?
 archived_by_actor_id uuid?   FK
 ```
 
-`(workspace_id, managed_system_id, slug)` is the partial unique tuple (predicate `WHERE archived_at IS NULL`). Two MSs may carry the same AA slug (`tableau/permission-management` and `power-bi/permission-management` coexist) per the `CONTEXT.md:337` worked example.
+`(workspace_id, managed_system_id, slug)` is the partial unique tuple (predicate `WHERE archived_at IS NULL`). Two MSs may carry the same AA slug (`tableau/permission-management` and `power-bi/permission-management` coexist); the slug is unique per MS, not per Workspace (`GLOSSARY.md` → **Analytics Area** lives inside one **Managed System**).
 
 ## Archive: timestamp + actor, automatic cascade MS → AA, slug reusable after archive
 
@@ -72,7 +72,7 @@ Slug reuse after archive is permitted by the partial unique indexes (`WHERE arch
 
 ## Audit detail: state-snapshot for create, change-diff for update, cascade-tracking for archive
 
-Six events are added to `AUDIT_EVENT_TYPES` (`packages/shared/src/enums/audit-events.ts`). Names follow the snake-case single-token convention that Slice 1's F-001 fix pinned and that the registry header in `packages/shared/src/enums/audit-events.ts` documents (CONTEXT.md "Managed System Registry" supplies the `registered` verb):
+Six events are added to `AUDIT_EVENT_TYPES` (`packages/shared/src/enums/audit-events.ts`). Names follow the snake-case single-token convention that Slice 1's F-001 fix pinned and that the registry header in `packages/shared/src/enums/audit-events.ts` documents (GLOSSARY.md "Managed System Registry" supplies the `registered` verb):
 
 ```text
 managed_system_registered

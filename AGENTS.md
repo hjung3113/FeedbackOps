@@ -50,14 +50,14 @@ Authority follows subject; there is no universal conflict ladder.
 **Authority by subject:**
 
 - `AGENTS.md` (root + per-directory) — agent conduct and repository/ownership boundaries
-- `CONTEXT.md` (root) — domain vocabulary and stable domain invariants
+- `GLOSSARY.md` (root) — domain vocabulary and stable domain invariants
 - `docs/adr/*.md` — architectural decisions
 - `docs/implementation/*.md` and `docs/design/*.md` — detailed contracts
 
 **Tiebreaks — apply, do not escalate:**
 
-- An ADR supersedes any other document — `docs/implementation/*`, `docs/design/*`, `CONTEXT.md`, `docs/design-prototype/`, and any `AGENTS.md` — on the decision it made. Note stale docs and fix them in the same chunk.
-- `CONTEXT.md` owns vocabulary and stable domain invariants, not architecture.
+- An ADR supersedes any other document — `docs/implementation/*`, `docs/design/*`, `GLOSSARY.md`, `docs/design-prototype/`, and any `AGENTS.md` — on the decision it made. Note stale docs and fix them in the same chunk.
+- `GLOSSARY.md` owns vocabulary and stable domain invariants, not architecture.
 - The most specific `AGENTS.md` wins: a per-directory `AGENTS.md` supersedes root within its directory.
 
 **Stop and report:** A disagreement between detailed contracts (`docs/implementation/*` vs `docs/design/*`) stops by design: neither is a decision record, so no tiebreak can pick a winner without fabricating a decision. A grill-locked Q collision, or any contradiction no tiebreak above covers → report which doc must reopen. Never resolve unilaterally.
@@ -67,7 +67,7 @@ Authority follows subject; there is no universal conflict ladder.
 1. `apps/frontend/src/lib/copy/*` and the wording the shipped screen already uses.
 2. `docs/design-prototype/` for a surface it drew that is not built yet.
 3. `docs/frontend/specs/*.md`.
-4. `CONTEXT.md`.
+4. `GLOSSARY.md`.
 
 Shipped user-facing strings are implemented in `apps/frontend/src/lib/copy/*`; update the matching module when canonical wording changes.
 
@@ -130,5 +130,5 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 
 - **Issue tracker.** GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI; external PRs are not a request surface. See `docs/agents/issue-tracker.md`.
 - **Triage labels.** Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-- **Domain docs.** Root `CONTEXT.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
+- **Domain docs.** Root `GLOSSARY.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
 - **Skills.** Workflow and general-purpose skills (the `mattpocock/skills` set, `session-handoff`, `issue-wave-conductor`, `orca-dispatch-recipes`, …) are user-level in `~/.agents/skills/`, one copy for every repo; this repo keeps only its stack skills. `/code-review` resolves to the Claude Code built-in. `shadcn` is vendored from `shadcn-ui/ui` (`skills/shadcn`, MIT). `impeccable` is installed in `.claude/skills/impeccable` (plus `.claude/agents/impeccable-*`) via `npx impeccable install --providers=claude --scope=project`; its engine binary (`scripts/bin/`) is gitignored and downloads on first run. Its edit/stop hooks are intentionally disabled, so remove them from `.claude/settings.local.json` again after `npx impeccable update`.

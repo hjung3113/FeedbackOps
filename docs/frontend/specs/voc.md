@@ -2,7 +2,7 @@
 
 > Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008. API authority is `docs/implementation/api/voc.md`; token values are in `packages/ui/src/styles/tokens.css` and `docs/frontend/tokens.md`.
 > Stack: React 18 + TypeScript 5 + Tailwind 4.3.3 (CSS-first theme, ADR-0058) + shadcn/ui (production), TipTap (rich content, per ADR-0002 / ADR-0011), TanStack Router (production route shell — see `apps/frontend/src/routes/`).
-> Authority: AGENTS.md > CONTEXT.md > docs/adr > docs/implementation. Spec docs win every disagreement with the prototype (HANDOFF.md Rule 4).
+> Conflict resolution and UI authority: root `AGENTS.md` → Source Of Truth (authority follows subject; there is no universal ladder). The shipped UI is the authority for existing surfaces (ADR-0060); this spec records the as-built contract.
 
 ---
 
@@ -370,12 +370,12 @@ Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 |---|---|---|
 | Copy link | Copies `window.location.origin + /vocs?view=inbox&selected=<id>` to clipboard, toasts "링크가 복사되었습니다" | `navigator.clipboard.writeText` |
 | Expand | `DetailPanelHeader` owns the toggle for every detail-slot drawer; Triage uses a local toggle. An expanded panel is a centred 60rem reading column with bordered gutters, in both the detail slot and Triage. Esc collapses unless already handled; closing the panel and changing route collapse it. | AppFrame owns detail-slot state; Triage uses `useFullscreenPanel()` |
-| Kebab → Mark read | `PATCH /vocs/:id/read-state` (TBD endpoint, S3-008 follow-up) | If not in Slice 3 backend, render the menu item with `disabledReason: 'Slice 3+에 출시 예정'` |
-| Kebab → Snooze | TBD endpoint | same |
-| Kebab → Subscribe / Unsubscribe | TBD (notifications, ADR-0014) | same |
-| Kebab → Archive | TBD (per Slice 2 archive policy in ADR-0019 Section A; archived VOCs are immutable) | Show confirmation dialog citing immutability |
+| Kebab → Mark read | Not implemented; no backend endpoint | Shipped kebab renders the item disabled with `disabledReason: '이후 제공 예정입니다'` |
+| Kebab → Snooze | Not implemented; no backend endpoint (snooze/mute backlog row in `14-post-mvp-backlog.md`) | same |
+| Kebab → Subscribe / Unsubscribe | Not implemented (notifications, ADR-0014) | same |
+| Kebab → Archive | Not implemented (Slice 2 archive policy in ADR-0019 Section A; archived VOCs are immutable) | same |
 
-For Slice 3, only Copy link lands from `<DetailPanelHeaderActions>`. The kebab menu items render but are disabled with the backend-provided reason (per `interaction-patterns.md` "Permission-blocked commands can appear disabled with reason").
+Only Copy link is implemented. The shipped kebab (`packages/ui/src/panel/DetailPanelHeaderActions.tsx`, `DEFERRED_ITEMS`) renders the four items disabled with `이후 제공 예정입니다`; read-state/snooze/subscribe/archive endpoints do not exist (backlog rows in `docs/design/14-post-mvp-backlog.md`).
 
 ### 5.5 Composer Preview modal
 

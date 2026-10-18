@@ -189,7 +189,7 @@ hiding cannot repair a gap. Outcome response decisions/presentation/history rema
 Survey-owned under ADR-0055's personal seam. Home uses only currently actionable items,
 Integration owns the compact shared UI, and source actions retain their owning routes.
 
-## Analytics Area operational report (ADR-0069; implementation pending)
+## Analytics Area operational report (ADR-0069; implemented #1077–#1079)
 
 Coverage's accepted `Analytics Area별 현황` tab opens exact source lists for operational attention;
 FR-DASH-002 in `08-dashboard-system.md` defines the metrics. Optional classification and links stay
@@ -208,15 +208,15 @@ Finding/generated Task Request source defaults contain metadata only. Approved
 text flows through fresh exact-active-approval/source/target reads, so withdrawal
 works across the system-generated surfaces. Authored downstream text is not erased.
 
-Proposed/new #816 attaches result-visible approved excerpts to an existing Finding
+#816 attaches result-visible approved excerpts to an existing Finding
 without a personal grant, requiring source Survey read/suppression and target
 `finding.manage`; it writes `evidence_of`, never `generated_finding`. Consequently
 attachment does not resolve an Outcome follow-up gap (ADR-0055). Existing personal
 create-Finding and no-direct-response→Task Request rules remain unchanged.
 Integration Evidence consumes safe DTOs, never raw link/audit/private binding joins.
-Implementation is pending the coordinated #739/#740 cutover and Slice 54.
+Implemented by the coordinated #739/#740 cutover and #816.
 
-## Close-out assistance boundary (ADR-0068; proposed/new)
+## Close-out assistance boundary (ADR-0068; implemented #1097/#1099)
 
 Cluster suggestions and source-less draft preview are optional assistance, not
 required workflow steps or execution evidence. Suggestions are not Entity Link

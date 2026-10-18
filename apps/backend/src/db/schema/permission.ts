@@ -1,6 +1,6 @@
 // Drizzle schema for the `permission` namespace.
 // Spec sources:
-// - CONTEXT.md: Capability, Sensitive Permission, Permission Request.
+// - GLOSSARY.md: Capability, Sensitive Permission, Permission Request.
 // - docs/implementation/02-domain-module-boundaries.md: Permission module owns
 //   permission_requests, permission_grants, permission_denies.
 // - docs/implementation/05-permission-policy.md: explicit deny overrides allow;

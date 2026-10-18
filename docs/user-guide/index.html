@@ -335,9 +335,9 @@
             <div class="callout"><strong>권한이 없을 때 화면은 비어 있지 않고 경로를 알려줍니다.</strong> 승인된 요약이나 권한 요청 경로가 표시될 수 있습니다. 요청이 불가능한 차단 상태라면 관리자에게 문의합니다.</div>
             <h3>화면 구조</h3>
             <p>왼쪽 레일이 큰 영역(Home · VOC · Findings · Tasks · Integration · Surveys · Admin)이고, 그 옆 사이드바가 해당 영역의 세부 화면입니다. 사이드바 위쪽의 <strong>Managed System 선택기</strong>는 필터가 아니라 <strong>권한 범위</strong>입니다. 내 권한 밖 시스템을 고르면 화면이 그에 맞게 제한됩니다.</p>
-            <!-- Source: CONTEXT.md lines 85-99 and 250-252. Managed System and Analytics Area definitions and scope. -->
+            <!-- Source: GLOSSARY.md → Managed System, Analytics Area (definitions and scope). -->
             <p><strong>Managed System</strong>은 피드백과 개선 작업의 범위를 정하는 사내 시스템입니다. 그 안의 <strong>Analytics Area</strong>는 분류와 집계를 위한 영역이며 권한 경계가 아닙니다.</p>
-            <!-- Source: CONTEXT.md lines 209-211 and docs/design/08-dashboard-system.md lines 5-22. Home and Integration are operational queue surfaces. -->
+            <!-- Source: GLOSSARY.md → My Work; docs/design/08-dashboard-system.md lines 5-22. Home and Integration are operational queue surfaces. -->
             <p>Home은 내가 지금 처리할 항목을 모으고, Integration은 시스템 사이에서 끊긴 근거·실행·검증 연결을 살펴보는 화면입니다.</p>
           `
         },
@@ -402,7 +402,7 @@
             <p>상태를 바꾸면 시스템이 공개 업데이트를 쓰거나, 건너뛰는 이유를 적도록 요구합니다. 리포터 몰래 상태만 바뀌지 않으며, 건너뛴 이유도 감사 기록에 남습니다.</p>
             <ul><li><strong>상태를 바꾸며 설명한다</strong> → 공개 업데이트를 쓰고 새 상태를 함께 지정</li><li><strong>상태만 바꾼다</strong> → 건너뛰기를 고르고 사유를 기록</li></ul>
             <p>작성 전에 미리보기로 리포터에게 어떻게 보이는지 확인할 수 있습니다.</p>
-            <!-- Source: CONTEXT.md lines 298-302. Public Update writer roles and the separate public and internal timelines. -->
+            <!-- Source: GLOSSARY.md → Public Update. Writer roles and the separate public and internal timelines. -->
           `
         },
         {
@@ -412,7 +412,7 @@
             <p><code>Clusters</code> (<code>/voc-clusters</code>)에서 여러 VOC를 하나로 묶습니다.</p>
             <p>Cluster는 <code>draft</code>로 시작해 <code>confirmed</code>가 됩니다. 초안 동안 구성원을 넣고 빼며 같은 문제인지 확인하고, 확정하면 묶음이 이후 근거의 단위가 됩니다.</p>
             <ul><li><strong>한 번에 공개 업데이트를 보낼 수 있습니다</strong> — 같은 문제를 제보한 사람들에게 같은 소식을 각각 쓰지 않아도 됩니다.</li><li><strong>Finding의 근거가 튼튼해집니다</strong> — 반복된 문제 제보가 판단의 근거가 됩니다.</li><li><strong>Cluster에서 바로 Task Request를 올릴 수 있습니다.</strong></li></ul>
-            <!-- Source: CONTEXT.md lines 213-215 and 310-313. Cluster membership is manually curated; VOC records remain independent. -->
+            <!-- Source: GLOSSARY.md → VOC Cluster. Membership is manually curated; VOC records remain independent. -->
           `
         },
         {
@@ -439,7 +439,7 @@
             <div class="callout"><code>Finding / VOC / Cluster</code> → <code>Task Request</code> → <code>pending_review</code> → <code>approved</code> → <code>converted</code> (Task 생성 또는 기존 Task 연결)<br><code>pending_review</code>에서 <code>needs_more_evidence</code> 또는 <code>rejected</code>로 갈 수도 있습니다.</div>
             <p><code>Task Requests</code> (<code>/tasks?view=requests</code>)에서 검토합니다. 승인·반려·근거 보강 요청 중에 고르고, 승인하면 Task로 전환하거나 이미 있는 Task에 연결합니다.</p>
             <p>자기가 올린 요청을 자기가 승인하는 경우(self-approval)는 워크스페이스 정책이 허용할 때만 가능하고, 감사 기록에 별도 라벨이 붙습니다. 필요 권한은 <code>task_request.self_approve</code>이며 Admin은 역할만으로 가집니다.</p>
-            <!-- Source: CONTEXT.md lines 282-286. Task Request Review roles, scope, self-approval reason, and audit metadata. -->
+            <!-- Source: GLOSSARY.md → Task Request Review, Task Request Self-Approval. Review roles, scope, self-approval reason, and audit metadata. -->
             <h3>Task 다루기</h3>
             <p><code>Tasks</code> (<code>/tasks?view=board</code>)는 칸반 보드입니다. 카드를 끌어 <code>backlog</code> → <code>todo</code> → <code>doing</code> → <code>review</code> → <code>done</code> → <code>released</code>로 옮길 수 있고 <code>reopened</code>될 수 있습니다.</p>
             <p><code>내 Task</code> (<code>/tasks?view=my</code>)에는 내게 배정된 것만 모입니다.</p>
@@ -593,13 +593,13 @@
       tour: [
         { title: '등록', screen: 'voc-create', who: '누구나 제출할 수 있습니다.', permission: '필요 권한: 없음', what: 'VOC 생성 화면에서 문제, Managed System, 필요한 설명과 선택 정보를 입력합니다.', change: 'VOC가 등록되고 리포터와 내부 상태는 분리되어 시작합니다.', chapter: 'ch-1', source: 'docs/USER-MANUAL.md:57-74' },
         { title: 'Triage', screen: 'voc-triage', who: '해당 Managed System의 Developer 또는 Admin.', permission: '필요 권한: voc.triage (Admin은 역할로 보유)', what: '심각도, 담당자, Analytics Area, 처리 상태를 결정합니다.', change: 'untriaged 상태를 triaged, needs_more_information 또는 dismissed_not_actionable로 판단합니다.', chapter: 'ch-3', source: 'docs/USER-MANUAL.md:105-124' },
-        { title: '묶기', screen: 'voc-clusters', who: 'Developer 또는 Admin.', permission: '', what: '비슷한 VOC를 Cluster에 모아 구성원을 확인하고 필요하면 확정합니다.', change: 'Cluster는 draft에서 confirmed로 바뀌며 VOC는 각각 독립된 채 남습니다.', chapter: 'ch-5', source: 'docs/USER-MANUAL.md:153-155; CONTEXT.md:213-215, 310-313' },
+        { title: '묶기', screen: 'voc-clusters', who: 'Developer 또는 Admin.', permission: '', what: '비슷한 VOC를 Cluster에 모아 구성원을 확인하고 필요하면 확정합니다.', change: 'Cluster는 draft에서 confirmed로 바뀌며 VOC는 각각 독립된 채 남습니다.', chapter: 'ch-5', source: 'docs/USER-MANUAL.md:153-155; GLOSSARY.md → VOC Cluster' },
         { title: 'Finding', screen: 'finding-detail', who: 'Finding을 읽거나 관리할 권한이 있는 담당자.', permission: '필요 권한: finding.read / finding.manage', what: 'VOC나 승인된 설문 발췌를 근거로 판단을 기록합니다.', change: 'Finding은 draft에서 active가 되고 실행으로 넘어가면 converted가 됩니다.', chapter: 'ch-6', source: 'docs/USER-MANUAL.md:167-180' },
-        { title: 'Task Request 검토', screen: 'task-requests', who: 'Admin 또는 같은 Managed System 범위의 Developer.', permission: '본인 요청 승인에는 task_request.self_approve가 필요합니다.', what: '요청을 승인·반려하거나 근거를 더 요청하고, 승인 후 Task로 전환하거나 기존 Task에 연결합니다.', change: '승인된 요청은 converted가 되거나 연결된 Task를 가리킵니다.', chapter: 'ch-7', source: 'CONTEXT.md:282-286' },
+        { title: 'Task Request 검토', screen: 'task-requests', who: 'Admin 또는 같은 Managed System 범위의 Developer.', permission: '본인 요청 승인에는 task_request.self_approve가 필요합니다.', what: '요청을 승인·반려하거나 근거를 더 요청하고, 승인 후 Task로 전환하거나 기존 Task에 연결합니다.', change: '승인된 요청은 converted가 되거나 연결된 Task를 가리킵니다.', chapter: 'ch-7', source: 'GLOSSARY.md → Task Request Review' },
         { title: 'Task 실행', screen: 'task-board', who: 'Task 실행을 맡은 Developer 또는 Admin.', permission: '', what: '보드에서 카드를 옮기며 실행 상태를 갱신합니다.', change: 'backlog → todo → doing → review → done → released 흐름을 따르며 reopened로 다시 열릴 수 있습니다.', chapter: 'ch-7', source: 'docs/USER-MANUAL.md:210-226; docs/USER-MANUAL.md:346-347' },
-        { title: '릴리스 후 공개 업데이트 후보 확인', screen: 'public-update-review', who: 'VOC의 공개 업데이트를 쓸 수 있는 Admin 또는 같은 범위 Developer.', permission: '', what: 'Released Task가 만든 후보를 확인하고 공개 상태를 직접 결정합니다.', change: '릴리스는 후보를 만들 뿐 VOC 상태를 자동으로 resolved로 바꾸지 않습니다.', chapter: 'ch-4', source: 'CONTEXT.md:298-302, 314-315' },
-        { title: '리포터에게 알리기', screen: 'voc-detail-composer', who: 'Admin 또는 같은 Managed System 범위의 Developer.', permission: '', what: '공개 업데이트를 쓰고 새 리포터 상태를 함께 지정합니다. 공개 업데이트 없이 상태만 바꾸려면 건너뛰기를 고르고 사유를 기록합니다.', change: '리포터 상태는 담당자가 직접 바꿉니다. 공개 업데이트를 쓴 경우 공개 타임라인에 남고, 건너뛴 경우 사유가 감사 기록에 남습니다.', chapter: 'ch-4', source: 'docs/USER-MANUAL.md:138-147; CONTEXT.md:298-302' },
-        { title: '리포터가 보는 화면', screen: 'voc-reporter-view', who: '해당 VOC의 Reporter.', permission: '필요 권한: 자신의 VOC를 확인하고 답장합니다.', what: '공개 상태, 공개 타임라인, 볼 수 있는 연결 요약을 확인합니다.', change: 'Reporter Reply는 내부 후속 대기열에 영향을 줄 수 있지만 리포터 상태를 자동 변경하지 않습니다.', chapter: 'ch-2', source: 'docs/USER-MANUAL.md:92-99; CONTEXT.md:304-309' },
+        { title: '릴리스 후 공개 업데이트 후보 확인', screen: 'public-update-review', who: 'VOC의 공개 업데이트를 쓸 수 있는 Admin 또는 같은 범위 Developer.', permission: '', what: 'Released Task가 만든 후보를 확인하고 공개 상태를 직접 결정합니다.', change: '릴리스는 후보를 만들 뿐 VOC 상태를 자동으로 resolved로 바꾸지 않습니다.', chapter: 'ch-4', source: 'GLOSSARY.md → Public Update' },
+        { title: '리포터에게 알리기', screen: 'voc-detail-composer', who: 'Admin 또는 같은 Managed System 범위의 Developer.', permission: '', what: '공개 업데이트를 쓰고 새 리포터 상태를 함께 지정합니다. 공개 업데이트 없이 상태만 바꾸려면 건너뛰기를 고르고 사유를 기록합니다.', change: '리포터 상태는 담당자가 직접 바꿉니다. 공개 업데이트를 쓴 경우 공개 타임라인에 남고, 건너뛴 경우 사유가 감사 기록에 남습니다.', chapter: 'ch-4', source: 'docs/USER-MANUAL.md:138-147; GLOSSARY.md → Public Update' },
+        { title: '리포터가 보는 화면', screen: 'voc-reporter-view', who: '해당 VOC의 Reporter.', permission: '필요 권한: 자신의 VOC를 확인하고 답장합니다.', what: '공개 상태, 공개 타임라인, 볼 수 있는 연결 요약을 확인합니다.', change: 'Reporter Reply는 내부 후속 대기열에 영향을 줄 수 있지만 리포터 상태를 자동 변경하지 않습니다.', chapter: 'ch-2', source: 'docs/USER-MANUAL.md:92-99; GLOSSARY.md → Reporter' },
         { title: '설문으로 개선 확인', screen: 'survey-results', who: 'Survey 결과를 읽을 수 있는 담당자.', permission: '필요 권한: survey.read; 개인 응답은 survey.read_personal_responses', what: '익명성 기준이 적용된 결과 요약을 살펴보고, 저조한 Outcome에는 정해진 후속 조치를 검토합니다.', change: 'Survey 응답은 Survey에 남고 VOC로 변환되지 않습니다.', chapter: 'ch-8', source: 'docs/USER-MANUAL.md:232-261; docs/design/07-survey-system.md:5-8' }
       ],
       faq: [
@@ -642,11 +642,11 @@
         {
           id: 'home-dashboard', title: '홈 대시보드', area: '홈', chapters: ['ch-0'],
           alt: '왼쪽 레일과 Managed System 선택기 옆에 운영 큐, 내게 배정된 항목, 커버리지 요약이 배치된 홈 대시보드.',
-          description: '복구·후속 조치 큐와 개인 배정 목록, 커버리지 요약을 보여줍니다.', sourceComment: 'CONTEXT.md lines 209-211; docs/design/08-dashboard-system.md lines 5-22',
+          description: '복구·후속 조치 큐와 개인 배정 목록, 커버리지 요약을 보여줍니다.', sourceComment: 'GLOSSARY.md → My Work; docs/design/08-dashboard-system.md lines 5-22',
           hotspots: [
             hit('testid:app-rail · name=시스템 선택', [0,0,52,960], '왼쪽 레일', '큰 영역을 레일에서 고르고, 세부 화면은 옆 사이드바에서 찾습니다.', 'docs/USER-MANUAL.md:51'),
             hit('testid:scope-selector · name=전체 Managed System', [60,58,223,38], 'Managed System 선택기', '선택기는 필터가 아니라 권한 범위입니다.', 'docs/USER-MANUAL.md:51'),
-            hit('testid:sidebar-nav-queue-unassigned-voc · name=미배정 VOC 12', [60,237,223,30], '미배정 VOC 큐', 'Home은 현재 내가 처리할 수 있는 항목을 모읍니다.', 'CONTEXT.md:209-211')
+            hit('testid:sidebar-nav-queue-unassigned-voc · name=미배정 VOC 12', [60,237,223,30], '미배정 VOC 큐', 'Home은 현재 내가 처리할 수 있는 항목을 모읍니다.', 'GLOSSARY.md → My Work')
           ]
         },
         {
@@ -756,7 +756,7 @@
           hotspots: [
             hit('testid:cluster-detail-title · name=인증 오류 패턴', [1025,136,391,28], 'Cluster 제목', '같은 문제라고 판단한 묶음의 이름을 확인합니다.', 'docs/USER-MANUAL.md:155-161'),
             hit('testid:cluster-detail-rationale · name=동일 Managed System의 VOC를 묶었습니다.', [1025,313,391,44], '그룹화 사유', '멤버를 검토하며 같은 문제인지 확인합니다.', 'docs/USER-MANUAL.md:155'),
-            hit('testid:cluster-members-list · name=로그인 세션이 자주 만료됩니다', [1025,673,391,57], '멤버 VOC', 'Cluster는 VOC를 합치지 않고 관련 VOC를 묶어 둡니다.', 'CONTEXT.md:213-215, 310-313')
+            hit('testid:cluster-members-list · name=로그인 세션이 자주 만료됩니다', [1025,673,391,57], '멤버 VOC', 'Cluster는 VOC를 합치지 않고 관련 VOC를 묶어 둡니다.', 'GLOSSARY.md → VOC Cluster')
           ]
         },
         {
@@ -956,8 +956,8 @@
           alt: 'Managed System별 Analytics Area 목록과 권한 경계가 아니라는 안내, 생성 버튼이 보이는 화면.',
           description: 'Managed System 안의 분류·집계용 Analytics Area를 관리합니다.',
           hotspots: [
-            hit('testid:aa-guardrail-callout · name=Analytics Area는 권한 경계가 아닙니다', [324,78,1083,69], '권한 경계 안내', 'Analytics Area는 권한 범위가 아닙니다.', 'CONTEXT.md:97-99, 250-252'),
-            hit('testid:aa-row-growth · name=성장 지표 analytics-area/growth', [325,256,1081,52], 'Analytics Area 행', '각 Analytics Area는 하나의 Managed System 안에서 관리합니다.', 'docs/USER-MANUAL.md:305; CONTEXT.md:235-241'),
+            hit('testid:aa-guardrail-callout · name=Analytics Area는 권한 경계가 아닙니다', [324,78,1083,69], '권한 경계 안내', 'Analytics Area는 권한 범위가 아닙니다.', 'GLOSSARY.md → Analytics Area'),
+            hit('testid:aa-row-growth · name=성장 지표 analytics-area/growth', [325,256,1081,52], 'Analytics Area 행', '각 Analytics Area는 하나의 Managed System 안에서 관리합니다.', 'docs/USER-MANUAL.md:305; GLOSSARY.md → Analytics Area'),
             hit('testid:aa-new-area-button · name=Analytics Area 생성', [1259,9,164,32], 'Analytics Area 생성', '시스템 하위 분석 영역을 추가합니다.', 'docs/USER-MANUAL.md:305')
           ]
         },
@@ -974,7 +974,7 @@
         {
           id: 'integration-dashboard', title: '연동 액션 대시보드', area: '연동', chapters: [],
           alt: '연동 액션 대시보드에 미배정 VOC, 실행 계획 없는 Finding, Released Task와 미해결 VOC, 권한 요청 복구 카드가 보이는 화면.',
-          description: '차트 대신 정책에 따라 조치가 필요한 연결 공백과 복구 큐를 보여줍니다.', sourceComment: 'docs/design/08-dashboard-system.md lines 5-22, 134-151; CONTEXT.md lines 209-211',
+          description: '차트 대신 정책에 따라 조치가 필요한 연결 공백과 복구 큐를 보여줍니다.', sourceComment: 'docs/design/08-dashboard-system.md lines 5-22, 134-151; GLOSSARY.md → My Work',
           hotspots: [
             hit('role=heading · name=연동 액션 대시보드', [324,28,582,28], '연동 액션 대시보드', 'Integration은 시스템 사이에서 끊긴 항목을 추적합니다.', 'docs/design/08-dashboard-system.md:5-22'),
             hit('testid:integration-dashboard-queues · name=미배정 VOC', [324,141,1083,428], '복구·후속 조치 큐', '설정된 후속 조치가 필요한 항목을 모읍니다.', 'docs/design/08-dashboard-system.md:134-151'),

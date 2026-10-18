@@ -1,6 +1,6 @@
 // Drizzle schema for the `core` namespace.
 // Spec sources:
-// - CONTEXT.md: Workspace, Actor, Role Level vocabulary.
+// - GLOSSARY.md: Workspace, Actor, Role Level vocabulary.
 // - docs/implementation/02-domain-module-boundaries.md: Core owns Workspace,
 //   Actor, Role Level, Audit Log.
 // - docs/implementation/04-database-and-migrations.md: workspace_id present on
@@ -44,7 +44,7 @@ export const displayCounters = coreSchema.table(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// core.workspaces — outermost tenant boundary per CONTEXT.md.
+// core.workspaces — outermost tenant boundary per GLOSSARY.md.
 // MVP seeds exactly one row (ADR-0006: WORKSPACE_ID env var).
 // ─────────────────────────────────────────────────────────────────────────
 export const workspaces = coreSchema.table('workspaces', {

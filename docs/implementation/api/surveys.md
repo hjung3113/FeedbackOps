@@ -411,9 +411,9 @@ Candidate reads write `survey_response_personal_read` in the same transaction; a
 
 This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, owner_actor_id?, owner_team_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. Optional nullable owner fields use the Finding destination resolver only after the complete Survey source gate, preserving explicit/null/omitted semantics and approved-excerpt privacy. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
 
-The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`. After ADR-0064/#739 cutover the public `source_id` is
+The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`. After the ADR-0064/#739 cutover the public `source_id` is
 NULL and the original response UUID is retained in a Survey-owned protected
-extension (proposed/new); generated title/summary contain deterministic Survey
+extension (migration 0059); generated title/summary contain deterministic Survey
 type/display ID and approved question metadata only, never excerpt text. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
 
 Same actor/key/body/source replays the original Finding with no duplicate side effects
@@ -497,7 +497,7 @@ If compatibility handling is ever needed, return `404` or `410`. Never create a 
 ## Close-out responsibility (ADR-0067)
 
 Survey operator resolution/validation is unchanged. Survey-response-derived Finding
-creation gains permitted proposed/new owner Actor/team input and safe default-resolution
+creation gains permitted owner Actor/team input and safe default-resolution
 metadata through the Finding command, using the destination system and its `finding.manage`
 gate only after the Survey personal source seam. No target-owner disclosure bypasses source
 visibility. Outcome Dashboard integration preserves ADR-0055's aggregate count/safe Survey
@@ -561,8 +561,8 @@ in `findings.md`. Inventory uses the linked-highlight audience, not this picker
 suppression. Neither this selection read nor safe attachment fabricates personal
 read audits; actual personal source reads keep existing audits.
 
-Backend and shared schemas are implemented by #1109; real-role migration and integration
-verification remain conductor-owned. The frontend picker is a separate implementation item.
+Backend, shared schemas and migration are implemented by #1109; the Finding-local
+frontend picker shipped with it.
 
 - **Auth:** authenticated session Actor/workspace; lookup Survey in workspace,
   then `survey.read` on source Managed System. Missing/foreign/source-denied
@@ -595,7 +595,7 @@ verification remain conductor-owned. The frontend picker is a separate implement
 
 ### Derived Finding read cutover (ADR-0064/#740)
 
-Results uses a proposed/new Survey-owned workspace+Survey-ID reader that returns
+Results uses a Survey-owned workspace+Survey-ID reader that returns
 candidate Finding IDs and target scope only. Source Survey read/privacy and each
 Finding's target read gate remain independent, including different Managed
 Systems in the same workspace. No personal grant is required merely to discover
