@@ -47,7 +47,12 @@ import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import { type CheckService, memoizeCapabilityChecks } from '../permissions/check-service.js';
 import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
-import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
+import {
+  type Scope,
+  actorScopeForCapability,
+  scopeIncludes,
+  scopeIsNonEmpty,
+} from '../permissions/scope-service.js';
 import {
   actorSurveyReadScope,
   actorSurveyRecoveryScope,
@@ -88,14 +93,14 @@ type DashboardDeps = {
 
 function inRequestedScope(scope: Scope, managedSystemId?: string): Scope | undefined {
   if (managedSystemId === undefined || managedSystemId === 'all') return scope;
-  if (scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId)) {
+  if (scopeIncludes(scope, managedSystemId)) {
     return { kind: 'scoped', managedSystemIds: [managedSystemId] };
   }
   return undefined;
 }
 
 function hasScope(scope: Scope | undefined): scope is Scope {
-  return scope !== undefined && (scope.kind === 'all' || scope.managedSystemIds.length > 0);
+  return scope !== undefined && scopeIsNonEmpty(scope);
 }
 
 function percent(value: number, total: number) {
@@ -112,10 +117,7 @@ function coverageStatus(
 }
 
 function includesManagedSystem(scope: Scope | undefined, managedSystemId: string): scope is Scope {
-  return (
-    scope !== undefined &&
-    (scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId))
-  );
+  return scope !== undefined && scopeIncludes(scope, managedSystemId);
 }
 
 type SystemCoverage = NonNullable<DashboardSummary['by_managed_system'][number]['coverage']>;
@@ -263,8 +265,7 @@ export function createDashboardService(deps: DashboardDeps) {
     const surveyScope = inRequestedScope(surveyScopeRaw, selectedManagedSystemId);
     const vocScope = inRequestedScope(vocScopeRaw, selectedManagedSystemId);
     const surveyScopeForDashboard = surveyScope;
-    const canSeeSurveyQueue = surveyScope !== undefined &&
-      (surveyScope.kind === 'all' || surveyScope.managedSystemIds.length > 0);
+    const canSeeSurveyQueue = surveyScope !== undefined && scopeIsNonEmpty(surveyScope);
     const queues: DashboardSummary['action_queues'] = [];
     const coverage: DashboardSummary['coverage'] = [];
     const kpis: DashboardSummary['kpis'] = {};
@@ -299,10 +300,7 @@ export function createDashboardService(deps: DashboardDeps) {
         secondary_action: null,
       });
 
-    if (
-      findingScope !== undefined &&
-      (findingScope.kind === 'all' || findingScope.managedSystemIds.length > 0)
-    ) {
+    if (findingScope !== undefined && scopeIsNonEmpty(findingScope)) {
       const active = await repo.countActiveFindings(
         deps.db,
         actor.workspace_id,
@@ -347,10 +345,7 @@ export function createDashboardService(deps: DashboardDeps) {
       });
     }
 
-    if (
-      taskScope !== undefined &&
-      (taskScope.kind === 'all' || taskScope.managedSystemIds.length > 0)
-    ) {
+    if (taskScope !== undefined && scopeIsNonEmpty(taskScope)) {
       kpis.tasks_in_flight = await repo.countTasksInFlight(
         deps.db,
         actor.workspace_id,
@@ -446,7 +441,7 @@ export function createDashboardService(deps: DashboardDeps) {
     if (
       openVoc !== undefined &&
       vocScope !== undefined &&
-      (vocScope.kind === 'all' || vocScope.managedSystemIds.length > 0)
+      scopeIsNonEmpty(vocScope)
     ) {
       const vocTaskValue = sumGroupedVocCounts((row) => row.with_task)!;
       const analyticsAreaValue = sumGroupedVocCounts((row) =>
@@ -705,7 +700,7 @@ function selectScope(scope: Scope, selected?: string): Scope {
   return {
     kind: 'scoped',
     managedSystemIds:
-      scope.kind === 'all' || scope.managedSystemIds.includes(selected) ? [selected] : [],
+      scopeIncludes(scope, selected) ? [selected] : [],
   };
 }
 function normalizedScope(scope: Scope) {

@@ -877,6 +877,56 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   const recoveryDetail = (cookie: string, id: string) =>
     app.inject({ method: 'GET', url: `/dashboard/recovery-items/${id}`, headers: headers(cookie) });
 
+  it('1261: Home counts and the Task lists they link to share the Task-owned predicates', async () => {
+    const seed = await createDashboardScope();
+    const msId = seed.msA;
+    for (const status of ['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened'] as const)
+      await insertTaskRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        status,
+        createdBy: adminActorId,
+      });
+    // Three linked Released Tasks: two with a public update, one with only a skipped update.
+    for (const skipped of [false, false, true]) {
+      const task = await insertTaskRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        status: 'released',
+        createdBy: adminActorId,
+      });
+      const voc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        msId,
+        reporterActorId,
+        `1261 voc ${uid('v')}`,
+        { severity: 'low', ownerUserId: adminActorId },
+      );
+      await link('voc', voc.id, 'task', task.id, 'evidence_of', msId);
+      await seedPublicUpdate(voc.id, skipped);
+    }
+
+    const summary = (await get(adminCookie, msId)).json<Summary>();
+    const list = async (query: string) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/tasks?managed_system_id=${msId}&${query}`,
+        headers: headers(adminCookie),
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json<{ items: unknown[] }>().items.length;
+    };
+
+    expect(summary.kpis.tasks_in_flight).toBe(3);
+    expect(summary.kpis.tasks_in_flight).toBe(await list('status_group=in-flight'));
+    const releasedUpdate = coverage(summary, 'released-update');
+    expect(releasedUpdate).toMatchObject({ value: 2, total: 3 });
+    expect((releasedUpdate?.total ?? 0) - (releasedUpdate?.value ?? 0)).toBe(
+      await list('public_update=missing'),
+    );
+  });
+
   it('1077: canonical Task/Task Request links agree across list, recovery and summary despite the Task projection', async () => {
     const seed = await createDashboardScope();
     const before = (await get(seed.devCookie, seed.msA)).json<Summary>();

@@ -8,6 +8,7 @@ import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { AuditService } from '../../core/audit/audit-service.js';
+import { unionScopes } from '../../permissions/scope-service.js';
 import type { VocClustersService } from '../../voc-clusters/service.js';
 import { type Scope, actorReadScope, actorTriageScope, inReporterArm } from '../authorization.js';
 
@@ -154,15 +155,7 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
       limit,
     });
 
-    const readOrTriageScope: Scope =
-      readScope.kind === 'all' || triageScope.kind === 'all'
-        ? { kind: 'all' }
-        : {
-            kind: 'scoped',
-            managedSystemIds: [
-              ...new Set([...readScope.managedSystemIds, ...triageScope.managedSystemIds]),
-            ],
-          };
+    const readOrTriageScope: Scope = unionScopes(readScope, triageScope);
 
     return {
       available: true,

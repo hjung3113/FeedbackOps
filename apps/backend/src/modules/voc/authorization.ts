@@ -16,6 +16,7 @@ import {
   type Scope,
   type ScopeActorContext,
   actorScopeForCapability,
+  unionScopes,
 } from '../permissions/scope-service.js';
 import { msInScope } from './read/scope.js';
 
@@ -47,12 +48,7 @@ export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite):
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
   ]);
-  // Union: if either is 'all', effective scope is 'all'.
-  if (readScope.kind === 'all' || triageScope.kind === 'all') {
-    return { kind: 'all' };
-  }
-  const unionIds = [...new Set([...readScope.managedSystemIds, ...triageScope.managedSystemIds])];
-  return { kind: 'scoped', managedSystemIds: unionIds };
+  return unionScopes(readScope, triageScope);
 }
 
 /**

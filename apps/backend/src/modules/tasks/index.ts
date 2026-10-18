@@ -7,3 +7,4 @@ export { taskRecoveryPredicate, taskRecoveryProjection } from './recovery-read.j
 
 export { actorTaskListScope } from './list-scope.js';
 export { countGroupedTasksForReport } from './repo.js';
+export { taskInFlightPredicate, taskReleasedWithPublicUpdatePredicate } from './repo.js';

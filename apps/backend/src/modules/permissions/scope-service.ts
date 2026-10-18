@@ -7,6 +7,22 @@ import { resolveCapabilityScope } from './check-service.js';
 
 export type Scope = { kind: 'all' } | { kind: 'scoped'; managedSystemIds: string[] };
 
+export function scopeIncludes(scope: Scope, managedSystemId: string): boolean {
+  return scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId);
+}
+
+export function scopeIsNonEmpty(scope: Scope): boolean {
+  return scope.kind === 'all' || scope.managedSystemIds.length > 0;
+}
+
+export function unionScopes(a: Scope, b: Scope): Scope {
+  if (a.kind === 'all' || b.kind === 'all') return { kind: 'all' };
+  return {
+    kind: 'scoped',
+    managedSystemIds: [...new Set([...a.managedSystemIds, ...b.managedSystemIds])],
+  };
+}
+
 export interface ScopeActorContext {
   actor_id: string;
   workspace_id: string;

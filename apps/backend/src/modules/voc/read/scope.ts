@@ -1,14 +1,14 @@
 // VOC list view scope resolution and shared scope membership helper.
 import type { ListVocsQuery } from '@fops/shared';
 import { HttpError } from '../../../lib/errors.js';
+import { scopeIncludes } from '../../permissions/scope-service.js';
 import type { Scope } from '../authorization.js';
 import type { ReadActorContext } from '../read-service.js';
 
 // ── Scope helpers ────────────────────────────────────────────────────────────
 
 export function msInScope(scope: Scope, msId: string): boolean {
-  if (scope.kind === 'all') return true;
-  return scope.managedSystemIds.includes(msId);
+  return scopeIncludes(scope, msId);
 }
 
 function intersectScopes(a: Scope, b: Scope): Scope {
