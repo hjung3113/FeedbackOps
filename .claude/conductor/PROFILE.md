@@ -2,8 +2,10 @@
 
 Repo specifics for the global `issue-wave-conductor` skill (`~/.agents/skills/issue-wave-conductor/SKILL.md`,
 #1197). The loop, the roles and the shared traps are there; this file holds only what differs here. Root `AGENTS.md`
-wins over both. `$CONDUCTOR` is this folder (`$FOPS_MAIN/.claude/conductor`); scripts are in `scripts/`, worker and
-reviewer rules in `templates/`.
+wins over both. `$CONDUCTOR` is this folder (`$FOPS_MAIN/.claude/conductor`); `$ENGINE` is
+`~/.agents/skills/issue-wave-conductor/scripts`. Common engines live there; repo-local tools stay in `scripts/`.
+This repo's settings and rules live in `conductor.json` + `addenda/`; shared templates live in
+`~/.agents/skills/issue-wave-conductor/templates/`. The launcher composes shared rules with the configured addenda.
 
 ## Flow
 
@@ -19,7 +21,7 @@ reviewer rules in `templates/`.
 
 ## Launch
 
-- `$CONDUCTOR/scripts/launch-worker.sh <n> <slug> [be]` (needs `WAVE_STATE`, `WAVE_BRIEFS`, `FOPS_MAIN`): Orca
+- `python3 "$ENGINE/launch-worker.py" <n> <slug> [be] --checkout "$FOPS_MAIN"` (needs `WAVE_STATE`, `WAVE_BRIEFS`, `FOPS_MAIN`): Orca
   worktree from `origin/develop`, branch rename, rules copied into `.review/` (`00-IMPL-RULES.md`, `-BE.md` with
   `be`, the reviewer rules), wait for the setup install, close the setup shells, `PRE_ADD`, route-tree build, then the
   shared `worker-launch.sh` with `WORKER_ROLE` (default `impl`) and optional `WORKER_MODEL`/`WORKER_EFFORT`.
@@ -27,7 +29,7 @@ reviewer rules in `templates/`.
   `verify-db.sh create <n> --migrate-from <worktree>` (or reuses an existing `env.verify.<n>`), copies it to
   `<worktree>/.review/env.verify`, and puts the exact command in the task's first lines:
   `FEEDBACKOPS_ENV_FILE=<abs worktree>/.review/env.verify pnpm --filter backend test:integration <files>`. Workers run
-  only the integration files they added or touched (`templates/impl-rules-be.md` rule 2). `scripts/test-integration.sh`
+  only the integration files they added or touched (`addenda/impl-rules-be.md` rule 2). `scripts/test-integration.sh`
   refuses port 5434 unless `FEEDBACKOPS_ALLOW_DEV_DB=1`; never set that for a worker.
 - In flight: ≈5–7 workers is the ceiling for one conductor; 2–3 while the conductor also runs every harness
   (16 GB machine; vitest is capped at 2 workers by `~/.zshenv`).
@@ -65,7 +67,7 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
 - Known FE load flakes (#634) pass when rerun alone; anything else is real.
 - **Final head (after the last fix round):** only what CI does not run: the mutation check on the fix (and the
   fix-diff check when required), `visual.sh run <touched specs>` (full when `packages/ui` changed),
-  `scripts/worker-hygiene.sh <worktree>` and `pnpm gate:fe-lint --base origin/develop`. CI
+  `python3 "$ENGINE/worker-hygiene.py" <worktree>` and `pnpm gate:fe-lint --base origin/develop`. CI
   (`scripts/ci/gate.sh` static, unit, integration) is the gate of record for the rebased head; no full
   `verify-fe.sh`/`verify-be.sh` rerun after a fix or a rebase.
 - **Visual baselines.** Sub-threshold changes pass against stale baselines: regenerate deliberately with
@@ -105,12 +107,12 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
 
 ## Review
 
-- Plan: `python3 $CONDUCTOR/scripts/review-plan.py <worktree> [--base origin/develop] [--head HEAD]` → `code`, `ux`
+- Plan: `python3 "$ENGINE/review-plan.py" <worktree> [--base origin/develop] [--head HEAD]` → `code`, `ux`
   (`required`/`optional`/false), `perf`, `flags` (`backend`, `migration`, `permission`, `instructions`). Checked
   against merged PRs: #820, #817, #835 → code+ux; #842, #846 → code+ux+perf; #839 → code only.
-- Rules: `review-final` → `templates/review-rules.md` (copied as `.review/00-REVIEW-RULES.md`); `review-ux` →
-  global `~/.agents/agents/review-ux.md` with § Review lens: UX; `review-perf` → `templates/review-rules-perf.md` (`.review/00-REVIEW-RULES-PERF.md`);
-  `review-quality` → global `~/.agents/agents/review-quality.md` with § Review lens: quality; brief check → `templates/brief-check.md`.
+- Rules: `review-final` → the shared `review-rules.md` + `addenda/review-rules.md` (copied as `.review/00-REVIEW-RULES.md`); `review-ux` →
+  global `~/.agents/agents/review-ux.md` with § Review lens: UX; `review-perf` → `addenda/review-rules-perf.md` (`.review/00-REVIEW-RULES-PERF.md`);
+  `review-quality` → global `~/.agents/agents/review-quality.md` with § Review lens: quality; brief check → the shared `brief-check.md` + `addenda/brief-check.md`.
 - **Perf measurement** (before UX, never while another lane's UX review or a vitest/integration run is on the
   host): when `ux-prep.sh` already ran for the issue, read `$WAVE_STATE/ux-prep-<n>.json` instead of rerunning
   `reset-rate-limits` + nav-perf. Otherwise `scripts/nav-perf.sh --base develop=<url> --base branch=<url>
@@ -202,22 +204,23 @@ issue is about that behaviour.
 
 | Script | What it does | Pinned by |
 | --- | --- | --- |
-| `scripts/launch-worker.sh <n> <slug> [be]` | §Launch | – |
+| `python3 "$ENGINE/launch-worker.py" <n> <slug> [be] --checkout "$FOPS_MAIN"` | §Launch | – |
 | `scripts/verify-fe.sh <worktree>` / `verify-be.sh <worktree> <n> [filters]` | §Verify; logs in `$WAVE_STATE/verify-<wt>/` and `$WAVE_STATE/vbe-<n>/` | – |
 | `scripts/verify-db.sh up` / `create <n> [--migrate-from <checkout>]` / `drop <n>` / `reset-rate-limits <n>` / `has-preview-fixtures <n>` / `down` | throwaway Postgres on 5439; `drop` removes the env file; `has-preview-fixtures` reports the `[preview]` fixture cluster | – |
 | `scripts/visual.sh run` / `update` / `stable` / `capture` | visual harness; picks the checkout from the cwd (or `VISUAL_ROOT`); `capture --clean` trashes its spec | – |
 | `scripts/baseline-keep.py` | baseline keep/revert with crops | – |
 | `scripts/biome-cmp.sh <worktree> <file>...` | biome error categories on develop vs branch | – |
-| `scripts/worker-hygiene.sh <worktree>` | fails on a new `biome-ignore`; reports whitespace-only churn | `test-worker-hygiene.py` |
-| `scripts/review-plan.py` | §Review plan; refuses uncommitted changes | `test-review-plan.py` (14 cases) |
+| `python3 "$ENGINE/worker-hygiene.py" <worktree>` | fails on a new `biome-ignore`; reports whitespace-only churn | engine repo tests |
+| `python3 "$ENGINE/review-plan.py" <worktree>` | §Review plan; refuses uncommitted changes | engine repo tests |
 | `scripts/nav-perf.sh` (+ `nav-perf.mjs`, `nav-perf-summary.py`) | §Review perf. Times click → quiet (no fetch, nothing loading for 300 ms, cap 30 s) in ego-browser; one warm-up pass, then bases alternate for `--runs`; one admin persona per base (`--personas`, default `mock-admin-1,mock-admin-2`); 429 samples excluded; an error or inconclusive target exits 1 (`--reset-db` plus the one retry handle it); output log `<out>.log`; curls every target and `--start` once first; `--reset-db <n>` clears the rate limits immediately before every attempt; the browser + summary step is retried once (first log kept as `<out>.attempt1.log`). Noise floor ≤4 ms | – |
 | `scripts/ux-prep.sh <n> <worktree> [--baseline <checkout>] [--scale] [--targets <hrefs>] [--no-perf]` | §Browser evidence: issue DB + seeded `<n>-develop`/`<n>-branch` previews + curl warm-up + Ego Lite probe (one restart) + nav-perf in one background run; writes `$WAVE_STATE/ux-prep-<n>.json` (last stdout line) and leaves the previews running | – |
 | `scripts/app-preview.py start <checkout> [--backend --env <env> [--seed]] [--name <label>]` / `stop <label>\|--all` / `status` | §Browser evidence. Refuses an env on 5434; `--seed` runs the personas seed then `preview-fixtures.mjs` (one `[preview]` record per drawer surface); a fixtures failure is a warning in the start JSON, its output in `$WAVE_STATE/preview-<label>-fixtures.log`; generates an `.mts` vite config; `status` reports dead PIDs and orphans, `stop --all` clears both | – |
 | `scripts/release-gate.sh <develop-checkout>` | §Slice close | – |
-| `scripts/wave-status.py [--json] [--prs] [--state-dir <dir>]` | read-only wave snapshot (workers, previews, worktrees, containers, PR CI); the `/wave` mod draws it | `test-wave-status.py` |
+| `python3 "$ENGINE/wave-status.py" [--json] [--prs] [--state-dir <dir>] --checkout <worktree>` | read-only wave snapshot (workers, previews, worktrees, containers, PR CI); the `/wave` mod draws it | engine repo tests |
 
-Run the three `scripts/test-*.py` after changing a pinned script. `scripts/test-integration.test.mjs` (repo root
-`scripts/`, CI static stage) pins the 5434 guard.
+The common engine source and tests live in `/Users/hyojung/orca/workspaces/conductor-engine`; run its tests
+when changing an engine. This repo carries configuration and addenda, not engine forks or their tests.
+`scripts/test-integration.test.mjs` (repo root `scripts/`, CI static stage) pins the 5434 guard.
 
 ## Traps
 

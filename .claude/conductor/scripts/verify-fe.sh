@@ -36,7 +36,7 @@ run_check be-tsc "$log/be-tsc.log" pnpm --filter @fops/backend exec tsc --noEmit
 # FE→BE drift (DB-free): an FE call to a path no BE route registers fails CI's backend job (s78, PR #1157).
 run_check fe-be-drift "$log/fe-be-drift.log" env -u DATABASE_URL -u DATABASE_URL_MIGRATE \
   pnpm --filter @fops/backend exec vitest run src/__tests__/fe-call-endpoints-exist.test.ts
-run_check worker-hygiene "$log/worker-hygiene.log" bash "$here/worker-hygiene.sh" "$wt"
+run_check worker-hygiene "$log/worker-hygiene.log" python3 "$HOME/.agents/skills/issue-wave-conductor/scripts/worker-hygiene.py" "$wt"
 print_summary > "$log/summary.txt"
 grep -E "Test Files|Tests " "$log/vitest.log" | tail -2 >> "$log/summary.txt"
 grep -E "FAIL " "$log/vitest.log" | sort -u | head -5 >> "$log/summary.txt"
