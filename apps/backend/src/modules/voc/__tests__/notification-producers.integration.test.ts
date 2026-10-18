@@ -11,6 +11,7 @@ import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
+import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
 import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import {
   NOTIFICATION_DISPATCH_QUEUE,
@@ -312,6 +313,35 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
           content: [{ type: 'paragraph', content: [{ type: 'text', text: 'reply text' }] }],
         },
       },
+    });
+  }
+
+  type PublicUpdatePayload =
+    | { skip_public_update: false; body_rich_content: unknown; next_reporter_facing_status: string }
+    | { skip_public_update: true; skip_reason: string; next_reporter_facing_status: string };
+
+  const BODY_ONLY: PublicUpdatePayload = {
+    skip_public_update: false,
+    body_rich_content: paragraphDoc('public update text'),
+    next_reporter_facing_status: 'received',
+  };
+
+  function postPublicUpdate(
+    targetApp: FastifyInstance,
+    actor: TestActor,
+    vocId: string,
+    payload: PublicUpdatePayload,
+    idempotencyKey = randomUUID(),
+  ) {
+    return targetApp.inject({
+      method: 'POST',
+      url: `/vocs/${vocId}/public-updates`,
+      headers: {
+        cookie: actorCookie(actor),
+        'content-type': 'application/json',
+        'idempotency-key': idempotencyKey,
+      },
+      payload,
     });
   }
 
@@ -724,6 +754,120 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
       `select 1 from core.audit_log
         where subject_id = $1
           and event_type in ('voc_severity_set', 'voc_owner_assigned', 'voc_triage_postponed')`,
+      [voc.id],
+    );
+    expect(audits.rowCount).toBe(0);
+    expect(await notificationJobCount(payload.correlation_id)).toBe(0);
+  });
+
+  it.each([
+    {
+      shape: 'body only',
+      payload: BODY_ONLY,
+      summary: 'VOC에 공개 업데이트가 등록되었습니다.',
+    },
+    {
+      shape: 'body + status change',
+      payload: {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('public update text'),
+        next_reporter_facing_status: 'reviewing',
+      } satisfies PublicUpdatePayload,
+      summary: 'VOC 진행 상태가 변경되었습니다.',
+    },
+    {
+      shape: 'skip + status change',
+      payload: {
+        skip_public_update: true,
+        skip_reason: 'status only, no text needed',
+        next_reporter_facing_status: 'reviewing',
+      } satisfies PublicUpdatePayload,
+      summary: 'VOC 진행 상태가 변경되었습니다.',
+    },
+  ])('notifies the Reporter once on a public update ($shape)', async ({ payload, summary }) => {
+    const voc = await seedVoc({ ownerUserId: owner.id });
+    const response = await postPublicUpdate(app, admin, voc.id, payload);
+    expect(response.statusCode).toBe(201);
+    const publicUpdateId = response.json<{ public_update: { id: string } }>().public_update.id;
+    const jobs = notifications.jobs.filter((job) => job.event_type === 'voc.public_update_posted');
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      workspace_id: workspaceId,
+      actor_id: reporter.id,
+      subject_type: 'voc',
+      subject_id: voc.id,
+      summary,
+    });
+    expect(jobs[0]?.detail).toEqual({ voc_id: voc.id, public_update_id: publicUpdateId });
+  });
+
+  it('does not notify when the Reporter is the posting actor', async () => {
+    const voc = await seedVoc({ reporter: admin });
+    const response = await postPublicUpdate(app, admin, voc.id, BODY_ONLY);
+    expect(response.statusCode).toBe(201);
+    expect(
+      notifications.jobs.filter((job) => job.event_type === 'voc.public_update_posted'),
+    ).toEqual([]);
+  });
+
+  it('does not notify when a public update is denied', async () => {
+    const voc = await seedVoc();
+    const response = await postPublicUpdate(app, reporter, voc.id, BODY_ONLY);
+    expect(response.statusCode).toBe(403);
+    expect(notifications.jobs).toHaveLength(0);
+  });
+
+  it('does not notify on an idempotent public-update replay', async () => {
+    const voc = await seedVoc();
+    const idempotencyKey = randomUUID();
+    const first = await postPublicUpdate(app, admin, voc.id, BODY_ONLY, idempotencyKey);
+    const replay = await postPublicUpdate(app, admin, voc.id, BODY_ONLY, idempotencyKey);
+    expect(first.statusCode).toBe(201);
+    expect(replay.statusCode).toBe(201);
+    expect(
+      notifications.jobs.filter((job) => job.event_type === 'voc.public_update_posted'),
+    ).toHaveLength(1);
+  });
+
+  it('never notifies the Reporter about an internal comment', async () => {
+    const voc = await seedVoc();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/vocs/${voc.id}/internal-comments`,
+      headers: {
+        cookie: actorCookie(admin),
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { body_rich_content: paragraphDoc('internal only') },
+    });
+    expect(response.statusCode).toBe(201);
+    const stored = await migrateHandle.pool.query(
+      'select 1 from voc.voc_internal_comments where voc_id = $1',
+      [voc.id],
+    );
+    expect(stored.rowCount).toBe(1);
+    expect(notifications.jobs).toHaveLength(0);
+  });
+
+  it('rolls back the public update, audit row, and enqueued job when enqueue fails', async () => {
+    const control = await seedVoc();
+    expect((await postPublicUpdate(app, admin, control.id, BODY_ONLY)).statusCode).toBe(201);
+    notifications.jobs.splice(0);
+    const voc = await seedVoc();
+    const response = await postPublicUpdate(rollbackApp, admin, voc.id, BODY_ONLY);
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+    const payload = failAfterEnqueue.attemptedPayloads[0];
+    if (!payload) throw new Error('public update rollback notification payload missing');
+    const updates = await migrateHandle.pool.query(
+      'select 1 from voc.voc_public_updates where voc_id = $1',
+      [voc.id],
+    );
+    expect(updates.rowCount).toBe(0);
+    const audits = await migrateHandle.pool.query(
+      `select 1 from core.audit_log where subject_id = $1 and event_type = 'public_update_created'`,
       [voc.id],
     );
     expect(audits.rowCount).toBe(0);

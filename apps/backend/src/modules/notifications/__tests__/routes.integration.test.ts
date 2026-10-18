@@ -627,6 +627,42 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     },
   );
 
+  it('resolves a public-update notice to the VOC for its Reporter without any grant', async () => {
+    const reporter = await createActorSession(WORKSPACE_ID, 'public-update-reporter', 'user');
+    subjectManagedSystemId = await insertMsDirectly(
+      migrateDb,
+      WORKSPACE_ID,
+      `${TEST_PREFIX}-public-update`,
+      'Public update notice test system',
+    );
+    const subject = await seedVocSubject(
+      WORKSPACE_ID,
+      subjectManagedSystemId,
+      reporter.id,
+      'Public update notice VOC',
+    );
+    const notification = await insertNotification(reporter, {
+      createdAt: new Date().toISOString(),
+      eventType: 'voc.public_update_posted',
+      subjectType: 'voc',
+      subjectId: subject.id,
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/notifications',
+      headers: cookieHeader(reporter),
+    });
+    expect(response.statusCode).toBe(200);
+    const item = response
+      .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+      .items.find((row) => row.id === notification.id);
+    expect(item?.subject_ref).toEqual({
+      visibility_state: 'allowed',
+      display_id: subject.displayId,
+      title: subject.title,
+    });
+  });
+
   it('resolves Permission Request subjects for requesters and admins only', async () => {
     const adminActor = await createActorSession(WORKSPACE_ID, 'e', 'admin');
     const request = await insertPermissionRequestRow(migrateDb, {

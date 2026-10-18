@@ -11,6 +11,9 @@ describe('@fops/shared notifications API', () => {
     expect(notificationEventTypeSchema.parse('task_request.needs_more_evidence')).toBe(
       'task_request.needs_more_evidence',
     );
+    expect(notificationEventTypeSchema.parse('voc.public_update_posted')).toBe(
+      'voc.public_update_posted',
+    );
     expect(() => notificationEventTypeSchema.parse('survey.assigned_to_me')).toThrow();
 
     const response = {
