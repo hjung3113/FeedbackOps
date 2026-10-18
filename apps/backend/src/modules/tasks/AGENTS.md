@@ -40,5 +40,6 @@ Managed System Registry belongs to Core. Task may consume Managed System scope a
 
 Survey-derived Finding/source summaries and Task Request draft defaults contain
 metadata only since the cutover. Approved text requires a fresh authorized highlight
+projection, never a cached summary or private response/link/audit reconstruction.
 Preserve ordinary source permissions and authored Task/Task Request prose; no
 bulk history rewrite is authorized. Consume the existing owning-module seams.

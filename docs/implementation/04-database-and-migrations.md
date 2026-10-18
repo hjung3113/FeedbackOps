@@ -486,7 +486,8 @@ protected `survey.finding_response_bindings` and `survey.highlight_response_bind
 and scoped reader/mutator seams. Existing-DB owner prerequisites, constraints,
 function signatures, cache inventory, standalone legacy-upgrade procedure and #740
 coordination are in [the #739 cutover contract](survey-provenance-cutover-739.md).
-Cutover executed; combined #739/#740 verification recorded in the cutover contract.
+The cutover shipped (#739/#740). The cutover contract holds the verification procedure and the
+standing gap: no standalone legacy-upgrade harness exists yet.
 
 - Survey-owned protected Finding and highlight extensions retain
   workspace-qualified response/approval bindings and historical generated text.
