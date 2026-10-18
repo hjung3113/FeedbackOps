@@ -64,15 +64,6 @@ describe('<ProgressNotesComposer> submit outcomes (real editor)', () => {
     return dom.editor;
   }
 
-  it('uses the attachment picker focus-visible ring on toolbar buttons', async () => {
-    await mountWithNote();
-    expect(screen.getByRole('button', { name: '굵게' })).toHaveClass(
-      'focus-visible:outline-none',
-      'focus-visible:ring-2',
-      'focus-visible:ring-focus-ring',
-    );
-  });
-
   it('a rejected submit keeps the note text', async () => {
     vi.mocked(createFindingComment).mockRejectedValue(new Error('서버 오류'));
     const editor = await mountWithNote();

@@ -354,8 +354,8 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
             />
 
             {/* Summary strip above the list; values come from the unfiltered list.
-              Evidence linked is pinned to exactly 0 — the list DTO carries no
-              evidence field (approved B2c plan). Status totals are already in tabs. */}
+              Status totals are already in tabs. The B2c always-0 Evidence cell
+              was removed (#1214): the list DTO carries no evidence field. */}
             <div
               className="flex items-stretch gap-4.5 border-b border-border-subtle bg-surface-canvas px-5 py-3"
               data-testid="milestones-summary"
@@ -365,12 +365,6 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                 value={countsUnavailable ? null : summary.inFlight}
                 valueClassName="text-accent-primary"
                 testId="milestone-summary-in-flight"
-              />
-              <SummaryDivider />
-              <SummaryCell
-                label="Evidence 연결"
-                value={0}
-                testId="milestone-summary-evidence-linked"
               />
               <div className="flex-1" />
             </div>
@@ -557,8 +551,4 @@ function SummaryCell({
       </span>
     </div>
   );
-}
-
-function SummaryDivider() {
-  return <div className="w-px self-stretch bg-border-subtle" aria-hidden="true" />;
 }

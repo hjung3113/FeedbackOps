@@ -224,7 +224,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
 
     const summary = screen.getByTestId('milestones-summary');
     expect(within(summary).getByText('진행 중 Task')).toBeInTheDocument();
-    expect(within(summary).getByText('Evidence 연결')).toBeInTheDocument();
+    expect(within(summary).queryByText('Evidence 연결')).not.toBeInTheDocument();
     expect(within(summary).queryByText('Milestones')).not.toBeInTheDocument();
     expect(within(summary).queryByText('릴리스됨')).not.toBeInTheDocument();
     expect(within(summary).queryByTestId('milestone-summary-total')).not.toBeInTheDocument();
@@ -232,7 +232,6 @@ describe('MilestonesRoute list (#514 B2c)', () => {
     expect(
       within(summary).queryByText('Schedule risk · mini-timeline 우측 표시'),
     ).not.toBeInTheDocument();
-    expect(within(summary).getByTestId('milestone-summary-evidence-linked')).toHaveTextContent('0');
     // Sum of progress.in_flight across the unfiltered list (1 + 0 + 0).
     expect(within(summary).getByTestId('milestone-summary-in-flight')).toHaveTextContent('1');
     expect(screen.getByRole('tab', { name: /^전체\s*,\s*3$/ })).toBeInTheDocument();
@@ -447,8 +446,6 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('—'),
     );
-    // Evidence linked is pinned to exactly 0 and is not counts-derived.
-    expect(screen.getByTestId('milestone-summary-evidence-linked')).toHaveTextContent('0');
     // Tab badges disappear instead of showing retained distributions.
     expect(screen.getByRole('tab', { name: /^전체/ })).not.toHaveTextContent('3');
     expect(screen.getByRole('tab', { name: /^진행 중/ })).not.toHaveTextContent('1');

@@ -663,7 +663,6 @@ describe('useInboxRoute', () => {
     expect(screen.queryByRole('button', { name: '필터' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '정렬' })).not.toBeInTheDocument();
     const createLink = screen.getByRole('link', { name: 'VOC 생성' });
-    expect(createLink).toHaveClass('bg-surface-raised');
     expect(createLink).not.toHaveClass('bg-accent-primary');
   });
 

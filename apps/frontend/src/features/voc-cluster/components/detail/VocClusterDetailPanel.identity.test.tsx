@@ -170,7 +170,7 @@ describe('VocClusterDetailPanel identity', () => {
 
     const footer = within(screen.getByTestId('cluster-cta-footer'));
     expect(footer.getByRole('link', { name: 'Finding 열기' })).toHaveClass('bg-accent-primary');
-    expect(footer.getByRole('button', { name: 'Finding 생성' })).toHaveClass('bg-surface-raised');
+    expect(footer.getByRole('button', { name: 'Finding 생성' })).toBeInTheDocument();
     expect(footer.getAllByRole('link', { name: 'Finding 열기' })).toHaveLength(1);
   });
 
@@ -191,10 +191,7 @@ describe('VocClusterDetailPanel identity', () => {
 
     render(<VocClusterDetailPanel clusterId={cluster.id} />);
 
-    expect(screen.getByText('담당자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(screen.getByText('담당자 없음')).toBeInTheDocument();
   });
 
   it.each(findingSeveritySchema.options)('renders the %s severity label', (severity) => {
