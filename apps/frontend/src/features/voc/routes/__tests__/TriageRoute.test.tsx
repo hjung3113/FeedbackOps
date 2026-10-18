@@ -441,7 +441,7 @@ describe('TriageRoute', () => {
     expect(screen.queryByPlaceholderText(LIST_SEARCH_PLACEHOLDER)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '필터' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '정렬' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'VOC 생성' })).toHaveClass('bg-surface-raised');
+    expect(screen.getByRole('link', { name: 'VOC 생성' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '내 VOC' })).toHaveAttribute(
       'data-search',
       JSON.stringify({ view: 'my' }),

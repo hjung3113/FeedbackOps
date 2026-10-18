@@ -67,11 +67,10 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     const summary = page.getByTestId('milestones-summary');
     await expect(summary).toContainText('진행 중 Task');
-    await expect(summary).toContainText('Evidence 연결');
+    await expect(summary).not.toContainText('Evidence 연결');
     await expect(summary).not.toContainText('Milestones');
     await expect(summary).not.toContainText('릴리스됨');
     await expect(summary).not.toContainText('Schedule risk'); // #670: the prototype annotation is gone
-    await expect(page.getByTestId('milestone-summary-evidence-linked')).toHaveText('0');
   });
 
   // #514 B2d — open-panel text assertions (no PNG; B2-pixel owns screenshots).

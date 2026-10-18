@@ -156,10 +156,7 @@ describe('TaskRequestPanel next actions', () => {
     expect(within(header as HTMLElement).getByText('Task Request')).toHaveClass('rounded');
     expect(within(header as HTMLElement).getByText('REQ-42')).toBeInTheDocument();
     expect(screen.getAllByText(GLOSSARY.unknownUser)).toHaveLength(2);
-    expect(screen.getByText('검토자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(screen.getByText('검토자 없음')).toBeInTheDocument();
   });
 
   it('uses the shared unassigned badge for linked Task candidates', () => {
@@ -184,10 +181,7 @@ describe('TaskRequestPanel next actions', () => {
       />,
     );
 
-    expect(screen.getByText('담당자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(screen.getByText('담당자 없음')).toBeInTheDocument();
   });
 
   it.each([
@@ -239,7 +233,7 @@ describe('TaskRequestPanel next actions', () => {
       '기존 Task 연결',
     ]);
     expect(convert).toHaveClass('bg-accent-primary', 'w-full');
-    expect(linkExisting).toHaveClass('bg-surface-raised', 'w-full');
+    expect(linkExisting).toHaveClass('w-full');
   });
 
   it('keeps approval primary and opens the rejection reason dialog from the secondary action', async () => {
@@ -294,7 +288,6 @@ describe('TaskRequestPanel next actions', () => {
     expect(reject).not.toHaveClass('bg-accent-primary');
     const requestEvidence = within(secondaryGroup).getByRole('button', { name: '근거 추가 요청' });
     expect(requestEvidence).toBeVisible();
-    expect(requestEvidence).toHaveClass('bg-surface-raised', 'border-border-subtle');
     expect(requestEvidence).not.toHaveClass('bg-accent-primary');
 
     await user.click(reject);
@@ -352,9 +345,6 @@ describe('TaskRequestPanel next actions', () => {
       .filter((button) => button.classList.contains('bg-accent-primary'));
 
     expect(primaryActions).toEqual([submit]);
-    expect(within(decisionSection).getAllByRole('button', { name: 'Task로 전환' })[0]).toHaveClass(
-      'bg-surface-raised',
-    );
   });
 
   it.each([

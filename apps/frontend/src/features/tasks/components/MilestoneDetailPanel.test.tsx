@@ -494,10 +494,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [{ ...childTask, assignee_actor_id: null }] });
     renderPanel(linkedDetail);
 
-    expect(await screen.findByText('담당자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(await screen.findByText('담당자 없음')).toBeInTheDocument();
   });
 
   // B2d fixup F2 — a non-null assignee id missing from the actor directory

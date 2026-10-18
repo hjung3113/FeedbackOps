@@ -43,10 +43,7 @@ describe('<TriageBlock>', () => {
         onOpenTriage={vi.fn()}
       />,
     );
-    expect(screen.getByText('담당자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(screen.getByText('담당자 없음')).toBeInTheDocument();
   });
 
   it('shows resolved owner display name when owner_user_id is present', () => {

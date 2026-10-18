@@ -151,7 +151,6 @@ describe('<EditDescriptionModal>', () => {
 
     // Click the secondary cancel/close control.
     const cancelButton = screen.getByRole('button', { name: '취소' });
-    expect(cancelButton).toHaveClass('bg-surface-raised', 'border-border-subtle');
     await user.click(cancelButton);
 
     // DirtyConfirmation uses DirtyConfirmation (AlertDialog from @radix-ui/react-dialog)

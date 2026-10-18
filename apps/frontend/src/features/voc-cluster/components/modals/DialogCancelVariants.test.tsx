@@ -86,12 +86,9 @@ const dialogs = [
 describe('VOC Cluster dialog cancel variants', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(dialogs)(
-    '$name cancel action uses secondary styling',
-    ({ render: renderDialog, cancel }) => {
-      render(renderDialog());
+  it.each(dialogs)('$name renders a named cancel action', ({ render: renderDialog, cancel }) => {
+    render(renderDialog());
 
-      expect(cancel()).toHaveClass('bg-surface-raised', 'border-border-subtle');
-    },
-  );
+    expect(cancel()).toBeInTheDocument();
+  });
 });

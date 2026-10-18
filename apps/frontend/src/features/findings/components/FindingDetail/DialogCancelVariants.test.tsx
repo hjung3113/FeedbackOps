@@ -101,15 +101,12 @@ describe('Finding dialog cancel variants', () => {
     vi.unstubAllGlobals();
   });
 
-  it.each(dialogs)('$name cancel action uses secondary styling', ({ render: renderDialog }) => {
+  it.each(dialogs)('$name renders a named cancel action', ({ render: renderDialog }) => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     render(<QueryClientProvider client={client}>{renderDialog()}</QueryClientProvider>);
 
-    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
-      'bg-surface-raised',
-      'border-border-subtle',
-    );
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
   });
 });

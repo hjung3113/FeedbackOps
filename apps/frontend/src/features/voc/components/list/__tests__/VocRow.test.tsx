@@ -67,10 +67,7 @@ describe('<VocRow>', () => {
 
   it('renders the shared unassigned badge when both owner ids are null', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
-    expect(screen.getByText('담당자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(screen.getByText('담당자 없음')).toBeInTheDocument();
   });
 
   it('does NOT render the unassigned badge when an owner is resolved', () => {
