@@ -143,166 +143,137 @@ export function createRequestService(deps: RequestServiceDeps) {
     return await db.transaction(async (tx) => {
       await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
-      // (1) Idempotency lookup.
-      if (options.idempotencyKey) {
-        // S-001: serialise concurrent first-time retries with the same
-        // (actor_id, key) so the loser blocks until the winner commits and
-        // then replays the stored response instead of colliding on the
-        // partial unique index. See ADR-0015 "Race surface" amendment.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${actor.actor_id}), hashtext(${options.idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(
+      const run = async () => {
+        await validateSupportedScope(
           tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-        );
-        if (hit.kind === 'match') {
-          return {
-            status: hit.status,
-            body: hit.body as CreatePermissionRequestResult['body'],
-          };
-        }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-          );
-        }
-      }
-
-      await validateSupportedScope(
-        tx,
-        actor.workspace_id,
-        capability,
-        body.requested_managed_system_id ?? null,
-        body.requested_object_type ?? null,
-        body.requested_object_id ?? null,
-      );
-      validateRequestExpiration(
-        body.requested_expiration ? new Date(body.requested_expiration) : null,
-      );
-
-      // (2) Re-check capability — fail fast if the actor already has it.
-      // S-002: thread the open tx so this re-check observes any grant a
-      // concurrent admin commit may have just made visible (and reads the
-      // same snapshot the subsequent insert will).
-      const decision = await checkService.checkCapability(
-        actor,
-        capability,
-        {
-          workspace_id: actor.workspace_id,
-          ...(body.requested_managed_system_id !== undefined
-            ? { managed_system_id: body.requested_managed_system_id }
-            : {}),
-        },
-        { tx },
-      );
-      if (decision.allow === true) {
-        throw new HttpError(
-          'conflict.capability_already_granted',
-          'actor already holds the requested capability',
-        );
-      }
-
-      // (3) Insert permission_request row.
-      let insertedId: string;
-      let insertedCreatedAt: Date;
-      try {
-        const rows = await tx
-          .insert(permissionRequests)
-          .values({
-            workspaceId: actor.workspace_id,
-            requesterActorId: actor.actor_id,
-            requestedCapability: capability,
-            requestedManagedSystemId: body.requested_managed_system_id ?? null,
-            requestedObjectType: body.requested_object_type ?? null,
-            requestedObjectId: body.requested_object_id ?? null,
-            reason: body.reason,
-            requestedExpiration: body.requested_expiration
-              ? new Date(body.requested_expiration)
-              : null,
-            sourceObjectType: body.source_object_type ?? null,
-            sourceObjectId: body.source_object_id ?? null,
-            sourceActionId: body.source_action_id ?? null,
-            returnRouteIntent: body.return_route_intent ?? null,
-            status: 'pending',
-          })
-          .returning({ id: permissionRequests.id, createdAt: permissionRequests.createdAt });
-        const row = rows[0];
-        if (!row) {
-          throw new HttpError('internal.unexpected', 'permission_request insert returned no row');
-        }
-        insertedId = row.id;
-        insertedCreatedAt = row.createdAt;
-      } catch (err) {
-        // Postgres unique_violation = 23505. The partial unique index
-        // `permission_requests_active_uq` fires for an existing
-        // pending|needs_more_info row with the same scope/source tuple.
-        const pgErr = err as DatabaseError;
-        if (pgErr?.code === '23505') {
-          throw new HttpError(
-            'conflict.permission_request_duplicate',
-            'an open permission request already exists for this capability and scope',
-          );
-        }
-        throw err;
-      }
-
-      await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [
-        { type: 'permission_request', id: insertedId },
-      ]);
-      // (4) Audit row, same transaction.
-      await auditService.record(tx, {
-        workspace_id: actor.workspace_id,
-        actor_id: actor.actor_id,
-        event_type: PERMISSION_REQUESTED,
-        subject_type: 'permission_request',
-        subject_id: insertedId,
-        summary: `Permission requested: ${capability}`,
-        detail: {
-          revision: 1,
+          actor.workspace_id,
           capability,
-          managed_system_id: body.requested_managed_system_id ?? null,
-          reason: body.reason,
-          sensitive,
-          source_object_type: body.source_object_type ?? null,
-          source_object_id: body.source_object_id ?? null,
-          source_action_id: body.source_action_id ?? null,
-        },
-      });
+          body.requested_managed_system_id ?? null,
+          body.requested_object_type ?? null,
+          body.requested_object_id ?? null,
+        );
+        validateRequestExpiration(
+          body.requested_expiration ? new Date(body.requested_expiration) : null,
+        );
 
-      const adminActorIds = await listWorkspaceAdminActorIds(tx, actor.workspace_id);
-      await deps.notify(tx, 'permission_request.submitted', {
-        workspace_id: actor.workspace_id,
-        actor_ids: adminActorIds,
-        subject_id: insertedId,
-        correlation_id: randomUUID(),
-        detail: { permission_request_id: insertedId },
-        params: {},
-      });
+        // (2) Re-check capability — fail fast if the actor already has it.
+        // S-002: thread the open tx so this re-check observes any grant a
+        // concurrent admin commit may have just made visible (and reads the
+        // same snapshot the subsequent insert will).
+        const decision = await checkService.checkCapability(
+          actor,
+          capability,
+          {
+            workspace_id: actor.workspace_id,
+            ...(body.requested_managed_system_id !== undefined
+              ? { managed_system_id: body.requested_managed_system_id }
+              : {}),
+          },
+          { tx },
+        );
+        if (decision.allow === true) {
+          throw new HttpError(
+            'conflict.capability_already_granted',
+            'actor already holds the requested capability',
+          );
+        }
 
-      const responseBody = {
-        id: insertedId,
-        status: 'pending' as const,
-        revision: 1,
-        created_at: insertedCreatedAt.toISOString(),
+        // (3) Insert permission_request row.
+        let insertedId: string;
+        let insertedCreatedAt: Date;
+        try {
+          const rows = await tx
+            .insert(permissionRequests)
+            .values({
+              workspaceId: actor.workspace_id,
+              requesterActorId: actor.actor_id,
+              requestedCapability: capability,
+              requestedManagedSystemId: body.requested_managed_system_id ?? null,
+              requestedObjectType: body.requested_object_type ?? null,
+              requestedObjectId: body.requested_object_id ?? null,
+              reason: body.reason,
+              requestedExpiration: body.requested_expiration
+                ? new Date(body.requested_expiration)
+                : null,
+              sourceObjectType: body.source_object_type ?? null,
+              sourceObjectId: body.source_object_id ?? null,
+              sourceActionId: body.source_action_id ?? null,
+              returnRouteIntent: body.return_route_intent ?? null,
+              status: 'pending',
+            })
+            .returning({ id: permissionRequests.id, createdAt: permissionRequests.createdAt });
+          const row = rows[0];
+          if (!row) {
+            throw new HttpError('internal.unexpected', 'permission_request insert returned no row');
+          }
+          insertedId = row.id;
+          insertedCreatedAt = row.createdAt;
+        } catch (err) {
+          // Postgres unique_violation = 23505. The partial unique index
+          // `permission_requests_active_uq` fires for an existing
+          // pending|needs_more_info row with the same scope/source tuple.
+          const pgErr = err as DatabaseError;
+          if (pgErr?.code === '23505') {
+            throw new HttpError(
+              'conflict.permission_request_duplicate',
+              'an open permission request already exists for this capability and scope',
+            );
+          }
+          throw err;
+        }
+
+        await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [
+          { type: 'permission_request', id: insertedId },
+        ]);
+        // (4) Audit row, same transaction.
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: PERMISSION_REQUESTED,
+          subject_type: 'permission_request',
+          subject_id: insertedId,
+          summary: `Permission requested: ${capability}`,
+          detail: {
+            revision: 1,
+            capability,
+            managed_system_id: body.requested_managed_system_id ?? null,
+            reason: body.reason,
+            sensitive,
+            source_object_type: body.source_object_type ?? null,
+            source_object_id: body.source_object_id ?? null,
+            source_action_id: body.source_action_id ?? null,
+          },
+        });
+
+        const adminActorIds = await listWorkspaceAdminActorIds(tx, actor.workspace_id);
+        await deps.notify(tx, 'permission_request.submitted', {
+          workspace_id: actor.workspace_id,
+          actor_ids: adminActorIds,
+          subject_id: insertedId,
+          correlation_id: randomUUID(),
+          detail: { permission_request_id: insertedId },
+          params: {},
+        });
+
+        const responseBody = {
+          id: insertedId,
+          status: 'pending' as const,
+          revision: 1,
+          created_at: insertedCreatedAt.toISOString(),
+        };
+
+        return { status: 201, body: responseBody };
       };
 
-      // (5) Reserve the idempotency row.
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          201,
-          responseBody,
-        );
-      }
-
-      return { status: 201, body: responseBody };
+      return options.idempotencyKey
+        ? idempotencyService.runIdempotent(
+            tx,
+            actor.actor_id,
+            options.idempotencyKey,
+            requestHash,
+            run,
+          )
+        : run();
     });
   }
 

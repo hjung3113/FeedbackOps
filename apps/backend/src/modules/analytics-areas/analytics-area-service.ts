@@ -327,143 +327,113 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
   ): Promise<ServiceResult<AnalyticsAreaDto>> {
     const requestHash = hashRequestBody({ id, ...body });
     return await db.transaction(async (tx) => {
-      // S-001 advisory lock omitted: this path is id-scoped (no slug-uniqueness
-      // race surface) so concurrent retries cannot hit the duplicate-slug 409
-      // that the lock guards on the register path.
-      if (options.idempotencyKey) {
-        const hit = await idempotencyService.lookup(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-        );
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body as AnalyticsAreaDto };
+      const run = async () => {
+        await requireWorkspaceAdmin(checkService, actor, tx);
+
+        const existingRows = await tx
+          .select()
+          .from(analyticsAreas)
+          .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
+          .limit(1);
+        const existing = existingRows[0];
+        if (!existing) {
+          throw new HttpError('not_found.record', 'analytics_area not found');
         }
-        if (hit.kind === 'mismatch') {
+
+        // ADR-0019 Section A: archived AA is itself immutable.
+        if (existing.archivedAt !== null) {
           throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
+            'conflict.record_archived',
+            'analytics_area is archived and cannot be updated',
+            { fields: [{ path: ['id'], code: 'record_archived' }] },
           );
         }
-      }
 
-      await requireWorkspaceAdmin(checkService, actor, tx);
+        // ADR-0019 Section B Q1: active AA under an archived parent MS
+        // (produced by the cascade race S-004 documents, by manual SQL,
+        // or by a future bypass) is treated as a frozen historical
+        // record — PATCH rejected. Operators clean it up via the
+        // standalone archive path (Section B Q2).
+        //
+        // ADR-0019 Section E: lock the parent MS row so a concurrent
+        // archive-MS tx cannot flip parent.archived_at between our read
+        // and our AA UPDATE.
+        const parentRows = await tx
+          .select({ archivedAt: managedSystems.archivedAt })
+          .from(managedSystems)
+          .where(
+            and(
+              eq(managedSystems.workspaceId, actor.workspace_id),
+              eq(managedSystems.id, existing.managedSystemId),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        const parent = parentRows[0];
+        if (parent && parent.archivedAt !== null) {
+          throw new HttpError(
+            'conflict.parent_archived',
+            'parent managed_system is archived; analytics_area cannot be updated (ADR-0019 Section B Q1)',
+            { fields: [{ path: ['managed_system_id'], code: 'parent_archived' }] },
+          );
+        }
 
-      const existingRows = await tx
-        .select()
-        .from(analyticsAreas)
-        .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
-        .limit(1);
-      const existing = existingRows[0];
-      if (!existing) {
-        throw new HttpError('not_found.record', 'analytics_area not found');
-      }
+        const changes: Record<string, { from: string | null; to: string | null }> = {};
+        const patch: Partial<{ name: string; ownerTeamId: string | null }> = {};
 
-      // ADR-0019 Section A: archived AA is itself immutable.
-      if (existing.archivedAt !== null) {
-        throw new HttpError(
-          'conflict.record_archived',
-          'analytics_area is archived and cannot be updated',
-          { fields: [{ path: ['id'], code: 'record_archived' }] },
-        );
-      }
+        if (body.name !== undefined && body.name !== existing.name) {
+          changes.name = { from: existing.name, to: body.name };
+          patch.name = body.name;
+        }
+        if (
+          body.owner_team_id !== undefined &&
+          (body.owner_team_id ?? null) !== existing.ownerTeamId
+        ) {
+          changes.owner_team_id = {
+            from: existing.ownerTeamId,
+            to: body.owner_team_id ?? null,
+          };
+          patch.ownerTeamId = body.owner_team_id ?? null;
+        }
 
-      // ADR-0019 Section B Q1: active AA under an archived parent MS
-      // (produced by the cascade race S-004 documents, by manual SQL,
-      // or by a future bypass) is treated as a frozen historical
-      // record — PATCH rejected. Operators clean it up via the
-      // standalone archive path (Section B Q2).
-      //
-      // ADR-0019 Section E: lock the parent MS row so a concurrent
-      // archive-MS tx cannot flip parent.archived_at between our read
-      // and our AA UPDATE.
-      const parentRows = await tx
-        .select({ archivedAt: managedSystems.archivedAt })
-        .from(managedSystems)
-        .where(
-          and(
-            eq(managedSystems.workspaceId, actor.workspace_id),
-            eq(managedSystems.id, existing.managedSystemId),
-          ),
-        )
-        .for('update')
-        .limit(1);
-      const parent = parentRows[0];
-      if (parent && parent.archivedAt !== null) {
-        throw new HttpError(
-          'conflict.parent_archived',
-          'parent managed_system is archived; analytics_area cannot be updated (ADR-0019 Section B Q1)',
-          { fields: [{ path: ['managed_system_id'], code: 'parent_archived' }] },
-        );
-      }
+        if (Object.keys(changes).length === 0) {
+          const dto = toDto(existing);
+          return { status: 200, body: dto };
+        }
 
-      const changes: Record<string, { from: string | null; to: string | null }> = {};
-      const patch: Partial<{ name: string; ownerTeamId: string | null }> = {};
+        const updatedRows = await tx
+          .update(analyticsAreas)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
+          .returning();
+        const updated = updatedRows[0];
+        if (!updated) {
+          throw new HttpError('internal.unexpected', 'analytics_areas update returned no row');
+        }
 
-      if (body.name !== undefined && body.name !== existing.name) {
-        changes.name = { from: existing.name, to: body.name };
-        patch.name = body.name;
-      }
-      if (
-        body.owner_team_id !== undefined &&
-        (body.owner_team_id ?? null) !== existing.ownerTeamId
-      ) {
-        changes.owner_team_id = {
-          from: existing.ownerTeamId,
-          to: body.owner_team_id ?? null,
-        };
-        patch.ownerTeamId = body.owner_team_id ?? null;
-      }
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: UPDATED,
+          subject_type: 'analytics_area',
+          subject_id: id,
+          summary: `Analytics Area updated: ${updated.slug}`,
+          detail: { analytics_area_id: id, changes },
+        });
 
-      if (Object.keys(changes).length === 0) {
-        const dto = toDto(existing);
-        if (options.idempotencyKey) {
-          await idempotencyService.record(
+        const dto = toDto(updated);
+        return { status: 200, body: dto };
+      };
+
+      return options.idempotencyKey
+        ? idempotencyService.runIdempotent(
             tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
-            200,
-            dto,
-          );
-        }
-        return { status: 200, body: dto };
-      }
-
-      const updatedRows = await tx
-        .update(analyticsAreas)
-        .set({ ...patch, updatedAt: new Date() })
-        .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
-        .returning();
-      const updated = updatedRows[0];
-      if (!updated) {
-        throw new HttpError('internal.unexpected', 'analytics_areas update returned no row');
-      }
-
-      await auditService.record(tx, {
-        workspace_id: actor.workspace_id,
-        actor_id: actor.actor_id,
-        event_type: UPDATED,
-        subject_type: 'analytics_area',
-        subject_id: id,
-        summary: `Analytics Area updated: ${updated.slug}`,
-        detail: { analytics_area_id: id, changes },
-      });
-
-      const dto = toDto(updated);
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          200,
-          dto,
-        );
-      }
-      return { status: 200, body: dto };
+            run,
+          )
+        : run();
     });
   }
 
@@ -474,104 +444,74 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
   ): Promise<ServiceResult<AnalyticsAreaDto>> {
     const requestHash = hashRequestBody({ id, op: 'archive' });
     return await db.transaction(async (tx) => {
-      // S-001 advisory lock omitted: id-scoped archive, no slug-uniqueness
-      // race surface to guard. The cascade serialisation against MS archive
-      // is owned by ADR-0019 Section E (SELECT FOR UPDATE on parent MS).
-      if (options.idempotencyKey) {
-        const hit = await idempotencyService.lookup(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-        );
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body as AnalyticsAreaDto };
+      const run = async () => {
+        await requireWorkspaceAdmin(checkService, actor, tx);
+
+        const existingRows = await tx
+          .select()
+          .from(analyticsAreas)
+          .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
+          .limit(1);
+        const existing = existingRows[0];
+        if (!existing) {
+          throw new HttpError('not_found.record', 'analytics_area not found');
         }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
-          );
+
+        // ADR-0019 Section E: lock the parent MS row so a concurrent
+        // MS-archive cascade serialises against this AA archive. The lock
+        // does not change semantics — the archive UPDATE below uses an
+        // `isNull(archivedAt)` predicate so the already-cascade-archived
+        // path still short-circuits — but it pins the ordering for the
+        // audit-row narrative (cascade vs. standalone) and prevents the
+        // S-004 race from producing inconsistent intermediate states.
+        await tx
+          .select({ id: managedSystems.id })
+          .from(managedSystems)
+          .where(
+            and(
+              eq(managedSystems.workspaceId, actor.workspace_id),
+              eq(managedSystems.id, existing.managedSystemId),
+            ),
+          )
+          .for('update')
+          .limit(1);
+
+        if (existing.archivedAt !== null) {
+          const dto = toDto(existing);
+          return { status: 200, body: dto };
         }
-      }
 
-      await requireWorkspaceAdmin(checkService, actor, tx);
+        const now = new Date();
+        await archiveAnalyticsAreaInTx(tx, auditService, {
+          workspaceId: actor.workspace_id,
+          actorId: actor.actor_id,
+          analyticsAreaId: id,
+          cascadeSourceManagedSystemId: null,
+          now,
+        });
 
-      const existingRows = await tx
-        .select()
-        .from(analyticsAreas)
-        .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
-        .limit(1);
-      const existing = existingRows[0];
-      if (!existing) {
-        throw new HttpError('not_found.record', 'analytics_area not found');
-      }
+        const refreshed = await tx
+          .select()
+          .from(analyticsAreas)
+          .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
+          .limit(1);
+        const row = refreshed[0];
+        if (!row) {
+          throw new HttpError('internal.unexpected', 'analytics_areas archive lost row');
+        }
+        const dto = toDto(row);
+        return { status: 200, body: dto };
+      };
 
-      // ADR-0019 Section E: lock the parent MS row so a concurrent
-      // MS-archive cascade serialises against this AA archive. The lock
-      // does not change semantics — the archive UPDATE below uses an
-      // `isNull(archivedAt)` predicate so the already-cascade-archived
-      // path still short-circuits — but it pins the ordering for the
-      // audit-row narrative (cascade vs. standalone) and prevents the
-      // S-004 race from producing inconsistent intermediate states.
-      await tx
-        .select({ id: managedSystems.id })
-        .from(managedSystems)
-        .where(
-          and(
-            eq(managedSystems.workspaceId, actor.workspace_id),
-            eq(managedSystems.id, existing.managedSystemId),
-          ),
-        )
-        .for('update')
-        .limit(1);
-
-      if (existing.archivedAt !== null) {
-        const dto = toDto(existing);
-        if (options.idempotencyKey) {
-          await idempotencyService.record(
+      return options.idempotencyKey
+        ? idempotencyService.runIdempotent(
             tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
-            200,
-            dto,
-          );
-        }
-        return { status: 200, body: dto };
-      }
-
-      const now = new Date();
-      await archiveAnalyticsAreaInTx(tx, auditService, {
-        workspaceId: actor.workspace_id,
-        actorId: actor.actor_id,
-        analyticsAreaId: id,
-        cascadeSourceManagedSystemId: null,
-        now,
-      });
-
-      const refreshed = await tx
-        .select()
-        .from(analyticsAreas)
-        .where(and(eq(analyticsAreas.workspaceId, actor.workspace_id), eq(analyticsAreas.id, id)))
-        .limit(1);
-      const row = refreshed[0];
-      if (!row) {
-        throw new HttpError('internal.unexpected', 'analytics_areas archive lost row');
-      }
-      const dto = toDto(row);
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          200,
-          dto,
-        );
-      }
-      return { status: 200, body: dto };
+            run,
+          )
+        : run();
     });
   }
 

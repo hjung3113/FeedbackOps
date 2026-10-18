@@ -321,6 +321,26 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     },
   );
 
+  it('rejects a create without an Idempotency-Key as validation.failed', async () => {
+    const managedSystemId = await seedManagedSystem();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/surveys',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+      },
+      payload: surveyBody(managedSystemId),
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }] },
+    });
+  });
+
   it('replays an idempotent create without a second row, audit, display id, or counter increment', async () => {
     const managedSystemId = await seedManagedSystem();
     const idempotencyKey = randomUUID();

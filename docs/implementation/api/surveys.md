@@ -44,7 +44,7 @@ operator_actor_id?, responses_identity_protected, starting_point? }`. It returns
 Survey DTO: `{ id, workspace_id, display_id, type, status, title, description,
 primary_managed_system_id, analytics_area_id, operator_actor_id,
 responses_identity_protected, created_by, opened_at, closed_at, created_at,
-updated_at }`.
+updated_at }`. A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 ### Built-in starting-point creation (#1073, ADR-0070)
 
@@ -261,11 +261,11 @@ returns `200` with the Survey DTO and writes `survey_updated` in the same
 transaction; audit detail is `{ survey_id }` only.
 Errors: `validation.failed`, `validation.malformed_idempotency_key`,
 `permission.denied`, `not_found.record`, `conflict.parent_archived`,
-`conflict.idempotency_key_reuse`, and `rate_limited.actor`.
+`conflict.idempotency_key_reuse`, and `rate_limited.actor`. A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 The three question commands require `survey.manage`, an `Idempotency-Key`, and
 mutation rate limiting; they are draft-only. They create, update, or delete a
-question at the listed Survey/question IDs.
+question at the listed Survey/question IDs. A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 `PATCH /surveys/:id/questions/reorder` requires the same `survey.manage`,
 Idempotency-Key, mutation-rate-limit, and draft guard. Its strict body is
@@ -278,7 +278,7 @@ writes `survey_questions_reordered` in the same transaction with audit detail
 `{ survey_id }` only.
 Errors: `validation.failed`, `validation.malformed_idempotency_key`,
 `permission.denied`, `not_found.record`, `conflict.idempotency_key_reuse`, and
-`rate_limited.actor`.
+`rate_limited.actor`. A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 `POST /surveys/:id/open` and `POST /surveys/:id/close` require
 `survey.manage`, an `Idempotency-Key`, and mutation rate limiting. Both return
@@ -290,7 +290,7 @@ zero questions returns `422 validation.failed` with
 `fields: [{ path: ['questions'], code: 'required' }]`, then validates the
 questions. A successful open/close updates the status and records respectively
 `survey_opened` (with `survey_id`, `display_id`, `question_count`) or
-`survey_closed` (with `survey_id`, `display_id`).
+`survey_closed` (with `survey_id`, `display_id`). A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 `GET /surveys/:id/form` is the respondent form read surface. Any authenticated
 Actor in the same Workspace may read an open Survey without `survey.read`; a
@@ -317,7 +317,7 @@ Survey returns `409 conflict.survey_not_open`; a second submission returns
 different payload returns `409 conflict.idempotency_key_reuse`. The `422
 validation.failed` matrix covers malformed or duplicate question IDs, unknown
 or inactive-branch answers, missing required answers, answer-kind/value and
-choice mismatches, rating bounds, and trimmed text length.
+choice mismatches, rating bounds, and trimmed text length. A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 ### GET /me/survey-responses — the session Actor's own response history
 
@@ -409,7 +409,7 @@ Candidate reads write `survey_response_personal_read` in the same transaction; a
 
 ### POST /survey-responses/:id/create-finding
 
-This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, owner_actor_id?, owner_team_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. Optional nullable owner fields use the Finding destination resolver only after the complete Survey source gate, preserving explicit/null/omitted semantics and approved-excerpt privacy. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
+This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, owner_actor_id?, owner_team_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. Optional nullable owner fields use the Finding destination resolver only after the complete Survey source gate, preserving explicit/null/omitted semantics and approved-excerpt privacy. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access). A missing or empty `Idempotency-Key` returns `422 validation.failed` with `fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`; a malformed one returns `422 validation.malformed_idempotency_key`.
 
 The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`. After the ADR-0064/#739 cutover the public `source_id` is
 NULL and the original response UUID is retained in a Survey-owned protected

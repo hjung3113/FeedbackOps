@@ -314,7 +314,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
     expect(first.status).toBe(201);
     expect(await conversationService.postPublicUpdateCommand(args)).toEqual(first);
     const histories = await dbHandle.pool.query(
-      'SELECT recovery_item_id,occurrence,outcome FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=ANY($2::text[]) ORDER BY recovery_item_id',
+      'SELECT recovery_item_id,occurrence,outcome FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=ANY($2::text[]) ORDER BY recovery_item_id COLLATE "C"',
       [workspaceId, tasks.map((t) => recoveryIdentity('released-task-unresolved-voc', t.id))],
     );
     expect(histories.rows).toEqual(
