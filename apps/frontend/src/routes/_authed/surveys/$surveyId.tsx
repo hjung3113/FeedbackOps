@@ -12,6 +12,7 @@ import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import { platformReturnField } from '@/lib/router/platform-return';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { DirtyConfirmation, EmptyState, PermissionBlockedPanel } from '@fops/ui';
@@ -29,6 +30,7 @@ const searchSchema = z
   .object({
     builder: z.boolean().optional(),
     returnTo: recoverySearchFields.returnTo,
+    platformReturn: platformReturnField,
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
     status: z.literal('open').optional(),

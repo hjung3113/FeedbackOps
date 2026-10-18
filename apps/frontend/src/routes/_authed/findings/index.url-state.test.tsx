@@ -640,6 +640,21 @@ describe('/findings URL state', () => {
     );
   });
 
+  test('a VOC return URL carrying platformReturn still round-trips the VOC schema', async () => {
+    const origin = `/vocs?view=inbox&platformReturn=${encodeURIComponent('https://platform.example.com/x')}`;
+    renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+
+    await screen.findByTestId('finding-detail-panel');
+
+    expect(screen.getByRole('link', { name: '원래 VOC로 돌아가기' })).toHaveAttribute(
+      'href',
+      origin,
+    );
+  });
+
   test('ignores an external return URL', async () => {
     const returnTo = 'https://example.com/vocs?view=inbox';
     renderUrlState(

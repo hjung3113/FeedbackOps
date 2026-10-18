@@ -20,10 +20,12 @@ export interface AuthRoutesOptions {
   workspaceId: string;
   /** From AppConfig.NODE_ENV; controls cookie `Secure` flag and dev-only routes. */
   nodeEnv: 'development' | 'test' | 'production';
+  /** From AppConfig.platformReturnOrigins; `[]` when the feature is off. */
+  platformReturnOrigins: string[];
 }
 
 export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opts) => {
-  const { authProvider, sessionService, workspaceId, nodeEnv } = opts;
+  const { authProvider, sessionService, workspaceId, nodeEnv, platformReturnOrigins } = opts;
   const isProd = nodeEnv === 'production';
 
   // ── GET /auth/login ───────────────────────────────────────────────────
@@ -225,6 +227,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
           role_level: loaded.actor.roleLevel,
         },
         workspace_id: sess.workspace_id,
+        platform_return_origins: platformReturnOrigins,
       };
     },
   });

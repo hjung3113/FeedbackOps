@@ -16,4 +16,5 @@ export const ROUTER_FALLBACK_COPY = {
     home: '홈으로',
     back: '뒤로',
   },
+  platformReturn: '플랫폼으로 돌아가기',
 } as const;
