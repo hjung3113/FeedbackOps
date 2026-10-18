@@ -19,6 +19,7 @@ import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import { OwnerPermissionRequestDialog } from './OwnerPermissionRequestDialog';
 
+import { MyVocsRecoveryLink } from '@/components/MyVocsRecoveryLink';
 import {
   type MinePermissionRequestRow,
   fetchDashboardSummary,
@@ -194,13 +195,7 @@ export function HomeScreen({
             {personalWorkDenied ? (
               <div className="space-y-7" data-testid="home-reporter-layout">
                 <AnswerableSurveysPanel />
-                <InternalLink
-                  href="/vocs?view=my"
-                  className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
-                >
-                  {HOME_COPY.myVocs}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </InternalLink>
+                <MyVocsRecoveryLink />
                 {(permissionRequests.length > 0 || sawPermissionRequests) && (
                   <OpenRequestsPanel requests={permissionRequests} />
                 )}

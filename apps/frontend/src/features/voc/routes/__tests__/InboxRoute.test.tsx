@@ -730,7 +730,7 @@ describe('useInboxRoute', () => {
     expect(
       screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.'),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId('voc-inbox-denied-my-vocs')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '내 VOC' })).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission error on VocList failed-load copy', async () => {

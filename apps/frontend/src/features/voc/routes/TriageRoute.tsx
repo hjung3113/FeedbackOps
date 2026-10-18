@@ -1,4 +1,4 @@
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestAccessButton } from '@/features/admin/public';
 // TriageRoute — mounts <VocTriageScreen> inside the existing WorkbenchShell slot.
 //
 // Reads URL state (tab, managedSystem, selected) from the route search.
@@ -14,11 +14,12 @@ import { RequestAccessButton } from '@/features/admin/permissions/request-access
 // The point check gates a selected Managed System. At the default scope,
 // capability scope can admit scoped actors; the queue enforces read ∩ triage.
 
+import { MyVocsRecoveryLink } from '@/components/MyVocsRecoveryLink';
 import { fetchNavCounts } from '@/lib/api/nav';
 import { fetchCapabilityScope } from '@/lib/api/permissions';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
-import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { NavCounts } from '@/lib/layout/AppSidebar';
@@ -26,7 +27,7 @@ import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
 import { Button, PermissionBlockedPanel } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowRight, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type * as React from 'react';
 import { useCallback, useState } from 'react';
 import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
@@ -220,14 +221,7 @@ export function TriageRoute(): React.ReactElement {
               {createLabel('VOC')}
             </Link>
           </Button>
-          {panelState === 'blocked_not_requestable' && (
-            <Button asChild variant="secondary" size="sm" spacing="compact">
-              <Link to="/vocs" search={{ view: 'my' }}>
-                {GLOSSARY.myVocs}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          )}
+          {panelState === 'blocked_not_requestable' && <MyVocsRecoveryLink />}
         </div>
         {panelState === 'request_access' && capability !== undefined ? (
           <RequestAccessButton

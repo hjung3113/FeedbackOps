@@ -1,10 +1,10 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { MyVocsRecoveryLink } from '@/components/MyVocsRecoveryLink';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { listMilestones } from '@/lib/api/milestones';
 import { getTask } from '@/lib/api/tasks';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
-import { GLOSSARY } from '@/lib/copy/glossary';
 import { LIST_SEARCH_EMPTY_LABEL, LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
@@ -519,13 +519,7 @@ export function TaskBoardRoute({
           category="Task board"
           reason={PERMISSION_BLOCKED_REASONS.taskList}
         />
-        <Link
-          to="/vocs"
-          search={{ view: 'my' }}
-          className="text-sm font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
-        >
-          {GLOSSARY.myVocs}
-        </Link>
+        <MyVocsRecoveryLink />
       </div>
     );
   }

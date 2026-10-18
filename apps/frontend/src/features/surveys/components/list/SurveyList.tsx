@@ -1,5 +1,5 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestAccessButton } from '@/features/admin/public';
 import type { FrontendPermissionState } from '@/lib/api';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
