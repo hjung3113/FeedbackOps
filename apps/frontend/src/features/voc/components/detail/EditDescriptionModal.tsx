@@ -40,7 +40,7 @@ import type { ApiError } from '@/lib/api';
 import { errorMapper } from '@/lib/api';
 import { useVocEditDescriptionMutation } from '../../hooks/useVocEditDescriptionMutation';
 import { AttachmentDropzone } from '../create/AttachmentDropzone';
-import { VocDescriptionToolbar } from '../create/VocDescriptionToolbar';
+import { vocDescriptionToolbar } from '../create/VocDescriptionToolbar';
 import { AttachmentChipList } from './AttachmentChip';
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -82,6 +82,10 @@ type EditFormValues = EditDescriptionRequest & {
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
+
+// Attachments here go through the dropzone only (`attachment_ids[]`); the inline attach button
+// would insert attachmentRef attrs the server sanitizer rejects, so this surface hides it.
+const EDIT_DESCRIPTION_TOOLBAR = vocDescriptionToolbar({ hideAttach: true });
 
 export function EditDescriptionModal({
   voc,
@@ -328,7 +332,7 @@ export function EditDescriptionModal({
                     onChange={(doc) => field.onChange(doc)}
                     placeholder="재현 방법과 기대 동작도 함께 적어주세요."
                     minHeight={160}
-                    toolbar={VocDescriptionToolbar}
+                    toolbar={EDIT_DESCRIPTION_TOOLBAR}
                   />
                 )}
               />
