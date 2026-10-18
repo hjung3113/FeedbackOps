@@ -7,6 +7,7 @@
 import { z } from 'zod';
 
 import { findingConfidenceSchema, findingSeveritySchema } from '../findings/index.js';
+import { vocClusterStatusSchema } from '../voc-clusters/status.js';
 
 export const VOC_CLUSTER_AUDIT_EVENT_TYPES = [
   'voc_cluster_created',
@@ -18,14 +19,12 @@ export const VOC_CLUSTER_AUDIT_EVENT_TYPES = [
   'finding_unlinked_from_voc_cluster',
 ] as const;
 
-const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
-
 export const vocClusterCreatedDetailSchema = z.object({
   voc_cluster_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
   title: z.string().min(1),
   summary_present: z.boolean(),
-  status: vocClusterStatusDetailSchema,
+  status: vocClusterStatusSchema,
 });
 export type VocClusterCreatedDetail = z.infer<typeof vocClusterCreatedDetailSchema>;
 
@@ -59,8 +58,8 @@ export const vocClusterUpdatedDetailSchema = z.object({
         .optional(),
       status: z
         .object({
-          from: vocClusterStatusDetailSchema,
-          to: vocClusterStatusDetailSchema,
+          from: vocClusterStatusSchema,
+          to: vocClusterStatusSchema,
         })
         .optional(),
       confirmed_by: z

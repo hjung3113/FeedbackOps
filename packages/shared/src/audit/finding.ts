@@ -11,6 +11,7 @@
 // into AUDIT_EVENT_DETAIL_SCHEMAS.
 
 import { z } from 'zod';
+import { findingStatusSchema } from '../findings/status.js';
 
 export const FINDING_FROM_VOC_AUDIT_EVENT_TYPES = ['finding_created_from_voc'] as const;
 
@@ -81,8 +82,8 @@ export type EvidenceHighlightAddedDetail = z.infer<typeof evidenceHighlightAdded
 
 export const findingStatusChangedDetailSchema = z.object({
   finding_id: z.string().uuid(),
-  from_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
-  to_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
+  from_status: findingStatusSchema,
+  to_status: findingStatusSchema,
   primary_managed_system_id: z.string().uuid(),
   reason: z.string().min(1).max(1000).optional(),
 });

@@ -6,6 +6,7 @@
 // register into AUDIT_EVENT_DETAIL_SCHEMAS.
 
 import { z } from 'zod';
+import { taskStatusSchema } from '../tasks/status.js';
 
 export const TASK_AUDIT_EVENT_TYPES = [
   'task_status_changed',
@@ -16,8 +17,8 @@ export const TASK_AUDIT_EVENT_TYPES = [
 
 export const taskStatusChangedDetailSchema = z
   .object({
-    from: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
-    to: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
+    from: taskStatusSchema,
+    to: taskStatusSchema,
     reason: z.string().min(1).max(1000).optional(),
   })
   .strict();
