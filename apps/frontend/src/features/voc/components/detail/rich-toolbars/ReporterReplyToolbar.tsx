@@ -9,7 +9,9 @@
 //
 // Mirrors PublicUpdateToolbar button pattern for visual consistency.
 
-import { AttachButton, cn, type TipTapEditor } from '@fops/ui';
+import { ComposerToolbarButton } from '@/features/cross-system/composer-editor/ComposerToolbarButton';
+import { promptForLink } from '@/features/cross-system/composer-editor/promptForLink';
+import { AttachButton, type TipTapEditor } from '@fops/ui';
 import { Bold, Italic, Link } from 'lucide-react';
 import type * as React from 'react';
 
@@ -24,45 +26,6 @@ export interface ReporterReplyToolbarProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function ToolbarButton({
-  onClick,
-  isActive,
-  disabled,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  isActive: boolean;
-  disabled: boolean;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => {
-        // Mouse only: stop the button from taking focus (and the selection) from the editor.
-        e.preventDefault();
-      }}
-      // Native click covers mouse and Enter/Space; the command refocuses the editor itself.
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      aria-pressed={isActive}
-      className={cn(
-        'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
-        'hover:bg-surface-row-hover hover:text-text-primary',
-        'disabled:cursor-not-allowed disabled:opacity-40',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-        isActive && 'bg-surface-row-selected text-text-primary',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ReporterReplyToolbar({
@@ -72,49 +35,37 @@ export function ReporterReplyToolbar({
 }: ReporterReplyToolbarProps): React.ReactElement {
   const disabled = editor === null;
 
-  function toggleLink() {
-    if (!editor) return;
-    const previousUrl = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('URL', previousUrl ?? '');
-    if (url === null) return; // cancelled
-    if (url === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-    } else {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    }
-  }
-
   return (
     <div
       className="flex items-center gap-0.5 px-2 py-1 border-b border-border-subtle"
       data-testid="reporter-reply-toolbar"
     >
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleBold().run()}
         isActive={editor?.isActive('bold') ?? false}
         disabled={disabled}
         title="굵게"
       >
         <Bold size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleItalic().run()}
         isActive={editor?.isActive('italic') ?? false}
         disabled={disabled}
         title="기울임"
       >
         <Italic size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
-        onClick={toggleLink}
+      <ComposerToolbarButton
+        onClick={() => promptForLink(editor)}
         isActive={editor?.isActive('link') ?? false}
         disabled={disabled}
         title="링크"
       >
         <Link size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
       {/* Attach — PLAN-22 C8. Wired through RichEditor toolbar API. */}
       {onAttach ? (

@@ -7,7 +7,9 @@
 // Allowed: Bold, Italic, Code (inline), BulletList, Link, @Mention (via MentionPickerButton).
 // Attach: rendered but always DOM-disabled (deferred to #22).
 
-import { AttachButton, cn, type TipTapEditor } from '@fops/ui';
+import { ComposerToolbarButton } from '@/features/cross-system/composer-editor/ComposerToolbarButton';
+import { promptForLink } from '@/features/cross-system/composer-editor/promptForLink';
+import { AttachButton, type TipTapEditor } from '@fops/ui';
 import { AtSign, Bold, Code, Italic, Link, List } from 'lucide-react';
 import type * as React from 'react';
 
@@ -29,45 +31,6 @@ export interface InternalCommentToolbarProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function ToolbarButton({
-  onClick,
-  isActive,
-  disabled,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  isActive: boolean;
-  disabled: boolean;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => {
-        // Mouse only: stop the button from taking focus (and the selection) from the editor.
-        e.preventDefault();
-      }}
-      // Native click covers mouse and Enter/Space; the command refocuses the editor itself.
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      aria-pressed={isActive}
-      className={cn(
-        'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
-        'hover:bg-surface-row-hover hover:text-text-primary',
-        'disabled:cursor-not-allowed disabled:opacity-40',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-        isActive && 'bg-surface-row-selected text-text-primary',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function InternalCommentToolbar({
@@ -83,72 +46,63 @@ export function InternalCommentToolbar({
       className="flex items-center gap-0.5 px-2 py-1 border-b border-border-subtle"
       data-testid="internal-comment-toolbar"
     >
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleBold().run()}
         isActive={editor?.isActive('bold') ?? false}
         disabled={editorDisabled}
         title="굵게"
       >
         <Bold size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleItalic().run()}
         isActive={editor?.isActive('italic') ?? false}
         disabled={editorDisabled}
         title="기울임"
       >
         <Italic size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleCode().run()}
         isActive={editor?.isActive('code') ?? false}
         disabled={editorDisabled}
         title="코드"
       >
         <Code size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleBulletList().run()}
         isActive={editor?.isActive('bulletList') ?? false}
         disabled={editorDisabled}
         title="글머리 기호"
       >
         <List size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
-        onClick={() => {
-          const previousUrl = editor?.getAttributes('link').href ?? '';
-          const url = window.prompt('링크 URL', previousUrl);
-          if (url === null) return;
-          if (url === '') {
-            editor?.chain().focus().extendMarkRange('link').unsetLink().run();
-          } else {
-            editor?.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-          }
-        }}
+      <ComposerToolbarButton
+        onClick={() => promptForLink(editor)}
         isActive={editor?.isActive('link') ?? false}
         disabled={editorDisabled}
         title="링크"
       >
         <Link size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
       {/* Separator */}
       <div className="w-px h-4 bg-border-subtle mx-0.5" aria-hidden="true" />
 
       {/* @Mention — Combobox-backed click; NOT inline @-autocomplete (spec §3.5). */}
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={onInsertMention}
         isActive={false}
         disabled={editorDisabled}
         title="@멘션"
       >
         <AtSign size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
       {/* Attach — wired through RichEditor toolbar API (PLAN-22 C8). */}
       {onAttach ? (
