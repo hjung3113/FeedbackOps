@@ -139,23 +139,3 @@ export function vocDescriptionToolbar(opts?: {
     );
   };
 }
-
-/**
- * Backward-compatible default export — bare render-prop (no attach error
- * handling). New call sites prefer `vocDescriptionToolbar({ onAttachError })`.
- *
- * Accepts an optional `api` so legacy callers passing only `editor` continue
- * to compile; when `api` is missing, the Attach button is still shown and its pick throws
- * (swallowed without `onAttachError`), so a surface without `onAttach` must use `hideAttach`.
- */
-export function VocDescriptionToolbar(
-  editor: Editor | null,
-  api?: RichEditorToolbarApi,
-): React.ReactElement | null {
-  const safeApi: RichEditorToolbarApi = api ?? {
-    attach: async () => {
-      throw new Error('RichEditor: onAttach is not configured for this surface');
-    },
-  };
-  return vocDescriptionToolbar()(editor, safeApi);
-}

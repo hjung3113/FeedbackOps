@@ -2,7 +2,7 @@
 // run the same command on the real editor and hand focus back to it (AF-2, #1182).
 
 import { NotesToolbar } from '@/features/cross-system/progress-notes/ProgressNotesComposer';
-import { VocDescriptionToolbar } from '@/features/voc/components/create/VocDescriptionToolbar';
+import { vocDescriptionToolbar } from '@/features/voc/components/create/VocDescriptionToolbar';
 import { InternalCommentToolbar } from '@/features/voc/components/detail/rich-toolbars/InternalCommentToolbar';
 import { PublicUpdateToolbar } from '@/features/voc/components/detail/rich-toolbars/PublicUpdateToolbar';
 import { ReporterReplyToolbar } from '@/features/voc/components/detail/rich-toolbars/ReporterReplyToolbar';
@@ -38,7 +38,12 @@ const TOOLBARS: ToolbarCase[] = [
   {
     name: 'VocDescriptionToolbar',
     surface: 'voc-description',
-    toolbar: (editor) => VocDescriptionToolbar(editor),
+    toolbar: (editor) =>
+      vocDescriptionToolbar()(editor, {
+        attach: async (): Promise<never> => {
+          throw new Error('attach is not configured in this test');
+        },
+      }),
   },
   {
     name: 'progress NotesToolbar',

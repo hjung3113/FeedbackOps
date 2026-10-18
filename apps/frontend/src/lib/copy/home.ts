@@ -27,7 +27,6 @@ export const HOME_COPY = {
   noZeroQueueItems: '처리할 항목 없음',
   summaryError: '홈 요약을 불러올 수 없습니다.',
   assignedToYou: '내게 배정됨',
-  myVocs: GLOSSARY.myVocs,
   coverage: '커버리지 신호',
   openRequests: '열린 요청',
   noOpenRequests: '열린 요청이 없습니다.',

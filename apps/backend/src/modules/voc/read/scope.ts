@@ -1,7 +1,7 @@
 // VOC list view scope resolution and shared scope membership helper.
 import type { ListVocsQuery } from '@fops/shared';
 import { HttpError } from '../../../lib/errors.js';
-import { scopeIncludes } from '../../permissions/scope-service.js';
+import { scopeIncludes, scopeIsNonEmpty } from '../../permissions/scope-service.js';
 import type { Scope } from '../authorization.js';
 import type { ReadActorContext } from '../read-service.js';
 
@@ -95,9 +95,7 @@ export function resolveVocListScope(args: {
   const intersected = intersectScopes(readScope, triage);
   const selected = managed_system_id && managed_system_id !== 'all' ? managed_system_id : undefined;
   if (intersected.kind === 'scoped' && intersected.managedSystemIds.length === 0) {
-    const holdsTriage = selected
-      ? msInScope(triage, selected)
-      : triage.kind === 'all' || triage.managedSystemIds.length > 0;
+    const holdsTriage = selected ? msInScope(triage, selected) : scopeIsNonEmpty(triage);
     if (holdsTriage) {
       // #1170: `voc.read` is requestable only per Managed System. With no
       // selection, a triage scope held on exactly one System names it so the
