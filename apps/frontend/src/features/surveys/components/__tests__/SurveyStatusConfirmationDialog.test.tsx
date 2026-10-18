@@ -19,6 +19,12 @@ function renderDialog(error: ApiError | null): void {
 }
 
 describe('SurveyStatusConfirmationDialog error copy (#561)', () => {
+  it('renders a named cancel action', () => {
+    renderDialog(null);
+
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
+  });
+
   it.each([
     ['a network TypeError', new TypeError('Failed to fetch')],
     ['a non-JSON body SyntaxError', new SyntaxError('Unexpected token <')],
