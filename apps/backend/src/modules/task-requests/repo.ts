@@ -1,8 +1,13 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+
+/** Pending-review status rule; `statusColumn` is the status column reference. */
+export function pendingTaskRequestPredicate(statusColumn: SQL): SQL {
+  return sql`${statusColumn} = 'pending_review'`;
+}
 
 export interface TaskRequestRow {
   cursor_timestamp?: string;

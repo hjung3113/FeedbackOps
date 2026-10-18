@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
 import { escapeLikePattern } from '../../lib/sql-like.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
@@ -323,7 +323,15 @@ function releasedWithVocPredicate() {
           AND link.status = 'active'
       )`;
 }
-function releasedWithPublicUpdatePredicate() {
+/** Status set of the `in-flight` group; `statusColumn` is the status column reference. */
+export function taskInFlightPredicate(statusColumn: SQL): SQL {
+  return sql`${statusColumn} IN ('todo', 'doing', 'review')`;
+}
+/**
+ * Released-with-public-update EXISTS (non-skipped public update on a linked, non-archived VOC).
+ * `taskTable` is the Task table reference or alias the EXISTS correlates against.
+ */
+export function taskReleasedWithPublicUpdatePredicate(taskTable: SQL): SQL {
   return sql`EXISTS (
         SELECT 1
         FROM core.entity_links_app link
@@ -334,10 +342,10 @@ function releasedWithPublicUpdatePredicate() {
         JOIN voc.voc_public_updates public_update
           ON public_update.voc_id = voc.id
          AND public_update.skip_public_update = false
-        WHERE link.workspace_id = task.tasks.workspace_id
+        WHERE link.workspace_id = ${taskTable}.workspace_id
           AND link.source_type = 'voc'
           AND link.target_type = 'task'
-          AND link.target_id = task.tasks.id
+          AND link.target_id = ${taskTable}.id
           AND link.relation_type = 'evidence_of'
           AND link.status = 'active'
       )`;
@@ -374,8 +382,7 @@ function listPredicates(input: ListInput) {
         : sql`analytics_area_id = ${input.analyticsAreaId}::uuid`,
     );
   }
-  if (input.statusGroup === 'in-flight')
-    predicates.push(sql`status IN ('todo', 'doing', 'review')`);
+  if (input.statusGroup === 'in-flight') predicates.push(taskInFlightPredicate(sql`status`));
   if (input.statusGroup === 'open')
     predicates.push(sql`status IN ('backlog', 'todo', 'doing', 'review', 'reopened')`);
   if (input.overdue === 'true')
@@ -387,7 +394,7 @@ function listPredicates(input: ListInput) {
     );
   if (input.publicUpdate === 'missing') {
     predicates.push(
-      sql`${releasedWithVocPredicate()} AND NOT (${releasedWithPublicUpdatePredicate()})`,
+      sql`${releasedWithVocPredicate()} AND NOT (${taskReleasedWithPublicUpdatePredicate(sql`task.tasks`)})`,
     );
   }
   const milestoneAlternatives = [];

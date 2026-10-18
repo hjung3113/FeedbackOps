@@ -15,7 +15,11 @@ import { actorFindingListScope, countGroupedFindingsForReport } from '../finding
 import { readManagedSystemMetadata } from '../managed-systems/index.js';
 import { type CheckService, memoizeCapabilityChecks } from '../permissions/check-service.js';
 import { isAuthorizationAbsence } from '../permissions/read-utility.js';
-import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
+import {
+  type Scope,
+  actorScopeForCapability,
+  scopeIncludes,
+} from '../permissions/scope-service.js';
 import { actorSurveyReadScope, checkSurveyRead } from '../surveys/authorization.js';
 import { countGroupedSurveysForReport } from '../surveys/index.js';
 import { actorTaskListScope, countGroupedTasksForReport } from '../tasks/index.js';
@@ -27,8 +31,7 @@ type Domain = (typeof domains)[number];
 type Group = { managed_system_id: string; analytics_area_id: string | null; total: number };
 const key = (row: Pick<Group, 'managed_system_id' | 'analytics_area_id'>) =>
   `${row.managed_system_id}/${row.analytics_area_id ?? '~'}`;
-const includes = (scope: Scope, id: string) =>
-  scope.kind === 'all' || scope.managedSystemIds.includes(id);
+const includes = scopeIncludes;
 const normalize = (scope: Scope) =>
   scope.kind === 'all' ? 'all' : [...scope.managedSystemIds].sort();
 const cursorSchema = z
