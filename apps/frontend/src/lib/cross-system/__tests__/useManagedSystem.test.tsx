@@ -7,12 +7,12 @@ import { useManagedSystem } from '../useManagedSystem';
 import { useManagedSystemNamesResult } from '../useManagedSystemNames';
 
 // Mock the fetchManagedSystems import
-vi.mock('@/lib/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/api')>();
+vi.mock('@/lib/api/managed-systems', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/managed-systems')>();
   return { ...actual, fetchManagedSystems: vi.fn() };
 });
 
-import { fetchManagedSystems } from '@/lib/api';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
 const mockFetchManagedSystems = vi.mocked(fetchManagedSystems);
 
 function makeWrapper() {

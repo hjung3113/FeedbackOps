@@ -3,8 +3,8 @@
 // On success: selects the new Finding in /findings and keeps the VOC origin.
 
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
 import {
   type CreateFindingRequest,
   type FindingSeverity,
@@ -143,11 +143,8 @@ export function CreateFindingModal({
       : undefined;
 
   const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', managedSystemId] as const,
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({ managedSystemId, includeArchived: true, signal }),
+    ...analyticsAreasCatalogQuery(managedSystemId),
     enabled: open,
-    staleTime: 10 * 60 * 1000,
   });
   const analyticsAreaOptions = React.useMemo(
     () =>

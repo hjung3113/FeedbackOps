@@ -1,6 +1,10 @@
-import { fetchAnalyticsAreas, fetchManagedSystems, useIdempotencyKey } from '@/lib/api';
+import { fetchManagedSystems, useIdempotencyKey } from '@/lib/api';
 import type { ApiError, ApiErrorEnvelope } from '@/lib/api';
 import { errorMapper, mapUnknownError } from '@/lib/api/errorMapper';
+import {
+  activeAnalyticsAreas,
+  analyticsAreasCatalogQuery,
+} from '@/lib/cross-system/analyticsAreasCatalog';
 import { createVocRequestSchema, emptyTipTapDoc } from '@fops/shared';
 import type { CreateVocRequest } from '@fops/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -110,9 +114,8 @@ export function useVocCreateController({
 
   // ── Analytics Areas query (disabled until MS selected) ───────────────────
   const aaQuery = useQuery({
-    queryKey: ['analytics-areas', { managedSystemId: selectedMs, includeArchived: false }],
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({ managedSystemId: selectedMs, includeArchived: false, signal }),
+    ...analyticsAreasCatalogQuery(selectedMs),
+    select: activeAnalyticsAreas,
     enabled: Boolean(selectedMs),
   });
 

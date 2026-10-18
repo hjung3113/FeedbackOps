@@ -1,6 +1,7 @@
-import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
+import { fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { AREA_REPORT_COPY as AREA_COPY } from '@/lib/copy/area-report';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
 import {
   Select,
   SelectContent,
@@ -47,32 +48,12 @@ export function VocAreaFilterSelect({
     staleTime: 5 * 60_000,
     retry: false,
   });
-  const areas = useQuery({
-    queryKey: ['voc-area-filter-options', scope],
-    retry: false,
-    staleTime: 30_000,
-    queryFn: async ({ signal }) => {
-      const items: Awaited<ReturnType<typeof fetchAnalyticsAreas>>['items'] = [];
-      let offset = 0;
-      while (true) {
-        const page = await fetchAnalyticsAreas({
-          includeArchived: true,
-          limit: 500,
-          offset,
-          signal,
-          ...(scope === undefined ? {} : { managedSystemId: scope }),
-        });
-        items.push(...page.items);
-        offset += page.items.length;
-        if (offset >= page.total || page.items.length === 0) return items;
-      }
-    },
-  });
+  const areas = useQuery({ ...analyticsAreasCatalogQuery(scope), retry: false });
 
   const systemNames = new Map((systems.data?.items ?? []).map((item) => [item.id, item.name]));
   // A background refetch keeps the last known scope; only no data yet (pending/failed) hides areas.
   const scopeData = capabilityScope.data;
-  const offeredAreas = (areas.data ?? []).filter(
+  const offeredAreas = (areas.data?.items ?? []).filter(
     (item) =>
       scopeData !== undefined &&
       systemNames.has(item.managed_system_id) &&
