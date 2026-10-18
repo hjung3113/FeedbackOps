@@ -94,6 +94,7 @@ services:
       OIDC_SCOPES: openid email profile
       TRUSTED_PROXY_HOPS: "1"
       PUBLIC_ATTACHMENT_ORIGIN: "'self'"
+      PLATFORM_RETURN_ORIGINS: ""
       STORAGE_S3_ENDPOINT: http://minio:9000
       STORAGE_S3_REGION: us-east-1
       STORAGE_S3_BUCKET: ${STORAGE_S3_BUCKET:-fops-attachments}

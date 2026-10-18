@@ -128,6 +128,25 @@ const routeCases: Array<{
   },
 ];
 
+// ADR-0071: platformReturn is accepted on exactly four routes; every other
+// strict schema drops it.
+const PLATFORM_URL = 'https://platform.example.com/analytics?x=1';
+describe('platformReturn search field', () => {
+  it.each([
+    ['/tasks', validateTasksSearch],
+    ['/vocs', validateVocSearch],
+    ['/surveys', validateSurveysSearch],
+    ['/surveys/$surveyId', validateSurveyDetailSearch],
+  ] as const)('%s keeps a valid platformReturn and drops an invalid one', (_path, validate) => {
+    expect(validate({ platformReturn: PLATFORM_URL })).toEqual({ platformReturn: PLATFORM_URL });
+    expect(validate({ platformReturn: 'javascript:alert(1)' })).toEqual({});
+  });
+
+  it('is dropped on a route outside the four', () => {
+    expect(validateHomeSearch({ platformReturn: PLATFORM_URL })).toEqual({});
+  });
+});
+
 it('keeps Survey detail list context, builder, and returnTo', () => {
   expect(
     validateSurveyDetailSearch({

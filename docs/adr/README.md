@@ -126,6 +126,7 @@ These record where the product deliberately differs from `docs/design-prototype/
 - [0069](0069-analytics-area-report.md) Analytics Area report attribution and safe metric grain — Coverage tab, current classification, Survey-level output and exact source links. *Accepted and implemented in #1077–#1079*
 
 - [0070](0070-survey-starting-templates-and-definition-reuse.md) Survey starting templates and definition reuse — three built-in backend starters, same-system snapshot reuse and visible dialog selection shipped in #1073–#1075; amends 0039 and narrows 0059 D2. *Accepted and implemented*
+- [0071](0071-return-to-platform-parameter.md) Return-to-platform parameter — `platformReturn` search key on four routes, shown as a sidebar link only for origins in `PLATFORM_RETURN_ORIGINS` (served by `GET /me`). *Accepted*
 
 ## Status legend
 

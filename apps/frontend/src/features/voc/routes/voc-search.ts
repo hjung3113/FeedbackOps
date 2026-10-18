@@ -1,3 +1,4 @@
+import { platformReturnField } from '@/lib/router/platform-return';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 // /vocs search schema — owned by the feature layer (admin/permissions
 // precedent) so both the route file and VocRouteShell import one definition.
@@ -11,6 +12,7 @@ import { z } from 'zod';
 export const vocSearchSchema = z
   .object({
     returnTo: recoverySearchFields.returnTo,
+    platformReturn: platformReturnField,
     view: z.enum(['inbox', 'my', 'triage']).optional(),
     action: z.enum(['create']).optional(),
     selected: z.string().uuid().optional(),

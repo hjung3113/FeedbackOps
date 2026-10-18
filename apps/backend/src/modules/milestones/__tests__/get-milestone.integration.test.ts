@@ -41,6 +41,8 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
     migrateHandle = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
+    // Per-actor buckets persist across files; start this suite with fresh ones.
+    await dbHandle.pool.query('delete from core.rate_limits');
 
     adminCookie = await loginAs(app, 'mock-admin-1');
     userCookie = await loginAs(app, 'mock-user-1');

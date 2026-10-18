@@ -17,7 +17,7 @@ import {
 import pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
-import type { AppConfig } from './config.js';
+import { type AppConfig, platformReturnOriginsOf } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { buildEntityLinkProviders } from './entity-link-providers.js';
 import { registerHttpErrorHandler } from './lib/http-error-handler.js';
@@ -391,6 +391,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     workspaceId,
     nodeEnv: config.NODE_ENV,
+    platformReturnOrigins: platformReturnOriginsOf(config),
   });
 
   // ── GET /actors — workspace actor list (post-#21 drift fix) ─────────────

@@ -1,8 +1,9 @@
 import type { SavedViewSurface } from '@/lib/api/saved-views';
 import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
+import { ROUTER_FALLBACK_COPY } from '@/lib/copy/router';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { cn } from '@fops/ui';
-import { ChevronDown, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import * as React from 'react';
 
 export type NavCounts = Partial<Record<NavCountKey, number>>;
@@ -89,6 +90,8 @@ export interface AppSidebarProps {
   onSaveView?: (name: string) => void;
   onApplySavedView?: (id: string) => void;
   onDeleteSavedView?: (id: string) => undefined | Promise<unknown>;
+  /** Already allowlisted by the caller (ADR-0071); rendered as a same-tab external link. */
+  platformReturnUrl?: string;
 }
 
 const STORAGE_KEY = 'appSidebarCollapsed';
@@ -122,6 +125,7 @@ export function AppSidebar({
   onSaveView,
   onApplySavedView,
   onDeleteSavedView,
+  platformReturnUrl,
 }: AppSidebarProps) {
   const [collapsed, setCollapsed] = React.useState(() => readInitialCollapsed(defaultCollapsed));
   const [scopeOpen, setScopeOpen] = React.useState(false);
@@ -237,6 +241,22 @@ export function AppSidebar({
               {!isAdmin && <p className="px-2 py-1.5 text-caption text-text-muted" data-testid="scope-name-visibility-note">이름은 워크스페이스 전체에 공개되며, 접근하려면 권한을 요청하세요.</p>}
             </div>
           )}
+        </div>
+      )}
+      {platformReturnUrl !== undefined && (
+        <div className="border-b border-border-subtle p-2">
+          <a
+            href={platformReturnUrl}
+            className={navItemClass(collapsed)}
+            data-testid="platform-return-link"
+            title={collapsed ? ROUTER_FALLBACK_COPY.platformReturn : undefined}
+            aria-label={collapsed ? ROUTER_FALLBACK_COPY.platformReturn : undefined}
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            {!collapsed && (
+              <span className="min-w-0 flex-1 truncate">{ROUTER_FALLBACK_COPY.platformReturn}</span>
+            )}
+          </a>
         </div>
       )}
       <nav className="flex-1 overflow-y-auto px-2 py-2">

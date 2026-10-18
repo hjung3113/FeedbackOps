@@ -11,6 +11,7 @@ export { CreateSurveyDialog } from '@/features/surveys/components/create/CreateS
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import { platformReturnField } from '@/lib/router/platform-return';
 import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
@@ -25,6 +26,7 @@ import { z } from 'zod';
 // the URL param is supported for deep links only.
 export const surveysSearchSchema = z
   .object({
+    platformReturn: platformReturnField,
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
     'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),

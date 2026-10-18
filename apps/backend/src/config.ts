@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { validateAttachmentOrigin } from './config-attachment-origin.js';
+import {
+  parsePlatformReturnOrigins,
+  validateAttachmentOrigin,
+} from './config-attachment-origin.js';
 import { validateOidcConfig } from './config-oidc.js';
 
 const optionalEnvString = z.preprocess(
@@ -46,6 +49,11 @@ const envSchema = z.object({
   // paths, query, credentials, wildcards, whitespace/separators, other
   // schemes — fails config load via validateAttachmentOrigin.
   PUBLIC_ATTACHMENT_ORIGIN: z.string().default("'self'"),
+  // Comma-separated bare origins allowed as the "return to platform" link
+  // target (ADR-0071). Unset or empty = feature off. Each entry follows the
+  // PUBLIC_ATTACHMENT_ORIGIN origin rules (minus 'self'); the server
+  // wires the parsed list into GET /me.
+  PLATFORM_RETURN_ORIGINS: z.string().optional(),
   // Review HTTP-H-2: `trustProxy: true` is unconditional and lets clients
   // spoof `X-Forwarded-For` to reset anon rate-limit buckets and audit IPs
   // when no ingress is in front. Hop count restricts Fastify to trusting
@@ -71,6 +79,17 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['PUBLIC_ATTACHMENT_ORIGIN'],
       message: originIssue,
+    });
+  }
+  const platformOrigins = parsePlatformReturnOrigins(
+    config.PLATFORM_RETURN_ORIGINS,
+    config.NODE_ENV,
+  );
+  if ('issue' in platformOrigins) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['PLATFORM_RETURN_ORIGINS'],
+      message: platformOrigins.issue,
     });
   }
   for (const oidcIssue of validateOidcConfig({
@@ -120,4 +139,13 @@ export type AppConfig = z.infer<typeof envSchema>;
 
 export function loadConfig(): AppConfig {
   return envSchema.parse(process.env);
+}
+
+// Config load already rejected invalid values, so a parse issue cannot occur
+// here; an unset or empty variable yields `[]` (feature off).
+export function platformReturnOriginsOf(
+  config: Pick<AppConfig, 'PLATFORM_RETURN_ORIGINS' | 'NODE_ENV'>,
+): string[] {
+  const parsed = parsePlatformReturnOrigins(config.PLATFORM_RETURN_ORIGINS, config.NODE_ENV);
+  return 'origins' in parsed ? parsed.origins : [];
 }

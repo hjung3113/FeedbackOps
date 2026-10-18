@@ -23,4 +23,6 @@ when `NODE_ENV` is `production` or the configured provider is not `mock`.
 clears the cookie, and returns `204`.
 
 `GET /me` requires a valid session and workspace membership; it returns the
-session Actor's identity and `workspace_id`.
+session Actor's identity, `workspace_id` and `platform_return_origins`:
+the origins configured in `PLATFORM_RETURN_ORIGINS` (ADR-0071), `[]` when
+unset. `POST /auth/mock-login` does not return `platform_return_origins`.

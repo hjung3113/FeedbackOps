@@ -47,6 +47,7 @@ import {
   CommandPaletteProvider,
   useCommandPalette,
 } from '../lib/layout/command-palette/CommandPaletteContext';
+import { selectPlatformReturn } from '../lib/router/platform-return';
 import type { AppRouterContext } from './__root';
 import { VOC_DEFAULT_VIEW } from './_authed/vocs';
 
@@ -359,6 +360,9 @@ export function AuthedLayout() {
 
 function AuthedShell() {
   const location = useRouterState({ select: (state) => state.location });
+  const platformReturn = useRouterState({
+    select: (state) => selectPlatformReturn(state.matches),
+  });
   const navigate = useNavigate({ from: '/vocs' });
   const queryClient = useQueryClient();
   const me = useMe();
@@ -464,6 +468,7 @@ function AuthedShell() {
       sidebarEntries={entries}
       activeDomain={activeDomain}
       paletteNavTree={NAV_TREE}
+      {...(platformReturn !== undefined ? { platformReturn } : {})}
       {...(managedSystemId !== undefined ? { managedSystemId } : {})}
       syncManagedSystemFromUrl={supportsManagedSystemScope}
       scopeControlEnabled={supportsManagedSystemScope}
