@@ -6,7 +6,7 @@ set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=${VISUAL_ROOT:-}
 FRONTEND=
-TEMPLATE=$SCRIPT_DIR/../templates/capture.visual.spec.ts.tmpl
+TEMPLATE=$SCRIPT_DIR/../addenda/capture.visual.spec.ts.tmpl
 PLAY_PASSED=0
 PLAY_FAILED=0
 PLAY_SKIPPED=0

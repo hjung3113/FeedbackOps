@@ -1,0 +1,292 @@
+{
+  "review_plan": {
+    "base": "origin/develop",
+    "test": {
+      "regex": "(__tests__/|\\.test\\.|\\.spec\\.|^apps/frontend/tests/|test-support/)"
+    },
+    "baseline": {
+      "prefix": [
+        "apps/frontend/tests/visual/baselines/"
+      ]
+    },
+    "docs_only": {
+      "doc": {
+        "any": [
+          {
+            "suffix": [
+              ".md"
+            ]
+          },
+          {
+            "prefix": [
+              "docs/",
+              "apps/frontend/src/lib/copy/"
+            ]
+          }
+        ]
+      },
+      "also_allowed": [
+        "test",
+        "baseline"
+      ],
+      "require_doc": false
+    },
+    "reviewed_tests": "non_test",
+    "skip_imports": true,
+    "reason_flags": false,
+    "ux": {
+      "required": [
+        {
+          "baseline": true,
+          "label": "visual baseline: {file}"
+        },
+        {
+          "match": {
+            "any": [
+              {
+                "regex": "^apps/frontend/src/(features|routes|lib/layout)/.*\\.tsx$"
+              },
+              {
+                "prefix": [
+                  "packages/ui/src/"
+                ]
+              },
+              {
+                "regex": "^apps/frontend/src/.*\\.css$"
+              }
+            ]
+          }
+        }
+      ],
+      "optional": [
+        {
+          "prefix": [
+            "apps/frontend/src/",
+            "packages/shared/src/"
+          ]
+        },
+        {
+          "regex": "^apps/backend/src/modules/.*(routes?|controller|validation|polic|permission)"
+        }
+      ]
+    },
+    "perf": {
+      "path_rules": [
+        {
+          "match": {
+            "any": [
+              {
+                "regex": "^apps/frontend/src/(routes|lib/router|lib/api|lib/layout|lib/query|lib/cross-system|lib/auth)/"
+              },
+              {
+                "prefix": [
+                  "apps/frontend/",
+                  "packages/ui/"
+                ],
+                "regex": "(^|/)use[A-Z\\-][\\w-]*\\.tsx?$|InternalLink"
+              }
+            ]
+          },
+          "reason": "routing/fetch path: {file}"
+        },
+        {
+          "match": {
+            "regex": "^(apps/frontend|packages/ui)/package\\.json$"
+          },
+          "reason": "dependency change: {file}"
+        }
+      ],
+      "line_rules": [
+        {
+          "file": {
+            "prefix": [
+              "apps/frontend/",
+              "packages/ui/"
+            ]
+          },
+          "regex": "\\b(useQuery|useInfiniteQuery|queryKey|staleTime|refetchInterval|invalidateQueries|apiRequest|apiClient)\\b|\\benabled\\s*:|\\bfetch\\(",
+          "reason": "query options or fetches changed: {files}"
+        },
+        {
+          "file": {
+            "prefix": [
+              "apps/backend/src/modules/"
+            ]
+          },
+          "patterns": [
+            {
+              "file": {
+                "regex": "^apps/backend/src/modules/.*/(read/|repository|repo\\.ts$|repo-)"
+              },
+              "regex": "\\b(ILIKE|LIKE|ORDER BY|LIMIT|OFFSET)\\b|\\.orderBy\\(|\\.limit\\(|\\.offset\\(|\\bilike\\(|\\blike\\(|\\.from\\("
+            },
+            {
+              "regex": "\\b(ILIKE|ORDER BY|LIMIT|OFFSET)\\b|\\.orderBy\\(|\\.limit\\(|\\.offset\\(|\\bilike\\("
+            }
+          ],
+          "reason": "list query changed in backend read code: {files}"
+        }
+      ]
+    },
+    "flags": [
+      {
+        "name": "backend",
+        "match": {
+          "prefix": [
+            "apps/backend/",
+            "packages/shared/"
+          ]
+        }
+      },
+      {
+        "name": "migration",
+        "match": {
+          "prefix": [
+            "apps/backend/migrations/"
+          ]
+        }
+      },
+      {
+        "name": "permission",
+        "scope": "non_test",
+        "match": {
+          "prefix": [
+            "apps/",
+            "packages/"
+          ],
+          "regex": "(?i)(permission|polic|(?<!_)auth(?!ed)|scope|grant|deny)"
+        },
+        "line": {
+          "regex": "PERMISSION_BLOCKED|requireReadable|requirePermission|capability|readScope|triageScope|scopeFilter|outOfScope|out_of_scope"
+        }
+      },
+      {
+        "name": "instructions",
+        "match": {
+          "any": [
+            {
+              "prefix": [
+                ".claude/"
+              ]
+            },
+            {
+              "suffix": [
+                "AGENTS.md",
+                "CLAUDE.md"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "worker_hygiene": {
+    "base": "origin/develop",
+    "product_paths": [
+      "apps",
+      "packages"
+    ],
+    "tracked_excludes": [
+      ":(exclude)*.png"
+    ],
+    "forbidden_pattern": "biome-ignore",
+    "forbidden_header": "NEW biome-ignore (forbidden; allowlisted diagnostics need no suppression):",
+    "reason_allowed": false,
+    "suppressions_no_growth": null,
+    "churn_paths": [
+      "."
+    ],
+    "pass_line": "worker-hygiene: no new biome-ignore"
+  },
+  "wave_status": {
+    "preview_mode": "pid",
+    "docker_containers": true
+  },
+  "launch": {
+    "main_env": "FOPS_MAIN",
+    "base": "origin/develop",
+    "branch_prefix": "feature/",
+    "orca_setup": "run",
+    "path_prepend": [
+      "/opt/homebrew/opt/node@22/bin"
+    ],
+    "wait_for": {
+      "all": [
+        {
+          "path": "node_modules/.modules.yaml",
+          "type": "file"
+        },
+        {
+          "path": "apps/frontend/node_modules",
+          "type": "dir"
+        }
+      ],
+      "required": [
+        {
+          "path": "node_modules/.modules.yaml",
+          "type": "file"
+        }
+      ],
+      "tries": 120,
+      "interval": 5,
+      "fail": "node_modules incomplete: pnpm install --frozen-lockfile (Node 22)"
+    },
+    "pre_steps": [
+      {
+        "run": [
+          "pnpm",
+          "--filter",
+          "@fops/frontend",
+          "build"
+        ],
+        "log": ".review/route-tree-build.log",
+        "fail": "frontend build failed (see .review/route-tree-build.log)"
+      }
+    ],
+    "first_line": "Read {rules} first. Node 22 is at /opt/homebrew/opt/node@22/bin.",
+    "templates": [
+      {
+        "dest": ".review/00-IMPL-RULES.md",
+        "shared": "impl-rules.md",
+        "addendum": "addenda/impl-rules.md",
+        "in_rules": true
+      },
+      {
+        "dest": ".review/00-REVIEW-RULES.md",
+        "shared": "review-rules.md",
+        "addendum": "addenda/review-rules.md"
+      },
+      {
+        "dest": ".review/00-REVIEW-RULES-PERF.md",
+        "addendum": "addenda/review-rules-perf.md"
+      }
+    ],
+    "modes": {
+      "be": {
+        "templates": [
+          {
+            "dest": ".review/00-IMPL-RULES-BE.md",
+            "addendum": "addenda/impl-rules-be.md",
+            "in_rules": true
+          }
+        ],
+        "hook": "scripts/verify-db.sh",
+        "hook_args": [
+          "create",
+          "{issue}",
+          "--migrate-from",
+          "{worktree}"
+        ],
+        "hook_log": ".review/verify-db-create.log",
+        "hook_fail": "issue DB create failed (see {worktree}/.review/verify-db-create.log; is verify-db.sh up running?)",
+        "skip_if_state": "env.verify.{issue}",
+        "copy_from_state": "env.verify.{issue}",
+        "copy_to": ".review/env.verify",
+        "task_lines": [
+          "Your own throwaway database (port 5439, never 5434): run only the integration files you added or touched, from the repo root, with",
+          "`FEEDBACKOPS_ENV_FILE={worktree}/.review/env.verify pnpm --filter backend test:integration <paths relative to apps/backend>`."
+        ]
+      }
+    }
+  }
+}
