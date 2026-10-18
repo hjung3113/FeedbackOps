@@ -1,7 +1,7 @@
-import { fetchManagedSystems } from '@/lib/api';
 import { managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { managedSystemsCatalogQuery } from './useManagedSystemNames';
 
 export interface ResolvedManagedSystem {
   id: string;
@@ -11,11 +11,7 @@ export interface ResolvedManagedSystem {
 }
 
 export function useManagedSystem(id: string | null | undefined): ResolvedManagedSystem | null {
-  const { data } = useQuery({
-    queryKey: ['managed-systems', 'all'],
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const { data } = useQuery(managedSystemsCatalogQuery());
 
   return useMemo(() => {
     if (!id || !data) return null;

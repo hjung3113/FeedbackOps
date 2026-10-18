@@ -7,7 +7,7 @@
 //     on a freshly migrated database.
 //   * Runs as the fops_app role via DATABASE_URL — proves the app role can
 //     write to non-audit tables. Never touches core.audit_log.
-//   * Three baseline actors per CONTEXT.md vocabulary (Slice 1):
+//   * Three baseline actors per GLOSSARY.md vocabulary (Slice 1):
 //       - mock-admin-1 / admin@feedbackops.local  / admin / internal_member
 //       - mock-user-1  / user@feedbackops.local   / user  / internal_member
 //       - system       / system@feedbackops.local / admin / system

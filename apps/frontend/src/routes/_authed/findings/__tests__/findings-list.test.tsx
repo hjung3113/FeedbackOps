@@ -94,14 +94,21 @@ vi.mock('@fops/ui', async () => {
       state,
       category,
       reason,
+      onRequestAccess,
     }: {
       state: string;
       category: string;
       reason?: string;
+      onRequestAccess?: () => void;
     }) => (
       <div data-testid="permission-blocked" data-state={state}>
         {category}
         {reason !== undefined ? <p>{reason}</p> : null}
+        {onRequestAccess !== undefined ? (
+          <button type="button" onClick={onRequestAccess}>
+            권한 요청하기
+          </button>
+        ) : null}
       </div>
     ),
     Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
@@ -370,9 +377,14 @@ describe('FindingsListPage', () => {
         const requestFlow = screen.getByTestId('request-access-flow');
         expect(requestFlow).toHaveAttribute('data-capability', permission.permission);
         expect(requestFlow).toHaveAttribute('data-return-route-intent', '/findings');
+        // Exactly one request CTA, mounted by the blocked panel itself (#1264).
         const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
-        expect(requestButton).toHaveClass('bg-surface-raised');
-        expect(requestButton).not.toHaveClass('bg-accent-primary');
+        expect(screen.getAllByRole('button', { name: '권한 요청하기' })).toHaveLength(1);
+        expect(
+          within(screen.getByTestId('permission-blocked')).getByRole('button', {
+            name: '권한 요청하기',
+          }),
+        ).toBe(requestButton);
         fireEvent.click(requestButton);
         expect(requestAccessFlowMock).toHaveBeenCalledTimes(1);
         expect(screen.queryByRole('link', { name: '내 VOC' })).not.toBeInTheDocument();

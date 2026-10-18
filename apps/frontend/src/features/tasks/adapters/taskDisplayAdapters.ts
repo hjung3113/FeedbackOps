@@ -1,6 +1,7 @@
 import { resolveActors } from '@/lib/api/actors';
-import { type ManagedSystemDto, fetchManagedSystems } from '@/lib/api/managed-systems';
+import type { ManagedSystemDto } from '@/lib/api/managed-systems';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { shortId } from '@/lib/identity';
 import type { TaskDto } from '@fops/shared';
 import { useQuery } from '@tanstack/react-query';
@@ -14,11 +15,7 @@ export type TaskAssigneeResolution =
   | { kind: 'unresolved'; actorId: string };
 
 export function useTaskManagedSystemNames(): ReadonlyMap<string, string> {
-  const systemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const systemsQuery = useQuery(managedSystemsCatalogQuery());
 
   return React.useMemo(
     () => new Map((systemsQuery.data?.items ?? []).map((system) => [system.id, system.name])),
@@ -28,11 +25,7 @@ export function useTaskManagedSystemNames(): ReadonlyMap<string, string> {
 
 /** Full registry read (same cache as the names hook) for team-picker candidates. */
 export function useTaskManagedSystems(): readonly ManagedSystemDto[] {
-  const systemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const systemsQuery = useQuery(managedSystemsCatalogQuery());
   return systemsQuery.data?.items ?? [];
 }
 

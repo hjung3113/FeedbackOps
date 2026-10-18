@@ -8,10 +8,9 @@ import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { AuditService } from '../../core/audit/audit-service.js';
+import { unionScopes } from '../../permissions/scope-service.js';
 import type { VocClustersService } from '../../voc-clusters/service.js';
-import { type Scope, actorReadScope, actorTriageScope } from '../authorization.js';
-
-import { msInScope } from '../read/scope.js';
+import { type Scope, actorReadScope, actorTriageScope, inReporterArm } from '../authorization.js';
 
 import { VOC_RECOMMENDATION_LIMIT, VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from './constants.js';
 import {
@@ -156,6 +155,8 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
       limit,
     });
 
+    const readOrTriageScope: Scope = unionScopes(readScope, triageScope);
+
     return {
       available: true,
       embedding_version: deps.embeddingVersion,
@@ -163,9 +164,13 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
         voc_id: row.voc_id,
         display_id: row.display_id,
         title: row.title,
-        // Candidates outside read scope were admitted through reporter ownership.
-        ...(msInScope(readScope, row.primary_managed_system_id) ||
-        msInScope(triageScope, row.primary_managed_system_id)
+        // Candidates outside read scope were admitted only through reporter ownership, so
+        // they are the reporter arm unless the actor also holds voc.triage there.
+        ...(!inReporterArm({
+          isReporter: true,
+          effectiveScope: readOrTriageScope,
+          managedSystemId: row.primary_managed_system_id,
+        })
           ? { severity: row.severity }
           : {}),
         reporter_facing_status: row.reporter_facing_status,

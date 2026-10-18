@@ -18,8 +18,7 @@ import { resolveOwner } from '../responsibility.js';
 import type { CreateVocActor, VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 
-import { actorEffectiveScope } from '../authorization.js';
-import { msInScope } from '../read/scope.js';
+import { actorEffectiveScope, inReporterArm } from '../authorization.js';
 
 export function createVocCreateCommands(deps: VocServiceDeps) {
   async function assertOwnerOverride(
@@ -190,7 +189,11 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       ...actor,
       role_level: actor.role_level ?? 'user',
     });
-    const isReporterArm = !msInScope(scope, row.primaryManagedSystemId);
+    const isReporterArm = inReporterArm({
+      isReporter: true,
+      effectiveScope: scope,
+      managedSystemId: row.primaryManagedSystemId,
+    });
 
     return {
       id: row.id,

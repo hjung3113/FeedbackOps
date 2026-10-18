@@ -16,6 +16,8 @@ import {
   type Scope,
   type ScopeActorContext,
   actorScopeForCapability,
+  scopeIncludes,
+  unionScopes,
 } from '../permissions/scope-service.js';
 
 export type { Scope };
@@ -46,12 +48,40 @@ export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite):
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
     actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
   ]);
-  // Union: if either is 'all', effective scope is 'all'.
-  if (readScope.kind === 'all' || triageScope.kind === 'all') {
-    return { kind: 'all' };
-  }
-  const unionIds = [...new Set([...readScope.managedSystemIds, ...triageScope.managedSystemIds])];
-  return { kind: 'scoped', managedSystemIds: unionIds };
+  return unionScopes(readScope, triageScope);
+}
+
+/**
+ * The reporter arm: the actor reported this VOC but holds neither `voc.read` nor
+ * `voc.triage` on its Managed System, so the projection omits `severity`.
+ * `effectiveScope` is the `voc.read` ∪ `voc.triage` union (`actorEffectiveScope`).
+ */
+export function inReporterArm(args: {
+  isReporter: boolean;
+  effectiveScope: Scope;
+  managedSystemId: string;
+}): boolean {
+  return args.isReporter && !scopeIncludes(args.effectiveScope, args.managedSystemId);
+}
+
+/**
+ * The single source-VOC read rule: the reporter, or `voc.read` on the VOC's
+ * Managed System. `reporterId` is null when the VOC has no reporter.
+ */
+export async function canReadVocAsSource(
+  checkService: CheckService,
+  actor: ActorContextLite,
+  voc: { managedSystemId: string; reporterId: string | null },
+  options?: Parameters<CheckService['checkCapability']>[3],
+): Promise<boolean> {
+  if (voc.reporterId && actor.actor_id === voc.reporterId) return true;
+  const decision = await checkService.checkCapability(
+    actor,
+    'voc.read',
+    { workspace_id: actor.workspace_id, managed_system_id: voc.managedSystemId },
+    options,
+  );
+  return decision.allow;
 }
 
 /**
@@ -112,11 +142,7 @@ export function isVocVisibleToActor(
   actorId: string,
   voc: { primary_managed_system_id: string; reporter_id: string },
 ): boolean {
-  if (readScope.kind === 'all') return true;
-  return (
-    readScope.managedSystemIds.includes(voc.primary_managed_system_id) ||
-    voc.reporter_id === actorId
-  );
+  return scopeIncludes(readScope, voc.primary_managed_system_id) || voc.reporter_id === actorId;
 }
 
 /** Shared caller gate for triage mutation and advisory owner candidates. */

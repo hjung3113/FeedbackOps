@@ -35,7 +35,7 @@ import { lockFindingForUpdate as lockFindingById } from '../findings/index.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import { type CheckService, memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockVocClusterById } from '../voc-clusters/index.js';
-import { selectVocForUpdate } from '../voc/index.js';
+import { canReadVocAsSource, selectVocForUpdate } from '../voc/index.js';
 import {
   type TaskRequestRow,
   countListRows,
@@ -146,37 +146,6 @@ function taskRequestToDto(row: TaskRequestRow, source?: TaskRequestSourceLink): 
   };
 }
 
-async function canReadSourceVoc(
-  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
-  actor: TaskRequestsActor,
-  managedSystemId: string,
-  reporterId: string,
-  options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.actor_id === reporterId) return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'voc.read',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
-  return decision.allow;
-}
-
-async function canExposeSourceVocText(
-  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
-  actor: TaskRequestsActor,
-  managedSystemId: string,
-  reporterId: string,
-): Promise<boolean> {
-  if (actor.actor_id === reporterId) return true;
-  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
-  });
-  return decision.allow;
-}
-
 async function hasSelfApprovalCapability(
   deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
   actor: TaskRequestsActor,
@@ -235,12 +204,10 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     if (row.source_type === 'voc') {
       const canRead =
         row.source_voc_reporter_id !== undefined &&
-        (await canExposeSourceVocText(
-          { checkService },
-          actor,
-          row.primary_managed_system_id,
-          row.source_voc_reporter_id,
-        ));
+        (await canReadVocAsSource(checkService, actor, {
+          managedSystemId: row.primary_managed_system_id,
+          reporterId: row.source_voc_reporter_id,
+        }));
       if (!canRead) return source;
     }
 
@@ -457,11 +424,10 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('not_found.record', 'voc not found');
           }
 
-          const sourceReadable = await canReadSourceVoc(
-            deps,
+          const sourceReadable = await canReadVocAsSource(
+            deps.checkService,
             args.actor,
-            voc.primaryManagedSystemId,
-            voc.reporterId,
+            { managedSystemId: voc.primaryManagedSystemId, reporterId: voc.reporterId },
             { tx },
           );
           if (!sourceReadable) {

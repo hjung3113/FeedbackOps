@@ -20,10 +20,10 @@ import {
   resolveSurveyResponseEvidenceAccess,
 } from '../surveys/evidence-access.js';
 import { captureOutcomeRecovery, finishOutcomeRecovery } from '../surveys/recovery-presentation.js';
-import { selectVocForUpdate } from '../voc/index.js';
+import { canReadVocAsSource, selectVocForUpdate } from '../voc/index.js';
 import { incrementFindingEvidenceCount, insertEvidenceHighlight, insertFinding } from './repo.js';
 import { resolveOwner } from './responsibility.js';
-import { canManageFinding, canReadSourceVoc, toDto } from './service-shared.js';
+import { canManageFinding, toDto } from './service-shared.js';
 import type { FindingsActor, FindingsServiceDeps } from './service.js';
 
 export function createFindingCreation(deps: FindingsServiceDeps) {
@@ -52,14 +52,11 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             throw new HttpError('not_found.record', 'voc not found');
           }
 
-          const sourceReadable = await canReadSourceVoc(
-            deps,
+          const sourceReadable = await canReadVocAsSource(
+            deps.checkService,
             actor,
-            sourceVoc.primaryManagedSystemId,
-            sourceVoc.reporterId,
-            {
-              tx,
-            },
+            { managedSystemId: sourceVoc.primaryManagedSystemId, reporterId: sourceVoc.reporterId },
+            { tx },
           );
           if (!sourceReadable) {
             throw new HttpError('not_found.record', 'voc not found');

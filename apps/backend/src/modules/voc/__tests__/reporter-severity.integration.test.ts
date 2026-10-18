@@ -22,7 +22,13 @@ const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const PREFIX = 'it-1173-severity';
-const personas = ['reporter', 'denied-admin', 'operator-reporter', 'operator'] as const;
+const personas = [
+  'reporter',
+  'denied-admin',
+  'operator-reporter',
+  'triage-reporter',
+  'operator',
+] as const;
 type Persona = (typeof personas)[number];
 
 describe.skipIf(!APP_URL || !MIGRATE_URL || !WORKSPACE_ID)(
@@ -89,6 +95,15 @@ describe.skipIf(!APP_URL || !MIGRATE_URL || !WORKSPACE_ID)(
           [WORKSPACE_ID, actors['denied-admin'], capability, ms],
         );
       }
+      // triage-reporter holds voc.triage without voc.read: the reporter arm is voc.read ∪ voc.triage.
+      await grantCapability(
+        handle,
+        WORKSPACE_ID,
+        actors['triage-reporter'],
+        'voc.triage',
+        ms,
+        actors['denied-admin'],
+      );
       for (const persona of ['operator-reporter', 'operator'] as const) {
         await grantCapability(
           handle,

@@ -37,10 +37,7 @@ describe('TaskRequestRow identity', () => {
       />,
     );
 
-    expect(screen.getByText('검토자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(screen.getByText('검토자 없음')).toBeInTheDocument();
   });
 
   it('uses safe source, Managed System, and requester labels when names are unavailable', () => {

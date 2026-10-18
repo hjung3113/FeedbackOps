@@ -28,6 +28,7 @@ export function createVocOwnerCandidatesReader(
           { id: row.primaryManagedSystemId },
           candidate.id,
           null,
+          { lock: false },
         );
         if (!failure || candidate.id === row.ownerUserId) {
           result.actors.push({ ...candidate, eligible: failure === null });

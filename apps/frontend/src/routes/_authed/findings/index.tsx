@@ -6,7 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { MyVocsRecoveryLink } from '@/components/MyVocsRecoveryLink';
+import { RequestAccessButton } from '@/features/admin/public';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import { useFindingsPages, useFindingsTotal } from '@/features/findings/hooks/useFindingsList';
@@ -30,7 +31,6 @@ import { type FindingDto, listFindingsQuerySchema } from '@fops/shared';
 import {
   ActiveFilterBar,
   type AvatarUser,
-  Button,
   Checkbox,
   ListShell,
   ObjectRow,
@@ -617,10 +617,8 @@ function FindingsListBody({
                   state="request_access"
                   category="Findings"
                   reason={PERMISSION_BLOCKED_REASONS.findingsList}
+                  onRequestAccess={onRequestAccess}
                 />
-                <Button variant="secondary" size="sm" onClick={onRequestAccess}>
-                  권한 요청하기
-                </Button>
               </div>
             )}
           />
@@ -631,15 +629,7 @@ function FindingsListBody({
               category="Findings"
               reason={PERMISSION_BLOCKED_REASONS.findingsList}
             />
-            <Button
-              asChild
-              variant="secondary"
-              size="sm"
-              spacing="compact"
-              data-testid="findings-denied-my-vocs"
-            >
-              <InternalLink href="/vocs?view=my">{GLOSSARY.myVocs}</InternalLink>
-            </Button>
+            <MyVocsRecoveryLink />
           </div>
         )
       ) : isError ? (

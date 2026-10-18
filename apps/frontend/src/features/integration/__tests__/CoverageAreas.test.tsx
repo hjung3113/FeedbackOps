@@ -387,7 +387,7 @@ it('walks the scoped archived Area catalog, selects an Area and clears paging', 
       total: 2,
     });
   await act(async () => {
-    await qc.invalidateQueries({ queryKey: ['coverage-area-options'] });
+    await qc.invalidateQueries({ queryKey: ['analytics-areas'] });
   });
   fireEvent.click(screen.getByTestId('coverage-filter-button'));
   fireEvent.keyDown(screen.getByLabelText('Analytics Area'), { key: 'ArrowDown' });

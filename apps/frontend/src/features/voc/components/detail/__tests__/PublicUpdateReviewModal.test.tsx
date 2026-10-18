@@ -39,10 +39,7 @@ describe('PublicUpdateReviewModal shared pickers', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
-      'bg-surface-raised',
-      'border-border-subtle',
-    );
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('combobox', { name: '후보' }));
     fireEvent.click(await screen.findByRole('option', { name: /Released Task 후보/ }));

@@ -2,13 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 
-import {
-  type AdminPermissionRequestRow,
-  fetchManagedSystems,
-  fetchPermissionRequestsAll,
-} from '@/lib/api';
+import { type AdminPermissionRequestRow, fetchPermissionRequestsAll } from '@/lib/api';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import type { PermissionRequestsSearch, ReviewTab } from './permission-requests-search.js';
 import { permissionRequestsReviewKey } from './useDecidePermissionRequest.js';
 
@@ -37,11 +34,7 @@ export function usePermissionRequestsConsole(): {
   const actorNames = Object.fromEntries(
     (actors.actors ?? []).map((actor) => [actor.id, actor.display_name]),
   );
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'],
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    retry: false,
-  });
+  const managedSystemsQuery = useQuery({ ...managedSystemsCatalogQuery(), retry: false });
   const managedSystemNames = Object.fromEntries(
     (managedSystemsQuery.data?.items ?? []).map((managedSystem) => [
       managedSystem.id,

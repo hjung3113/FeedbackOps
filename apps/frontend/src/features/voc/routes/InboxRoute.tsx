@@ -4,7 +4,8 @@
 // C9 of Slice 3 #20.
 
 import { ListLoadMore } from '@/components/ListLoadMore';
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { MyVocsRecoveryLink } from '@/components/MyVocsRecoveryLink';
+import { RequestAccessButton } from '@/features/admin/public';
 import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { LIST_SEARCH_PLACEHOLDER } from '@/lib/copy/list-search';
@@ -26,7 +27,7 @@ import {
   type SortOption,
 } from '@fops/ui';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'lucide-react';
+import { Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'lucide-react';
 import * as React from 'react';
 import { VocAreaFilterSelect } from '../components/VocAreaFilterSelect';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
@@ -536,18 +537,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
             />
           )}
           {view === 'inbox' && listError.envelope.requestable_permission === undefined ? (
-            <Button
-              asChild
-              variant="subtle"
-              size="sm"
-              spacing="compact"
-              data-testid="voc-inbox-denied-my-vocs"
-            >
-              <Link to="/vocs" search={{ view: 'my' }}>
-                {GLOSSARY.myVocs}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
+            <MyVocsRecoveryLink />
           ) : null}
         </div>
       ) : (

@@ -80,7 +80,7 @@ These are small enough not to deserve a separate ADR but need an answer so scree
 - **Icon library**: `lucide-react`. shadcn defaults to it; aligned with DESIGN.md aesthetic; tree-shakeable.
 - **Date library**: `date-fns` + `date-fns-tz`. Smaller than Luxon, immutable, TS-native. Korean locale built in. Timezone-aware formatting for audit and Reporter Summary timestamps.
 - **Drag and drop**: deferred. No MVP screen requires DnD; the next requirement (e.g. Task board reorder) will land with its own ADR pick (`@dnd-kit/core` is the likely choice).
-- **Chart library**: deferred. Dashboard is action-queue (CONTEXT.md), not chart-first; charts arrive with a future analytics phase that will pick `Recharts` or `Visx` then.
+- **Chart library**: deferred. Dashboard is action-queue (GLOSSARY.md), not chart-first; charts arrive with a future analytics phase that will pick `Recharts` or `Visx` then.
 - **Component sandbox**: Storybook 8, served from `apps/frontend` workspace, with the axe-core integration above. Mandatory for `packages/ui` primitives; optional for `apps/frontend/src/features/*` screens.
 
 > Note (2026-10): only lucide-react was adopted. date-fns, Storybook 8 and the axe-core build check were not; visual parity is covered by apps/frontend/tests/visual.

@@ -1,4 +1,4 @@
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestAccessButton } from '@/features/admin/public';
 import { FindingRequestTaskDraftHost, useFindingDetail } from '@/features/findings/public';
 import { RATING_BAND_LABELS, SURVEY_RESULT_KIND_LABELS } from '@/lib/copy/enum-labels';
 import type { OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';

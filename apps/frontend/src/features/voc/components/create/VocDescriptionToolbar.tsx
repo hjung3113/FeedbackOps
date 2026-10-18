@@ -1,28 +1,21 @@
 // VocDescriptionToolbar — RichEditor toolbar render-prop for the voc-description surface.
 // Renders the buttons declared in VOC_DESCRIPTION_TOOLBAR (rich-toolbar-voc-description.ts).
-// PLAN-22 C8: Attach is now active. Surface owners pass `onAttach` to opt in;
-// the button is hidden when `onAttach` is omitted (kept compatible with
-// other call sites that have not yet wired the uploader).
+// The attach button is always rendered; omitting `RichEditor.onAttach` does not hide it (the
+// editor rejects the pick and the error is swallowed when `onAttachError` is absent). A surface
+// that cannot take inline attachments opts out with `vocDescriptionToolbar({ hideAttach: true })`.
 
-import * as React from 'react';
-import {
-  AttachButton,
-  Tooltip,
-  TooltipProvider,
-  TooltipTrigger,
-  TooltipContent,
-  cn,
-  type RichEditorToolbarApi,
-  type TipTapEditor as Editor,
-} from '@fops/ui';
+import { ComposerToolbarButton } from '@/features/cross-system/composer-editor/ComposerToolbarButton';
+import { promptForLink } from '@/features/cross-system/composer-editor/promptForLink';
+import { AttachButton, type TipTapEditor as Editor, type RichEditorToolbarApi } from '@fops/ui';
 import {
   Bold as BoldIcon,
-  Italic as ItalicIcon,
-  Underline as UnderlineIcon,
   Code as CodeIcon,
-  List as ListIcon,
+  Italic as ItalicIcon,
   Link2 as LinkIcon,
+  List as ListIcon,
+  Underline as UnderlineIcon,
 } from 'lucide-react';
+import * as React from 'react';
 import {
   VOC_DESCRIPTION_TOOLBAR,
   type VocDescriptionToolbarAction,
@@ -70,117 +63,79 @@ const BUTTONS: Record<Exclude<VocDescriptionToolbarAction, 'attach'>, ToolbarBut
     icon: LinkIcon,
     label: '링크',
     isActive: (e) => e.isActive('link'),
-    onClick: (e) => {
-      const previous = e.getAttributes('link')['href'] as string | undefined;
-      const url = window.prompt('링크 URL', previous ?? '');
-      if (url === null) return;
-      if (url === '') {
-        e.chain().focus().unsetLink().run();
-        return;
-      }
-      e.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    },
+    onClick: (e) => promptForLink(e),
   },
 };
 
 /**
  * Render-prop factory. Pass it directly: `toolbar={vocDescriptionToolbar(opts)}`.
  * `onAttachError` lets the host surface a toast on upload failure; `attach`
- * itself is wired through `RichEditor.onAttach`.
+ * itself is wired through `RichEditor.onAttach`. `hideAttach` drops the attach button and its
+ * separator for surfaces that send attachments only through a dropzone (VOC edit-description:
+ * the save path keeps `attachment_ids[]` only and the sanitizer rejects the editor's
+ * `attachmentRef` metadata attrs).
  */
 export function vocDescriptionToolbar(opts?: {
   onAttachError?: (err: unknown) => void;
+  hideAttach?: boolean;
 }): (editor: Editor | null, api: RichEditorToolbarApi) => React.ReactElement | null {
   return (editor, api) => {
     if (!editor) return null;
     return (
-      <TooltipProvider>
-        <div
-          className="flex items-center gap-1 border-b border-border-subtle px-2 py-1"
-          data-testid="voc-description-toolbar"
-        >
-          {VOC_DESCRIPTION_TOOLBAR.map((item) => {
-            if (item.id === 'attach') {
-              return (
-                <React.Fragment key={item.id}>
-                  <span
-                    className="mx-1 h-4 w-px bg-border-subtle"
-                    aria-hidden="true"
-                    data-testid="voc-toolbar-separator"
-                  />
-                  <AttachButton
-                    data-testid="voc-toolbar-attach"
-                    label={item.tooltip ?? '첨부 파일 추가'}
-                    disabled={item.disabled === true}
-                    onPick={async (file) => {
-                      try {
-                        await api.attach(file);
-                      } catch (e) {
-                        opts?.onAttachError?.(e);
-                      }
-                    }}
-                  />
-                </React.Fragment>
-              );
-            }
-            const spec = BUTTONS[item.id];
-            const Icon = spec.icon;
-            const disabled = item.disabled === true || !spec.onClick;
-            const active = !disabled && spec.isActive?.(editor) === true;
-            const handleClick = (): void => {
-              if (disabled) return;
-              spec.onClick?.(editor);
-            };
-            const tooltip = item.tooltip ?? spec.label;
+      <div
+        className="flex items-center gap-1 border-b border-border-subtle px-2 py-1"
+        data-testid="voc-description-toolbar"
+      >
+        {VOC_DESCRIPTION_TOOLBAR.map((item) => {
+          if (item.id === 'attach') {
+            if (opts?.hideAttach === true) return null;
             return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={spec.label}
-                    aria-pressed={active}
-                    disabled={disabled}
-                    onClick={handleClick}
-                    data-testid={`voc-toolbar-${item.id}`}
-                    className={cn(
-                      'inline-flex h-7 w-7 items-center justify-center rounded-sm text-text-muted transition-colors',
-                      'hover:bg-surface-card hover:text-text-primary',
-                      'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-muted',
-                      active && 'bg-surface-card text-accent-primary',
-                    )}
-                  >
-                    <Icon size={13} strokeWidth={2} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>{tooltip}</TooltipContent>
-              </Tooltip>
+              <React.Fragment key={item.id}>
+                <span
+                  className="mx-1 h-4 w-px bg-border-subtle"
+                  aria-hidden="true"
+                  data-testid="voc-toolbar-separator"
+                />
+                <AttachButton
+                  data-testid="voc-toolbar-attach"
+                  label={item.tooltip ?? '첨부 파일 추가'}
+                  disabled={item.disabled === true}
+                  onPick={async (file) => {
+                    try {
+                      await api.attach(file);
+                    } catch (e) {
+                      opts?.onAttachError?.(e);
+                    }
+                  }}
+                />
+              </React.Fragment>
             );
-          })}
-          <span className="ml-auto text-xs font-semibold uppercase tracking-wide text-text-muted">
-            VOC 본문
-          </span>
-        </div>
-      </TooltipProvider>
+          }
+          const spec = BUTTONS[item.id];
+          const Icon = spec.icon;
+          const disabled = item.disabled === true || !spec.onClick;
+          const active = !disabled && spec.isActive?.(editor) === true;
+          const handleClick = (): void => {
+            if (disabled) return;
+            spec.onClick?.(editor);
+          };
+          return (
+            <ComposerToolbarButton
+              key={item.id}
+              onClick={handleClick}
+              isActive={active}
+              disabled={disabled}
+              title={item.tooltip ?? spec.label}
+              data-testid={`voc-toolbar-${item.id}`}
+            >
+              <Icon size={14} strokeWidth={2} />
+            </ComposerToolbarButton>
+          );
+        })}
+        <span className="ml-auto text-xs font-semibold uppercase tracking-wide text-text-muted">
+          VOC 본문
+        </span>
+      </div>
     );
   };
-}
-
-/**
- * Backward-compatible default export — bare render-prop (no attach error
- * handling). New call sites prefer `vocDescriptionToolbar({ onAttachError })`.
- *
- * Accepts an optional `api` so legacy callers passing only `editor` continue
- * to compile; when `api` is missing, the Attach button no-ops gracefully
- * (matches surfaces that haven't wired `onAttach` on the RichEditor yet).
- */
-export function VocDescriptionToolbar(
-  editor: Editor | null,
-  api?: RichEditorToolbarApi,
-): React.ReactElement | null {
-  const safeApi: RichEditorToolbarApi = api ?? {
-    attach: async () => {
-      throw new Error('RichEditor: onAttach is not configured for this surface');
-    },
-  };
-  return vocDescriptionToolbar()(editor, safeApi);
 }

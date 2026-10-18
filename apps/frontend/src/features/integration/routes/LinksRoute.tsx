@@ -1,7 +1,7 @@
 import { resolveActors } from '@/lib/api';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ENTITY_LINK_RELATION_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
 import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -153,11 +153,7 @@ export function LinksRoute() {
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
 
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystemsQuery = useQuery(managedSystemsCatalogQuery());
 
   const actorIds = React.useMemo(
     () => [

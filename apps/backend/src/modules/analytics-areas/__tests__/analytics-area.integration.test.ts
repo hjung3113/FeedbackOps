@@ -232,7 +232,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     const body = dup.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
     expect(body.code).toBe('conflict.duplicate_slug');
     expectFields(body, [{ path: ['slug'], code: 'duplicate_slug' }]);
-    // CONTEXT.md:337 — same slug under different MS is permitted.
+    // GLOSSARY.md → Analytics Area — same slug under different MS is permitted.
     const cross = await createAa(app, cookie, {
       managed_system_id: ms2,
       slug: 'it-permission',

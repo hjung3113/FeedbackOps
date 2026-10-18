@@ -76,7 +76,7 @@ Permission owns:
 - Permission Request
 - permission decisions
 - explicit deny handling
-- governed direct capability grants and supported scope policy; no Role Level promotion (ADR-0066, proposed/new)
+- governed direct capability grants and supported scope policy; no Role Level promotion (ADR-0066, implemented #1085)
 - selected request detail and explained risk, using authorized source projections
 
 Entity Linking owns:
@@ -275,7 +275,7 @@ Entity Linking uses providers to enforce:
 `src/routes/_authed/voc-clusters/` doing URL/shell wiring only), not a new
 top-level product domain.
 
-## Permission close-out seams (ADR-0066; #1080 / #1081, direct grant pending)
+## Permission close-out seams (ADR-0066; #1080 / #1081 / #1085)
 
 Permission writes only its requests/grants/denies. Approval and direct grant share
 a Permission-owned grant command. Auth extends its workspace Actor lookup with
@@ -358,8 +358,8 @@ modules reach those bindings only through the Survey application seam. Entity
 Links owns canonical link mutation, including the narrow Survey definer; Core
 keeps append-only audit APIs, with raw app audit reads revoked at cutover.
 
-Integration's proposed/new Evidence route consumes backend-composed authorized
-DTOs, never private provenance/link/audit joins. ADR-0065 assigns Findings as composition owner for proposed/new
+Integration's Evidence route consumes backend-composed authorized
+DTOs, never private provenance/link/audit joins. ADR-0065 assigns Findings as composition owner for
 `GET /evidence-highlights` and `GET /evidence-highlights/:id`. UI ownership grants
 no Survey/Finding mutation ownership. #816 reuses the approved Survey projection
 and Finding-owned attachment command rather than granting personal-response
@@ -435,7 +435,7 @@ and personal Results/creation contracts.
 Task Request and Task share the Task-owned `tasks/responsibility.ts` destination resolver.
 It consumes `managed-systems/index.ts` locked defaults/diagnostics, Auth's public Actor lock,
 Finding's public authorization and `analytics-areas/index.ts` locked owner-team input.
-Core's `core/read-projections.ts` exports `readResponsibilityTeam` for transaction-aware
+Core's `core/responsibility-read-projections.ts` exports `findResponsibilityTeam` for transaction-aware
 same-workspace active-team input; destinations retain eligibility and all assignment writes.
 The Analytics Area lock preserves its prior signature and adds `owner_team_id` for both
 source workers. Cluster has no direct Area and no member-derived rule.

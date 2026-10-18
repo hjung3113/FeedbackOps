@@ -1,8 +1,18 @@
-import { fetchManagedSystems } from '@/lib/api';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 export const managedSystemNamesQueryKey = ['managed-systems', 'all'] as const;
+
+/** The one all-systems read (archived included); every `['managed-systems', 'all']` caller uses it. */
+export function managedSystemsCatalogQuery() {
+  return {
+    queryKey: managedSystemNamesQueryKey,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      fetchManagedSystems({ includeArchived: true, limit: 500, signal }),
+    staleTime: 10 * 60 * 1000,
+  };
+}
 
 export function useManagedSystemNamesResult(
   options: {
@@ -10,10 +20,8 @@ export function useManagedSystemNamesResult(
   } = {},
 ): { namesById: Map<string, string>; isSuccess: boolean } {
   const query = useQuery({
-    queryKey: managedSystemNamesQueryKey,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, limit: 500, signal }),
+    ...managedSystemsCatalogQuery(),
     enabled: options.enabled ?? true,
-    staleTime: 10 * 60 * 1000,
   });
 
   const namesById = useMemo(

@@ -16,7 +16,7 @@ export type {
   VocGroupedCountRow,
   VocReferenceReader,
 } from './read-contract.js';
-export { isVocVisibleToActor, type Scope } from './authorization.js';
+export { canReadVocAsSource, isVocVisibleToActor, type Scope } from './authorization.js';
 export {
   enqueueReleasedTaskReviewCandidates,
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,

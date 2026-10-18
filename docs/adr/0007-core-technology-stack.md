@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Zustand and GitHub Actions were chosen but are not in use (notes below). Amended by ADR-0062 (`@shadcn/lint` design-system rules run on Oxlint; Biome stays the formatter and general linter).
+Accepted. Zustand was chosen but is not in use (note below); GitHub Actions was adopted 2026-10 (#794, see the amendment below). Amended by ADR-0062 (`@shadcn/lint` design-system rules run on Oxlint; Biome stays the formatter and general linter).
 
 FeedbackOps MVP uses one decision per layer rather than per-team or per-feature variation:
 
@@ -42,3 +42,7 @@ The shape constraints in `AGENTS.md` and `docs/implementation/00-architecture.md
 ## Reopening
 
 Replacing any single layer (e.g. Drizzle → Prisma, Fastify → Hono, Vitest → Jest) requires a new ADR describing the migration cost on existing modules, not a silent swap. Adding a *new* layer (e.g. introducing a background-job runner, a feature-flag service, an i18n library) is a separate ADR and does not invalidate this one.
+
+## Amended 2026-10-18 — CI adopted
+
+The "No workflow is committed" note under **CI** above is out of date: `.github/workflows/ci.yml` (#794) runs the repo gate on every PR to `develop`/`main` and every push to them, and branch protection makes its three checks a merge requirement (root `AGENTS.md` → Verification). The Zustand note still holds: no store exists.

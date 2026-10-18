@@ -5,6 +5,7 @@ import {
   type Scope,
   type ScopeActorContext,
   actorScopeForCapability,
+  scopeIncludes,
 } from '../permissions/scope-service.js';
 
 /**
@@ -31,7 +32,7 @@ export async function actorFindingReadScope(
 }
 
 export function isFindingInReadScope(scope: Scope, managedSystemId: string): boolean {
-  return scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId);
+  return scopeIncludes(scope, managedSystemId);
 }
 
 const findingRoleDenied: Decision = {

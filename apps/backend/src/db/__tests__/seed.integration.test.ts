@@ -118,7 +118,7 @@ describe.skipIf(!runIntegration)('seed idempotency', () => {
     expect(seedTeamRows[0]?.count).toBe('1');
   });
 
-  it('seeds the three CONTEXT.md baseline actors with locked role/type combo', async () => {
+  it('seeds the three GLOSSARY.md baseline actors with locked role/type combo', async () => {
     const { rows } = await handle.pool.query<{
       external_id: string;
       role_level: string;

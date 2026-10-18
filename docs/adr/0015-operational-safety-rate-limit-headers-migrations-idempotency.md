@@ -181,7 +181,7 @@ metadata only; active excerpt text requires a fresh authorized read. This cache
 exception does not authorize rewriting independently authored Task/Task Request
 text or altering the Drizzle-generated migration/journal/snapshot discipline.
 
-## Amended 2026-10-13 — bounded paid preview (proposed/new)
+## Amended 2026-10-13 — bounded paid preview (implemented #1099)
 
 ADR-0068 requires a separate preview request-abuse bucket (10/minute/actor),
 not the read or VOC-submit mutation bucket. It additionally reserves actor

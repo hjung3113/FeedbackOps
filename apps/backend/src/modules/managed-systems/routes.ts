@@ -5,7 +5,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
-import { IDEMPOTENCY_KEY_REGEX } from '../../lib/http-headers.js';
+import { optionalIdempotencyKey } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -54,20 +54,6 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
 ) => {
   const { sessionService, managedSystemService, workspaceId, rateLimitConfig } = opts;
 
-  function parseIdempotencyKey(headers: Record<string, unknown>): string | undefined {
-    const raw = headers['idempotency-key'];
-    const headerKey = Array.isArray(raw) ? raw[0] : raw;
-    if (typeof headerKey !== 'string' || headerKey.length === 0) return undefined;
-    if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
-      throw new HttpError(
-        'validation.malformed_idempotency_key',
-        'Idempotency-Key must be a UUIDv4',
-        { fields: [{ path: ['headers', 'idempotency-key'], code: 'invalid_uuidv4' }] },
-      );
-    }
-    return headerKey;
-  }
-
   // ── POST /managed-systems ─────────────────────────────────────────────
   app.route({
     method: 'POST',
@@ -78,7 +64,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
     handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-      const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
       const actor: ActorContext = {
         actor_id: sess.actor_id,
         workspace_id: sess.workspace_id,
@@ -119,7 +105,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
           fields: fieldsFromZodIssues(parsed.error.issues),
         });
       }
-      const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
       const actor: ActorContext = {
         actor_id: sess.actor_id,
         workspace_id: sess.workspace_id,
@@ -146,7 +132,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
     handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-      const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);
+      const idempotencyKey = optionalIdempotencyKey(req.headers as Record<string, unknown>);
       const actor: ActorContext = {
         actor_id: sess.actor_id,
         workspace_id: sess.workspace_id,

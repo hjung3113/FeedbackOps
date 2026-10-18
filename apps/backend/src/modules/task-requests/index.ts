@@ -4,7 +4,7 @@ export {
   type TaskRequestsServiceDeps,
 } from './service.js';
 export { taskRequestsRoutes, type TaskRequestsRoutesOptions } from './routes.js';
-export { findTaskRequestById, type TaskRequestRow } from './repo.js';
+export { findTaskRequestById, pendingTaskRequestPredicate, type TaskRequestRow } from './repo.js';
 export {
   lockTaskRequestForUpdate,
   markTaskRequestConverted,

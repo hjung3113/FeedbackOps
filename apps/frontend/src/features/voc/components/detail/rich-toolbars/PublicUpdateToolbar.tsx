@@ -9,7 +9,8 @@
 // OQ-3 default. Earlier "clean public copy policy" deferred attach here;
 // OQ-3 explicitly overrides that for #22.
 
-import { AttachButton, cn, type TipTapEditor } from '@fops/ui';
+import { ComposerToolbarButton } from '@/features/cross-system/composer-editor/ComposerToolbarButton';
+import { AttachButton, type TipTapEditor } from '@fops/ui';
 import { Bold, Italic, List } from 'lucide-react';
 import type * as React from 'react';
 
@@ -23,45 +24,6 @@ export interface PublicUpdateToolbarProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function ToolbarButton({
-  onClick,
-  isActive,
-  disabled,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  isActive: boolean;
-  disabled: boolean;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => {
-        // Mouse only: stop the button from taking focus (and the selection) from the editor.
-        e.preventDefault();
-      }}
-      // Native click covers mouse and Enter/Space; the command refocuses the editor itself.
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      aria-pressed={isActive}
-      className={cn(
-        'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
-        'hover:bg-surface-row-hover hover:text-text-primary',
-        'disabled:cursor-not-allowed disabled:opacity-40',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-        isActive && 'bg-surface-row-selected text-text-primary',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -77,32 +39,32 @@ export function PublicUpdateToolbar({
       className="flex items-center gap-0.5 px-2 py-1 border-b border-border-subtle"
       data-testid="public-update-toolbar"
     >
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleBold().run()}
         isActive={editor?.isActive('bold') ?? false}
         disabled={disabled}
         title="굵게"
       >
         <Bold size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleItalic().run()}
         isActive={editor?.isActive('italic') ?? false}
         disabled={disabled}
         title="기울임"
       >
         <Italic size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
-      <ToolbarButton
+      <ComposerToolbarButton
         onClick={() => editor?.chain().focus().toggleBulletList().run()}
         isActive={editor?.isActive('bulletList') ?? false}
         disabled={disabled}
         title="글머리 기호"
       >
         <List size={14} />
-      </ToolbarButton>
+      </ComposerToolbarButton>
 
       {/* Attach — PLAN-22 C8 (OQ-3 default). Wired through RichEditor toolbar API. */}
       {onAttach ? (

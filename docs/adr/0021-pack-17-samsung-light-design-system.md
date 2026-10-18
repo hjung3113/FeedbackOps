@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted 2026-05-20. Supersedes ADR-0016. Amends ADR-0020 Out-of-scope clause.
+Accepted 2026-05-20. Partially supersedes ADR-0016 (dark-only theme; ADR-0016's component-wrap and WCAG rules remain in force). Amends ADR-0020 Out-of-scope clause.
 
 ## Context
 

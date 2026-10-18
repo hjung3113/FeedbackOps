@@ -483,3 +483,6 @@ apps/frontend/src/features/voc/components/triage/__tests__/TriageActions.test.ts
 apps/frontend/src/features/voc/components/triage/__tests__/TriageActions.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-16); #1175 adds no imports
 packages/ui/src/entity/__tests__/LinkedEntityTrail.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-17); #1236 adds an iconTone describe block only
 packages/ui/src/entity/__tests__/LinkedEntityTrail.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-17); #1236 adds no imports
+apps/frontend/src/features/voc/components/create/__tests__/VocDescriptionToolbar.test.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (measured 2026-10-19); Slice 66 Q2 only repoints the toolbar factory
+apps/frontend/src/features/voc/components/create/__tests__/VocDescriptionToolbar.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-19); Slice 66 Q2 only repoints the toolbar factory
+apps/frontend/src/features/voc/components/create/__tests__/VocDescriptionToolbar.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-19); Slice 66 Q2 only repoints the toolbar factory

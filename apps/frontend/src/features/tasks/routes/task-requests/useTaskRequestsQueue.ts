@@ -1,6 +1,5 @@
 import { fetchTaskRequests, getTaskRequest, resolveActors } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
@@ -16,6 +15,7 @@ import {
 } from '@tanstack/react-query';
 import * as React from 'react';
 
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { useTaskPanelSelection } from '../../hooks/useTaskPanelSelection';
 import type { NameMaps } from './TaskRequestRow';
 import { isPermissionDenied } from './predicates';
@@ -201,11 +201,7 @@ export function useTaskRequestsQueue({
     if (activeTab !== 'all' && activeTab !== destination) setActiveTab(destination);
   }, [selectedParam, selectedId, restoredDetail, managedSystem, activeTab]);
 
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystemsQuery = useQuery(managedSystemsCatalogQuery());
 
   const actorIds = React.useMemo(
     () => [

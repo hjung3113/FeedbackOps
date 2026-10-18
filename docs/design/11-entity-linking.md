@@ -95,13 +95,10 @@ are `allowed | hidden | denied`; `summary_visible` is defined but never emitted
 for a `voc` target. `POST /entity-links` stays locked to `internal_only`; each
 visibility token is enforced via seeded rows, not API-created data.
 
-The Survey Response→Finding registry rows `(survey_response → finding,
-generated_finding)` and `(survey_response → finding, evidence_of)` are
-command-only provider relations, enforced through the database tuple CHECK.
-Generic `POST /entity-links` rejects them, generic lists hide them, and generic
-detach treats them as absent. Finding-domain commands are their only writers;
-`generated_finding` is written only by `POST /survey-responses/:id/create-finding`.
-`created_finding` is explicitly not used for Survey Response lineage.
+The Survey Response→Finding registry rows and their command-only rule (tuple CHECK,
+generic rejection/hiding, Finding-domain commands as the only writers) are owned by
+`docs/implementation/06-entity-linking-contract.md` (Survey Response→Finding
+command-only tuples; ADR-0064 Survey boundary).
 
 ### FR-LINK-003: Support Dashboard Missing-Link Queries
 
@@ -144,8 +141,8 @@ Recommended:
 
 ## Survey canonical history isolation (ADR-0064)
 
-Accepted target contract, pending #740: keep every canonical link endpoint/status
-and detach metadata, but move ordinary app reads/writes to a proposed/new filtered
+Implemented by #740: keep every canonical link endpoint/status
+and detach metadata, but move ordinary app reads/writes to a filtered
 owner-backed view excluding either Survey-response endpoint in every status.
 Generic counts/cursors/detach omit those rows entirely. Survey mutations remain
 Entity Links-owned narrow commands; safe derived-Finding reads belong to Survey,

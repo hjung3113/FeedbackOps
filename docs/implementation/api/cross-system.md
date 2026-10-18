@@ -60,7 +60,7 @@ to an existing Task.
 Converted Tasks start in Backlog by default. Backlog Tasks may have assignees,
 but execution has not started until the Task moves to Todo or Doing.
 
-## Permission close-out boundary (ADR-0066; proposed/new)
+## Permission close-out boundary (ADR-0066; implemented #1080–#1085)
 
 Requester pending edit/withdrawal and governed direct grants stay Permission-owned.
 They create no entity_links and never run the originally blocked source action.

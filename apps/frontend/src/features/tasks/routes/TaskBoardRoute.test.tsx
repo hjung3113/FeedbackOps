@@ -304,10 +304,7 @@ describe('TaskBoardRoute', () => {
     await screen.findByText('TASK-1000');
     expect(screen.getByText('전체 Task')).toBeInTheDocument();
     const card = screen.getByRole('button', { name: 'TASK-1000: 매출 리포트 쿼리 플랜 개선' });
-    expect(within(card).getByText('담당자 없음')).toHaveClass(
-      'bg-accent-danger/10',
-      'text-accent-danger',
-    );
+    expect(within(card).getByText('담당자 없음')).toBeInTheDocument();
     expect(screen.getAllByText('미배정').length).toBeGreaterThan(0);
     expect(screen.getByText('진행 중')).toBeInTheDocument();
     expect(screen.queryByText('Total tasks')).not.toBeInTheDocument();

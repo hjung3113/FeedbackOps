@@ -5,7 +5,7 @@ import {
   type AnalyticsAreaDto,
   type ManagedSystemDto,
   type ResolveActorsResponse,
-  fetchAnalyticsAreas,
+  fetchEveryAnalyticsAreaPage,
   fetchManagedSystemDefaultCandidates,
   fetchManagedSystemDefaultDiagnostics,
   fetchManagedSystems,
@@ -37,7 +37,7 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
   });
   const areasQuery = useQuery({
     queryKey: ['analytics-areas', { includeArchived }] as const,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ includeArchived, signal }),
+    queryFn: ({ signal }) => fetchEveryAnalyticsAreaPage({ includeArchived, signal }),
     retry: false,
   });
   const requestsQuery = useQuery({

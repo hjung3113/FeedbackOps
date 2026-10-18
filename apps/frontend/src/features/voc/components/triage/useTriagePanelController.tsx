@@ -1,5 +1,5 @@
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchVocOwnerCandidates } from '@/lib/api/voc-owner-candidates';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import type { FindingSeverity, VocListItem } from '@fops/shared';
 import { type PickerOption, UndoToast } from '@fops/ui';
@@ -76,15 +76,7 @@ export function useTriagePanelController({
     return map;
   }, [candidates]);
 
-  const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', voc.primary_managed_system_id, 'triage'] as const,
-    queryFn: ({ signal }) =>
-      fetchAnalyticsAreas({
-        managedSystemId: voc.primary_managed_system_id,
-        includeArchived: true,
-        signal,
-      }),
-  });
+  const analyticsAreasQuery = useQuery(analyticsAreasCatalogQuery(voc.primary_managed_system_id));
   const aaOptions: PickerOption[] = React.useMemo(
     () =>
       (analyticsAreasQuery.data?.items ?? [])

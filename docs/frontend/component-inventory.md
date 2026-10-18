@@ -252,6 +252,15 @@ loading and retry strings. Ordinary Button keyboard focus remains available;
 permission-blocked and initial-error screens do not render the control.
 
 
+### MyVocsRecoveryLink (blocked-state recovery link)
+
+`apps/frontend/src/components/MyVocsRecoveryLink.tsx` is the single blocked-state
+detour to 내 VOC (#1264): a secondary compact `Button` wrapping the
+`/vocs?view=my` link with the `GLOSSARY.myVocs` label and a trailing arrow.
+Task list, Task board, VOC Inbox, VOC Triage, Findings list and the Home
+reporter layout consume it instead of per-screen links. A screen renders it
+only in the permission-blocked states that already offered the detour.
+
 ### Recovery composition (Integration-owned, ADR-0067)
 
 | Component/seam | Location | Contract |

@@ -1,10 +1,10 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listMilestones } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { MilestoneStatusFilter } from '@fops/shared';
 import {
@@ -38,9 +38,6 @@ export interface MilestonesRouteProps {
 }
 
 type MilestoneTab = MilestoneStatusFilter | 'all';
-
-// GET /analytics-areas caps limit at 500; paginate rather than raise it (F4).
-const ANALYTICS_AREAS_PAGE_LIMIT = 500;
 
 // No Blocked tab: this slice has no backing blocked filter decision; Blocked
 // still appears as a row badge (MilestoneStatusBadge).
@@ -143,40 +140,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       ),
     [actors],
   );
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystemsQuery = useQuery(managedSystemsCatalogQuery());
   // Area display lookup must resolve every linked Area: archived Areas stay
   // referenced by existing Milestones, and the endpoint paginates (default
-  // page < catalog), so walk all pages instead of trusting one response (F4).
-  const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', 'all', { includeArchived: true, paginated: true }] as const,
-    queryFn: async ({ signal }) => {
-      const first = await fetchAnalyticsAreas({
-        includeArchived: true,
-        limit: ANALYTICS_AREAS_PAGE_LIMIT,
-        offset: 0,
-        signal,
-      });
-      const items = [...first.items];
-      let total = first.total;
-      while (items.length < total) {
-        const next = await fetchAnalyticsAreas({
-          includeArchived: true,
-          limit: ANALYTICS_AREAS_PAGE_LIMIT,
-          offset: items.length,
-          signal,
-        });
-        if (next.items.length === 0) break;
-        items.push(...next.items);
-        total = next.total;
-      }
-      return { items, total };
-    },
-    staleTime: 10 * 60 * 1000,
-  });
+  // page < catalog), so the catalog walks all pages instead of trusting one response (F4).
+  const analyticsAreasQuery = useQuery(analyticsAreasCatalogQuery());
 
   const items = listQuery.data?.items ?? [];
   // R5 (Astra P2-2) + R6 correction — the counts read is independently keyed,
@@ -386,8 +354,8 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
             />
 
             {/* Summary strip above the list; values come from the unfiltered list.
-              Evidence linked is pinned to exactly 0 — the list DTO carries no
-              evidence field (approved B2c plan). Status totals are already in tabs. */}
+              Status totals are already in tabs. The B2c always-0 Evidence cell
+              was removed (#1214): the list DTO carries no evidence field. */}
             <div
               className="flex items-stretch gap-4.5 border-b border-border-subtle bg-surface-canvas px-5 py-3"
               data-testid="milestones-summary"
@@ -397,12 +365,6 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                 value={countsUnavailable ? null : summary.inFlight}
                 valueClassName="text-accent-primary"
                 testId="milestone-summary-in-flight"
-              />
-              <SummaryDivider />
-              <SummaryCell
-                label="Evidence 연결"
-                value={0}
-                testId="milestone-summary-evidence-linked"
               />
               <div className="flex-1" />
             </div>
@@ -589,8 +551,4 @@ function SummaryCell({
       </span>
     </div>
   );
-}
-
-function SummaryDivider() {
-  return <div className="w-px self-stretch bg-border-subtle" aria-hidden="true" />;
 }

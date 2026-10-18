@@ -681,12 +681,12 @@ second decision store or response identity disclosure to non-personal holders.
 
 Responsibility pairs above and existing VOC owner fields validate workspace, active team,
 and destination Actor eligibility. No backfill from `created_by`/`reviewer_actor_id`, no
-automatic reassignment, team membership, or permission grant. Safe proposed/new creation
+automatic reassignment, team membership, or permission grant. Safe creation
 metadata `default_resolved`, `source_rule`, `managed_system_id`, persisted responsibility,
 and skipped-rule categories lives in responses/creation audits, not a second assignment
 truth; private candidate IDs stay out of Reporter responses.
 
-## Analytics Area report projection — accepted, proposed/new (ADR-0069)
+## Analytics Area report projection — implemented (ADR-0069, #1077–#1079)
 
 This is a computed read projection, not a table or new lifecycle. Wire shape is owned by
 `docs/implementation/api/dashboard.md`; metric meanings by FR-DASH-002 in `08-dashboard-system.md`.
@@ -700,8 +700,8 @@ ADR-0055 decision state remains Survey-owned and is never copied into report sto
 
 ## Survey protected provenance (ADR-0064; migration 0059)
 
-Migration 0059 models these Survey-owned protected extensions. Deployment and
-combined #739/#740 acceptance remain pending; names and application seams are in
+Migration 0059 models these Survey-owned protected extensions; it is applied.
+Names and application seams are in
 `docs/implementation/survey-provenance-cutover-739.md`.
 
 | Survey-owned extension | Private fields | Consistency |
@@ -724,11 +724,11 @@ retain ordinary behavior. Task source summaries/defaults must not automatically
 copy Survey excerpt text; independently authored prose is outside this backfill.
 
 Canonical Entity Link fields and active uniqueness remain unchanged; after #740,
-ordinary app access uses the proposed/new filtered view excluding both Survey
+ordinary app access uses the filtered view excluding both Survey
 endpoints in every status. Audit identifiers remain canonical but raw app audit
 SELECT is revoked. #816 approval selection IDs are safe selection references,
 not response IDs; candidate suppression counts response subjects/answers, never
-approval rows. Its proposed/new DTO/API shapes are owned by the API contracts.
+approval rows. Its DTO/API shapes are owned by the API contracts.
 
 ## VOC Cluster Suggestion (ADR-0068; storage #1096, BE/shared shipped #1097)
 

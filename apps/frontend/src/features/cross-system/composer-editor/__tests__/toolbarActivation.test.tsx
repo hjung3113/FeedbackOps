@@ -1,7 +1,8 @@
-// All four composer toolbars share one activation path: native click, so mouse, Enter and Space
+// All five composer toolbars share one activation path: native click, so mouse, Enter and Space
 // run the same command on the real editor and hand focus back to it (AF-2, #1182).
 
 import { NotesToolbar } from '@/features/cross-system/progress-notes/ProgressNotesComposer';
+import { vocDescriptionToolbar } from '@/features/voc/components/create/VocDescriptionToolbar';
 import { InternalCommentToolbar } from '@/features/voc/components/detail/rich-toolbars/InternalCommentToolbar';
 import { PublicUpdateToolbar } from '@/features/voc/components/detail/rich-toolbars/PublicUpdateToolbar';
 import { ReporterReplyToolbar } from '@/features/voc/components/detail/rich-toolbars/ReporterReplyToolbar';
@@ -33,6 +34,16 @@ const TOOLBARS: ToolbarCase[] = [
     name: 'InternalCommentToolbar',
     surface: 'internal-comment',
     toolbar: (editor) => <InternalCommentToolbar editor={editor} onInsertMention={() => {}} />,
+  },
+  {
+    name: 'VocDescriptionToolbar',
+    surface: 'voc-description',
+    toolbar: (editor) =>
+      vocDescriptionToolbar()(editor, {
+        attach: async (): Promise<never> => {
+          throw new Error('attach is not configured in this test');
+        },
+      }),
   },
   {
     name: 'progress NotesToolbar',
@@ -86,7 +97,7 @@ describe('composer toolbar activation (real TipTap editor)', () => {
         // Reach the button backwards from the editor: Shift+Tab until it is focused.
         live.commands.focus();
         await nextFrame();
-        for (let i = 0; i < 6 && document.activeElement !== bold; i += 1) {
+        for (let i = 0; i < 10 && document.activeElement !== bold; i += 1) {
           await user.tab({ shift: true });
         }
         expect(bold).toHaveFocus();

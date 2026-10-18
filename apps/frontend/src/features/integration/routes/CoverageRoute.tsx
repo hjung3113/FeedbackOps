@@ -35,12 +35,14 @@ import * as React from 'react';
 import { AnalyticsAreaReportPanel } from '../components/AnalyticsAreaReportPanel';
 import { RecoveryFreshness } from '../recovery/RecoveryFreshness';
 
-import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
+import { fetchDashboardSummary } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 import { WORKSPACE_SETTINGS_COVERAGE_COPY } from '@/lib/copy/workspace-settings';
+import { analyticsAreasCatalogQuery } from '@/lib/cross-system/analyticsAreasCatalog';
+import { managedSystemsCatalogQuery } from '@/lib/cross-system/useManagedSystemNames';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { InternalLink } from '@/lib/router/InternalLink';
 
@@ -179,25 +181,9 @@ export function CoverageRoute(): React.ReactElement {
 
   const areaLabel = useAnalyticsAreaFilterLabel(isAreas ? area : undefined, managedSystemId);
   const scopedAreas = useQuery({
-    queryKey: ['coverage-area-options', managedSystemId],
+    ...analyticsAreasCatalogQuery(managedSystemId),
     enabled: isAreas && managedSystemId !== undefined,
     retry: false,
-    queryFn: async ({ signal }) => {
-      const items: Awaited<ReturnType<typeof fetchAnalyticsAreas>>['items'] = [];
-      let offset = 0;
-      while (true) {
-        const page = await fetchAnalyticsAreas({
-          includeArchived: true,
-          limit: 500,
-          offset,
-          signal,
-          ...(managedSystemId ? { managedSystemId } : {}),
-        });
-        items.push(...page.items);
-        offset += page.items.length;
-        if (offset >= page.total || page.items.length === 0) return items;
-      }
-    },
   });
 
   const summary = useQuery({
@@ -210,17 +196,8 @@ export function CoverageRoute(): React.ReactElement {
       }),
     retry: false,
   });
-  const systemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
-  const areasQuery = useQuery({
-    queryKey: ['analytics-areas', { includeArchived: true }] as const,
-    enabled: !isAreas,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const systemsQuery = useQuery(managedSystemsCatalogQuery());
+  const areasQuery = useQuery({ ...analyticsAreasCatalogQuery(), enabled: !isAreas });
 
   const systemsById = React.useMemo(() => {
     const out: Record<string, string> = {};
@@ -348,7 +325,7 @@ export function CoverageRoute(): React.ReactElement {
                         <SelectGroup>
                           <SelectItem value="all">{AREA_COPY.allAreas}</SelectItem>
                           <SelectItem value="unset">{AREA_COPY.unset}</SelectItem>
-                          {(scopedAreas.data ?? []).map((item) => (
+                          {(scopedAreas.data?.items ?? []).map((item) => (
                             <SelectItem key={item.id} value={item.id}>
                               {item.name}
                               {item.archived_at ? ` · ${AREA_COPY.archived}` : ''}

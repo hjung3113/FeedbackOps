@@ -606,7 +606,7 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
     const { queryClient } = await openConvertFormReturnsClient();
     await chooseOption('Analytics Area', 'Alternative Area');
     await queryClient.invalidateQueries({
-      queryKey: ['analytics-areas', taskRequest.primary_managed_system_id],
+      queryKey: ['analytics-areas', 'catalog', taskRequest.primary_managed_system_id],
     });
 
     const hint = await screen.findByText(

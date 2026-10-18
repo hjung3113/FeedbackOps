@@ -288,7 +288,7 @@ remain separate gates. Assignment display/edit/filter is source-owned and audita
 
 ## Survey evidence withdrawal and reuse (ADR-0064)
 
-Accepted target contract; implementation pending #739/#740/#816. The generic
+Implemented by #739/#740/#816. The generic
 field sketches above are qualified for Survey evidence: public source/binding/text
 columns are NULL, while Survey-owned protected extensions retain original source
 UUIDs and historical generated text (`15-data-contracts.md`). Generated Survey
@@ -315,7 +315,7 @@ APIs in `docs/implementation/api/findings.md`. Eligibility precedes search and
 pagination; unavailable text and generated summaries never act as hidden matches.
 No Unlinked tab, Evidence lifecycle/display ID, execution KPI or duplicate editor.
 
-Finding's Add Evidence Survey branch (implementation pending #816) uses the ADR-0064 candidate/attachment APIs:
+Finding's Add Evidence Survey branch (implemented #816) uses the ADR-0064 candidate/attachment APIs:
 select authorized Survey, then approved question/excerpt, then attach server-side.
 No raw UUID or editable Survey quote; source changes clear selection, pending
 submit disables, retry preserves draft, stale approval allows reselection. Distinguish

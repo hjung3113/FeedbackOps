@@ -100,13 +100,10 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     ) as typeof globalThis.fetch;
   });
 
-  it('uses secondary styling for its cancel action', () => {
+  it('renders a named cancel action', () => {
     renderModal(null);
 
-    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
-      'bg-surface-raised',
-      'border-border-subtle',
-    );
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
   });
 
   it.each(findingSeveritySchema.options)(

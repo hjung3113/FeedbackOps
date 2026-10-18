@@ -211,7 +211,7 @@ error `code` and `statusCode` at info level. This covers malformed or empty JSON
 unsupported media types, oversized bodies, and invalid Content-Length.
 `POST /attachments` maps malformed multipart input the same way (#770).
 
-## Amended 2026-10-13 — paid-preview quota detail (proposed/new)
+## Amended 2026-10-13 — paid-preview quota detail (implemented #1099)
 
 ADR-0068 adds proposed `rate_limited.workspace` (429) alongside
 `rate_limited.actor`. Paid exhaustion detail is `{ budget_period: 'minute'|'day',

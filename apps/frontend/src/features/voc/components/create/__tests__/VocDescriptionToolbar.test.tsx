@@ -5,7 +5,7 @@
 import { render, screen } from '@testing-library/react';
 import { fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { VocDescriptionToolbar } from '../VocDescriptionToolbar';
+import { vocDescriptionToolbar } from '../VocDescriptionToolbar';
 import { VOC_DESCRIPTION_TOOLBAR } from '../rich-toolbar-voc-description';
 import type { TipTapEditor as Editor } from '@fops/ui';
 
@@ -30,8 +30,14 @@ function makeEditorMock(): { editor: Editor; chainSpy: ChainSpy } {
   const chain: Record<string, unknown> = {};
   // Methods we care to assert on
   chain['run'] = runFn;
-  chain['focus'] = (..._args: unknown[]) => { focusFn(); return chain; };
-  chain['toggleBold'] = (..._args: unknown[]) => { toggleBoldFn(); return chain; };
+  chain['focus'] = (..._args: unknown[]) => {
+    focusFn();
+    return chain;
+  };
+  chain['toggleBold'] = (..._args: unknown[]) => {
+    toggleBoldFn();
+    return chain;
+  };
   // Catch-all: return `chain` for any other method (italic, underline, etc.)
   const chainProxy = new Proxy(chain, {
     get(target, prop) {
@@ -53,10 +59,17 @@ function makeEditorMock(): { editor: Editor; chainSpy: ChainSpy } {
   };
 }
 
+const noAttachApi = {
+  attach: async (): Promise<never> => {
+    throw new Error('attach is not configured in this test');
+  },
+};
+const renderToolbar = (editor: Editor) => vocDescriptionToolbar()(editor, noAttachApi);
+
 describe('<VocDescriptionToolbar>', () => {
   it('renders 7 buttons matching VOC_DESCRIPTION_TOOLBAR', () => {
     const { editor } = makeEditorMock();
-    const element = VocDescriptionToolbar(editor);
+    const element = renderToolbar(editor);
     expect(element).not.toBeNull();
     render(element!);
 
@@ -69,7 +82,7 @@ describe('<VocDescriptionToolbar>', () => {
 
   it('renders the VOC body label at the right edge of the toolbar', () => {
     const { editor } = makeEditorMock();
-    const element = VocDescriptionToolbar(editor);
+    const element = renderToolbar(editor);
     render(element!);
 
     const label = screen.getByText('VOC 본문');
@@ -79,7 +92,7 @@ describe('<VocDescriptionToolbar>', () => {
 
   it('all buttons (including PLAN-22 C8 attach) are enabled', () => {
     const { editor } = makeEditorMock();
-    const element = VocDescriptionToolbar(editor);
+    const element = renderToolbar(editor);
     render(element!);
 
     for (const item of VOC_DESCRIPTION_TOOLBAR) {
@@ -90,7 +103,7 @@ describe('<VocDescriptionToolbar>', () => {
 
   it('clicking bold invokes chain().focus().toggleBold().run() on the editor', () => {
     const { editor, chainSpy } = makeEditorMock();
-    const element = VocDescriptionToolbar(editor);
+    const element = renderToolbar(editor);
     render(element!);
 
     fireEvent.click(screen.getByTestId('voc-toolbar-bold'));
@@ -102,7 +115,7 @@ describe('<VocDescriptionToolbar>', () => {
   });
 
   it('returns null when editor is null', () => {
-    const result = VocDescriptionToolbar(null);
+    const result = vocDescriptionToolbar()(null, noAttachApi);
     expect(result).toBeNull();
   });
 });

@@ -406,13 +406,11 @@ Core/personas modes do not seed Findings, Evidence Highlights, Task Requests, Ta
 
 - `SEED_MODE=scale pnpm --filter @fops/backend db:seed` is for throwaway preview DBs only. It includes personas and adds 40 reporters, 5,000 VOCs, 5,000 Tasks, 300 Findings, 250 Task Requests, 60 Clusters and 25 Milestones across Tableau/Power BI, with five years of history, evidence links and memberships. Existing baseline/preview rows survive. The cohort and reserved `fops-preview-scale-complete` actor marker commit atomically; stable IDs and per-group deduplication permit partial-cohort retries when the marker is absent. Scale creates no Survey data; it inserts one VOC Evidence Highlight per `evidence_of` VOC, so `evidence_count` equals both the link count and the highlight-row count.
 
-## Permission close-out migration contract (ADR-0066; proposed/new)
+## Permission close-out migration contract (ADR-0066; migration 0058 applied)
 
 Migration `0058_permission_request_revision.sql` adds the request revision and
-`cancelled` status without altering the open-request unique index. Apply it before
-writers and deploy required-revision API and #1083 clients together. Its SQL
-contains a history-preserving rollback note. Scratch-DB verification and the
-latest snapshot refresh must precede the migration drift gate; never adopt a
+`cancelled` status without altering the open-request unique index; it is applied.
+Its SQL contains a history-preserving rollback note; never adopt a
 TS-derived snapshot without comparing actual migrated SQL as described above.
 
 No migration is applied by the docs decision. Implementation adds positive integer
@@ -471,26 +469,27 @@ months, ordered by resolution time/UUID and filtered by current permission befor
 Survey response presentation/history remains a personal-gated Survey-owned adapter and
 retains ADR-0055 state/definer/grant protections, not duplicated Dashboard resolution state.
 
-## Analytics Area report storage boundary (ADR-0069; implementation pending)
+## Analytics Area report storage boundary (ADR-0069; implemented #1077–#1079)
 
 No report tables, lifecycle storage, Area backfill, mandatory classification or Task Request Area
-column are introduced. Grouped owner reads and metadata batching produce the proposed/new API projection.
+column are introduced. Grouped owner reads and metadata batching produce the API projection.
 Survey classification remains behind protected owner readers; `fops_app` gains no direct response/answer
-read grant. If batching requires a new protected reader, its name/migration is proposed/new until
-implemented: register it in `apps/backend/migrations/meta/_journal.json`, narrowly grant the owner's
+read grant. If batching requires a new protected reader, register it
+in `apps/backend/migrations/meta/_journal.json`, narrowly grant the owner's
 needed columns, fix `search_path = pg_catalog`, revoke PUBLIC and preserve existing capability gates.
 Measure grouped query plans around 5k VOCs/5k Tasks before proposing an index; no preemptive materialized cache.
 
-## Survey provenance cutover — ADR-0064 (coordinated delivery pending)
+## Survey provenance cutover — ADR-0064 (shipped #739/#740)
 
 #739 adds generated/journaled migration `0059_survey_finding_provenance.sql`,
 protected `survey.finding_response_bindings` and `survey.highlight_response_bindings`,
 and scoped reader/mutator seams. Existing-DB owner prerequisites, constraints,
 function signatures, cache inventory, standalone legacy-upgrade procedure and #740
 coordination are in [the #739 cutover contract](survey-provenance-cutover-739.md).
-Execution and combined #739/#740 verification are still required.
+The cutover shipped (#739/#740). The cutover contract holds the verification procedure and the
+standing gap: no standalone legacy-upgrade harness exists yet.
 
-- Proposed/new Survey-owned protected Finding and highlight extensions retain
+- Survey-owned protected Finding and highlight extensions retain
   workspace-qualified response/approval bindings and historical generated text.
   Fields, NULL conditions and consistency rules are in `docs/design/15-data-contracts.md`.
   `fops_app` has no SELECT/INSERT/UPDATE/DELETE on these extensions; use scoped
@@ -622,10 +621,9 @@ App audit INSERT stays without RETURNING; raw audit SELECT is revoked, while con
 migrate/operator history retains Actor, subject and detail. The narrow scoped Core
 question/configuration projections replace the two existing audit readers.
 
-The coordinated rollout, new owner-role prerequisite, consumer inventory and conductor
-verification are recorded in `survey-link-audit-cutover-740.md`. Neither 0059 nor #740
-alone closes Slice 53. Trusted permitted-definer composition is the accepted limit;
-stolen-app-credential unlinkability is not claimed.
+The coordinated rollout, new owner-role prerequisite and consumer inventory are
+recorded in `survey-link-audit-cutover-740.md`. Trusted permitted-definer
+composition is the accepted limit; stolen-app-credential unlinkability is not claimed.
 
 ### #1109 approved Survey attachment extension (0066)
 
@@ -633,17 +631,11 @@ stolen-app-credential unlinkability is not claimed.
 `meta/0066_snapshot.json`/journal extend the existing Survey provenance and Entity
 Links mutator functions. No storage table changes, new owners, app table grants or
 reader-owner widening are introduced. Exact column privileges and their purposes
-are recorded in [the #1109 cutover section](survey-link-audit-cutover-740.md#1109-approved-attachment-extension-0066-runtime-verification-pending).
+are recorded in [the #1109 cutover section](survey-link-audit-cutover-740.md#1109-approved-attachment-extension-0066).
 The new approval-addressed response lock has PUBLIC EXECUTE revoked and app EXECUTE
 only. Ownership-transfer schema CREATE is temporary and revoked before commit.
 Deferred 0059 checks allow another response on a target only with its same-transaction
 active internal-only `evidence_of`; generated lineage and original history stay intact.
-
-Generation is completed; application and real-role verification are conductor-owned.
-Apply after 0065, verify owner/membership/function/column ACLs, and execute the new
-route rollback/replay/revoke/threshold race tests together with existing provenance
-and canonical-read suites on a throwaway database before deployment acceptance.
-
 
 ## Issue #1226: VOC no-follow-up decisions
 
