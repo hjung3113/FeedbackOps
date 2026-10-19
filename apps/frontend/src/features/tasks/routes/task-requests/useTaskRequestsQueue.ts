@@ -369,6 +369,15 @@ export function useTaskRequestsQueue({
       setCompletedDecision(null);
       return;
     }
+    // Once the URL reached the advanced selection, the origin param is no longer in-flight:
+    // navigating back to it (the approve toast action) is a fresh request, not this decision.
+    if (
+      (selectedParam ?? null) === completedDecision.selectionId &&
+      completedDecision.originParam !== completedDecision.selectionId
+    ) {
+      setCompletedDecision({ ...completedDecision, originParam: completedDecision.selectionId });
+      return;
+    }
     if (items.length === 0 && taskRequestsQuery.hasNextPage) {
       if (!taskRequestsQuery.isFetching && !taskRequestsQuery.isError)
         void taskRequestsQuery.fetchNextPage();

@@ -163,6 +163,7 @@ export function TaskRequestDecisionDialog({
             required: true,
           };
   const inputId = `task-request-${content?.action}-reason`;
+  const reasonErrorId = `task-request-${content?.action}-reason-error`;
   const reasonRef = React.useRef<HTMLTextAreaElement>(null);
 
   return (
@@ -231,13 +232,14 @@ export function TaskRequestDecisionDialog({
                 onChange={(event) => onChange(event.target.value)}
                 disabled={isSubmitting || successfulClose}
                 aria-invalid={content.error !== null && content.reasonInvalid !== false}
+                {...(content.error !== null ? { 'aria-describedby': reasonErrorId } : {})}
               />
               {details.required && (
                 <span className="text-xs text-text-muted">필수 입력 항목입니다.</span>
               )}
             </div>
             {content.error && (
-              <p className="text-sm text-accent-danger" role="alert">
+              <p id={reasonErrorId} className="text-sm text-accent-danger" role="alert">
                 {content.error}
               </p>
             )}
