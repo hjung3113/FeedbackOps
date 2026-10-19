@@ -326,6 +326,30 @@ describe('VocCreateScreen integration', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('접수 완료: V-1'));
   });
 
+  test('names the missing required fields next to the disabled submit button', async () => {
+    installFetch({});
+    renderHarness({ onCancel: vi.fn() });
+    await waitFor(() => expect(screen.getByTestId('ms-picker')).toBeInTheDocument());
+
+    expect(screen.getByTestId('voc-submit-missing')).toHaveTextContent(
+      '필수 항목: 제목, 상세 설명, Managed System',
+    );
+    expect(screen.getByRole('button', { name: 'VOC 제출' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('radio', { name: MS_ITEM.name }));
+    fireEvent.change(screen.getByRole('textbox', { name: /제목/i }), {
+      target: { value: '테스트 제목입니다' },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('voc-submit-missing')).toHaveTextContent('필수 항목: 상세 설명'),
+    );
+
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+    await waitFor(() => expect(screen.queryByTestId('voc-submit-missing')).not.toBeInTheDocument());
+  });
+
   test('AC-E14 renders help and submits independent source and Analytics Area values without a warning dialog', async () => {
     const { postBodies } = installFetch({
       postVocsResponse: {

@@ -4,8 +4,9 @@
 import { VocClusterListShell } from '@/features/voc-cluster/components/detail/VocClusterListShell';
 import { useCreateVocCluster } from '@/features/voc-cluster/hooks/useCreateVocCluster';
 import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
-import { type ApiError, errorMapper, fetchManagedSystems } from '@/lib/api';
+import { type ApiError, errorMapper, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { CLUSTER_CREATE_COPY } from '@/lib/copy/voc-cluster';
 import { parseRouteSearch } from '@/lib/router/search';
 import type { CreateVocClusterRequest } from '@fops/shared';
 import {
@@ -190,6 +191,24 @@ function CreateClusterModal({
     retry: false,
   });
 
+  // Same capability the backend checks on create (finding.manage). Narrowing is UX only;
+  // while the scope is pending the picker is disabled; if the scope query errors every system
+  // stays listed and the server stays the authority (a 403 shows CLUSTER_CREATE_COPY.denied).
+  const scopeQuery = useQuery({
+    queryKey: ['permission-scope', 'finding.manage'] as const,
+    queryFn: ({ signal }) => fetchCapabilityScope('finding.manage', { signal }),
+    enabled: open,
+    retry: false,
+  });
+  const scope = scopeQuery.data?.scope;
+  const allowedSystems = (systemsQuery.data?.items ?? []).filter(
+    (s) => scope?.kind !== 'scoped' || scope.managed_system_ids.includes(s.id),
+  );
+  // A selection made before the scope narrowed counts as empty.
+  const selectedSystemId = allowedSystems.some((s) => s.id === managedSystemId)
+    ? managedSystemId
+    : '';
+
   const mutation = useCreateVocCluster();
 
   function closeAndReset() {
@@ -205,7 +224,7 @@ function CreateClusterModal({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (managedSystemId === '') {
+    if (selectedSystemId === '') {
       setManagedSystemError('Managed System을 선택하세요.');
       managedSystemTriggerRef.current?.focus();
       return;
@@ -213,7 +232,7 @@ function CreateClusterModal({
     setManagedSystemError(null);
     const body: CreateVocClusterRequest = {
       title,
-      primary_managed_system_id: managedSystemId,
+      primary_managed_system_id: selectedSystemId,
       ...(summary.trim() ? { summary } : {}),
     };
     mutation.mutate(body, {
@@ -222,8 +241,12 @@ function CreateClusterModal({
         onCreated(cluster.id);
       },
       onError: (err: ApiError) => {
-        setError(errorMapper(err.envelope).message);
-        toast.error(errorMapper(err.envelope).message);
+        const message =
+          err.code === 'permission.denied' || err.code === 'permission.scope_required'
+            ? CLUSTER_CREATE_COPY.denied
+            : errorMapper(err.envelope).message;
+        setError(message);
+        toast.error(message);
       },
     });
   }
@@ -281,7 +304,8 @@ function CreateClusterModal({
               Managed System <span aria-hidden>*</span>
             </FieldLabel>
             <Select
-              value={managedSystemId || NO_MANAGED_SYSTEM}
+              value={selectedSystemId || NO_MANAGED_SYSTEM}
+              disabled={scopeQuery.isPending}
               onValueChange={(value) => {
                 setManagedSystemId(value === NO_MANAGED_SYSTEM ? '' : value);
                 setManagedSystemError(null);
@@ -303,7 +327,7 @@ function CreateClusterModal({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_MANAGED_SYSTEM}>시스템 선택…</SelectItem>
-                {(systemsQuery.data?.items ?? []).map((s) => (
+                {allowedSystems.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
                   </SelectItem>

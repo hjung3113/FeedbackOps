@@ -189,7 +189,11 @@ export function ReporterReplyComposer({
         // REV-3 Cluster Z: explicit value (null = clear).
         value={draftDoc}
         onChange={(doc) => setDraftDoc(doc)}
-        placeholder="제출자에게 보낼 답장 내용을 입력하세요..."
+        placeholder={
+          me?.actor.id === voc.reporter_id
+            ? '담당자에게 보낼 답장 내용을 입력하세요...'
+            : '제출자에게 보낼 답장 내용을 입력하세요...'
+        }
         minHeight={84}
         onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
