@@ -160,15 +160,59 @@ export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
 export { ToolbarKicker, type ToolbarKickerProps } from './layout/ToolbarKicker';
 export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
 
-// Form primitives (Slice 3 #19)
-export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
-export { DatePicker, type DatePickerProps } from './forms/DatePicker.js';
-// Feedback primitives (Slice 3 #19)
-export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
-// Feedback primitives (Slice 3 #21 C3.1)
-export { UndoToast, type UndoToastProps } from './feedback/UndoToast';
-// Feedback primitives (Slice 3 #21 C5.5)
-export { PreviewModal, type PreviewModalProps } from './feedback/PreviewModal';
+// Bundle 2a panel, toolbar, forms, and feedback exports are sourced from @ap/ui (#1290).
+export {
+  ActiveFilterBar,
+  type ActiveFilterBarProps,
+  Callout,
+  type CalloutProps,
+  type CalloutTone,
+  DatePicker,
+  type DatePickerProps,
+  DetailPanelFullscreenContext,
+  DetailPanelFullscreenToggle,
+  type DetailPanelFullscreenValue,
+  DetailPanelHeader,
+  type DetailPanelHeaderProps,
+  DetailPanelHeaderActions,
+  type DetailPanelHeaderActionsProps,
+  type DetailPanelKind,
+  DetailPanelReadingColumn,
+  DetailPanelSectionNav,
+  type DetailPanelSectionNavProps,
+  type PanelSection,
+  DirtyConfirmation,
+  type DirtyConfirmationProps,
+  EmptyState,
+  type EmptyStateProps,
+  FieldLabel,
+  type FieldLabelProps,
+  FieldRow,
+  type FieldRowProps,
+  ListFilterButton,
+  type ListFilterButtonProps,
+  ListSortButton,
+  type ListSortButtonProps,
+  ListTabs,
+  type ListTabsProps,
+  ListToolbar,
+  type ListToolbarProps,
+  type ListToolbarTab,
+  NestedTextBlock,
+  type NestedTextBlockProps,
+  PanelSectionTitle,
+  type PanelSectionTitleProps,
+  PanelTitleBlock,
+  type PanelTitleBlockProps,
+  PreviewModal,
+  type PreviewModalProps,
+  SearchInput,
+  type SearchInputProps,
+  type FilterCategory,
+  type SortOption,
+  UndoToast,
+  type UndoToastProps,
+} from '@ap/ui';
 
 // Indicators + badges (Slice 3 #20)
 export {
@@ -218,25 +262,6 @@ export {
 export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/UserAvatar';
 export { UserChip, type UserChipProps } from './identity/UserChip';
 
-// Toolbar primitives (Slice 3 #20)
-export { ActiveFilterBar, type ActiveFilterBarProps } from './toolbar/ActiveFilterBar.js';
-export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
-export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
-export {
-  ListFilterButton,
-  type ListFilterButtonProps,
-  type FilterCategory,
-} from './toolbar/ListFilterButton';
-export {
-  ListSortButton,
-  type ListSortButtonProps,
-  type SortOption,
-} from './toolbar/ListSortButton';
-// Forms (Slice 3 #20)
-export { SearchInput, type SearchInputProps } from './forms/SearchInput';
-// Feedback (Slice 3 #20)
-export { EmptyState, type EmptyStateProps } from './feedback/EmptyState';
-
 // Data primitives (Slice 6 #137)
 export {
   ObjectRow,
@@ -244,34 +269,6 @@ export {
   type ObjectRowDensity,
   type ObjectRowSeverity,
 } from './data/ObjectRow';
-
-// Panel primitives (Slice 3 #20)
-export {
-  DetailPanelHeader,
-  type DetailPanelHeaderProps,
-  type DetailPanelKind,
-} from './panel/DetailPanelHeader';
-export {
-  DetailPanelFullscreenContext,
-  DetailPanelFullscreenToggle,
-  DetailPanelReadingColumn,
-  type DetailPanelFullscreenValue,
-} from './panel/DetailPanelFullscreenContext';
-export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';
-export { NestedTextBlock, type NestedTextBlockProps } from './panel/NestedTextBlock';
-export { FieldRow, type FieldRowProps } from './panel/FieldRow';
-export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
-export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
-export {
-  DetailPanelHeaderActions,
-  type DetailPanelHeaderActionsProps,
-} from './panel/DetailPanelHeaderActions';
-// Panel section nav (Slice 3 #21 — deferred from #20)
-export {
-  DetailPanelSectionNav,
-  type DetailPanelSectionNavProps,
-  type PanelSection,
-} from './panel/DetailPanelSectionNav';
 
 // Permissions (Slice 3 #20)
 export {

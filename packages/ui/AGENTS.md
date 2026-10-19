@@ -23,11 +23,17 @@
   `@ap/ui` at the `sdk-v0.2.0` tag. The local `src/index.ts` preserves the
   `@fops/ui` API; `src/components/shadcn/*` and selected `src/utils/*`
   files are compatibility re-exports only. Do not add implementation there.
-- Bundle 2 and product/domain components remain local under `src/{badges,data,
-  entity,feedback,forms,identity,indicators,layout,panel,permissions,
-  rich-content,toolbar}`. `src/internal/useHorizontalOverflow.ts` and
-  `src/layout/useDetailPanelSlot.ts` (including `DetailPanelSlotContext`)
-  also remain local.
+- Bundle 2a (panel, toolbar, forms, and feedback components) is sourced from
+  `@ap/ui` at `sdk-v0.2.0`. The matching files under `src/{panel,toolbar,forms,
+  feedback}` and their entries in `src/index.ts` are compatibility re-exports;
+  keep the FeedbackOps tests local. `src/panel/useJumpGuard.ts` remains local
+  because the SDK does not export that private helper, and its existing test
+  imports the helper directly.
+- Layout shells and product/domain components remain local under
+  `src/{badges,data,entity,identity,indicators,layout,permissions,rich-content}`.
+  `src/internal/useHorizontalOverflow.ts` and `src/layout/useDetailPanelSlot.ts`
+  (including `DetailPanelSlotContext`) also remain local. Keep
+  `DetailPanelFullscreenContext` sourced from `@ap/ui` for all consumers.
 - The frontend declares the same `@ap/ui` tag directly so its stylesheet
   resolver can reach bundle-1 CSS. It imports
   `@ap/ui/styles/{tokens,semantic,theme,compat}.css` in that order, then
