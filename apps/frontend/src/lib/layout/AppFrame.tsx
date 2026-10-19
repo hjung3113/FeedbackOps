@@ -15,8 +15,9 @@ import { allowedPlatformReturnHref } from '@/lib/router/platform-return';
 import {
   DetailPanelFullscreenContext,
   DetailPanelReadingColumn,
-  DetailPanelSlotContext,
+  DetailPanelSlotProvider,
   cn,
+  useDetailPanelSlotHost,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
@@ -48,24 +49,32 @@ export interface AppFrameProps {
   className?: string;
 }
 
-interface SlotEntry {
-  key: string;
-  node: React.ReactNode;
-}
-
 /**
  * App frame for authenticated routes. Composes Rail(52) + Sidebar(240/56) + shell outlet + DetailPanelSlot(440).
  *
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, platformReturn, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
-  const [slots, setSlots] = React.useState<SlotEntry[]>([]);
-  const [expandedSlotKey, setExpandedSlotKey] = React.useState<string | null>(null);
+export function AppFrame(props: AppFrameProps) {
+  return (
+    <DetailPanelSlotProvider>
+      <AppFrameBody {...props} />
+    </DetailPanelSlotProvider>
+  );
+}
+
+function AppFrameBody({ sidebarEntries, activeDomain, paletteNavTree, platformReturn, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
   React.useEffect(() => {
     if (syncManagedSystemFromUrl) setSelectedManagedSystemId(managedSystemId);
   }, [managedSystemId, syncManagedSystemFromUrl]);
+  const { ref: slotHostRef, open: slotOpen, expanded: isExpanded } = useDetailPanelSlotHost();
+  // The provider hands `DetailPanelFullscreenContext` only to the portaled panel; the reading
+  // column sits outside it and just needs `expanded` (the toggle lives in the panel header).
+  const columnContextValue = React.useMemo(
+    () => ({ expanded: isExpanded, toggle: () => {} }),
+    [isExpanded],
+  );
   const me = useMe();
   const actor = me.data?.actor;
   const workspaceAdminCheck = usePermissionCheck({ capability: 'workspace.admin' });
@@ -177,60 +186,8 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, platfor
     onDeleteSavedView: deleteCurrentView,
   };
 
-  const setContent = React.useCallback((key: string, node: React.ReactNode) => {
-    setSlots((prev) => {
-      const filtered = prev.filter((s) => s.key !== key);
-      if (filtered.length > 0 && process.env.NODE_ENV !== 'production') {
-        console.warn(
-          `[AppFrame] DetailPanelSlot already has a registrant. New registration "${key}" overrides previous keys: ${filtered.map((s) => s.key).join(', ')}. Only one shell should forward detailPanel per route.`,
-        );
-      }
-      return [...filtered, { key, node }];
-    });
-    // Routes close their panel with either an absent prop (clear) or `null` (kept as a
-    // closed registrant); both end the expanded state so the next record opens at normal width.
-    if (node === null || node === undefined) {
-      setExpandedSlotKey((current) => (current === key ? null : current));
-    }
-  }, []);
-
-  const clear = React.useCallback((key: string) => {
-    setSlots((prev) => prev.filter((s) => s.key !== key));
-    setExpandedSlotKey((current) => (current === key ? null : current));
-  }, []);
-
-  const activeSlot = slots[slots.length - 1];
-  const slotNode = activeSlot?.node;
-  const slotKey = activeSlot?.key;
-  const slotOpen = slotNode !== undefined && slotNode !== null;
-  const isExpanded = slotOpen && slotKey !== undefined && expandedSlotKey === slotKey;
-  const toggleFullscreen = React.useCallback(() => {
-    if (slotKey === undefined || !slotOpen) return;
-    setExpandedSlotKey((current) => (current === slotKey ? null : slotKey));
-  }, [slotKey, slotOpen]);
-  const fullscreenContextValue = React.useMemo(
-    () => (slotOpen ? { expanded: isExpanded, toggle: toggleFullscreen } : null),
-    [isExpanded, slotOpen, toggleFullscreen],
-  );
-
-  React.useEffect(() => {
-    if (!isExpanded || slotKey === undefined) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) {
-        setExpandedSlotKey((current) => (current === slotKey ? null : current));
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isExpanded, slotKey]);
-
-  // Memoize context value so shells' useDetailPanelSlot effect does not re-fire
-  // on every AppFrame re-render. Without this, ctx reference changes each render
-  // → effect re-runs → setContent → setState → re-render → infinite loop.
-  const ctxValue = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
-
   return (
-    <DetailPanelSlotContext.Provider value={ctxValue}>
+    <>
       <div className={cn('flex h-screen bg-surface-canvas text-text-primary', className)} data-app-frame>
         <AppRail
           activeDomain={activeDomain}
@@ -263,9 +220,9 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, platfor
           data-expanded={isExpanded ? 'true' : 'false'}
         >
           {slotOpen && (
-            <DetailPanelFullscreenContext.Provider value={fullscreenContextValue}>
+            <DetailPanelFullscreenContext.Provider value={columnContextValue}>
               <DetailPanelReadingColumn data-testid="app-detail-slot-column">
-                {slotNode}
+                <div ref={slotHostRef} className="contents" />
               </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>
           )}
@@ -274,6 +231,6 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, platfor
           <CommandPalette navTree={paletteNavTree} canAccessWorkspaceAdmin={canAccessWorkspaceAdmin} />
         )}
       </div>
-    </DetailPanelSlotContext.Provider>
+    </>
   );
 }

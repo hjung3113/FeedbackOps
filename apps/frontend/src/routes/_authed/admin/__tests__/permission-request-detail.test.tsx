@@ -1,5 +1,5 @@
 import { adminDetailFixture } from '@/test/permission-details';
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -10,7 +10,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { render, screen } from '@testing-library/react';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
@@ -39,17 +39,16 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
 }
 
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <div ref={ref} />;
+}
 function DetailPanelHost({ children }: { children: ReactNode }) {
-  const [panel, setPanel] = useState<ReactNode>();
-  const setContent = useCallback((_key: string, node: ReactNode) => setPanel(node), []);
-  const clear = useCallback(() => setPanel(undefined), []);
-  const context = useMemo(() => ({ setContent, clear }), [setContent, clear]);
-
   return (
-    <DetailPanelSlotContext.Provider value={context}>
+    <DetailPanelSlotProvider>
       {children}
-      {panel}
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 

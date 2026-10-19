@@ -1,5 +1,5 @@
 import { VocClusterListShell } from '@/features/voc-cluster/components/detail/VocClusterListShell';
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -11,7 +11,6 @@ import {
   useNavigate,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { clusterSuggestionsFixture } from '../../../../tests/visual/fixtures/cluster-suggestions';
 import { IDS, populatedList } from '../../../../tests/visual/fixtures/voc-clusters';
@@ -39,16 +38,16 @@ function me() {
     workspace_id: IDS.workspace,
   };
 }
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <aside ref={ref} />;
+}
 function Root() {
-  const [panel, setPanel] = useState<ReactNode>(null);
-  const setContent = useCallback((_key: string, node: ReactNode) => setPanel(node), []);
-  const clear = useCallback(() => setPanel(null), []);
-  const context = useMemo(() => ({ setContent, clear }), [setContent, clear]);
   return (
-    <DetailPanelSlotContext.Provider value={context}>
+    <DetailPanelSlotProvider>
       <Outlet />
-      <aside>{panel}</aside>
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 function mount(initialPath = `/voc-clusters?selected=${IDS.draft}`) {

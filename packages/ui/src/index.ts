@@ -158,7 +158,11 @@ export { ListShell, type ListShellProps } from './layout/ListShell';
 export { WorkbenchShell, type WorkbenchShellProps } from './layout/WorkbenchShell';
 export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
 export { ToolbarKicker, type ToolbarKickerProps } from './layout/ToolbarKicker';
-export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
+export {
+  DetailPanelSlotProvider,
+  useDetailPanelSlot,
+  useDetailPanelSlotHost,
+} from './layout/useDetailPanelSlot';
 
 // Bundle 2a panel, toolbar, forms, and feedback exports are sourced from @ap/ui (#1290).
 export {

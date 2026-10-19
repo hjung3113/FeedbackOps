@@ -41,7 +41,7 @@ DetailPanelHeader
 DetailPanelHeaderActions
 DetailPanelReadingColumn
 DetailPanelSectionNav
-DetailPanelSlotContext
+DetailPanelSlotProvider
 Dialog
 DialogClose
 DialogContent
@@ -168,6 +168,7 @@ managedSystemMarkToken
 prefersReducedMotion
 readMotionTiming
 useDetailPanelSlot
+useDetailPanelSlotHost
 useListMotion
 `
   .trim()

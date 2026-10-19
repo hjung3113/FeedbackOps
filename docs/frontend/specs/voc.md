@@ -369,7 +369,7 @@ Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 | Affordance | Action | Production wiring |
 |---|---|---|
 | Copy link | Copies `window.location.origin + /vocs?view=inbox&selected=<id>` to clipboard, toasts "링크가 복사되었습니다" | `navigator.clipboard.writeText` |
-| Expand | `DetailPanelHeader` owns the toggle for every detail-slot drawer; Triage uses a local toggle. An expanded panel is a centred 60rem reading column with bordered gutters, in both the detail slot and Triage. Esc collapses unless already handled; closing the panel and changing route collapse it. | AppFrame owns detail-slot state; Triage uses `useFullscreenPanel()` |
+| Expand | `DetailPanelHeader` owns the toggle for every detail-slot drawer; Triage uses a local toggle. An expanded panel is a centred 60rem reading column with bordered gutters, in both the detail slot and Triage. Esc collapses unless already handled; closing the panel and changing route collapse it. | AppFrame's `DetailPanelSlotProvider` (`@ap/ui`) owns detail-slot state; Triage uses `useFullscreenPanel()` |
 | Kebab → Mark read | Not implemented; no backend endpoint | Shipped kebab renders the item disabled with `disabledReason: '이후 제공 예정입니다'` |
 | Kebab → Snooze | Not implemented; no backend endpoint (snooze/mute backlog row in `14-post-mvp-backlog.md`) | same |
 | Kebab → Subscribe / Unsubscribe | Not implemented (notifications, ADR-0014) | same |

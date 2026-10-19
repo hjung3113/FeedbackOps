@@ -127,8 +127,8 @@ importers:
   apps/frontend:
     dependencies:
       '@ap/ui':
-        specifier: git+https://github.com/hjung3113/analytics-platform.git#sdk-v0.2.0&path:/packages/ui
-        version: https://codeload.github.com/hjung3113/analytics-platform/tar.gz/32f81df05d96a16b885f35473b0ebade9eaf238d#path:/packages/ui(@floating-ui/dom@1.7.6)(@tiptap/extensions@3.23.5(@tiptap/core@3.23.5(@tiptap/pm@3.23.5))(@tiptap/pm@3.23.5))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(happy-dom@20.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+        specifier: git+https://github.com/hjung3113/analytics-platform.git#sdk-v0.3.0&path:/packages/ui
+        version: https://codeload.github.com/hjung3113/analytics-platform/tar.gz/14017e12ed7441d728902a2b69a7658d9130f434#path:/packages/ui(@floating-ui/dom@1.7.6)(@tiptap/extensions@3.23.5(@tiptap/core@3.23.5(@tiptap/pm@3.23.5))(@tiptap/pm@3.23.5))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(happy-dom@20.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -243,8 +243,8 @@ importers:
   packages/ui:
     dependencies:
       '@ap/ui':
-        specifier: git+https://github.com/hjung3113/analytics-platform.git#sdk-v0.2.0&path:/packages/ui
-        version: https://codeload.github.com/hjung3113/analytics-platform/tar.gz/32f81df05d96a16b885f35473b0ebade9eaf238d#path:/packages/ui(@floating-ui/dom@1.7.6)(@tiptap/extensions@3.23.5(@tiptap/core@3.23.5(@tiptap/pm@3.23.5))(@tiptap/pm@3.23.5))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(happy-dom@20.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+        specifier: git+https://github.com/hjung3113/analytics-platform.git#sdk-v0.3.0&path:/packages/ui
+        version: https://codeload.github.com/hjung3113/analytics-platform/tar.gz/14017e12ed7441d728902a2b69a7658d9130f434#path:/packages/ui(@floating-ui/dom@1.7.6)(@tiptap/extensions@3.23.5(@tiptap/core@3.23.5(@tiptap/pm@3.23.5))(@tiptap/pm@3.23.5))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(happy-dom@20.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@fops/shared':
         specifier: workspace:*
         version: link:../shared
@@ -384,8 +384,8 @@ packages:
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
 
-  '@ap/ui@https://codeload.github.com/hjung3113/analytics-platform/tar.gz/32f81df05d96a16b885f35473b0ebade9eaf238d#path:/packages/ui':
-    resolution: {path: /packages/ui, tarball: https://codeload.github.com/hjung3113/analytics-platform/tar.gz/32f81df05d96a16b885f35473b0ebade9eaf238d}
+  '@ap/ui@https://codeload.github.com/hjung3113/analytics-platform/tar.gz/14017e12ed7441d728902a2b69a7658d9130f434#path:/packages/ui':
+    resolution: {path: /packages/ui, tarball: https://codeload.github.com/hjung3113/analytics-platform/tar.gz/14017e12ed7441d728902a2b69a7658d9130f434}
     version: 0.0.0
     peerDependencies:
       react: ^19.3.0
@@ -4232,7 +4232,7 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
-  '@ap/ui@https://codeload.github.com/hjung3113/analytics-platform/tar.gz/32f81df05d96a16b885f35473b0ebade9eaf238d#path:/packages/ui(@floating-ui/dom@1.7.6)(@tiptap/extensions@3.23.5(@tiptap/core@3.23.5(@tiptap/pm@3.23.5))(@tiptap/pm@3.23.5))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(happy-dom@20.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
+  '@ap/ui@https://codeload.github.com/hjung3113/analytics-platform/tar.gz/14017e12ed7441d728902a2b69a7658d9130f434#path:/packages/ui(@floating-ui/dom@1.7.6)(@tiptap/extensions@3.23.5(@tiptap/core@3.23.5(@tiptap/pm@3.23.5))(@tiptap/pm@3.23.5))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(happy-dom@20.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
     dependencies:
       '@formkit/auto-animate': 0.10.0(patch_hash=goterzy5ngfcns65rnzb2gncwm)
       '@radix-ui/react-avatar': 1.1.11(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)

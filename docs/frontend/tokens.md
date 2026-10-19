@@ -189,7 +189,7 @@ body size + leading to `body`.
 
 Since issue #743 (ADR-0058) the theme is Tailwind v4 CSS-first:
 `@ap/ui/styles/theme.css` (`@theme inline` aliasing the token variables,
-pinned at tag `sdk-v0.2.0`) replaces the former JS preset
+pinned at tag `sdk-v0.3.0`) replaces the former JS preset
 (`tailwind.preset.ts`, removed). The mapping above is unchanged.
 
 Since issue #782, `text-caption`, `text-tiny`, and `text-micro` expose their
@@ -370,7 +370,7 @@ Badge with a 'Gunmetal' background (#94a3b8), 'Storm Cloud' text (#667083), 4px 
 ## Tokens — Motion
 
 Raw values ship in `@ap/ui/styles/tokens.css` (ADR-0063, pinned at tag
-`sdk-v0.2.0`). Tailwind aliases in `@ap/ui/styles/theme.css` reference these
+`sdk-v0.3.0`). Tailwind aliases in `@ap/ui/styles/theme.css` reference these
 variables; components consume the shared overlay constants exported from
 `@ap/ui`, never independent motion classes. See the Motion section in
 `ui-design-system.md` for surface behavior and reduced motion.
@@ -418,7 +418,7 @@ Quick Color Reference:
 ### CSS Custom Properties
 
 The shipped CSS custom-property names and values are defined in
-`@ap/ui/styles/tokens.css` (bundle 1, tag `sdk-v0.2.0`). That stylesheet is
+`@ap/ui/styles/tokens.css` (bundle 1, tag `sdk-v0.3.0`). That stylesheet is
 the implementation source for the token names and values in this reference.
 
 ### Frontend Stylesheet
