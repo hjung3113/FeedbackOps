@@ -1,6 +1,6 @@
 # VOC Frontend Implementation Spec — Slice 3
 
-> Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008. API authority is `docs/implementation/api/voc.md`; token values are in `packages/ui/src/styles/tokens.css` and `docs/frontend/tokens.md`.
+> Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008. API authority is `docs/implementation/api/voc.md`; token values are in `@ap/ui/styles/tokens.css` and `docs/frontend/tokens.md`.
 > Stack: React 18 + TypeScript 5 + Tailwind 4.3.3 (CSS-first theme, ADR-0058) + shadcn/ui (production), TipTap (rich content, per ADR-0002 / ADR-0011), TanStack Router (production route shell — see `apps/frontend/src/routes/`).
 > Conflict resolution and UI authority: root `AGENTS.md` → Source Of Truth (authority follows subject; there is no universal ladder). The shipped UI is the authority for existing surfaces (ADR-0060); this spec records the as-built contract.
 
@@ -477,9 +477,9 @@ Full event vocab lives in backend audit module; this spec lists VOC-touching nam
 
 ## 6. Visual Contract
 
-There is no `tailwind.config.ts` any more: since ADR-0058 the Tailwind theme is the CSS-first `packages/ui/src/styles/theme.css` (v4 `@theme inline` aliasing the token variables). **CSS custom property names from `docs/design-prototype/styles.css` port verbatim** (values follow ADR-0021 light-only); the theme exposes them as kebab-case utility keys.
+There is no `tailwind.config.ts` any more: since ADR-0058 the Tailwind theme is the CSS-first `@ap/ui/styles/theme.css` (v4 `@theme inline` aliasing the token variables). **CSS custom property names from `docs/design-prototype/styles.css` port verbatim** (values follow ADR-0021 light-only); the theme exposes them as kebab-case utility keys.
 
-Values: `packages/ui/src/styles/tokens.css` and `docs/frontend/tokens.md` (ADR-0021 light-only).
+Values: `@ap/ui/styles/tokens.css` and `docs/frontend/tokens.md` (ADR-0021 light-only).
 
 ### 6.7 Density + radii
 

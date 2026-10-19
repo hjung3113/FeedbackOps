@@ -9,7 +9,7 @@ Accepted (2026-10-11). Reverses the #785 decision to remove overlay animation su
 
 Overlays appear and disappear without motion, and the documented reduced-motion rule has no
 shared implementation. Component-specific timings would fragment the policy and make future
-list and drag motion harder to keep consistent. The existing five-import `@fops/ui` CSS
+list and drag motion harder to keep consistent. The original five-import `@fops/ui` CSS
 consumer contract (ADR-0058) must deliver the foundation to every consumer unchanged.
 
 ## Decision
@@ -54,7 +54,8 @@ consumer contract (ADR-0058) must deliver the foundation to every consumer uncha
 
 ## Consequences
 
-Consumers retain the same five documented stylesheet imports and source scanning. The
+The original consumer contract retained five documented stylesheet imports and source
+scanning. See the 2026-10-19 amendment for the current SDK stylesheet imports. The
 consumer-contract test must prove keyframes, utilities, token values, and reduced-motion
 rules compile from those imports alone. Per-component motion hard-coding is prohibited.
 Finite overlay animations should preserve visual harness end states when animations are
@@ -92,3 +93,12 @@ Alternatives rejected:
   by FeedbackOps and analytics-platform and revisiting them on every upgrade.
 
 Decider: owner, 2026-10-13.
+
+## Amended 2026-10-19 — bundle-1 SDK source (#1287)
+
+The token, theme, compatibility CSS, motion utilities, and shadcn primitive
+implementations described here are sourced through `@ap/ui` at tag
+`sdk-v0.2.0`. FeedbackOps preserves the `@fops/ui` export surface and keeps
+local bundle-2 consumers. The stylesheet contract now includes the SDK's
+`@ap/ui/styles/sources.css` after the four ordered CSS imports; motion
+constants and hooks continue to be exported through the package index.

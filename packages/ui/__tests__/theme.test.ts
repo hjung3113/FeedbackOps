@@ -1,14 +1,13 @@
 import fs from 'node:fs';
-import path from 'node:path';
+import { createRequire } from 'node:module';
 import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
 // Issue #672 intent, carried over from tailwind-preset.test.ts (ADR-0058):
-// the CSS-first theme (packages/ui/src/styles/theme.css) must wire the Pack 17
-// typography tokens (packages/ui/src/styles/tokens.css) into Tailwind so
+// the CSS-first @ap/ui theme must wire the Pack 17 typography tokens into Tailwind so
 // `font-sans`/`font-mono` and the size utilities resolve to tokens instead of
 // Tailwind defaults.
-const THEME_CSS_PATH = path.resolve(__dirname, '../src/styles/theme.css');
+const THEME_CSS_PATH = createRequire(import.meta.url).resolve('@ap/ui/styles/theme.css');
 
 /** Collect the custom-property declarations of every `@theme` block. */
 function parseThemeDecls(cssPath: string): Map<string, string> {

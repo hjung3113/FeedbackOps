@@ -103,7 +103,7 @@ Names in the primitive table and the composed list above are design-time names. 
 | ObjectList, ListRow | `ObjectRow` + `ListToolbar` / `ListTabs` + `ListStateMessage` | `packages/ui/src/data/ObjectRow.tsx`, `packages/ui/src/toolbar/`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | Active filters | `ActiveFilterBar` — presentational chips with visible labels, tooltip-backed remove buttons, and one clear-all control; empty items render nothing | `packages/ui/src/toolbar/ActiveFilterBar.tsx` |
 | FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
-| LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `packages/ui/src/components/shadcn/skeleton.tsx`, `apps/frontend/src/components/ListStateMessage.tsx` |
+| LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `@ap/ui`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |
 | DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelReadingColumn`, `DetailPanelSectionNav` (mount the nav as a sibling above the scroll root; the cover is then the strip's overlap with the root), `PanelTitleBlock` (`inset=none`), `PanelSectionTitle` (`inset=panel`, `size=tiny`), `FieldRow`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
 | StatusBadge | shared `ReporterStatusBadge`, `InternalTaskBadge`; feature-local `SurveyStatusBadge`, `LinkStatusBadge`, `MilestoneStatusBadge` | `packages/ui/src/badges/`, `apps/frontend/src/features/surveys/components/`, `apps/frontend/src/features/integration/components/`, `apps/frontend/src/features/tasks/components/` |
@@ -117,15 +117,15 @@ Names in the primitive table and the composed list above are design-time names. 
 | ActionQueueRow | feature-local `ActionQueueRow` (Home); `IntegrationDashboardCards` (Integration) | `apps/frontend/src/features/home/HomeScreen.tsx`, `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
 | CommandMenu | `CommandPalette` with local `CommandPaletteItemIcon` | `apps/frontend/src/lib/layout/command-palette/` |
 | UserPicker | feature-local `OwnerPicker` (VOC Triage owner) | `apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx` |
-| Drawer | `Sheet` | `packages/ui/src/components/shadcn/sheet.tsx` |
+| Drawer | `Sheet` | `@ap/ui` |
 | Toast | `sonner` `Toaster` mounted in the root route; `UndoToast` | `apps/frontend/src/routes/__root.tsx`, `packages/ui/src/feedback/UndoToast.tsx` |
-| Avatar | `Avatar`, `UserAvatar`, `UserChip` | `packages/ui/src/components/shadcn/avatar.tsx`, `packages/ui/src/identity/` |
-| TextInput | `Input` | `packages/ui/src/components/shadcn/input.tsx` |
+| Avatar | `Avatar`, `UserAvatar`, `UserChip` | `@ap/ui`, `packages/ui/src/identity/` |
+| TextInput | `Input` | `@ap/ui` |
 | Progress indicator | `ProgressMeter` | `packages/ui/src/indicators/ProgressMeter.tsx` |
 | Status badge frame | `StatusBadgeFrame` | `packages/ui/src/badges/StatusBadgeFrame.tsx` |
 | Managed System square mark | `ManagedSystemMark` | `packages/ui/src/badges/ManagedSystemMark.tsx` |
-| Loading rows and panel blocks | `SkeletonRows`, `SkeletonBlocks` | `packages/ui/src/components/` |
-| Keyboard shortcut hint | `KeyboardShortcut` | `packages/ui/src/components/KeyboardShortcut.tsx` |
+| Loading rows and panel blocks | `SkeletonRows`, `SkeletonBlocks` | `@ap/ui` |
+| Keyboard shortcut hint | `KeyboardShortcut` | `@ap/ui` |
 | Workbench toolbar kicker | `ToolbarKicker` | `packages/ui/src/layout/ToolbarKicker.tsx` |
 | Picker option grid | `PickerOptionGrid` (VOC triage) | `apps/frontend/src/features/voc/components/triage/PickerOptionGrid.tsx` |
 
