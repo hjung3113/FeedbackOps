@@ -28,6 +28,8 @@ export function PermissionRequestDetail({
   discardedReason,
   onDraftChanged,
   onStaleConflict,
+  onDecisionSubmitted,
+  onDecisionSettled,
   onActionPicked,
   onClose,
 }: {
@@ -39,6 +41,8 @@ export function PermissionRequestDetail({
   discardedReason?: string;
   onDraftChanged?: (draft: { revision: number; nonEmpty: boolean; reason: string }) => void;
   onStaleConflict?: () => void;
+  onDecisionSubmitted?: () => void;
+  onDecisionSettled?: () => void;
   onActionPicked?: () => void;
   onClose: () => void;
 }) {
@@ -98,9 +102,11 @@ export function PermissionRequestDetail({
             <FieldRow label="요청자" inset="none">
               <span className="flex flex-col gap-0.5">
                 <span>{actorName ?? GLOSSARY.unknownUser}</span>
-                <span className="font-mono text-xs text-text-muted">
-                  {shortId(request.requester_actor_id)}
-                </span>
+                {actorName ? null : (
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(request.requester_actor_id)}
+                  </span>
+                )}
               </span>
             </FieldRow>
             <FieldRow label="요청 ID" inset="none">
@@ -141,11 +147,14 @@ export function PermissionRequestDetail({
           <PermissionRequestDecisionForm
             key={`${request.id}:${request.revision}:${reviewEpoch}`}
             request={request}
+            actorName={actorName}
             managedSystemName={managedSystemName}
             {...(staleNotice ? { staleNoticeShown: true } : {})}
             {...(discardedReason !== undefined ? { discardedReason } : {})}
             {...(onDraftChanged ? { onDraftChanged } : {})}
             {...(onStaleConflict ? { onStaleConflict } : {})}
+            {...(onDecisionSubmitted ? { onDecisionSubmitted } : {})}
+            {...(onDecisionSettled ? { onDecisionSettled } : {})}
             {...(onActionPicked ? { onActionPicked } : {})}
             onReviewCompleted={() => setReviewEpoch((epoch) => epoch + 1)}
           />

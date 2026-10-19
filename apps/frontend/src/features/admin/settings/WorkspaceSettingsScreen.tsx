@@ -79,13 +79,12 @@ const lockedSurveySettings: LockedSetting[] = [
 const lockedScopeSettings: LockedSetting[] = [
   {
     label: '개발자의 기본 Managed System 범위',
-    description: '개발자가 처음 로그인할 때 적용되는 유효 범위의 합집합 기준값입니다.',
+    description: ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.developerDefaultScope,
     value: '내 담당 시스템만',
   },
   {
     label: 'all = 워크스페이스 전체',
-    description:
-      '관리자만 all을 워크스페이스 전체로 해석합니다. 다른 역할은 유효 범위의 합집합 (교집합 = 워크스페이스 ∩ 부여된 범위)으로 해석합니다.',
+    description: ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.allScope,
     value: '관리자만',
   },
 ];
@@ -275,7 +274,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const selfApprovalWarningLines =
     draft.permission_self_approval === 'forbidden'
       ? [
-          '과거의 직접 승인 기록은 감사 로그에 SELF_APPROVAL 라벨로 영구 보존되며 회수되지 않습니다.',
+          ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.pastRecordsKept,
           '활성 직접 승인 권한은 만료일까지 유지되며 갱신 시 새 정책 기준으로 평가됩니다.',
           '대기 중인 직접 승인 요청은 저장 시점부터 검토자가 배정되어야 하며 요청자에게 알림이 발송됩니다.',
           ADMIN_PERMISSIONS_COPY.selfDenyLiftForbidden,
@@ -316,7 +315,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
             editing={editing === 'permission_self_approval'}
             isDirty={selfApprovalDirty}
             label="권한 요청 직접 승인"
-            description="요청자가 직접 자기 권한 요청을 승인하려면 범위 내 권한이 필요합니다. 감사 로그에 SELF_APPROVAL 라벨로 표시됩니다."
+            description={ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.settingDescription}
             value={draft.permission_self_approval}
             savedValue={saved.permission_self_approval}
             onChange={(value) => updateDraft('permission_self_approval', value)}
@@ -332,7 +331,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           ))}
         </div>
         <p className="mt-2 text-xs text-text-muted">
-          Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.
+          {ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.taskRequestNote}
         </p>
         {selfApprovalDirty && (
           <Callout

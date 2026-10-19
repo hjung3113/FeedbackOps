@@ -39,10 +39,11 @@ describe('WorkspaceSettingsForm', () => {
 
     expect(screen.getByText('권한 요청 직접 승인', { exact: true })).toBeInTheDocument();
     expect(
-      screen.getByText('Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.', {
+      screen.getByText('Task Request 자가승인은 별도 규칙을 따르며 이 설정과 무관합니다.', {
         exact: true,
       }),
     ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/SELF_APPROVAL|ADR-0026|∩|합집합|교집합/);
   });
 
   test('persists the selected shared picker value with the same settings patch', async () => {

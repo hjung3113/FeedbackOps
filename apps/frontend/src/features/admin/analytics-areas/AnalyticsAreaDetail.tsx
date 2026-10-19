@@ -193,6 +193,7 @@ export function AnalyticsAreaSlideOver({
               editingRef.current = true;
               onEdit(area);
             }}
+            aria-label={`${area.name} ${GLOSSARY.edit}`}
             data-testid="aa-edit-button"
           >
             <Settings className="h-3 w-3" />

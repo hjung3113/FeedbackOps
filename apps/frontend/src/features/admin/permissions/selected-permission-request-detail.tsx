@@ -34,6 +34,8 @@ export function SelectedPermissionRequestDetail({
     reason: string;
   } | null>(null);
   const [discardedReason, setDiscardedReason] = React.useState<string | null>(null);
+  // A decision this panel submitted bumps the revision itself; that is not a change made elsewhere.
+  const [decisionInFlight, setDecisionInFlight] = React.useState(false);
   const onDraftChanged = React.useCallback(
     (next: { revision: number; nonEmpty: boolean; reason: string }) => setDraft(next),
     [],
@@ -42,7 +44,7 @@ export function SelectedPermissionRequestDetail({
   // Preserve the old reason outside the keyed form before its revision reset.
   // Same-revision reads leave both the form and its intent key untouched.
   if (detail && draft && draft.revision !== detail.revision) {
-    if (draft.nonEmpty) setDiscardedReason(draft.reason);
+    if (draft.nonEmpty && !decisionInFlight) setDiscardedReason(draft.reason);
     setDraft(null);
   }
   if (query.isError || !detail || !query.isFetchedAfterMount)
@@ -76,6 +78,8 @@ export function SelectedPermissionRequestDetail({
       {...(discardedReason !== null ? { discardedReason } : {})}
       onDraftChanged={onDraftChanged}
       onStaleConflict={() => setStaleReview(true)}
+      onDecisionSubmitted={() => setDecisionInFlight(true)}
+      onDecisionSettled={() => setDecisionInFlight(false)}
       onActionPicked={() => {
         setStaleReview(false);
         setDiscardedReason(null);
