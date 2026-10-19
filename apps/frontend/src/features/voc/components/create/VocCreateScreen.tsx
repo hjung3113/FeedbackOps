@@ -16,6 +16,7 @@ import {
   Button,
 } from '@fops/ui';
 import { mapUnknownError } from '@/lib/api';
+import { isTipTapDocBlank } from '@fops/shared';
 import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
@@ -53,6 +54,17 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
     ...(initialManagedSystemId !== undefined ? { initialManagedSystemId } : {}),
     ...(onDirtyChange !== undefined ? { onDirtyChange } : {}),
   });
+
+  const [title, description, managedSystemId] = form.watch([
+    'title',
+    'description_rich_content',
+    'primary_managed_system_id',
+  ]);
+  const missingRequired = [
+    ...(title.trim() === '' ? ['제목'] : []),
+    ...(isTipTapDocBlank(description) ? ['상세 설명'] : []),
+    ...(managedSystemId === '' ? ['Managed System'] : []),
+  ];
 
   return (
     <div className="flex h-full flex-col">
@@ -271,6 +283,15 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           제출 후 Managed System은 변경 불가
         </span>
         <span className="flex-1" />
+        {missingRequired.length > 0 && (
+          <span
+            id="voc-submit-missing"
+            data-testid="voc-submit-missing"
+            className="text-xs text-text-muted"
+          >
+            필수 항목: {missingRequired.join(', ')}
+          </span>
+        )}
         <Button
           type="button"
           variant="subtle"
@@ -282,6 +303,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
         <Button
           type="submit"
           form="voc-create-form"
+          {...(missingRequired.length > 0 ? { 'aria-describedby': 'voc-submit-missing' } : {})}
           disabled={
             !form.formState.isValid ||
             isSubmitting ||
