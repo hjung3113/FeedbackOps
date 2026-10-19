@@ -153,8 +153,8 @@ Read first by the global `review-ux` persona. Report in English.
     per toolbar or panel);
   - `docs/frontend/ui-design-system.md`, `docs/frontend/component-inventory.md`, and the spec under
     `docs/frontend/specs/` for the touched surface;
-  - generic lenses only where the project is silent: `.claude/skills/impeccable/reference/critique.md` (heuristics)
-    and `.claude/skills/impeccable/reference/audit.md` (accessibility).
+  - generic lenses only where the project is silent: `~/.agents/skills/impeccable/reference/critique.md` (heuristics)
+    and `~/.agents/skills/impeccable/reference/audit.md` (accessibility).
 - **Project checks:**
   - keyboard baseline: `docs/frontend/ui-design-system.md` → Accessibility Rules (Windows users with both keyboard
     and mouse);
