@@ -46,13 +46,17 @@
   in the local `SeverityIndicator` module because `@ap/ui` does not expose that
   value from its package entry and the local `SeverityBadge` uses it.
 - FeedbackOps-owned product/domain components remain local under
-  `src/{badges,data,entity,identity,indicators,permissions,rich-content}`.
-  `src/internal/useHorizontalOverflow.ts` also remains local. Rich-content stays
-  here for now (ADR-0011); upstream ADR-0052 restored an SDK copy of the editor,
-  renderer and allowlist in `sdk-v0.5.0`, so switching it to `@ap/ui` is a later
-  bundle (the allowlist original stays in `packages/shared`). FeedbackOps owns the UI allowlist in `src/rich-content/allowlist-local.ts`,
-  which mirrors the canonical `packages/shared` contract and is drift-tested; the
-  ADR-0016 package boundary keeps `@fops/ui` from importing `@fops/shared`.
+  `src/{badges,data,entity,identity,indicators,permissions}`.
+  `src/internal/useHorizontalOverflow.ts` also remains local. Rich-content uses
+  TipTap per ADR-0011; its editor, renderer, attach button, and extensions are
+  sourced from `@ap/ui` at `sdk-v0.5.0` per upstream ADR-0052. `RichEditor.tsx`,
+  `RichContentRenderer.tsx`, `toolbar/AttachButton.tsx`,
+  `extensions/attachmentRef.ts`, and `extensions/mention.ts` under
+  `src/rich-content/` are compatibility re-exports; keep FeedbackOps tests local.
+  The allowlist original stays in `packages/shared`. The local
+  `allowlist-local.ts`, `sanitizeClient.ts`, and `fixtures-local.ts` stay as the
+  drift anchor. The ADR-0016 package boundary still keeps `@fops/ui` from
+  importing `@fops/shared`.
   Keep `DetailPanelFullscreenContext` sourced from `@ap/ui` for all consumers.
 - The frontend declares the same `@ap/ui` tag directly so its stylesheet
   resolver can reach bundle-1 CSS. It imports
