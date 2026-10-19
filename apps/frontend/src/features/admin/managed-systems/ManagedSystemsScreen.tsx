@@ -27,13 +27,18 @@ import {
 import { Link } from '@tanstack/react-router';
 import { ArrowRight, Filter, Plus, Shield } from 'lucide-react';
 import type * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
 import { formatDateTime } from '@/lib/format/datetime';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
+import {
+  ADMIN_LIST_FOCUS_FALLBACK_ID,
+  restoreFocus,
+  useRestoreFocusAfterRefetch,
+} from '../lib/restoreFocus.js';
 import { scopeMark } from '../lib/scopeMark.js';
 import { PermissionGate } from '../permissions/permission-gate.js';
 
@@ -91,6 +96,14 @@ function ManagedSystemsBody({
   setRegisterOpen: (v: boolean) => void;
 }) {
   const [editTarget, setEditTarget] = useState<ManagedSystemDto | null>(null);
+  // Row control that opened the settings dialog; focus returns here when it closes.
+  const editTrigger = useRef<HTMLElement | null>(null);
+  const skipFocusRestore = useRef(false);
+  function openSettings(target: ManagedSystemDto, trigger: HTMLElement) {
+    editTrigger.current = trigger;
+    skipFocusRestore.current = false;
+    setEditTarget(target);
+  }
   // Archived rows cannot be restored (ADR-0019 §A: archived rows are immutable).
   // The designed remedy for "archived by mistake" is re-registering the same
   // slug (ADR-0017), so Configure hands the archived row's fields to Register.
@@ -106,13 +119,18 @@ function ManagedSystemsBody({
     requestsCount,
     invalidate,
   } = useManagedSystemsRegistry(includeArchived);
+  const armFocusFallback = useRestoreFocusAfterRefetch(listQuery.isFetching);
 
   return (
     <section className="space-y-8">
       {/* ── Registry ──────────────────────────────────────────────── */}
       <div>
         <div className="mb-3.5 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <h3
+            id={ADMIN_LIST_FOCUS_FALLBACK_ID}
+            tabIndex={-1}
+            className="text-xs font-semibold uppercase tracking-wide text-text-muted outline-hidden"
+          >
             레지스트리
           </h3>
           <span className="text-xs text-text-muted">
@@ -148,7 +166,7 @@ function ManagedSystemsBody({
                 warning={Boolean(
                   diagnosticsQuery.data?.items.some((item) => item.managed_system_id === m.id),
                 )}
-                onConfigure={() => setEditTarget(m)}
+                onConfigure={(trigger) => openSettings(m, trigger)}
               />
             ))}
           </div>
@@ -209,8 +227,8 @@ function ManagedSystemsBody({
                   <Button
                     variant="subtle"
                     size="sm"
-                    onClick={() => {
-                      if (target) setEditTarget(target);
+                    onClick={(event) => {
+                      if (target) openSettings(target, event.currentTarget);
                     }}
                     aria-label={`${systemLabel} 설정 열기`}
                   >
@@ -273,7 +291,13 @@ function ManagedSystemsBody({
         onOpenChange={(open) => {
           if (!open) setEditTarget(null);
         }}
+        onCloseAutoFocus={(event) => {
+          if (skipFocusRestore.current) return;
+          event.preventDefault();
+          restoreFocus(editTrigger.current);
+        }}
         onReregister={(target) => {
+          skipFocusRestore.current = true;
           setEditTarget(null);
           setReregisterFrom(target);
           setRegisterOpen(true);
@@ -281,6 +305,8 @@ function ManagedSystemsBody({
         onSaved={async () => {
           setEditTarget(null);
           await invalidate();
+          // An archived row can drop out of the list once it refetches.
+          armFocusFallback(editTrigger.current);
         }}
       />
     </section>
@@ -348,7 +374,7 @@ function RegistryRow({
   resolved: ResolveActorsResponse | undefined;
   last: boolean;
   warning: boolean;
-  onConfigure: () => void;
+  onConfigure: (trigger: HTMLElement) => void;
 }) {
   const mark = scopeMark(row.slug, row.name);
   const owner = ownerUser(row, resolved);
@@ -402,7 +428,8 @@ function RegistryRow({
         <Button
           variant="subtle"
           size="sm"
-          onClick={onConfigure}
+          onClick={(event) => onConfigure(event.currentTarget)}
+          aria-label={`${row.name} 설정`}
           data-testid={`ms-configure-${row.slug}`}
         >
           설정

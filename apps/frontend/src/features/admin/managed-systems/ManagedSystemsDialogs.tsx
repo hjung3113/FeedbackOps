@@ -7,6 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DirtyConfirmation,
   FieldLabel,
   Input,
   Select,
@@ -17,7 +18,7 @@ import {
   SelectValue,
 } from '@fops/ui';
 import { useMutation } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
@@ -351,31 +352,63 @@ function RegisterDialog({
 function EditDialog({
   target,
   onOpenChange,
+  onCloseAutoFocus,
   onReregister,
   onSaved,
 }: {
   target: ManagedSystemDto | null;
   onOpenChange: (v: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onReregister: (target: ManagedSystemDto) => void;
   onSaved: () => Promise<void>;
 }) {
+  const [dirty, setDirty] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   return (
-    <Dialog open={target !== null} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="ms-edit-dialog">
-        {target && (
-          <EditForm key={target.id} target={target} onReregister={onReregister} onSaved={onSaved} />
-        )}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog
+        open={target !== null}
+        onOpenChange={(open) => {
+          // Escape, the × button and an outside click all arrive here.
+          if (!open && dirty) setConfirmOpen(true);
+          else onOpenChange(open);
+        }}
+      >
+        <DialogContent
+          data-testid="ms-edit-dialog"
+          {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
+        >
+          {target && (
+            <EditForm
+              key={target.id}
+              target={target}
+              onDirtyChange={setDirty}
+              onReregister={onReregister}
+              onSaved={onSaved}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      <DirtyConfirmation
+        open={confirmOpen}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onOpenChange(false);
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
   );
 }
 
 function EditForm({
   target,
+  onDirtyChange,
   onReregister,
   onSaved,
 }: {
   target: ManagedSystemDto;
+  onDirtyChange: (dirty: boolean) => void;
   onReregister: (target: ManagedSystemDto) => void;
   onSaved: () => Promise<void>;
 }) {
@@ -388,6 +421,17 @@ function EditForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [defaultErrors, setDefaultErrors] = useState<DefaultErrors>({});
+
+  const dirty =
+    !isArchived &&
+    (name !== target.name ||
+      externalKey !== (target.external_key ?? '') ||
+      ownerSelectionValue(owner) !== ownerSelectionValue(ownerSelection(target)) ||
+      ownerSelectionValue(reviewer) !== ownerSelectionValue(ownerSelection(target, 'reviewer')));
+  useEffect(() => {
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {

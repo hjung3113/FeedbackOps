@@ -40,7 +40,7 @@ describe('PermissionRequestDetail identity', () => {
     expect(screen.getByText('Billing Ops')).toBeInTheDocument();
     expect(screen.getByText('10000000').closest('header')).toBeNull();
     expect(screen.getByText('10000000')).toHaveClass('font-mono', 'text-xs', 'text-text-muted');
-    expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
+    expect(screen.queryByText('20000000')).not.toBeInTheDocument();
     expect(screen.queryByText('30000000')).not.toBeInTheDocument();
 
     const header = screen.getByText('권한 요청').closest('header');

@@ -36,6 +36,7 @@ export interface DecidePermissionRequestArgs {
 export function useDecidePermissionRequest(
   onSettled?: (succeeded: boolean) => void,
   onStale?: () => void,
+  onSucceeded?: (result: PermissionDecisionResult) => void,
 ): UseMutationResult<PermissionDecisionResult, ApiError, DecidePermissionRequestArgs> {
   const queryClient = useQueryClient();
 
@@ -62,7 +63,8 @@ export function useDecidePermissionRequest(
       ),
     retry: false,
     onSettled: (data) => onSettled?.(data !== undefined),
-    onSuccess: async (_data, args) => {
+    onSuccess: async (data, args) => {
+      onSucceeded?.(data);
       toast.success('권한 요청이 처리되었습니다.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: permissionRequestsReviewKey }),

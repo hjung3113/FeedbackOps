@@ -25,6 +25,7 @@ import type { PermissionRequestDecisionAction } from '@/lib/api';
 import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { useMe } from '@/lib/auth/useMe';
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { formatDateOnly } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
@@ -93,20 +94,24 @@ function hasExpirationFieldError(error: unknown): boolean {
 
 export function PermissionRequestDecisionForm({
   request,
+  actorName,
   managedSystemName,
   staleNoticeShown,
   discardedReason,
   onDraftChanged,
   onStaleConflict,
+  onDecisionSucceeded,
   onActionPicked,
   onReviewCompleted,
 }: {
   request: PermissionRequestAdminDetail;
+  actorName?: string | undefined;
   managedSystemName?: string | undefined;
   staleNoticeShown?: boolean;
   discardedReason?: string;
   onDraftChanged?: (draft: { revision: number; nonEmpty: boolean; reason: string }) => void;
   onStaleConflict?: () => void;
+  onDecisionSucceeded?: (result: { id: string; revision: number }) => void;
   onActionPicked?: () => void;
   onReviewCompleted?: () => void;
 }) {
@@ -176,8 +181,10 @@ export function PermissionRequestDecisionForm({
       intent.current = null;
       onStaleConflict?.();
     },
+    (result) => onDecisionSucceeded?.(result),
   );
   const me = useMe();
+  const captureCopy = ADMIN_PERMISSIONS_COPY.selfApprovalCapture;
   const workspaceSettings = useWorkspaceSettings();
   const minExpirationDate = localDateInputValue(new Date());
   const selectedAction = ACTIONS.find((candidate) => candidate.value === action) ?? null;
@@ -506,8 +513,7 @@ export function PermissionRequestDecisionForm({
             <OutlineBadge>민감</OutlineBadge>
           </div>
           <p className="text-xs leading-5 text-text-secondary">
-            이 결정은 본인이 작성한 요청을 본인이 승인하는 직접 승인입니다. 감사 로그에
-            SELF_APPROVAL 라벨이 부여되고 다음 두 항목이 함께 캡처됩니다.
+            {ADMIN_PERMISSIONS_COPY.selfApprovalCapture.intro}
           </p>
           <label
             className="flex flex-col gap-2 text-sm text-text-secondary"
@@ -537,29 +543,37 @@ export function PermissionRequestDecisionForm({
             />
           </label>
           <div className="flex flex-col gap-1 rounded bg-surface-detail p-3 text-xs text-text-secondary">
-            <span className="uppercase tracking-wide text-text-muted">감사 기록 미리보기</span>
-            <span>label: SELF_APPROVAL</span>
-            <span>
-              actor: {me.data?.actor.id ?? '—'} · subject: {request.requester_actor_id}
+            <span className="uppercase tracking-wide text-text-muted">
+              {captureCopy.previewTitle}
             </span>
-            <span>capability: {request.requested_capability}</span>
+            <span>{captureCopy.recordedAs}</span>
             <span>
-              scope:{' '}
+              {captureCopy.approver}: {me.data?.actor.display_name ?? captureCopy.unknownActor}
+              {' · '}
+              {captureCopy.requester}: {actorName ?? captureCopy.unknownActor}
+            </span>
+            <span>
+              {captureCopy.permission}: {getCapabilityDisplayLabel(request.requested_capability)}
+            </span>
+            <span>
+              {captureCopy.scope}:{' '}
               {request.requested_managed_system_id
                 ? (managedSystemName ?? 'Managed System')
-                : '워크스페이스 전체'}
+                : captureCopy.allScope}
             </span>
             {request.requested_managed_system_id && !managedSystemName && (
               <span className="font-mono text-text-muted">
                 {shortId(request.requested_managed_system_id)}
               </span>
             )}
-            <span>policy_citation: {policyCitation || '— (필수)'}</span>
             <span>
-              no_peer_reviewer:{' '}
+              {captureCopy.policyCitation}: {policyCitation || captureCopy.required}
+            </span>
+            <span>
+              {captureCopy.peerReviewerAbsence}:{' '}
               {peerReviewerAbsence
-                ? `\"${peerReviewerAbsence.slice(0, 56)}${peerReviewerAbsence.length > 56 ? '…' : ''}\"`
-                : '— (필수)'}
+                ? `"${peerReviewerAbsence.slice(0, 56)}${peerReviewerAbsence.length > 56 ? '…' : ''}"`
+                : captureCopy.required}
             </span>
           </div>
           {selfApprovalForbidden ? (

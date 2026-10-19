@@ -347,6 +347,73 @@ describe("/admin/permissions/requests", () => {
     },
   );
 
+  test.each([
+    { action: '거절', status: 'rejected' },
+    { action: '추가 정보 요청', status: 'needs_more_info' },
+  ] as const)(
+    'a $action this form submitted does not show the changed-elsewhere reset notice',
+    async ({ action, status }) => {
+      // Real order, no artificial delay: the detail refetch with revision+1 resolves, the mutation
+      // settles in the following microtask, and React renders both in one batch.
+      installFetch({
+        detail: (row) =>
+          decisionPosts().length > 0
+            ? adminDetailFixture({ ...row, revision: 8, status })
+            : adminDetailFixture(row),
+      });
+      renderRoute();
+      await screen.findByTestId('permission-decision-section');
+      fireEvent.click(screen.getByRole('button', { name: action }));
+      fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'my own reason' } });
+      fireEvent.click(screen.getByTestId('permission-decision-submit'));
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith('권한 요청이 처리되었습니다.'),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+      expect(screen.queryByTestId('permission-decision-reset-notice')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(ADMIN_PERMISSIONS_COPY.discardedDecisionReason, { exact: false }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  test("an external revision landing while this form's decision POST is pending keeps the notice and reason", async () => {
+    let revision = 7;
+    installFetch({ detail: (row) => adminDetailFixture({ ...row, revision }) });
+    const fastFetch = globalThis.fetch;
+    let releasePost: () => void = () => {};
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST')
+        await new Promise<void>((resolve) => {
+          releasePost = resolve;
+        });
+      return fastFetch(input, init);
+    }) as typeof globalThis.fetch;
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'pending reason' } });
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+    revision = 9;
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+    const notice = await screen.findByTestId('permission-decision-reset-notice');
+    expect(notice).toHaveTextContent('다른 곳에서 요청이 변경되어');
+    expect(notice).toHaveTextContent('pending reason');
+    releasePost();
+  });
+
   test('same-ID revision updates its server risk evidence and clears the review draft', async () => {
     let revision = 7;
     const workspaceSignal: PermissionRiskIndicator = {
@@ -1044,6 +1111,28 @@ describe("/admin/permissions/requests", () => {
       screen.getByRole("button", { name: "승인" }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("permission-decision-submit")).toBeEnabled();
+  });
+
+  test('the self-approval audit preview names both actors in plain Korean without debug keys', async () => {
+    installFetch({
+      actorId: REQUESTS[0].requester_actor_id,
+      detail: (row) =>
+        adminDetailFixture(row, true, 'allowed', {
+          requester: { id: row.requester_actor_id, display_name: '김하나', role_level: 'admin' },
+        }),
+    });
+    renderRoute();
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+
+    const capture = screen.getByTestId('self-approval-audit-capture');
+    expect(capture).toHaveTextContent('감사 로그에 본인 승인으로 기록됩니다');
+    await waitFor(() =>
+      expect(capture).toHaveTextContent('승인자: Admin · 요청자: 김하나'),
+    );
+    expect(capture.textContent).not.toMatch(
+      /SELF_APPROVAL|label:|actor:|subject:|policy_citation|no_peer_reviewer|aaaaaaaa/,
+    );
   });
 
   test("AC-4 shows audit capture only for this Admin's approve action, not another request or another action", async () => {
