@@ -192,7 +192,8 @@ function CreateClusterModal({
   });
 
   // Same capability the backend checks on create (finding.manage). Narrowing is UX only;
-  // while the scope is unknown every system is listed and the server stays the authority.
+  // while the scope is pending the picker is disabled; if the scope query errors every system
+  // stays listed and the server stays the authority (a 403 shows CLUSTER_CREATE_COPY.denied).
   const scopeQuery = useQuery({
     queryKey: ['permission-scope', 'finding.manage'] as const,
     queryFn: ({ signal }) => fetchCapabilityScope('finding.manage', { signal }),
@@ -203,6 +204,10 @@ function CreateClusterModal({
   const allowedSystems = (systemsQuery.data?.items ?? []).filter(
     (s) => scope?.kind !== 'scoped' || scope.managed_system_ids.includes(s.id),
   );
+  // A selection made before the scope narrowed counts as empty.
+  const selectedSystemId = allowedSystems.some((s) => s.id === managedSystemId)
+    ? managedSystemId
+    : '';
 
   const mutation = useCreateVocCluster();
 
@@ -219,7 +224,7 @@ function CreateClusterModal({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (managedSystemId === '') {
+    if (selectedSystemId === '') {
       setManagedSystemError('Managed System을 선택하세요.');
       managedSystemTriggerRef.current?.focus();
       return;
@@ -227,7 +232,7 @@ function CreateClusterModal({
     setManagedSystemError(null);
     const body: CreateVocClusterRequest = {
       title,
-      primary_managed_system_id: managedSystemId,
+      primary_managed_system_id: selectedSystemId,
       ...(summary.trim() ? { summary } : {}),
     };
     mutation.mutate(body, {
@@ -299,7 +304,8 @@ function CreateClusterModal({
               Managed System <span aria-hidden>*</span>
             </FieldLabel>
             <Select
-              value={managedSystemId || NO_MANAGED_SYSTEM}
+              value={selectedSystemId || NO_MANAGED_SYSTEM}
+              disabled={scopeQuery.isPending}
               onValueChange={(value) => {
                 setManagedSystemId(value === NO_MANAGED_SYSTEM ? '' : value);
                 setManagedSystemError(null);
