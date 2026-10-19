@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -16,7 +18,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@ap/ui": "git+https://github.com/hjung3113/analytics-platform.git#sdk-v0.3.1&path:/packages/ui",
+    "@ap/ui": "git+https://github.com/hjung3113/analytics-platform.git#sdk-v0.5.0&path:/packages/ui",
     "@fops/shared": "workspace:*",
     "@formkit/auto-animate": "0.10.0",
     "@radix-ui/react-avatar": "^1.1.11",
