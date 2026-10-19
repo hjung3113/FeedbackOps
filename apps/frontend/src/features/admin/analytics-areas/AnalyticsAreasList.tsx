@@ -128,11 +128,7 @@ export function AnalyticsAreasCatalog({
 
       <div>
         <div className="mb-3.5 flex items-center justify-between">
-          <PanelSectionTitle
-            id={ADMIN_LIST_FOCUS_FALLBACK_ID}
-            tabIndex={-1}
-            className="mb-0"
-          >
+          <PanelSectionTitle id={ADMIN_LIST_FOCUS_FALLBACK_ID} tabIndex={-1} className="mb-0">
             카탈로그
           </PanelSectionTitle>
           <span className="text-xs text-text-muted">
