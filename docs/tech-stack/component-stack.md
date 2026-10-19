@@ -78,9 +78,10 @@ packages/ui/src/{badges,data,entity,feedback,forms,identity,indicators,layout,pa
 The matching `ObjectRow`, `UserAvatar`, `UserChip`, `ProgressMeter`,
 `SeverityIndicator`, `PermissionBlockedPanel`, and `StatusBadgeFrame` modules
 are compatibility re-exports. FeedbackOps-owned badges, `LinkedEntityTrail`,
-pickers, and rich-content remain local. The SDK no longer carries the
-FeedbackOps rich-content implementation or allowlist; `allowlist-local.ts` is
-the UI copy of the canonical shared contract and remains drift-tested.
+pickers, and rich-content remain local for now. The SDK also carries a
+rich-content copy (restored in `sdk-v0.5.0`, upstream ADR-0052); switching to it
+is a later bundle. `allowlist-local.ts` is the UI copy of the canonical shared
+contract and remains drift-tested.
 
 Compatibility re-exports remain in `packages/ui/src/components/shadcn/`;
 the `@fops/ui` public API is assembled by `packages/ui/src/index.ts`.
