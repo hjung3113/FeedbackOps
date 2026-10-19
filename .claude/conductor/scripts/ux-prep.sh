@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 [ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"  # zsh-invoked runs lost BASH_SOURCE (s61, s70)
 # ux-prep.sh <n> <worktree> [--baseline <checkout>] [--scale] [--targets <href,href,...>] [--no-perf]
+# Quote the --targets list when calling from zsh: hrefs carry '?', which zsh globs before this script runs.
 # Background UX/perf prep (run it with run_in_background as soon as the code review launches): creates or reuses
 # the issue DB (verify-db.sh), seeds only when the [preview] fixtures are gone (app-preview.py --seed on the
 # baseline start, restarting it if live, plus SEED_MODE=scale with --scale), starts or reuses the

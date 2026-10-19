@@ -6,12 +6,17 @@ wins over both. `$CONDUCTOR` is this folder (`$FOPS_MAIN/.claude/conductor`); `$
 `~/.agents/skills/issue-wave-conductor/scripts`. Common engines live there; repo-local tools stay in `scripts/`.
 This repo's settings and rules live in `conductor.json` + `addenda/`; shared templates live in
 `~/.agents/skills/issue-wave-conductor/templates/`. The launcher composes shared rules with the configured addenda.
+This repo is a consumer of the private provider repo **conductor-engine** (#1280): it keeps only this folder
+(`conductor.json`, `addenda/`, this profile, repo-specific `scripts/`) and no copies of skills, personas or engines.
 
 ## Flow
 
 - `<base>` is `develop`; a slice ships as a `develop` → `main` release PR. Feature PRs squash-merge into `develop`
   (`ship-pr.sh`); the `main` merge is always a **merge commit** (a ruleset allows only that) and is the
   user's, or the conductor's only with explicit approval this session. Never ship with base `main` or `master`.
+- **Merge grant** (asked once at slice start, re-asked every session): the recommended option is "merge into
+  `develop` on green CI and review, report afterwards". `main` (the release PR, or an owner-approved hotfix PR with
+  a back-merge PR `main` → `develop`) needs explicit owner approval in the session.
 - Branch `feature/<n>-<slug>`. `$MAIN` is `FOPS_MAIN` (the main checkout). Worktrees live at
   `~/orca/workspaces/FeedbackOps/<n>-<slug>`.
 - `WAVE_STATE` also holds `env.verify.<n>` (issue databases) and `preview-<label>.json` (`app-preview.py`).
@@ -154,7 +159,9 @@ Read first by the global `review-ux` persona. Report in English.
   - keyboard baseline: `docs/frontend/ui-design-system.md` → Accessibility Rules (Windows users with both keyboard
     and mouse);
   - copy: existing `lib/copy` strings reused, Korean chrome, glossary nouns, no em dash in UI strings;
-  - consistency: density and the 50px header rhythm.
+  - consistency: density and the 50px header rhythm;
+  - emphasis (owner, s84): judge each screen on whether its ≤3 most important things stand out. Duplicate emphasis
+    (severity stripe + icon + badge, a status repeated, red zero-counts) is a finding, not a style choice.
 
 ## Review lens: quality
 
@@ -199,6 +206,8 @@ issue is about that behaviour.
   runs verify-fe, verify-be and the visual harness, and prints the PR command without creating or merging it). The
   release PR merges with `gh pr merge <n> --merge`; a squash on `main` made the next release conflict (#811 → #837).
 - Before any handoff `app-preview.py status` shows no previews and no orphans.
+- At slice close move the slice's finished `W-*.json` state files out of `$WAVE_STATE` (to `.review/archive/`, or
+  `trash`) so `/resume` lists only live workers (s80/s87: ~50 stale files were re-triaged every resume).
 
 ## Tools
 
@@ -218,8 +227,13 @@ issue is about that behaviour.
 | `scripts/release-gate.sh <develop-checkout>` | §Slice close | – |
 | `python3 "$ENGINE/wave-status.py" [--json] [--prs] [--state-dir <dir>] --checkout <worktree>` | read-only wave snapshot (workers, previews, worktrees, containers, PR CI); the `/wave` mod draws it | engine repo tests |
 
-The common engine source and tests live in `/Users/hyojung/orca/workspaces/conductor-engine`; run its tests
-when changing an engine. This repo carries configuration and addenda, not engine forks or their tests.
+Shared pieces (the conductor skill with its engines and templates, `orca-dispatch-recipes`, `session-handoff`, the
+reviewer personas, the workflow hooks) are installed by the provider's `install.sh` from its canonical checkout
+`~/orca/projects/conductor-engine`; the SessionStart context names the installed commit, and when it reports
+edited copies run `install.sh --check` there (edit the provider, never the installed copy). A problem with a shared
+piece is filed upstream with `engine/scripts/upstream-file.sh` (`--batch` for several); a repo-side workaround goes
+in §Traps with the upstream issue link, never only in memory or `HANDOFF.md`. This repo carries configuration and
+addenda, not engine forks or their tests.
 `scripts/test-integration.test.mjs` (repo root `scripts/`, CI static stage) pins the 5434 guard.
 
 ## Traps
@@ -245,3 +259,20 @@ when changing an engine. This repo carries configuration and addenda, not engine
   the shared Zod schema in the test.
 - Changing a label's line box inside a vertically centred dialog shifts the whole modal by a subpixel; keep
   pixel-preserving refactors local there.
+- Both previews of one issue share the issue DB, so the `<n>-develop` backend's pg-boss worker takes jobs of a new
+  event type the branch adds and fails them (s88 false UX blocker "no notifications arrive"). When a branch adds a
+  job payload or event type, stop the `<n>-develop` preview before the UX run and check `pgboss.job` before calling
+  "nothing arrives" a code bug.
+- `ux-prep.sh` can report `probe: failed` after its Ego Lite restart while a manual probe a minute later passes:
+  re-probe by hand once before relaunching anything. Quote its `--targets` list from zsh (`?` globs).
+- Create every worktree that will host a worker or reviewer, or be shipped, with `orca worktree create`; a plain
+  `git worktree add` cannot host codex-orca and `ship-pr.sh` does not clean it (s84/s88). `orca terminal create` can
+  fail transiently and leave an empty terminal: retry once, close the orphan. After two "Timed out waiting for
+  terminal handle" on one codex-orca launch, use `worker-launch.sh --role impl-fallback` with the row's
+  `--model`/`--effort` and record it in VERIFY (s90; conductor-engine#10).
+- Never overwrite an existing `.review/wave/<n>-task.md` from an older session (s88 lost a brief): pick a new name
+  or pass `--brief <path>` (conductor-engine#33).
+- Rate-limit buckets (`core.rate_limits`) outlive test files and are keyed `<workspace_id>:<actor_id>`; the
+  `mutation` tier is 10/min per actor. A 429 in an untouched integration suite means a neighbour spent the shared
+  persona's budget: the suite clears its cohort's buckets in `beforeEach`/`beforeAll` (#1275, #1281). A delete by bare
+  `actor.id::text` matches nothing (#1214).
