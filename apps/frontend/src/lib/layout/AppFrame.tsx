@@ -68,12 +68,12 @@ function AppFrameBody({ sidebarEntries, activeDomain, paletteNavTree, platformRe
   React.useEffect(() => {
     if (syncManagedSystemFromUrl) setSelectedManagedSystemId(managedSystemId);
   }, [managedSystemId, syncManagedSystemFromUrl]);
-  const { ref: slotHostRef, open: slotOpen, expanded: isExpanded } = useDetailPanelSlotHost();
+  const { ref: slotHostRef, open: slotOpen, expanded: isExpanded, toggle: toggleSlot } = useDetailPanelSlotHost();
   // The provider hands `DetailPanelFullscreenContext` only to the portaled panel; the reading
-  // column sits outside it and just needs `expanded` (the toggle lives in the panel header).
+  // column sits outside it, so it gets the host's own view of the same state.
   const columnContextValue = React.useMemo(
-    () => ({ expanded: isExpanded, toggle: () => {} }),
-    [isExpanded],
+    () => ({ expanded: isExpanded, toggle: toggleSlot }),
+    [isExpanded, toggleSlot],
   );
   const me = useMe();
   const actor = me.data?.actor;
