@@ -9,11 +9,11 @@ import {
 } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto, MilestoneDto } from '@fops/shared';
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import * as React from 'react';
+import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
 
@@ -194,16 +194,16 @@ function createdRow(): MilestoneDto {
 // The route forwards its detail slot to AppFrame; tests mirror AppFrame's
 // host by rendering whatever the shell registers (permission-request-detail
 // test pattern) so the panel content is assertable without the full frame.
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <div ref={ref} />;
+}
 function DetailPanelHost({ children }: { children: React.ReactNode }) {
-  const [panel, setPanel] = React.useState<React.ReactNode>();
-  const setContent = React.useCallback((_key: string, node: React.ReactNode) => setPanel(node), []);
-  const clear = React.useCallback(() => setPanel(undefined), []);
-  const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
   return (
-    <DetailPanelSlotContext.Provider value={context}>
+    <DetailPanelSlotProvider>
       {children}
-      {panel}
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 

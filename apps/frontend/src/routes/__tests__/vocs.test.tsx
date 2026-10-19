@@ -11,8 +11,8 @@
 // component directly via a createRoute harness to avoid routeTree.gen.ts
 // regeneration timing issues (the generated file regen requires vite dev).
 //
-// AppFrame test helpers mock the DetailPanelSlotContext so that
-// useDetailPanelSlot inside the shells does not throw.
+// Without a DetailPanelSlotProvider the shells' detail-slot registration
+// is a no-op, so these mounts need no AppFrame.
 
 import { VOC_SEVERITY_DISCLAIMER } from '@/lib/copy/voc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

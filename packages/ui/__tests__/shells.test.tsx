@@ -1,11 +1,12 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import {
-  DetailPanelSlotContext,
+  DetailPanelSlotProvider,
   ListShell,
   PageShell,
   ShellHeader,
   WorkbenchShell,
+  useDetailPanelSlotHost,
 } from '../src/index';
 
 describe('Three-shell taxonomy (ADR-0020)', () => {
@@ -80,42 +81,45 @@ describe('ShellHeader 50px rhythm', () => {
   });
 });
 
+function SlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <div ref={ref} data-testid="slot-host" />;
+}
+
 describe('useDetailPanelSlot forwarding', () => {
-  it('shell with detailPanel prop calls slot setContent', () => {
-    const setContent = vi.fn();
-    const clear = vi.fn();
+  it('shell with detailPanel prop renders it into the slot host', () => {
     render(
-      <DetailPanelSlotContext.Provider value={{ setContent, clear }}>
+      <DetailPanelSlotProvider>
         <ListShell toolbar={{ title: 'I' }} list={<div />} detailPanel={<aside>panel</aside>} />
-      </DetailPanelSlotContext.Provider>,
+        <SlotHost />
+      </DetailPanelSlotProvider>,
     );
-    expect(setContent).toHaveBeenCalledTimes(1);
-    const firstCall = setContent.mock.calls[0];
-    expect(firstCall).toBeDefined();
-    const [, node] = firstCall ?? [];
-    expect(node).toBeDefined();
+    expect(within(screen.getByTestId('slot-host')).getByText('panel')).toBeInTheDocument();
   });
 
-  it('shell without detailPanel does not call setContent', () => {
-    const setContent = vi.fn();
-    const clear = vi.fn();
+  it('shell without detailPanel leaves the slot host empty', () => {
     render(
-      <DetailPanelSlotContext.Provider value={{ setContent, clear }}>
+      <DetailPanelSlotProvider>
         <PageShell header={{ title: 'H' }}>body</PageShell>
-      </DetailPanelSlotContext.Provider>,
+        <SlotHost />
+      </DetailPanelSlotProvider>,
     );
-    expect(setContent).not.toHaveBeenCalled();
+    expect(screen.getByTestId('slot-host')).toBeEmptyDOMElement();
   });
 
   it('shell unmount clears slot', () => {
-    const setContent = vi.fn();
-    const clear = vi.fn();
-    const { unmount } = render(
-      <DetailPanelSlotContext.Provider value={{ setContent, clear }}>
+    const { rerender } = render(
+      <DetailPanelSlotProvider>
         <ListShell toolbar={{ title: 'I' }} list={<div />} detailPanel={<aside>panel</aside>} />
-      </DetailPanelSlotContext.Provider>,
+        <SlotHost />
+      </DetailPanelSlotProvider>,
     );
-    unmount();
-    expect(clear).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('panel')).toBeInTheDocument();
+    rerender(
+      <DetailPanelSlotProvider>
+        <SlotHost />
+      </DetailPanelSlotProvider>,
+    );
+    expect(screen.queryByText('panel')).toBeNull();
   });
 });

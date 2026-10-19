@@ -1,4 +1,4 @@
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import * as React from 'react';
+import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
 
@@ -77,17 +77,16 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 
 import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
 
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <div ref={ref} />;
+}
 function DetailPanelHost({ children }: { children: React.ReactNode }) {
-  const [panel, setPanel] = React.useState<React.ReactNode>();
-  const setContent = React.useCallback((_key: string, node: React.ReactNode) => setPanel(node), []);
-  const clear = React.useCallback((_key: string) => setPanel(undefined), []);
-  const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
-
   return (
-    <DetailPanelSlotContext.Provider value={context}>
+    <DetailPanelSlotProvider>
       {children}
-      {panel}
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 

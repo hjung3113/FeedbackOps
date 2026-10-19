@@ -34,6 +34,7 @@
 - Do not build repeated UI patterns directly inside screens. Create or reuse a feature-local component first, then compose it in the screen.
 - Before creating a new component, check `packages/ui`, the feature's existing components, and `docs/frontend/component-inventory.md`.
 - Use existing wrappers from `@fops/ui` before importing shadcn/Radix primitives directly. Bundle-1 token and primitive implementations come from the pinned `@ap/ui` dependency; local compatibility files under `packages/ui/src/components/shadcn` only re-export them.
+- The detail slot is `@ap/ui`'s (bundle 2b): `AppFrame` wraps its frame in `DetailPanelSlotProvider` and hosts the panel through `useDetailPanelSlotHost()`; shells forward `detailPanel` with `useDetailPanelSlot(node)`, which is `@ap/ui`'s `useDetailPanelContent` (`undefined` clears, `null` closes). There is no `DetailPanelSlotContext`; tests that render a shell with `detailPanel` mount `DetailPanelSlotProvider` plus a host element.
 - Never import `@radix-ui/*` in `apps/frontend` (enforced by `pnpm check:boundaries`); use the `@fops/ui` wrappers.
 - Use installed libraries, shadcn/Radix wrappers, and `lucide-react` before hand-rolling interaction behavior, accessibility primitives, icons, popovers, menus, tabs, dialogs, or form controls.
 - Add new tokens or variants to docs before using them broadly.

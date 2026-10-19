@@ -244,7 +244,9 @@ describe('AppFrame', () => {
     );
     await waitFor(
       () => {
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('[AppFrame]'));
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('[DetailPanelSlot] Multiple registrants'),
+        );
       },
       { timeout: 3000 },
     );
@@ -361,9 +363,10 @@ describe('AppFrame', () => {
     await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
 
     expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
-    expect(screen.getByTestId('header-panel').parentElement).toBe(
-      screen.getByTestId('app-detail-slot-column'),
-    );
+    // The panel mounts in the slot host, a layout-neutral `contents` div inside the column.
+    const host = screen.getByTestId('header-panel').parentElement;
+    expect(host).toHaveClass('contents');
+    expect(host?.parentElement).toBe(screen.getByTestId('app-detail-slot-column'));
   });
 
   it.each([

@@ -13,7 +13,7 @@ import {
   listTaskRequestsQuerySchema,
   listTasksQuerySchema,
 } from '@fops/shared';
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   RouterProvider,
@@ -24,7 +24,7 @@ import {
 } from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import * as React from 'react';
+import type * as React from 'react';
 import { toast } from 'sonner';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -157,16 +157,16 @@ vi.mock('@/lib/api/tasks-comments', async (original) => ({
   listTaskComments: async () => ({ items: [], page: { has_more: false } }),
 }));
 // The real ListShell registers the real panel in the same slot contract as AppFrame.
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <div ref={ref} />;
+}
 function DetailPanelHost({ children }: { children: React.ReactNode }) {
-  const [panel, setPanel] = React.useState<React.ReactNode>();
-  const setContent = React.useCallback((_key: string, node: React.ReactNode) => setPanel(node), []);
-  const clear = React.useCallback(() => setPanel(undefined), []);
-  const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
   return (
-    <DetailPanelSlotContext.Provider value={context}>
+    <DetailPanelSlotProvider>
       {children}
-      {panel}
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 function createTasksRouter(view: string, host: (children: React.ReactNode) => React.ReactNode) {
