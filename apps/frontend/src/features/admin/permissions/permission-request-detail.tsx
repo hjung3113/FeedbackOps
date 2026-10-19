@@ -28,8 +28,7 @@ export function PermissionRequestDetail({
   discardedReason,
   onDraftChanged,
   onStaleConflict,
-  onDecisionSubmitted,
-  onDecisionSettled,
+  onDecisionSucceeded,
   onActionPicked,
   onClose,
 }: {
@@ -41,8 +40,7 @@ export function PermissionRequestDetail({
   discardedReason?: string;
   onDraftChanged?: (draft: { revision: number; nonEmpty: boolean; reason: string }) => void;
   onStaleConflict?: () => void;
-  onDecisionSubmitted?: () => void;
-  onDecisionSettled?: () => void;
+  onDecisionSucceeded?: (result: { id: string; revision: number }) => void;
   onActionPicked?: () => void;
   onClose: () => void;
 }) {
@@ -153,8 +151,7 @@ export function PermissionRequestDetail({
             {...(discardedReason !== undefined ? { discardedReason } : {})}
             {...(onDraftChanged ? { onDraftChanged } : {})}
             {...(onStaleConflict ? { onStaleConflict } : {})}
-            {...(onDecisionSubmitted ? { onDecisionSubmitted } : {})}
-            {...(onDecisionSettled ? { onDecisionSettled } : {})}
+            {...(onDecisionSucceeded ? { onDecisionSucceeded } : {})}
             {...(onActionPicked ? { onActionPicked } : {})}
             onReviewCompleted={() => setReviewEpoch((epoch) => epoch + 1)}
           />

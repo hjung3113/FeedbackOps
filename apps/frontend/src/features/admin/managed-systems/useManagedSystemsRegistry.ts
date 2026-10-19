@@ -23,7 +23,7 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
   areasByMs: Map<string, AnalyticsAreaDto[]>;
   renderedAreaCount: number;
   resolved: ResolveActorsResponse | undefined;
-  listQuery: { isPending: boolean; isError: boolean; error: unknown };
+  listQuery: { isPending: boolean; isError: boolean; isFetching: boolean; error: unknown };
   diagnosticsQuery: ReturnType<typeof useDefaultDiagnostics>;
   requestsCount: number;
   invalidate: () => Promise<void>;
@@ -100,6 +100,7 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
     listQuery: {
       isPending: listQuery.isPending,
       isError: listQuery.isError,
+      isFetching: listQuery.isFetching || areasQuery.isFetching,
       error: listQuery.error,
     },
     diagnosticsQuery,

@@ -353,20 +353,14 @@ describe("/admin/permissions/requests", () => {
   ] as const)(
     'a $action this form submitted does not show the changed-elsewhere reset notice',
     async ({ action, status }) => {
+      // Real order, no artificial delay: the detail refetch with revision+1 resolves, the mutation
+      // settles in the following microtask, and React renders both in one batch.
       installFetch({
         detail: (row) =>
           decisionPosts().length > 0
             ? adminDetailFixture({ ...row, revision: 8, status })
             : adminDetailFixture(row),
       });
-      // The decision settles only after every invalidated query refetches; a slow list read
-      // lets the new detail revision render first, as it does against a real server.
-      const fastFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (String(input) === '/permissions/requests?status=all' && decisionPosts().length > 0)
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        return fastFetch(input, init);
-      }) as typeof globalThis.fetch;
       renderRoute();
       await screen.findByTestId('permission-decision-section');
       fireEvent.click(screen.getByRole('button', { name: action }));
@@ -375,13 +369,8 @@ describe("/admin/permissions/requests", () => {
       await waitFor(() =>
         expect(toast.success).toHaveBeenCalledWith('권한 요청이 처리되었습니다.'),
       );
-      const detailGets = () =>
-        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
-          ([url, init]) => String(url).endsWith(REQUESTS[0].id) && init?.method !== 'POST',
-        ).length;
-      await waitFor(() => expect(detailGets()).toBeGreaterThanOrEqual(2));
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       });
       expect(screen.queryByTestId('permission-decision-reset-notice')).not.toBeInTheDocument();
       expect(
@@ -389,6 +378,41 @@ describe("/admin/permissions/requests", () => {
       ).not.toBeInTheDocument();
     },
   );
+
+  test("an external revision landing while this form's decision POST is pending keeps the notice and reason", async () => {
+    let revision = 7;
+    installFetch({ detail: (row) => adminDetailFixture({ ...row, revision }) });
+    const fastFetch = globalThis.fetch;
+    let releasePost: () => void = () => {};
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST')
+        await new Promise<void>((resolve) => {
+          releasePost = resolve;
+        });
+      return fastFetch(input, init);
+    }) as typeof globalThis.fetch;
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'pending reason' } });
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+    revision = 9;
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+    const notice = await screen.findByTestId('permission-decision-reset-notice');
+    expect(notice).toHaveTextContent('다른 곳에서 요청이 변경되어');
+    expect(notice).toHaveTextContent('pending reason');
+    releasePost();
+  });
 
   test('same-ID revision updates its server risk evidence and clears the review draft', async () => {
     let revision = 7;

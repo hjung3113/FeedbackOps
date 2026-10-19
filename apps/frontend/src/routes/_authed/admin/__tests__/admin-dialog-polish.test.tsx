@@ -35,7 +35,7 @@ function renderPage(path: string, component: () => React.ReactNode) {
 }
 
 // One active system with one active area; archiving either removes it from the next list read.
-function installFetch() {
+function installFetch(gate?: { list: Promise<void> | null }) {
   const archived = { ms: false, aa: false };
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input);
@@ -49,6 +49,8 @@ function installFetch() {
       archived.aa = true;
       return response({});
     }
+    // Hold the list read that follows an archive until the test releases it.
+    if (gate?.list && (archived.ms || archived.aa)) await gate.list;
     if (url.startsWith('/managed-systems'))
       return response({
         items: [
@@ -144,6 +146,29 @@ describe('admin settings dialogs', () => {
     await waitFor(() => expect(screen.queryByTestId(s.dialog)).toBeNull());
     await waitFor(() => expect(screen.getByRole('heading', { name: s.heading })).toHaveFocus());
   });
+
+  test.each(surfaces)(
+    '$label archive falls back to the heading only after the slow list drops the row',
+    async (s) => {
+      let release: () => void = () => {};
+      installFetch({
+        list: new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+      });
+      renderPage(s.path, s.page);
+      const trigger = await s.open();
+      fireEvent.click(await screen.findByTestId(s.archive));
+      const confirm = await screen.findByTestId(`${s.archive}-confirm-dialog`);
+      fireEvent.click(within(confirm).getByRole('button', { name: '보관' }));
+      await waitFor(() => expect(screen.queryByTestId(s.dialog)).toBeNull());
+      // The dialog is closed while the old row is still rendered: focus returns to it.
+      await waitFor(() => expect(trigger).toHaveFocus());
+      release();
+      await waitFor(() => expect(trigger).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.getByRole('heading', { name: s.heading })).toHaveFocus());
+    },
+  );
 
   test('Managed System settings ask before discarding unsaved edits; clean ones close at once', async () => {
     installFetch();

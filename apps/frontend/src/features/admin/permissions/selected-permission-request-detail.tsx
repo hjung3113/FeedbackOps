@@ -34,8 +34,12 @@ export function SelectedPermissionRequestDetail({
     reason: string;
   } | null>(null);
   const [discardedReason, setDiscardedReason] = React.useState<string | null>(null);
-  // A decision this panel submitted bumps the revision itself; that is not a change made elsewhere.
-  const [decisionInFlight, setDecisionInFlight] = React.useState(false);
+  // The revision this panel's own successful decision produced (from the decision response). It is
+  // kept past mutation settle, until another revision replaces it, so the detail refetch that lands
+  // after settle is still recognised as ours; any other revision change is a change made elsewhere.
+  const [ownDecision, setOwnDecision] = React.useState<{ id: string; revision: number } | null>(
+    null,
+  );
   const onDraftChanged = React.useCallback(
     (next: { revision: number; nonEmpty: boolean; reason: string }) => setDraft(next),
     [],
@@ -44,7 +48,8 @@ export function SelectedPermissionRequestDetail({
   // Preserve the old reason outside the keyed form before its revision reset.
   // Same-revision reads leave both the form and its intent key untouched.
   if (detail && draft && draft.revision !== detail.revision) {
-    if (draft.nonEmpty && !decisionInFlight) setDiscardedReason(draft.reason);
+    const ownRevision = ownDecision?.id === id && ownDecision.revision === detail.revision;
+    if (draft.nonEmpty && !ownRevision) setDiscardedReason(draft.reason);
     setDraft(null);
   }
   if (query.isError || !detail || !query.isFetchedAfterMount)
@@ -78,8 +83,7 @@ export function SelectedPermissionRequestDetail({
       {...(discardedReason !== null ? { discardedReason } : {})}
       onDraftChanged={onDraftChanged}
       onStaleConflict={() => setStaleReview(true)}
-      onDecisionSubmitted={() => setDecisionInFlight(true)}
-      onDecisionSettled={() => setDecisionInFlight(false)}
+      onDecisionSucceeded={setOwnDecision}
       onActionPicked={() => {
         setStaleReview(false);
         setDiscardedReason(null);

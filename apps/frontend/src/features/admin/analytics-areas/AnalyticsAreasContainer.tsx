@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AnalyticsAreaDto, ManagedSystemDto } from '../../../lib/api';
 import { groupAreasByMs } from '../lib/groupAreasByMs.js';
-import { restoreFocus } from '../lib/restoreFocus.js';
+import { restoreFocus, useRestoreFocusAfterRefetch } from '../lib/restoreFocus.js';
 import { AnalyticsAreaSlideOver } from './AnalyticsAreaDetail.js';
 import { EditDialog, RegisterDialog } from './AnalyticsAreaDialogs.js';
 import { AnalyticsAreasCatalog } from './AnalyticsAreasList.js';
@@ -50,6 +50,7 @@ export function AnalyticsAreasBody({
     () => (managedSystemId ? systems.filter((system) => system.id === managedSystemId) : systems),
     [managedSystemId, systems],
   );
+  const armFocusFallback = useRestoreFocusAfterRefetch(aaQuery.isFetching || msQuery.isFetching);
   const areas = useMemo(() => aaQuery.data?.items ?? [], [aaQuery.data]);
   // The open detail is derived from the URL `selected` + the loaded list.
   const detail = useMemo(
@@ -165,7 +166,7 @@ export function AnalyticsAreasBody({
           setEditTarget(null);
           await invalidate();
           // An archived row can drop out of the list once it refetches.
-          if (!rowTrigger.current?.isConnected) restoreFocus(null);
+          armFocusFallback(rowTrigger.current);
         }}
       />
     </>

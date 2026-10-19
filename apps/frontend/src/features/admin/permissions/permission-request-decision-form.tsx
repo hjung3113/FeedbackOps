@@ -100,8 +100,7 @@ export function PermissionRequestDecisionForm({
   discardedReason,
   onDraftChanged,
   onStaleConflict,
-  onDecisionSubmitted,
-  onDecisionSettled,
+  onDecisionSucceeded,
   onActionPicked,
   onReviewCompleted,
 }: {
@@ -112,8 +111,7 @@ export function PermissionRequestDecisionForm({
   discardedReason?: string;
   onDraftChanged?: (draft: { revision: number; nonEmpty: boolean; reason: string }) => void;
   onStaleConflict?: () => void;
-  onDecisionSubmitted?: () => void;
-  onDecisionSettled?: () => void;
+  onDecisionSucceeded?: (result: { id: string; revision: number }) => void;
   onActionPicked?: () => void;
   onReviewCompleted?: () => void;
 }) {
@@ -163,7 +161,6 @@ export function PermissionRequestDecisionForm({
   const mutation = useDecidePermissionRequest(
     (succeeded) => {
       submitting.current = false;
-      onDecisionSettled?.();
       if (succeeded) {
         intent.current = null;
         onReviewCompleted?.();
@@ -184,6 +181,7 @@ export function PermissionRequestDecisionForm({
       intent.current = null;
       onStaleConflict?.();
     },
+    (result) => onDecisionSucceeded?.(result),
   );
   const me = useMe();
   const captureCopy = ADMIN_PERMISSIONS_COPY.selfApprovalCapture;
@@ -300,7 +298,6 @@ export function PermissionRequestDecisionForm({
     if (intent.current?.fingerprint !== fingerprint)
       intent.current = { fingerprint, key: mintIdempotencyKey() };
     submitting.current = true;
-    onDecisionSubmitted?.();
     mutation.mutate({ ...args, idempotencyKey: intent.current.key });
   }
 

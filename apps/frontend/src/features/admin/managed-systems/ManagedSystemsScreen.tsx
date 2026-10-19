@@ -34,7 +34,11 @@ import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
 import { formatDateTime } from '@/lib/format/datetime';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
-import { ADMIN_LIST_FOCUS_FALLBACK_ID, restoreFocus } from '../lib/restoreFocus.js';
+import {
+  ADMIN_LIST_FOCUS_FALLBACK_ID,
+  restoreFocus,
+  useRestoreFocusAfterRefetch,
+} from '../lib/restoreFocus.js';
 import { scopeMark } from '../lib/scopeMark.js';
 import { PermissionGate } from '../permissions/permission-gate.js';
 
@@ -115,6 +119,7 @@ function ManagedSystemsBody({
     requestsCount,
     invalidate,
   } = useManagedSystemsRegistry(includeArchived);
+  const armFocusFallback = useRestoreFocusAfterRefetch(listQuery.isFetching);
 
   return (
     <section className="space-y-8">
@@ -301,7 +306,7 @@ function ManagedSystemsBody({
           setEditTarget(null);
           await invalidate();
           // An archived row can drop out of the list once it refetches.
-          if (!editTrigger.current?.isConnected) restoreFocus(null);
+          armFocusFallback(editTrigger.current);
         }}
       />
     </section>
