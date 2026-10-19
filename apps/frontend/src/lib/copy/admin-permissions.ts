@@ -39,17 +39,6 @@ export const ADMIN_PERMISSIONS_COPY = {
   revokeSuccess: '권한을 취소했습니다.',
   liftSuccess: '차단을 해제했습니다.',
   selfDenyLiftForbidden: '관리자는 본인에게 걸린 차단도 직접 해제할 수 없습니다.',
-  selfApprovalPolicy: {
-    developerDefaultScope:
-      '개발자가 처음 로그인할 때 부여된 범위를 모두 합친 유효 범위의 기준값입니다.',
-    allScope:
-      '관리자만 all을 워크스페이스 전체로 해석합니다. 다른 역할은 워크스페이스 범위와 부여된 범위가 겹치는 부분만 적용합니다.',
-    settingDescription:
-      '요청자가 직접 자기 권한 요청을 승인하려면 범위 내 권한이 필요합니다. 감사 로그에 본인 승인으로 기록됩니다.',
-    taskRequestNote: 'Task Request 자가승인은 별도 규칙을 따르며 이 설정과 무관합니다.',
-    pastRecordsKept:
-      '과거의 직접 승인 기록은 감사 로그에 본인 승인으로 영구 보존되며 회수되지 않습니다.',
-  },
   selfApprovalCapture: {
     intro:
       '이 결정은 본인이 작성한 요청을 본인이 승인하는 직접 승인입니다. 감사 로그에 본인 승인으로 기록되고 다음 두 항목이 함께 저장됩니다.',
@@ -62,8 +51,6 @@ export const ADMIN_PERMISSIONS_COPY = {
     policyCitation: '정책 근거',
     peerReviewerAbsence: '동료 검토자 부재 사유',
     required: '— (필수)',
-    allScope: '워크스페이스 전체',
-    unknownActor: '알 수 없는 사용자',
   },
   riskReview: {
     title: '검토 시 확인할 사항',

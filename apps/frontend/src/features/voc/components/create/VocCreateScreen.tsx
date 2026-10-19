@@ -2,29 +2,30 @@
 // C4+C5 of Slice 3 #19.
 // Left column: react-hook-form wired fields. Right column: reporter and recommendation info.
 
-import type * as React from 'react';
 import { Link } from '@tanstack/react-router';
+import type * as React from 'react';
 import { Controller } from 'react-hook-form';
 
+import { mapUnknownError } from '@/lib/api';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
+import { VOC_CREATE_COPY } from '@/lib/copy/voc';
+import { isTipTapDocBlank } from '@fops/shared';
 import {
-  FieldLabel,
-  ManagedSystemPicker,
   AnalyticsAreaPicker,
+  Button,
+  FieldLabel,
   Input,
+  ManagedSystemPicker,
   RichEditor,
   Skeleton,
-  Button,
 } from '@fops/ui';
-import { mapUnknownError } from '@/lib/api';
-import { isTipTapDocBlank } from '@fops/shared';
-import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
-import { SimilarVocPanel } from './SimilarVocPanel';
 import { SemanticVocPanel } from './SemanticVocPanel';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
+import { SimilarVocPanel } from './SimilarVocPanel';
+import { SourceContextSegmented } from './SourceContextSegmented';
 import { vocDescriptionToolbar } from './VocDescriptionToolbar';
-import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import { useVocCreateController } from './useVocCreateController';
 
 export interface VocCreateScreenProps {
@@ -61,9 +62,9 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
     'primary_managed_system_id',
   ]);
   const missingRequired = [
-    ...(title.trim() === '' ? ['제목'] : []),
-    ...(isTipTapDocBlank(description) ? ['상세 설명'] : []),
-    ...(managedSystemId === '' ? ['Managed System'] : []),
+    ...(title.trim() === '' ? [VOC_CREATE_COPY.titleField] : []),
+    ...(isTipTapDocBlank(description) ? [VOC_CREATE_COPY.descriptionField] : []),
+    ...(managedSystemId === '' ? [VOC_CREATE_COPY.managedSystemField] : []),
   ];
 
   return (
@@ -81,7 +82,9 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           >
             {/* Title */}
             <div className="flex flex-col gap-2">
-              <FieldLabel required htmlFor="title">제목</FieldLabel>
+              <FieldLabel required htmlFor="title">
+                {VOC_CREATE_COPY.titleField}
+              </FieldLabel>
               <Input
                 id="title"
                 placeholder="겪으신 문제를 한 줄로 요약해 주세요"
@@ -102,7 +105,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                 htmlFor="description_rich_content"
                 tip="겪으신 일을 시간 순서대로 적어주시면 도움이 됩니다"
               >
-                상세 설명
+                {VOC_CREATE_COPY.descriptionField}
               </FieldLabel>
               <Controller
                 control={form.control}
@@ -163,7 +166,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                 appearance="section"
                 tip="제출 후 변경할 수 없습니다. 어느 시스템에 대한 VOC인지 정확히 골라주세요."
               >
-                Managed System
+                {VOC_CREATE_COPY.managedSystemField}
               </FieldLabel>
               {msQuery.isLoading ? (
                 <div className="flex flex-wrap gap-2">
@@ -289,7 +292,8 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
             data-testid="voc-submit-missing"
             className="text-xs text-text-muted"
           >
-            필수 항목: {missingRequired.join(', ')}
+            {VOC_CREATE_COPY.requiredFieldsPrefix}
+            {missingRequired.join(', ')}
           </span>
         )}
         <Button

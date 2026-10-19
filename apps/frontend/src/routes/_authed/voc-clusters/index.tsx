@@ -4,7 +4,13 @@
 import { VocClusterListShell } from '@/features/voc-cluster/components/detail/VocClusterListShell';
 import { useCreateVocCluster } from '@/features/voc-cluster/hooks/useCreateVocCluster';
 import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
-import { type ApiError, errorMapper, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
+import {
+  type ApiError,
+  errorMapper,
+  fetchCapabilityScope,
+  fetchManagedSystems,
+  isPermissionDenied,
+} from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { CLUSTER_CREATE_COPY } from '@/lib/copy/voc-cluster';
 import { parseRouteSearch } from '@/lib/router/search';
@@ -241,10 +247,10 @@ function CreateClusterModal({
         onCreated(cluster.id);
       },
       onError: (err: ApiError) => {
-        const message =
-          err.code === 'permission.denied' || err.code === 'permission.scope_required'
-            ? CLUSTER_CREATE_COPY.denied
-            : errorMapper(err.envelope).message;
+        const permissionDenied: boolean = isPermissionDenied(err);
+        const message = permissionDenied
+          ? CLUSTER_CREATE_COPY.denied
+          : errorMapper(err.envelope).message;
         setError(message);
         toast.error(message);
       },

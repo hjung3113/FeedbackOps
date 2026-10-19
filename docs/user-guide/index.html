@@ -488,7 +488,7 @@
             <h3>요청하고 승인받기</h3>
             <ol><li>막힌 화면에서 <strong>권한 요청</strong>을 누르고 사유를 적습니다. 민감한 권한은 사유가 필수입니다.</li><li>Admin이 <code>/admin/permissions/requests</code>에서 승인·거절·추가 정보 요청을 검토합니다.</li><li>승인되면 해당 Managed System 범위로 권한이 생깁니다.</li></ol>
             <h3>Admin이 스스로에게 권한을 주는 경우</h3>
-            <p>워크스페이스 정책이 self-approval을 허용해야 합니다. 승인 시 근거 정책 조항과 사유를 입력해야 하고, 감사 기록에 <code>SELF_APPROVAL</code> 라벨이 붙습니다.</p>
+            <p>워크스페이스 정책이 self-approval을 허용해야 합니다. 승인 시 근거 정책 조항과 사유를 입력해야 하고, 감사 로그에 본인 승인으로 기록됩니다.</p>
             <h3>알아둘 것</h3>
             <!-- Source: docs/adr/0048-role-level-extension.md:93-126. Admin has domain-specific role bypass exceptions to general capability grants. -->
             <ul><li><strong>명시적 거부는 일반 권한 허용보다 우선합니다.</strong> Admin의 도메인별 역할 우회 예외는 역할과 권한 표를 확인하세요.</li><li><strong>권한은 Managed System 단위입니다.</strong> A 시스템의 <code>voc.triage</code>가 B 시스템에는 적용되지 않습니다.</li><li>사이드바의 Managed System 선택기에서 권한 밖 시스템은 아이콘으로 표시됩니다.</li></ul>
