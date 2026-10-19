@@ -4,18 +4,19 @@
  * Uses postcss (NOT regex) to parse tokens.css.
  * ADR-0021: colors = R G B triple; non-colors = raw value.
  */
-import path from 'node:path';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import postcss from 'postcss';
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PACK_17_TOKENS } from './token-fidelity.fixture';
 
 // Paths resolved relative to this test file (packages/ui/src/styles/__tests__/)
 // tokens.css: all Pack 17 prototype tokens (closed-world set-equality)
 // semantic.css: shadcn HSL var remaps only (not checked for set-equality)
 // theme.css: CSS-first Tailwind theme keys (ADR-0058, replaces the JS preset)
-const TOKENS_CSS_PATH = path.resolve(__dirname, '../tokens.css');
-const THEME_CSS_PATH = path.resolve(__dirname, '../theme.css');
+const require = createRequire(import.meta.url);
+const TOKENS_CSS_PATH = require.resolve('@ap/ui/styles/tokens.css');
+const THEME_CSS_PATH = require.resolve('@ap/ui/styles/theme.css');
 
 /** Parse a CSS file and extract all custom property declarations from all :root blocks. */
 function parseCustomProps(cssPath: string): Map<string, string> {
@@ -50,7 +51,9 @@ describe('token-fidelity: tokens.css + semantic.css against Pack 17 fixture', ()
     for (const entry of colorTokensWithHex) {
       const runtimeValue = tokenProps.get(entry.tokenName);
       if (runtimeValue && /^#[0-9a-fA-F]{3,8}$/.test(runtimeValue.trim())) {
-        violations.push(`${entry.tokenName}: runtime value is raw hex "${runtimeValue}" — must be R G B triple "${entry.rgb}"`);
+        violations.push(
+          `${entry.tokenName}: runtime value is raw hex "${runtimeValue}" — must be R G B triple "${entry.rgb}"`,
+        );
       }
     }
     expect(violations, violations.join('\n')).toHaveLength(0);
@@ -70,7 +73,10 @@ describe('token-fidelity: tokens.css + semantic.css against Pack 17 fixture', ()
     for (const entry of PACK_17_TOKENS) {
       it(`${entry.tokenName} has correct value`, () => {
         const parsedValue = tokenProps.get(entry.tokenName);
-        expect(parsedValue, `${entry.tokenName} is not declared in tokens.css or semantic.css`).toBeDefined();
+        expect(
+          parsedValue,
+          `${entry.tokenName} is not declared in tokens.css or semantic.css`,
+        ).toBeDefined();
 
         if (entry.rgb !== undefined) {
           // Color token: assert R G B triple
@@ -83,7 +89,7 @@ describe('token-fidelity: tokens.css + semantic.css against Pack 17 fixture', ()
           // Normalize whitespace for font-family strings
           const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
           expect(
-            normalize(parsedValue!),
+            normalize(parsedValue ?? ''),
             `${entry.tokenName}: expected raw="${entry.raw}" but got "${parsedValue}"`,
           ).toBe(normalize(entry.raw));
         }
@@ -185,9 +191,6 @@ describe('token-fidelity: Tailwind theme key resolvability', () => {
     ];
 
     const missing = expectedKeys.filter((k) => !themeKeys.has(k));
-    expect(
-      missing,
-      `Tailwind theme is missing color keys: ${missing.join(', ')}`,
-    ).toHaveLength(0);
+    expect(missing, `Tailwind theme is missing color keys: ${missing.join(', ')}`).toHaveLength(0);
   });
 });

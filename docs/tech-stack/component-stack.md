@@ -64,13 +64,16 @@ Those components must be owned by this codebase.
 
 ### Layer 1: UI Primitives
 
-Owned path:
+The bundle-1 primitive source lives in the pinned `@ap/ui` package
+(analytics-platform's `packages/ui`, tag `sdk-v0.2.0`). FeedbackOps-owned
+composed components live at:
 
 ```text
-packages/ui/src/components/shadcn/*
+packages/ui/src/{badges,data,entity,feedback,forms,identity,indicators,layout,panel,permissions,rich-content,toolbar}/*
 ```
 
-The shipped primitives are listed in `packages/ui/src/components/shadcn/` and exported from `packages/ui/src/index.ts`.
+Compatibility re-exports remain in `packages/ui/src/components/shadcn/`;
+the `@fops/ui` public API is assembled by `packages/ui/src/index.ts`.
 
 Recommended source:
 
@@ -95,7 +98,7 @@ Owned path:
 packages/ui/src/<area>/*
 ```
 
-Areas: `badges`, `data`, `entity`, `feedback`, `forms`, `identity`, `indicators`, `layout`, `panel`, `permissions`, `rich-content`, `toolbar`. Shared pickers and `Button` live in `packages/ui/src/components/*`. The layout shells are exactly `PageShell`, `ListShell`, and `WorkbenchShell` (ADR-0020).
+Areas: `badges`, `data`, `entity`, `feedback`, `forms`, `identity`, `indicators`, `layout`, `panel`, `permissions`, `rich-content`, `toolbar`. Shared pickers live in `packages/ui/src/components/*`; `Button` is exposed through `@fops/ui` and sourced from `@ap/ui`. The layout shells are exactly `PageShell`, `ListShell`, and `WorkbenchShell` (ADR-0020).
 
 Components that only one feature uses stay feature-local, under `apps/frontend/src/features/<feature>/`.
 
@@ -147,7 +150,7 @@ cmdk
 Use:
 
 ```text
-- shadcn/ui for source-owned UI wrappers (packages/ui/src/components/shadcn; shadcn is not a runtime dependency)
+- shadcn/ui primitives sourced through the pinned `@ap/ui` SDK; FeedbackOps consumers use the `@fops/ui` wrappers
 - Radix UI for accessible primitives (@radix-ui/react-* dependencies of packages/ui)
 - lucide-react for icons
 - sonner for ephemeral mutation feedback
@@ -185,7 +188,7 @@ clsx
 Constraints:
 
 ```text
-- Theme and tokens are CSS: packages/ui/src/styles/{tokens,semantic,theme,compat}.css. The Tailwind JS preset and tailwind.config are removed (ADR-0058).
+- Theme and tokens are CSS from `@ap/ui/styles/{tokens,semantic,theme,compat}.css`; the app also imports `@ap/ui/styles/sources.css`. The Tailwind JS preset and tailwind.config are removed (ADR-0058).
 - Light is the only MVP theme (ADR-0021).
 ```
 
@@ -282,7 +285,7 @@ They are not approved as direct visual systems.
 Any component copied from a registry must go through this process:
 
 ```text
-1. Copy into packages/ui/src/components/shadcn (primitives) or the matching packages/ui/src/<area> folder (product and domain components).
+1. For a bundle-1 primitive, update the upstream analytics-platform SDK and consume a tagged `@ap/ui` release. Put FeedbackOps product and domain components in the matching `packages/ui/src/<area>` folder.
 2. Normalize colors, spacing, radius, typography, focus rings, and density to `docs/frontend/ui-design-system.md` semantic tokens.
 3. Remove unrelated variants and decorative styling.
 4. Verify accessibility behavior.
@@ -448,7 +451,7 @@ packages/ui dependencies:
 - lucide-react, sonner
 ```
 
-shadcn/ui is not a normal runtime UI dependency; its components are source files under `packages/ui/src/components/shadcn`.
+shadcn/ui is not a normal runtime UI dependency; bundle-1 source files are shipped by the pinned `@ap/ui` package. Local files under `packages/ui/src/components/shadcn` are compatibility re-exports.
 Install reusable component dependencies at the workspace root or target package
 according to the chosen workspace manager; do not create per-app lockfiles.
 

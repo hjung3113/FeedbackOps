@@ -33,7 +33,7 @@
 
 - Do not build repeated UI patterns directly inside screens. Create or reuse a feature-local component first, then compose it in the screen.
 - Before creating a new component, check `packages/ui`, the feature's existing components, and `docs/frontend/component-inventory.md`.
-- Use existing wrappers under `packages/ui/src/components` (Radix wrappers live in `components/shadcn`) before importing shadcn/Radix primitives directly.
+- Use existing wrappers from `@fops/ui` before importing shadcn/Radix primitives directly. Bundle-1 token and primitive implementations come from the pinned `@ap/ui` dependency; local compatibility files under `packages/ui/src/components/shadcn` only re-export them.
 - Never import `@radix-ui/*` in `apps/frontend` (enforced by `pnpm check:boundaries`); use the `@fops/ui` wrappers.
 - Use installed libraries, shadcn/Radix wrappers, and `lucide-react` before hand-rolling interaction behavior, accessibility primitives, icons, popovers, menus, tabs, dialogs, or form controls.
 - Add new tokens or variants to docs before using them broadly.

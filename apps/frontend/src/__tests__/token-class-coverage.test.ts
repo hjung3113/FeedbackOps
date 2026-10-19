@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 /**
  * Token-class coverage: asserts no .tsx file under apps/frontend/src/ references
  * a semantic-prefix Tailwind class whose theme key is not resolvable in the
@@ -6,14 +7,15 @@ import fs from 'node:fs';
  * JS preset).
  *
  * Uses node:fs walk (no fast-glob dep) to scan all .tsx files.
- * Parses `--color-*` keys out of packages/ui/src/styles/theme.css (postcss).
+ * Parses `--color-*` keys out of the resolved `@ap/ui` theme (postcss).
  */
 import path from 'node:path';
 import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
 // ---- Theme ----
-const THEME_CSS_PATH = path.resolve(__dirname, '../../../../packages/ui/src/styles/theme.css');
+const uiRequire = createRequire(path.resolve(__dirname, '../../../../packages/ui/package.json'));
+const THEME_CSS_PATH = uiRequire.resolve('@ap/ui/styles/theme.css');
 
 function parseThemeColorKeys(cssPath: string): Set<string> {
   const source = fs.readFileSync(cssPath, 'utf-8');

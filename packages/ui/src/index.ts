@@ -1,5 +1,127 @@
-export { Button, buttonVariants } from './components/Button.js';
-export type { ButtonProps } from './components/Button.js';
+export {
+  Alert,
+  AlertDescription,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  AlertTitle,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Combobox,
+  DIALOG_CONTENT_MOTION,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogContentBare,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+  Input,
+  KeyboardShortcut,
+  Label,
+  POPPER_CONTENT_MOTION,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+  RadioGroup,
+  RadioGroupItem,
+  SCRIM_MOTION,
+  SELECT_CONTENT_MOTION,
+  SHEET_CONTENT_MOTION,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetOverlay,
+  SheetPortal,
+  SheetTitle,
+  SheetTrigger,
+  Skeleton,
+  SkeletonBlocks,
+  SkeletonRows,
+  Tabs,
+  TabsContent,
+  TabsListBase as TabsList,
+  TabsTriggerBase as TabsTrigger,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  badgeVariants,
+  buttonVariants,
+  cn,
+  isToastTarget,
+  prefersReducedMotion,
+  readMotionTiming,
+  useListMotion,
+  type BadgeProps,
+  type ButtonProps,
+  type ComboboxOption,
+  type ComboboxProps,
+  type InputProps,
+  type KeyboardShortcutProps,
+  type SkeletonBlock,
+  type SkeletonBlocksProps,
+  type SkeletonRowsProps,
+  type TextareaProps,
+} from '@ap/ui';
+
 export {
   ManagedSystemPicker,
   type ManagedSystemPickerProps,
@@ -9,43 +131,6 @@ export {
   AnalyticsAreaPicker,
   type AnalyticsAreaPickerProps,
 } from './components/AnalyticsAreaPicker.js';
-export { cn } from './utils/cn.js';
-export {
-  DIALOG_CONTENT_MOTION,
-  POPPER_CONTENT_MOTION,
-  SCRIM_MOTION,
-  SELECT_CONTENT_MOTION,
-  SHEET_CONTENT_MOTION,
-  prefersReducedMotion,
-  readMotionTiming,
-} from './utils/motion.js';
-export { useListMotion } from './utils/useListMotion.js';
-export { isToastTarget } from './utils/toast-target.js';
-
-// shadcn primitives (Pack 17, ADR-0021)
-// Note: shadcn/button re-exports Button/buttonVariants already exported above — omitted to avoid collision
-export * from './components/shadcn/input.js';
-export * from './components/shadcn/textarea.js';
-export * from './components/shadcn/label.js';
-export * from './components/shadcn/select.js';
-export * from './components/shadcn/checkbox.js';
-export * from './components/shadcn/radio-group.js';
-export * from './components/shadcn/toggle-group.js';
-export * from './components/shadcn/card.js';
-export * from './components/shadcn/dialog.js';
-export * from './components/shadcn/alert-dialog.js';
-export * from './components/shadcn/alert.js';
-export * from './components/shadcn/tooltip.js';
-export * from './components/shadcn/hover-card.js';
-export * from './components/shadcn/popover.js';
-export * from './components/shadcn/sheet.js';
-export * from './components/shadcn/tabs.js';
-export * from './components/shadcn/skeleton.js';
-export * from './components/shadcn/avatar.js';
-export * from './components/shadcn/badge.js';
-export * from './components/shadcn/dropdown-menu.js';
-export * from './components/shadcn/combobox.js';
-
 // Rich content (Pack 17, ADR-0011)
 export {
   RichEditor,
@@ -122,7 +207,12 @@ export {
   type ManagedSystemMarkToken,
 } from './badges/managed-system-mark.js';
 export { OutlineBadge, type OutlineBadgeProps } from './badges/OutlineBadge';
-export { EntityIconBadge, type EntityIconBadgeProps, type EntityIconType, ENTITY_ICON_MAP } from './badges/EntityIconBadge';
+export {
+  EntityIconBadge,
+  type EntityIconBadgeProps,
+  type EntityIconType,
+  ENTITY_ICON_MAP,
+} from './badges/EntityIconBadge';
 
 // Identity (Slice 3 #20)
 export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/UserAvatar';
@@ -142,13 +232,6 @@ export {
   type ListSortButtonProps,
   type SortOption,
 } from './toolbar/ListSortButton';
-export { KeyboardShortcut, type KeyboardShortcutProps } from './components/KeyboardShortcut';
-export { SkeletonRows, type SkeletonRowsProps } from './components/SkeletonRows';
-export {
-  SkeletonBlocks,
-  type SkeletonBlocksProps,
-  type SkeletonBlock,
-} from './components/SkeletonBlocks';
 // Forms (Slice 3 #20)
 export { SearchInput, type SearchInputProps } from './forms/SearchInput';
 // Feedback (Slice 3 #20)
@@ -163,7 +246,11 @@ export {
 } from './data/ObjectRow';
 
 // Panel primitives (Slice 3 #20)
-export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } from './panel/DetailPanelHeader';
+export {
+  DetailPanelHeader,
+  type DetailPanelHeaderProps,
+  type DetailPanelKind,
+} from './panel/DetailPanelHeader';
 export {
   DetailPanelFullscreenContext,
   DetailPanelFullscreenToggle,
@@ -175,9 +262,16 @@ export { NestedTextBlock, type NestedTextBlockProps } from './panel/NestedTextBl
 export { FieldRow, type FieldRowProps } from './panel/FieldRow';
 export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
 export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
-export { DetailPanelHeaderActions, type DetailPanelHeaderActionsProps } from './panel/DetailPanelHeaderActions';
+export {
+  DetailPanelHeaderActions,
+  type DetailPanelHeaderActionsProps,
+} from './panel/DetailPanelHeaderActions';
 // Panel section nav (Slice 3 #21 — deferred from #20)
-export { DetailPanelSectionNav, type DetailPanelSectionNavProps, type PanelSection } from './panel/DetailPanelSectionNav';
+export {
+  DetailPanelSectionNav,
+  type DetailPanelSectionNavProps,
+  type PanelSection,
+} from './panel/DetailPanelSectionNav';
 
 // Permissions (Slice 3 #20)
 export {

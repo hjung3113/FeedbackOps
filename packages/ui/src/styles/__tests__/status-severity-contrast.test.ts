@@ -10,11 +10,11 @@ import fs from 'node:fs';
  * so a future edit to any of these values gets caught here if it regresses
  * below AA — parsed with postcss, same technique as token-fidelity.test.ts.
  */
-import path from 'node:path';
+import { createRequire } from 'node:module';
 import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
-const TOKENS_CSS_PATH = path.resolve(__dirname, '../tokens.css');
+const TOKENS_CSS_PATH = createRequire(import.meta.url).resolve('@ap/ui/styles/tokens.css');
 
 function parseCustomProps(cssPath: string): Map<string, string> {
   const source = fs.readFileSync(cssPath, 'utf-8');

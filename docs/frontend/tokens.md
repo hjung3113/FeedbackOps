@@ -188,9 +188,9 @@ The base layer (`apps/frontend/src/styles.css`) applies `--font-sans` and the
 body size + leading to `body`.
 
 Since issue #743 (ADR-0058) the theme is Tailwind v4 CSS-first:
-`packages/ui/src/styles/theme.css` (`@theme inline` aliasing the token
-variables) replaces the former JS preset (`tailwind.preset.ts`, removed). The
-mapping above is unchanged.
+`@ap/ui/styles/theme.css` (`@theme inline` aliasing the token variables,
+pinned at tag `sdk-v0.2.0`) replaces the former JS preset
+(`tailwind.preset.ts`, removed). The mapping above is unchanged.
 
 Since issue #782, `text-caption`, `text-tiny`, and `text-micro` expose their
 matching size tokens as size-only utilities. Issue #797 also exposes `text-md`
@@ -266,7 +266,7 @@ Icon chips use `--radius-icon-chip` (5px), exposed as `rounded-icon-chip`.
 - **Card padding:** 12px
 - **Element gap:** 8px
 - **Row accent stripe:** 3px (`--row-accent-width`, exposed as `w-row-accent`)
-- **Layout tokens:** see `Layout tokens` in `packages/ui/src/styles/tokens.css` (sidebar, rail, topbar, toolbar, detail panel, row heights, badge height, icon sizes, entity link inventory).
+- **Layout tokens:** see `Layout tokens` in `@ap/ui/styles/tokens.css` (sidebar, rail, topbar, toolbar, detail panel, row heights, badge height, icon sizes, entity link inventory).
 - **Panel footer height:** 101px (`--panel-footer-max`), the fixed TriageActions footer; the desktop toast offset adds a 16px gap above it (#867). Footers are not capped at this height: a wrapping footer (an unlinked Finding's actions, about 137px) is taller, and a toast can overlap its top row while it shows.
 - **Row minimum utilities:** `min-h-row-default` and `min-h-row-expanded` expose the 60px and 96px row-height tokens.
 - **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
@@ -369,10 +369,11 @@ Badge with a 'Gunmetal' background (#94a3b8), 'Storm Cloud' text (#667083), 4px 
 
 ## Tokens — Motion
 
-Raw values ship in `packages/ui/src/styles/tokens.css` (ADR-0063). Tailwind aliases in
-`theme.css` reference these variables; components consume the shared overlay constants in
-`packages/ui/src/utils/motion.ts`, never independent motion classes. See the Motion section
-in `ui-design-system.md` for surface behavior and reduced motion.
+Raw values ship in `@ap/ui/styles/tokens.css` (ADR-0063, pinned at tag
+`sdk-v0.2.0`). Tailwind aliases in `@ap/ui/styles/theme.css` reference these
+variables; components consume the shared overlay constants exported from
+`@ap/ui`, never independent motion classes. See the Motion section in
+`ui-design-system.md` for surface behavior and reduced motion.
 
 | Token | Value | Utility / role |
 | --- | --- | --- |
@@ -416,31 +417,33 @@ Quick Color Reference:
 
 ### CSS Custom Properties
 
-The shipped CSS custom-property names and values are defined in `packages/ui/src/styles/tokens.css`. `tokens.css` is the implementation source for the token names and values in this reference.
+The shipped CSS custom-property names and values are defined in
+`@ap/ui/styles/tokens.css` (bundle 1, tag `sdk-v0.2.0`). That stylesheet is
+the implementation source for the token names and values in this reference.
 
 ### Frontend Stylesheet
 
 `apps/frontend/src/styles.css` imports `tailwindcss`, then
-`@fops/ui/styles/tokens.css` and `@fops/ui/styles/semantic.css` (both in
-`layer(base)`), then the CSS-first theme `@fops/ui/styles/theme.css`, then
-the parity layer `@fops/ui/styles/compat.css` (ADR-0058; v3 Preflight pins,
-`space-y-*`, and legacy leading/tracking values). Text-size line-height
+`@ap/ui/styles/tokens.css` and `@ap/ui/styles/semantic.css` (both in
+`layer(base)`), then the CSS-first theme `@ap/ui/styles/theme.css`, then
+the parity layer `@ap/ui/styles/compat.css` (ADR-0058; v3 Preflight pins,
+`space-y-*`, and legacy leading/tracking values), followed by
+`@ap/ui/styles/sources.css`. Text-size line-height
 companions are pinned in the exported `theme.css`. Tailwind sources are
-declared explicitly with `@source` (index.html, app `src/`,
-`packages/ui/src`) on top of auto-detection; the typography plugin stays
+declared explicitly with `@source` (index.html, app `src/`, and the UI
+package source trees) on top of auto-detection; the typography plugin stays
 UNLOADED (ADR-0058 §5).
 
-Downstream consumers of `@fops/ui` (e.g. analytics-platform) use the same
-import order — `tailwindcss` → tokens/semantic (`layer(base)`) → theme →
-compat; theme before base is a consumer invariant — plus:
+Consumers use the same import order — `tailwindcss` → tokens/semantic
+(`layer(base)`) → theme → compat → package sources; theme before base is a
+consumer invariant — plus:
 
 - body prerequisites: Pack 17 body typography
   (`font-family: var(--font-sans); font-size: var(--text-body);
   line-height: var(--leading-normal)`) on `body`, and the webfont imports
   (`@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono`,
   `pretendard` dynamic subset) unlayered;
-- an explicit `@source` for this submodule's `packages/ui/src` next to the
-  consumer's own sources, e.g. `@source '../FeedbackOps/packages/ui/src';`.
+- explicit source declarations for the app tree and any local package code.
 
 See ADR-0058 for the full contract and the consumer-contract test in
 `packages/ui/src/styles/__tests__/consumer-contract.test.ts`.
