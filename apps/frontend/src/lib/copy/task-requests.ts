@@ -14,6 +14,7 @@ export const TASK_REQUEST_COPY = {
   automaticNote: '자동 배정은 설정된 기본값을 사용합니다.',
   converted: (displayId: string, assignee: string) =>
     `Task ${displayId}${/[036]$/.test(displayId) ? '으로' : '로'} 전환했습니다. 담당자: ${assignee}`,
+  convertToTask: 'Task로 전환',
   openTask: 'Task 열기',
   created: 'Task Request가 생성되었습니다.',
   openRequest: 'Task Request 열기',
