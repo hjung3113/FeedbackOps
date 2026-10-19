@@ -196,6 +196,7 @@ function CreateClusterModal({
   const scopeQuery = useQuery({
     queryKey: ['permission-scope', 'finding.manage'] as const,
     queryFn: ({ signal }) => fetchCapabilityScope('finding.manage', { signal }),
+    enabled: open,
     retry: false,
   });
   const scope = scopeQuery.data?.scope;
