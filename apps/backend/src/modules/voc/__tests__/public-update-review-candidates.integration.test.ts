@@ -122,6 +122,15 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
        )`,
       [WORKSPACE_ID],
     );
+    // Rate-limit buckets outlive test files: earlier suites can spend this actor cohort's
+    // per-minute budget and turn an expected 409 into a 429 (#1275).
+    await migrateHandle.pool.query(
+      `delete from core.rate_limits where key in (
+         select workspace_id || ':' || id from core.actors where workspace_id = $1
+           and (external_id in ('mock-admin-1', 'mock-user-1') or external_id like 'mock-dev-read-%')
+       )`,
+      [WORKSPACE_ID],
+    );
     await migrateHandle.pool.query(
       `delete from core.actors where workspace_id = $1 and external_id like 'mock-dev-read-%'`,
       [WORKSPACE_ID],
