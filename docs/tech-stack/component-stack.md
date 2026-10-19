@@ -65,7 +65,7 @@ Those components must be owned by this codebase.
 ### Layer 1: UI Primitives
 
 The bundle-1 primitive source lives in the pinned `@ap/ui` package
-(analytics-platform's `packages/ui`, tag `sdk-v0.3.0`). FeedbackOps-owned
+(analytics-platform's `packages/ui`, tag `sdk-v0.3.1`). FeedbackOps-owned
 composed components live at:
 
 ```text

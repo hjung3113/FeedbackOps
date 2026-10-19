@@ -20,17 +20,17 @@
 
 - Use semantic tokens, not raw hex values, outside token implementation files.
 - Bundle 1 (tokens, motion utilities, and shadcn primitives) is sourced from
-  `@ap/ui` at the `sdk-v0.3.0` tag. The local `src/index.ts` preserves the
+  `@ap/ui` at the `sdk-v0.3.1` tag. The local `src/index.ts` preserves the
   `@fops/ui` API; `src/components/shadcn/*` and selected `src/utils/*`
   files are compatibility re-exports only. Do not add implementation there.
 - Bundle 2a (panel, toolbar, forms, and feedback components) is sourced from
-  `@ap/ui` at `sdk-v0.3.0`. The matching files under `src/{panel,toolbar,forms,
+  `@ap/ui` at `sdk-v0.3.1`. The matching files under `src/{panel,toolbar,forms,
   feedback}` and their entries in `src/index.ts` are compatibility re-exports;
   keep the FeedbackOps tests local. `src/panel/useJumpGuard.ts` remains local
   because the SDK does not export that private helper, and its existing test
   imports the helper directly.
 - Bundle 2b (layout shells and the detail slot) is sourced from `@ap/ui` at
-  `sdk-v0.3.0`. `src/layout/*` are compatibility re-exports. `useDetailPanelSlot(node)`
+  `sdk-v0.3.1`. `src/layout/*` are compatibility re-exports. `useDetailPanelSlot(node)`
   is `@ap/ui`'s `useDetailPanelContent` under the FeedbackOps name (`undefined`
   clears, `null` registers a closed registrant). `DetailPanelSlotContext` is gone:
   `AppFrame` wraps its frame in `DetailPanelSlotProvider` and renders the host
