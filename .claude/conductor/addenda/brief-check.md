@@ -8,6 +8,9 @@ Examples and paths for the shared items (each cost a review round in sessions 63
 - Item 2: cardinality and validation rules match the backend validator (`routes.ts`, `authoring.ts`, service code),
   not the issue text (#827).
 - Item 3: a sequence that cannot hit the race passes before the fix (#891).
+  s90 #1292: an "own mutation vs refetch" test delayed the list read by 100 ms and passed, while the running app
+  failed; `onSuccess` awaits the invalidations, so settle and the refetched render land in one batch. Pin the real
+  order (POST resolves → settle → refetch renders) in the brief.
 - Item 4: integration tests send the body the frontend sends (#921).
 - Item 5: lifecycle events (#838).
 - Item 6: mount lifetime (#922 → #937).

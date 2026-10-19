@@ -203,7 +203,9 @@ issue is about that behaviour.
 - **Walkthrough:** previews of `origin/main` and `origin/develop` on a throwaway DB (as above), `review-ux` over at
   most three issue-sized flows per run, plus one `nav-perf.sh` comparison over the rail targets as a safety net.
 - Release: `scripts/release-gate.sh <develop-checkout>` (clean checkout at `origin/develop`; refreshes the release DB,
-  runs verify-fe, verify-be and the visual harness, and prints the PR command without creating or merging it). The
+  runs verify-fe, verify-be and the visual harness, and prints the PR command without creating or merging it). A fresh
+  detached checkout has no root `.env` (gitignored): copy the main checkout's `.env` in first, or the gate stops at
+  `verify-db up` (s90). The
   release PR merges with `gh pr merge <n> --merge`; a squash on `main` made the next release conflict (#811 → #837).
 - Before any handoff `app-preview.py status` shows no previews and no orphans.
 - At slice close move the slice's finished `W-*.json` state files out of `$WAVE_STATE` (to `.review/archive/`, or
@@ -270,6 +272,8 @@ addenda, not engine forks or their tests.
   fail transiently and leave an empty terminal: retry once, close the orphan. After two "Timed out waiting for
   terminal handle" on one codex-orca launch, use `worker-launch.sh --role impl-fallback` with the row's
   `--model`/`--effort` and record it in VERIFY (s90; conductor-engine#10).
+- `app-preview.py` needs `WAVE_STATE` exported: without it `stop <label>` finds nothing and still exits quietly
+  (s90: six previews kept running). Export it for every call, keep its output, and read `status` after stopping.
 - Never overwrite an existing `.review/wave/<n>-task.md` from an older session (s88 lost a brief): pick a new name
   or pass `--brief <path>` (conductor-engine#33).
 - Rate-limit buckets (`core.rate_limits`) outlive test files and are keyed `<workspace_id>:<actor_id>`; the
