@@ -2,12 +2,13 @@
    must establish layer order before our `layer(base)` imports so tokens.css
    (base) keeps priority over any theme-layer output (ADR-0058). */
 @import "tailwindcss";
-@import "@fops/ui/styles/tokens.css" layer(base);
-@import "@fops/ui/styles/semantic.css" layer(base);
+@import "@ap/ui/styles/tokens.css" layer(base);
+@import "@ap/ui/styles/semantic.css" layer(base);
 /* CSS-first Pack 17 theme (ADR-0058) — replaces the v3 JS preset + @config. */
-@import "@fops/ui/styles/theme.css";
+@import "@ap/ui/styles/theme.css";
 /* v3 Preflight pins, v3 `space-y-*`, leading/tracking legacy shims (ADR-0058). */
-@import "@fops/ui/styles/compat.css";
+@import "@ap/ui/styles/compat.css";
+@import "@ap/ui/styles/sources.css";
 
 /* Pack 17 webfonts (#715): variable faces registered by these packages.
    Inter has no Hangul, so --font-sans falls Korean glyphs through to
@@ -21,9 +22,9 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
-/* Explicit sources, equivalent to the v3 `content` globs (index.html, app
-   src incl. its tests, ui package src). Auto-detection from the app root adds
-   the same trees; the explicit entries pin the contract for the ui package. */
+/* Explicit app sources supplement the package-owned @ap/ui/styles/sources.css
+   import above; the local package source tree remains explicit for bundle 2.
+   Auto-detection covers the same app tree and the imports pin its contract. */
 @source '../index.html';
 @source './';
 @source '../../../packages/ui/src';
@@ -35,8 +36,8 @@
 
 /* v3 Preflight pins (border color, placeholder color, button cursor), the v3
    `space-y-*` semantics, and the leading/tracking legacy shims ship from the
-   package as `@fops/ui/styles/compat.css` (imported above) so analytics-
-   platform gets the same parity behavior through the documented imports. */
+   package as `@ap/ui/styles/compat.css` (imported above) so consumers share
+   the same parity behavior through the documented imports. */
 
 @layer utilities {
   html,

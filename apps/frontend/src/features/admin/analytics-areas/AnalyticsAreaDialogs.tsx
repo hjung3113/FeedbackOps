@@ -196,15 +196,20 @@ function RegisterForm({
 export function EditDialog({
   target,
   onOpenChange,
+  onCloseAutoFocus,
   onSaved,
 }: {
   target: AnalyticsAreaDto | null;
   onOpenChange: (v: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onSaved: () => Promise<void>;
 }) {
   return (
     <Dialog open={target !== null} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="aa-edit-dialog">
+      <DialogContent
+        data-testid="aa-edit-dialog"
+        {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
+      >
         {target && <EditForm key={target.id} target={target} onSaved={onSaved} />}
       </DialogContent>
     </Dialog>

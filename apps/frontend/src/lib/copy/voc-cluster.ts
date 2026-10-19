@@ -25,3 +25,8 @@ export const CLUSTER_SUGGESTION_COPY = {
   optInHelp:
     '켜면 매시간 유사한 VOC 두 건을 Cluster 제안으로 만듭니다. 끄면 새 제안만 멈추고 이미 만든 제안은 계속 검토할 수 있습니다.',
 };
+
+export const CLUSTER_CREATE_COPY = {
+  denied:
+    '이 Managed System에서 Cluster를 만들 권한이 없습니다. 다른 Managed System을 선택하거나 워크스페이스 관리자에게 권한을 요청하세요.',
+};

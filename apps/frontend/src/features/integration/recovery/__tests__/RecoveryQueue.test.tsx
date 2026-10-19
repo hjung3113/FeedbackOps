@@ -1,6 +1,6 @@
 import { validateHomeSearch } from '@/routes/_authed/home';
 import { validateIntegrationDashboardSearch } from '@/routes/_authed/integration';
-import { DetailPanelFullscreenContext, DetailPanelSlotContext, PageShell } from '@fops/ui';
+import { DetailPanelSlotProvider, PageShell, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import {
   Outlet,
@@ -11,7 +11,6 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { type ReactNode, useMemo, useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useRecoveryQueue } from '../useRecoveryQueue';
 
@@ -116,27 +115,23 @@ function setup(
   );
   return requests;
 }
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <aside ref={ref} />;
+}
 function Host() {
-  const [panel, setPanel] = useState<ReactNode>();
-  const ctx = useMemo(
-    () => ({
-      setContent: (_key: string, node: ReactNode) => setPanel(node),
-      clear: () => setPanel(undefined),
-    }),
-    [],
-  );
   return (
-    <DetailPanelSlotContext.Provider value={ctx}>
+    <DetailPanelSlotProvider>
       <Outlet />
-      <aside>{panel}</aside>
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 function Queue({ view = 'operational' }: { view?: 'operational' | 'actionable' }) {
   const recovery = useRecoveryQueue(view);
   return <PageShell detailPanel={recovery.detailPanel}>{recovery.queue}</PageShell>;
 }
-async function mount(url = '/integration', fullscreen = false) {
+async function mount(url = '/integration') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute({ component: Host });
   const integration = createRoute({
@@ -156,9 +151,7 @@ async function mount(url = '/integration', fullscreen = false) {
   await act(async () => router.load());
   const view = render(
     <QueryClientProvider client={client}>
-      <DetailPanelFullscreenContext.Provider value={{ expanded: fullscreen, toggle: () => {} }}>
-        <RouterProvider router={router} />
-      </DetailPanelFullscreenContext.Provider>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return { client, router, history, ...view };
@@ -529,8 +522,13 @@ it('returns focus to the clicked history occurrence when the same identity appea
 
 it('leaves fullscreen Escape to the shell and permits explicit close', async () => {
   setup();
-  await mount(`/integration?selected=${ID}`, true);
+  await mount(`/integration?selected=${ID}`);
   await screen.findByTestId('recovery-panel');
+  fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+  expect(screen.getByRole('button', { name: '전체 화면 전환' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   fireEvent.keyDown(document.body, { key: 'Escape' });
   expect(screen.getByTestId('recovery-panel')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));

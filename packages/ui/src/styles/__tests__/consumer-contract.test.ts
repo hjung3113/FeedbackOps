@@ -5,9 +5,9 @@ import { expect, it } from 'vitest';
 import { POPPER_CONTENT_MOTION } from '../../utils/motion.js';
 
 /**
- * Consumer contract for the documented @fops/ui imports (ADR-0058).
+ * Consumer contract for the documented @ap/ui stylesheet imports (ADR-0058).
  *
- * analytics-platform imports only these five lines — never the app stylesheet.
+ * Consumers import these package stylesheet lines — never the app stylesheet.
  * These tests compile EXACTLY the documented recipe with Tailwind's Node API
  * and assert the parity-critical CSS the package components rely on is present
  * in that package-only output (FIX1 for W-743 final review R1/R2/R3).
@@ -17,10 +17,11 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 /** The documented consumer imports — the only stylesheet input allowed here. */
 const DOCUMENTED_IMPORTS = [
   "@import 'tailwindcss';",
-  "@import '@fops/ui/styles/tokens.css' layer(base);",
-  "@import '@fops/ui/styles/semantic.css' layer(base);",
-  "@import '@fops/ui/styles/theme.css';",
-  "@import '@fops/ui/styles/compat.css';",
+  "@import '@ap/ui/styles/tokens.css' layer(base);",
+  "@import '@ap/ui/styles/semantic.css' layer(base);",
+  "@import '@ap/ui/styles/theme.css';",
+  "@import '@ap/ui/styles/compat.css';",
+  "@import '@ap/ui/styles/sources.css';",
 ].join('\n');
 
 async function compileConsumerCss(candidates: string[]): Promise<string> {

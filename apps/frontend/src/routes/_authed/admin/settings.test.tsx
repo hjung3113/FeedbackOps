@@ -150,7 +150,7 @@ describe('/admin/settings route', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        '관리자만 all을 워크스페이스 전체로 해석합니다. 다른 역할은 유효 범위의 합집합 (교집합 = 워크스페이스 ∩ 부여된 범위)으로 해석합니다.',
+        '관리자만 all을 워크스페이스 전체로 해석합니다. 다른 역할은 워크스페이스 범위와 부여된 범위가 겹치는 부분만 적용합니다.',
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByText('금지', { exact: true })).toHaveLength(2);

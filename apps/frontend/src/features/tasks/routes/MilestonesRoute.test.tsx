@@ -2,11 +2,11 @@ import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDto } from '@fops/shared';
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import * as React from 'react';
+import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
 
@@ -399,19 +399,16 @@ describe('MilestonesRoute counts suppression (R5)', () => {
 
   // Mirrors AppFrame's detail-slot host (same pattern as the edit tests) so
   // the selected record's independently keyed detail read is observable.
+  function DetailPanelSlotHost() {
+    const { ref } = useDetailPanelSlotHost();
+    return <div ref={ref} />;
+  }
   function DetailPanelHost({ children }: { children: React.ReactNode }) {
-    const [panel, setPanel] = React.useState<React.ReactNode>();
-    const setContent = React.useCallback(
-      (_key: string, node: React.ReactNode) => setPanel(node),
-      [],
-    );
-    const clear = React.useCallback(() => setPanel(undefined), []);
-    const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
     return (
-      <DetailPanelSlotContext.Provider value={context}>
+      <DetailPanelSlotProvider>
         {children}
-        {panel}
-      </DetailPanelSlotContext.Provider>
+        <DetailPanelSlotHost />
+      </DetailPanelSlotProvider>
     );
   }
 

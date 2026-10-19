@@ -10,6 +10,7 @@ import { TASK_REQUEST_COPY } from '@/lib/copy/task-requests';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -53,6 +54,7 @@ export function useTaskRequestDecision({
   currentRole,
 }: UseTaskRequestDecisionArgs): UseTaskRequestDecisionResult {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const isSelfApproval = currentActorId === item.requester_actor_id;
   const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
   const [isDecisionSubmitting, setIsDecisionSubmitting] = React.useState(false);
@@ -106,7 +108,19 @@ export function useTaskRequestDecision({
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
-      toast.success(TASK_REQUEST_COPY.decisions[variables.action]);
+      toast.success(
+        TASK_REQUEST_COPY.decisions[variables.action],
+        variables.action === 'approve'
+          ? {
+              action: {
+                label: TASK_REQUEST_COPY.convertToTask,
+                onClick: () => {
+                  void navigate({ to: '/tasks', search: { view: 'requests', param: item.id } });
+                },
+              },
+            }
+          : {},
+      );
     },
     onError: (err) => {
       decisionSubmittingRef.current = false;

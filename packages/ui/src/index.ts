@@ -1,5 +1,127 @@
-export { Button, buttonVariants } from './components/Button.js';
-export type { ButtonProps } from './components/Button.js';
+export {
+  Alert,
+  AlertDescription,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  AlertTitle,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Combobox,
+  DIALOG_CONTENT_MOTION,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogContentBare,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+  Input,
+  KeyboardShortcut,
+  Label,
+  POPPER_CONTENT_MOTION,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+  RadioGroup,
+  RadioGroupItem,
+  SCRIM_MOTION,
+  SELECT_CONTENT_MOTION,
+  SHEET_CONTENT_MOTION,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetOverlay,
+  SheetPortal,
+  SheetTitle,
+  SheetTrigger,
+  Skeleton,
+  SkeletonBlocks,
+  SkeletonRows,
+  Tabs,
+  TabsContent,
+  TabsListBase as TabsList,
+  TabsTriggerBase as TabsTrigger,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  badgeVariants,
+  buttonVariants,
+  cn,
+  isToastTarget,
+  prefersReducedMotion,
+  readMotionTiming,
+  useListMotion,
+  type BadgeProps,
+  type ButtonProps,
+  type ComboboxOption,
+  type ComboboxProps,
+  type InputProps,
+  type KeyboardShortcutProps,
+  type SkeletonBlock,
+  type SkeletonBlocksProps,
+  type SkeletonRowsProps,
+  type TextareaProps,
+} from '@ap/ui';
+
 export {
   ManagedSystemPicker,
   type ManagedSystemPickerProps,
@@ -9,43 +131,6 @@ export {
   AnalyticsAreaPicker,
   type AnalyticsAreaPickerProps,
 } from './components/AnalyticsAreaPicker.js';
-export { cn } from './utils/cn.js';
-export {
-  DIALOG_CONTENT_MOTION,
-  POPPER_CONTENT_MOTION,
-  SCRIM_MOTION,
-  SELECT_CONTENT_MOTION,
-  SHEET_CONTENT_MOTION,
-  prefersReducedMotion,
-  readMotionTiming,
-} from './utils/motion.js';
-export { useListMotion } from './utils/useListMotion.js';
-export { isToastTarget } from './utils/toast-target.js';
-
-// shadcn primitives (Pack 17, ADR-0021)
-// Note: shadcn/button re-exports Button/buttonVariants already exported above — omitted to avoid collision
-export * from './components/shadcn/input.js';
-export * from './components/shadcn/textarea.js';
-export * from './components/shadcn/label.js';
-export * from './components/shadcn/select.js';
-export * from './components/shadcn/checkbox.js';
-export * from './components/shadcn/radio-group.js';
-export * from './components/shadcn/toggle-group.js';
-export * from './components/shadcn/card.js';
-export * from './components/shadcn/dialog.js';
-export * from './components/shadcn/alert-dialog.js';
-export * from './components/shadcn/alert.js';
-export * from './components/shadcn/tooltip.js';
-export * from './components/shadcn/hover-card.js';
-export * from './components/shadcn/popover.js';
-export * from './components/shadcn/sheet.js';
-export * from './components/shadcn/tabs.js';
-export * from './components/shadcn/skeleton.js';
-export * from './components/shadcn/avatar.js';
-export * from './components/shadcn/badge.js';
-export * from './components/shadcn/dropdown-menu.js';
-export * from './components/shadcn/combobox.js';
-
 // Rich content (Pack 17, ADR-0011)
 export {
   RichEditor,
@@ -73,17 +158,65 @@ export { ListShell, type ListShellProps } from './layout/ListShell';
 export { WorkbenchShell, type WorkbenchShellProps } from './layout/WorkbenchShell';
 export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
 export { ToolbarKicker, type ToolbarKickerProps } from './layout/ToolbarKicker';
-export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
+export {
+  DetailPanelSlotProvider,
+  useDetailPanelSlot,
+  useDetailPanelSlotHost,
+} from './layout/useDetailPanelSlot';
 
-// Form primitives (Slice 3 #19)
-export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
-export { DatePicker, type DatePickerProps } from './forms/DatePicker.js';
-// Feedback primitives (Slice 3 #19)
-export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
-// Feedback primitives (Slice 3 #21 C3.1)
-export { UndoToast, type UndoToastProps } from './feedback/UndoToast';
-// Feedback primitives (Slice 3 #21 C5.5)
-export { PreviewModal, type PreviewModalProps } from './feedback/PreviewModal';
+// Bundle 2a panel, toolbar, forms, and feedback exports are sourced from @ap/ui (#1290).
+export {
+  ActiveFilterBar,
+  type ActiveFilterBarProps,
+  Callout,
+  type CalloutProps,
+  type CalloutTone,
+  DatePicker,
+  type DatePickerProps,
+  DetailPanelFullscreenContext,
+  DetailPanelFullscreenToggle,
+  type DetailPanelFullscreenValue,
+  DetailPanelHeader,
+  type DetailPanelHeaderProps,
+  DetailPanelHeaderActions,
+  type DetailPanelHeaderActionsProps,
+  type DetailPanelKind,
+  DetailPanelReadingColumn,
+  DetailPanelSectionNav,
+  type DetailPanelSectionNavProps,
+  type PanelSection,
+  DirtyConfirmation,
+  type DirtyConfirmationProps,
+  EmptyState,
+  type EmptyStateProps,
+  FieldLabel,
+  type FieldLabelProps,
+  FieldRow,
+  type FieldRowProps,
+  ListFilterButton,
+  type ListFilterButtonProps,
+  ListSortButton,
+  type ListSortButtonProps,
+  ListTabs,
+  type ListTabsProps,
+  ListToolbar,
+  type ListToolbarProps,
+  type ListToolbarTab,
+  NestedTextBlock,
+  type NestedTextBlockProps,
+  PanelSectionTitle,
+  type PanelSectionTitleProps,
+  PanelTitleBlock,
+  type PanelTitleBlockProps,
+  PreviewModal,
+  type PreviewModalProps,
+  SearchInput,
+  type SearchInputProps,
+  type FilterCategory,
+  type SortOption,
+  UndoToast,
+  type UndoToastProps,
+} from '@ap/ui';
 
 // Indicators + badges (Slice 3 #20)
 export {
@@ -122,37 +255,16 @@ export {
   type ManagedSystemMarkToken,
 } from './badges/managed-system-mark.js';
 export { OutlineBadge, type OutlineBadgeProps } from './badges/OutlineBadge';
-export { EntityIconBadge, type EntityIconBadgeProps, type EntityIconType, ENTITY_ICON_MAP } from './badges/EntityIconBadge';
+export {
+  EntityIconBadge,
+  type EntityIconBadgeProps,
+  type EntityIconType,
+  ENTITY_ICON_MAP,
+} from './badges/EntityIconBadge';
 
 // Identity (Slice 3 #20)
 export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/UserAvatar';
 export { UserChip, type UserChipProps } from './identity/UserChip';
-
-// Toolbar primitives (Slice 3 #20)
-export { ActiveFilterBar, type ActiveFilterBarProps } from './toolbar/ActiveFilterBar.js';
-export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
-export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
-export {
-  ListFilterButton,
-  type ListFilterButtonProps,
-  type FilterCategory,
-} from './toolbar/ListFilterButton';
-export {
-  ListSortButton,
-  type ListSortButtonProps,
-  type SortOption,
-} from './toolbar/ListSortButton';
-export { KeyboardShortcut, type KeyboardShortcutProps } from './components/KeyboardShortcut';
-export { SkeletonRows, type SkeletonRowsProps } from './components/SkeletonRows';
-export {
-  SkeletonBlocks,
-  type SkeletonBlocksProps,
-  type SkeletonBlock,
-} from './components/SkeletonBlocks';
-// Forms (Slice 3 #20)
-export { SearchInput, type SearchInputProps } from './forms/SearchInput';
-// Feedback (Slice 3 #20)
-export { EmptyState, type EmptyStateProps } from './feedback/EmptyState';
 
 // Data primitives (Slice 6 #137)
 export {
@@ -161,23 +273,6 @@ export {
   type ObjectRowDensity,
   type ObjectRowSeverity,
 } from './data/ObjectRow';
-
-// Panel primitives (Slice 3 #20)
-export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } from './panel/DetailPanelHeader';
-export {
-  DetailPanelFullscreenContext,
-  DetailPanelFullscreenToggle,
-  DetailPanelReadingColumn,
-  type DetailPanelFullscreenValue,
-} from './panel/DetailPanelFullscreenContext';
-export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';
-export { NestedTextBlock, type NestedTextBlockProps } from './panel/NestedTextBlock';
-export { FieldRow, type FieldRowProps } from './panel/FieldRow';
-export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
-export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
-export { DetailPanelHeaderActions, type DetailPanelHeaderActionsProps } from './panel/DetailPanelHeaderActions';
-// Panel section nav (Slice 3 #21 — deferred from #20)
-export { DetailPanelSectionNav, type DetailPanelSectionNavProps, type PanelSection } from './panel/DetailPanelSectionNav';
 
 // Permissions (Slice 3 #20)
 export {

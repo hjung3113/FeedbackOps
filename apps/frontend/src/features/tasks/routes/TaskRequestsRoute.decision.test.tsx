@@ -423,6 +423,25 @@ describe('TaskRequestsRoute decision dialogs', () => {
     expect(screen.queryByText('Required.')).not.toBeInTheDocument();
   });
 
+  it('links the reject reason error to the textarea while it shows', async () => {
+    const dialog = await openDialog('반려', 'Task Request 반려');
+    const textbox = within(dialog).getByRole('textbox');
+    expect(textbox).toHaveAttribute('aria-invalid', 'false');
+    expect(textbox).not.toHaveAttribute('aria-describedby');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '반려' }));
+    const alert = await within(dialog).findByRole('alert');
+    const alertId = alert.getAttribute('id');
+    expect(alertId).toBeTruthy();
+    expect(textbox).toHaveAttribute('aria-invalid', 'true');
+    expect(textbox).toHaveAttribute('aria-describedby', alertId);
+
+    fireEvent.change(textbox, { target: { value: '검토 메모' } });
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument());
+    expect(textbox).not.toHaveAttribute('aria-describedby');
+    expect(textbox).toHaveAttribute('aria-invalid', 'false');
+  });
+
   it('approves another actor request without an optional reason', async () => {
     await openDialog('승인', 'Task Request 승인');
     fireEvent.click(screen.getByRole('button', { name: '승인' }));

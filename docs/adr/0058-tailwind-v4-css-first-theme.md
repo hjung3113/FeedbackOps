@@ -56,7 +56,7 @@ invariant**: importing the theme layer last — or importing the token files
 without a layer — hands the theme layer the last word and silently changes
 rendering.
 
-Consumption contract (analytics-platform and any new consumer):
+Original consumption contract (analytics-platform, 2026-10-03):
 
 ```css
 @import 'tailwindcss';
@@ -213,3 +213,15 @@ visual harness). `packages/ui/src/utils/cn.ts` now registers those keys with
 `extendTailwindMerge` (text caption/tiny/micro, leading body, tracking
 kicker/kind-label, radius icon-chip, spacing row-accent), and every new theme key
 is registered there in the same change (`packages/ui/AGENTS.md`).
+
+## Amended 2026-10-19 — bundle-1 SDK source (#1287)
+
+Bundle 1 (tokens, theme, compatibility CSS, merge utility, and shadcn
+primitives) is consumed from the pinned `@ap/ui` dependency at tag
+`sdk-v0.2.0`. FeedbackOps keeps its `@fops/ui` public API and local
+bundle-2/product components. The app's stylesheet imports
+`@ap/ui/styles/tokens.css` and `semantic.css` in `layer(base)`, followed by
+`theme.css`, `compat.css`, and `sources.css`. The four CSS files retain
+their order and layer qualifiers; the sources import scans the SDK package.
+The package-root `@ap/ui/styles.css` extension bundle is not part of this
+consumer contract.

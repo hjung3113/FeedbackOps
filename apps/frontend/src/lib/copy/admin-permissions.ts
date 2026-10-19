@@ -39,6 +39,19 @@ export const ADMIN_PERMISSIONS_COPY = {
   revokeSuccess: '권한을 취소했습니다.',
   liftSuccess: '차단을 해제했습니다.',
   selfDenyLiftForbidden: '관리자는 본인에게 걸린 차단도 직접 해제할 수 없습니다.',
+  selfApprovalCapture: {
+    intro:
+      '이 결정은 본인이 작성한 요청을 본인이 승인하는 직접 승인입니다. 감사 로그에 본인 승인으로 기록되고 다음 두 항목이 함께 저장됩니다.',
+    previewTitle: '감사 기록 미리보기',
+    recordedAs: '감사 로그에 본인 승인으로 기록됩니다',
+    approver: '승인자',
+    requester: '요청자',
+    permission: '권한',
+    scope: '범위',
+    policyCitation: '정책 근거',
+    peerReviewerAbsence: '동료 검토자 부재 사유',
+    required: '— (필수)',
+  },
   riskReview: {
     title: '검토 시 확인할 사항',
     currentState: '현재 상태 기준',

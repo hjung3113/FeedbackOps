@@ -7,7 +7,7 @@ import {
   validateIntegrationDashboardSearch,
 } from '@/routes/_authed/integration';
 import type { FindingDto } from '@fops/shared';
-import { DetailPanelSlotContext } from '@fops/ui';
+import { DetailPanelSlotProvider, useDetailPanelSlotHost } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -19,7 +19,6 @@ import {
 } from '@tanstack/react-router';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type ReactNode, useMemo, useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   RECOVERY_VISUAL_ID,
@@ -53,20 +52,16 @@ const finding: FindingDto = {
   updated_at: time,
   source: null,
 };
+function DetailPanelSlotHost() {
+  const { ref } = useDetailPanelSlotHost();
+  return <aside ref={ref} />;
+}
 function Host() {
-  const [panel, setPanel] = useState<ReactNode>();
-  const ctx = useMemo(
-    () => ({
-      setContent: (_key: string, node: ReactNode) => setPanel(node),
-      clear: () => setPanel(undefined),
-    }),
-    [],
-  );
   return (
-    <DetailPanelSlotContext.Provider value={ctx}>
+    <DetailPanelSlotProvider>
       <Outlet />
-      <aside>{panel}</aside>
-    </DetailPanelSlotContext.Provider>
+      <DetailPanelSlotHost />
+    </DetailPanelSlotProvider>
   );
 }
 function response(body: unknown, status = 200) {

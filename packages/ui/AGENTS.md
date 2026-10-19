@@ -19,22 +19,49 @@
 ## Design Rules
 
 - Use semantic tokens, not raw hex values, outside token implementation files.
-- Tokens are exposed to Tailwind by the CSS-first theme `src/styles/theme.css`
-  (ADR-0058): every utility-facing key there aliases a `tokens.css` variable —
-  add both sides in the same PR, and do not duplicate token values in the
-  theme. `@theme inline` inlines utility VALUES (`rounded-sm` embeds
-  `var(--radius-sm)`); Tailwind still emits self-referencing theme-layer
-  variables (`--radius-sm: var(--radius-sm)`), so tokens win only because the
-  consumer imports the `layer(base)` token files after the theme layer — that
-  order is a consumer invariant, not a default. Consumer parity rules (v3
-  Preflight pins, `space-y-*`, and `leading-*`/`tracking-*` shims) live in
-  `src/styles/compat.css`, exported as `@fops/ui/styles/compat.css`; text-size
-  line-height companions stay in the exported theme.
-- A new Tailwind theme key must also be registered in `src/utils/cn.ts`
-  (`extendTailwindMerge`). tailwind-merge knows only Tailwind's default scales, so
-  an unregistered `text-caption` reads as a text color and `cn` drops it next to
-  `text-text-muted` (#782). The CSS compiles either way; only the merge breaks.
-- `components.json` here only points `@shadcn/lint` at the app's Tailwind entry (ADR-0062). It is not a shadcn CLI config: primitives enter through the copy-based intake in `docs/tech-stack/component-stack.md`, not `shadcn add`.
+- Bundle 1 (tokens, motion utilities, and shadcn primitives) is sourced from
+  `@ap/ui` at the `sdk-v0.3.1` tag. The local `src/index.ts` preserves the
+  `@fops/ui` API; `src/components/shadcn/*` and selected `src/utils/*`
+  files are compatibility re-exports only. Do not add implementation there.
+- Bundle 2a (panel, toolbar, forms, and feedback components) is sourced from
+  `@ap/ui` at `sdk-v0.3.1`. The matching files under `src/{panel,toolbar,forms,
+  feedback}` and their entries in `src/index.ts` are compatibility re-exports;
+  keep the FeedbackOps tests local. `src/panel/useJumpGuard.ts` remains local
+  because the SDK does not export that private helper, and its existing test
+  imports the helper directly.
+- Bundle 2b (layout shells and the detail slot) is sourced from `@ap/ui` at
+  `sdk-v0.3.1`. `src/layout/*` are compatibility re-exports. `useDetailPanelSlot(node)`
+  is `@ap/ui`'s `useDetailPanelContent` under the FeedbackOps name (`undefined`
+  clears, `null` registers a closed registrant). `DetailPanelSlotContext` is gone:
+  `AppFrame` wraps its frame in `DetailPanelSlotProvider` and renders the host
+  through `useDetailPanelSlotHost()`, and the provider owns the expanded state
+  (toggle, Esc, reset on key change) and `DetailPanelFullscreenContext`. Tests that
+  render a shell with `detailPanel` mount `DetailPanelSlotProvider` plus a host div.
+  Overlapping registrants log the SDK's `[DetailPanelSlot] Multiple registrants; the last registrant wins.`
+- Product/domain components remain local under
+  `src/{badges,data,entity,identity,indicators,permissions,rich-content}`.
+  `src/internal/useHorizontalOverflow.ts` also remains local. Keep
+  `DetailPanelFullscreenContext` sourced from `@ap/ui` for all consumers.
+- The frontend declares the same `@ap/ui` tag directly so its stylesheet
+  resolver can reach bundle-1 CSS. It imports
+  `@ap/ui/styles/{tokens,semantic,theme,compat}.css` in that order, then
+  `@ap/ui/styles/sources.css`.
+  Preserve `layer(base)` on the token and semantic imports. Do not use
+  `@ap/ui/styles.css`, which adds the platform extension layer.
+- To bump the bundle-1 tag, verify the new tag exports the full public API and
+  CSS subpaths, update the `@ap/ui` git ref in both
+  `packages/ui/package.json` and `apps/frontend/package.json`, refresh the
+  lockfile resolution, and check index export parity, the consumer CSS
+  contract, and dependency/patch constraints. Keep TipTap at 3.23.5 and
+  `@formkit/auto-animate@0.10.0` with its workspace patch unless a separate
+  decision changes those constraints.
+- A new Tailwind theme key must also be registered in the `@ap/ui` theme and
+  its `cn` merge configuration. tailwind-merge knows only Tailwind's default
+  scales, so an unregistered `text-caption` reads as a text color and `cn`
+  drops it next to `text-text-muted` (#782).
+- `components.json` here only points `@shadcn/lint` at the app's Tailwind
+  entry (ADR-0062). It is not a shadcn CLI config; use the intake guidance in
+  `docs/tech-stack/component-stack.md`.
 - Follow `docs/frontend/tokens.md` tokens for light surfaces, spacing, typography, and density; do not introduce a new visual theme from `packages/ui`.
 - Promote from feature-local code only after a second real consumer proves reuse.
 - Every reusable component must define loading, empty, error, disabled, focus-visible, and permission-limited behavior when applicable.

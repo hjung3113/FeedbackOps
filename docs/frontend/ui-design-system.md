@@ -874,16 +874,16 @@ Rules:
 - On failure, rollback visual state and show retry.
 ```
 
-## Semantic Tokens (shipped in `packages/ui/src/styles/tokens.css`)
+## Semantic Tokens (shipped in `@ap/ui/styles/tokens.css`)
 
-The semantic token set is defined in `packages/ui/src/styles/tokens.css`; `docs/frontend/tokens.md` is the seed and documents the `-label` text pairs under "Semantic Text Label Tokens". Application code consumes these groups, not the raw color tokens:
+The semantic token set is defined in `@ap/ui/styles/tokens.css`; `docs/frontend/tokens.md` is the seed and documents the `-label` text pairs under "Semantic Text Label Tokens". Application code consumes these groups, not the raw color tokens:
 
 ```text
 Text: --text-*
 Surfaces: --surface-*
 Borders and focus: --border-*, --focus-ring, --focus-ring-danger
 Workflow: --status-internal-*, --status-reporter-*, --severity-*, --confidence-*
-Layout: see `Layout tokens` in tokens.css
+Layout: see `Layout tokens` in `@ap/ui/styles/tokens.css`
 ```
 
 ## Motion
@@ -892,7 +892,7 @@ Use motion only to preserve continuity when something appears, leaves, or moves 
 absence feels broken (ADR-0063). Never add decorative page/tab transitions, staggered rows,
 count-ups, or hover lifts. Sonner toasts keep their existing behavior.
 
-Values live in `packages/ui/src/styles/tokens.css`; `theme.css` exposes their Tailwind aliases:
+Values live in `@ap/ui/styles/tokens.css`; `@ap/ui/styles/theme.css` exposes their Tailwind aliases:
 
 | Token | Value |
 | --- | --- |
@@ -994,7 +994,7 @@ Without `forceMount`, existing open/close presence and animation behavior is unc
 Existing transitions use fast/standard through the Tailwind default aliases. Overlay
 animations use `animation-duration-base|slow` and `ease-enter` with `tw-animate-css`.
 Overlays are enter-only: exit Presence keeps a closed Radix layer registered and swallowing Escape, including in nested stacks (ADR-0063, #1127).
-The exported constants in `packages/ui/src/utils/motion.ts` are the only overlay motion seam;
+The overlay motion constants exported by `@ap/ui` are the only overlay motion seam;
 wrappers and the command palette compose them without inline motion classes:
 
 - `POPPER_CONTENT_MOTION`: popover, dropdown (including sub-content), hover card, and tooltip;

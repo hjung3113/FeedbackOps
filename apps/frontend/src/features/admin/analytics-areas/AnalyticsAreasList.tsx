@@ -21,6 +21,7 @@ import type * as React from 'react';
 
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
+import { ADMIN_LIST_FOCUS_FALLBACK_ID } from '../lib/restoreFocus.js';
 import { scopeMark } from '../lib/scopeMark.js';
 import { teamName } from './teamName.js';
 import { useManagedSystemsList } from './useAnalyticsAreasQueries.js';
@@ -113,7 +114,7 @@ export function AnalyticsAreasCatalog({
   areasByMs: Map<string, AnalyticsAreaDto[]>;
   resolved: ResolveActorsResponse | undefined;
   renderedAreaCount: number;
-  onRowClick: (area: AnalyticsAreaDto) => void;
+  onRowClick: (area: AnalyticsAreaDto, trigger: HTMLElement) => void;
   onAddArea: (msId: string) => void;
   onClearFilters: () => void;
 }) {
@@ -127,7 +128,9 @@ export function AnalyticsAreasCatalog({
 
       <div>
         <div className="mb-3.5 flex items-center justify-between">
-          <PanelSectionTitle className="mb-0">카탈로그</PanelSectionTitle>
+          <PanelSectionTitle id={ADMIN_LIST_FOCUS_FALLBACK_ID} tabIndex={-1} className="mb-0">
+            카탈로그
+          </PanelSectionTitle>
           <span className="text-xs text-text-muted">
             Analytics Area {renderedAreaCount}개 · Managed System {renderedSystems.length}개
           </span>
@@ -191,7 +194,7 @@ function GroupCard({
   ms: ManagedSystemDto;
   areas: AnalyticsAreaDto[];
   resolved: ResolveActorsResponse | undefined;
-  onRowClick: (a: AnalyticsAreaDto) => void;
+  onRowClick: (a: AnalyticsAreaDto, trigger: HTMLElement) => void;
   onAddArea: () => void;
 }) {
   const mark = scopeMark(ms.slug, ms.name);
@@ -231,9 +234,9 @@ function GroupCard({
               role="button"
               tabIndex={0}
               data-testid={`aa-row-${a.slug}`}
-              onClick={() => onRowClick(a)}
+              onClick={(e) => onRowClick(a, e.currentTarget)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') onRowClick(a);
+                if (e.key === 'Enter' || e.key === ' ') onRowClick(a, e.currentTarget);
               }}
               className={`grid grid-cols-(--analytics-area-row-columns) w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-surface-canvas${
                 i < areas.length - 1 ? ' border-b border-border-subtle' : ''
@@ -259,7 +262,7 @@ function GroupCard({
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRowClick(a);
+                    onRowClick(a, e.currentTarget);
                   }}
                   data-testid={`aa-detail-${a.slug}`}
                   data-area-id={a.id}

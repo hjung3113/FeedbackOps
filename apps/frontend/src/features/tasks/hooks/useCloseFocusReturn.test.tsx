@@ -1,6 +1,6 @@
 // A row whose ref was detached must stop being a live focus target — even after
 // its original DOM node reconnects: auto-animate reinserts the removed node for
-// the exit animation (packages/ui/src/utils/useListMotion.ts). returnFocus must
+// the exit animation (`useListMotion`, exported by `@ap/ui`). returnFocus must
 // then leave focus on the control the user is actually on.
 import { act, renderHook } from '@testing-library/react';
 import { expect, it } from 'vitest';
