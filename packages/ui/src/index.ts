@@ -223,8 +223,8 @@ export {
   SeverityIndicator,
   type SeverityIndicatorProps,
   type SeverityEnum,
-} from './indicators/SeverityIndicator';
-export { ProgressMeter, type ProgressMeterProps } from './indicators/ProgressMeter';
+} from '@ap/ui';
+export { ProgressMeter, type ProgressMeterProps } from '@ap/ui';
 export {
   SeverityBadge,
   SEVERITY_LABELS,
@@ -245,7 +245,7 @@ export {
   type StatusBadgeFrameProps,
   type StatusBadgeAppearance,
   type StatusBadgeTone,
-} from './badges/StatusBadgeFrame';
+} from '@ap/ui';
 export { UnassignedBadge, type UnassignedBadgeProps } from './badges/UnassignedBadge';
 export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
 export { ManagedSystemMark, type ManagedSystemMarkProps } from './badges/ManagedSystemMark';
@@ -263,8 +263,8 @@ export {
 } from './badges/EntityIconBadge';
 
 // Identity (Slice 3 #20)
-export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/UserAvatar';
-export { UserChip, type UserChipProps } from './identity/UserChip';
+export { UserAvatar, type UserAvatarProps, type AvatarUser } from '@ap/ui';
+export { UserChip, type UserChipProps } from '@ap/ui';
 
 // Data primitives (Slice 6 #137)
 export {
@@ -272,14 +272,14 @@ export {
   type ObjectRowProps,
   type ObjectRowDensity,
   type ObjectRowSeverity,
-} from './data/ObjectRow';
+} from '@ap/ui';
 
 // Permissions (Slice 3 #20)
 export {
   PermissionBlockedPanel,
   type PermissionBlockedPanelProps,
   type PermissionState,
-} from './permissions/PermissionBlockedPanel';
+} from '@ap/ui';
 // Entity (Slice 3 #20 placeholder; Slice 4 wires real node resolution)
 export {
   LinkedEntityTrail,

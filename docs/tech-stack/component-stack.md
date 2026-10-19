@@ -64,13 +64,24 @@ Those components must be owned by this codebase.
 
 ### Layer 1: UI Primitives
 
-The bundle-1 primitive source lives in the pinned `@ap/ui` package
-(analytics-platform's `packages/ui`, tag `sdk-v0.3.1`). FeedbackOps-owned
-composed components live at:
+The primitive source and the shared display components `ObjectRow`, `UserAvatar`,
+`UserChip`, `ProgressMeter`, `SeverityIndicator`, `PermissionBlockedPanel`, and
+`StatusBadgeFrame` live in the pinned `@ap/ui` package (analytics-platform's
+`packages/ui`, tag `sdk-v0.5.0`). Matching paths in `packages/ui/src` are
+compatibility re-exports for `@fops/ui`; the SDK ownership decision is recorded
+upstream in ADR-0050. FeedbackOps-owned composed components live at:
 
 ```text
 packages/ui/src/{badges,data,entity,feedback,forms,identity,indicators,layout,panel,permissions,rich-content,toolbar}/*
 ```
+
+The matching `ObjectRow`, `UserAvatar`, `UserChip`, `ProgressMeter`,
+`SeverityIndicator`, `PermissionBlockedPanel`, and `StatusBadgeFrame` modules
+are compatibility re-exports. FeedbackOps-owned badges, `LinkedEntityTrail`,
+pickers, and rich-content remain local for now. The SDK also carries a
+rich-content copy (restored in `sdk-v0.5.0`, upstream ADR-0052); switching to it
+is a later bundle. `allowlist-local.ts` is the UI copy of the canonical shared
+contract and remains drift-tested.
 
 Compatibility re-exports remain in `packages/ui/src/components/shadcn/`;
 the `@fops/ui` public API is assembled by `packages/ui/src/index.ts`.

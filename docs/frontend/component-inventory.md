@@ -100,14 +100,14 @@ Names in the primitive table and the composed list above are design-time names. 
 | AppShell | `AppFrame` | `apps/frontend/src/lib/layout/AppFrame.tsx` |
 | RoleLevelAwareSidebar | `AppRail` + `AppSidebar` | `apps/frontend/src/lib/layout/` |
 | ManagedSystemScopeSwitcher | scope selector inside `AppSidebar` (`ManagedSystemScopeOption`) | `apps/frontend/src/lib/layout/AppSidebar.tsx` |
-| ObjectList, ListRow | `ObjectRow` + `ListToolbar` / `ListTabs` + `ListStateMessage` | `packages/ui/src/data/ObjectRow.tsx`, `packages/ui/src/toolbar/`, `apps/frontend/src/components/ListStateMessage.tsx` |
+| ObjectList, ListRow | `ObjectRow` + `ListToolbar` / `ListTabs` + `ListStateMessage` | `packages/ui/src/data/ObjectRow.tsx` (compatibility re-export of `@ap/ui`), `packages/ui/src/toolbar/`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | Active filters | `ActiveFilterBar` — presentational chips with visible labels, tooltip-backed remove buttons, and one clear-all control; empty items render nothing | `packages/ui/src/toolbar/ActiveFilterBar.tsx` |
 | FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
 | LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `@ap/ui`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |
 | DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelReadingColumn`, `DetailPanelSectionNav` (mount the nav as a sibling above the scroll root; the cover is then the strip's overlap with the root), `PanelTitleBlock` (`inset=none`), `PanelSectionTitle` (`inset=panel`, `size=tiny`), `FieldRow`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
 | StatusBadge | shared `ReporterStatusBadge`, `InternalTaskBadge`; feature-local `SurveyStatusBadge`, `LinkStatusBadge`, `MilestoneStatusBadge` | `packages/ui/src/badges/`, `apps/frontend/src/features/surveys/components/`, `apps/frontend/src/features/integration/components/`, `apps/frontend/src/features/tasks/components/` |
-| SignalBadge | `SeverityBadge` (default accessible prefix `심각도`; full `ariaLabel` override for Task `우선순위`), `SeverityIndicator` (full `label` override), `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
+| SignalBadge | `SeverityBadge` (default accessible prefix `심각도`; full `ariaLabel` override for Task `우선순위`), `SeverityIndicator` (full `label` override; compatibility re-export of `@ap/ui`), `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
 | RichContentEditor | `RichEditor` + `RichContentRenderer` | `packages/ui/src/rich-content/` |
 | PublicUpdateComposer | feature-local `PublicUpdateComposer` | `apps/frontend/src/features/voc/components/detail/` |
 | ConversationComposer | feature-local `ComposerSection` + `ComposerTabs` hosting `PublicUpdateComposer`, `ReporterReplyComposer`, `InternalCommentComposer` | `apps/frontend/src/features/voc/components/detail/` |
@@ -119,17 +119,17 @@ Names in the primitive table and the composed list above are design-time names. 
 | UserPicker | feature-local `OwnerPicker` (VOC Triage owner) | `apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx` |
 | Drawer | `Sheet` | `@ap/ui` |
 | Toast | `sonner` `Toaster` mounted in the root route; `UndoToast` | `apps/frontend/src/routes/__root.tsx`, `packages/ui/src/feedback/UndoToast.tsx` |
-| Avatar | `Avatar`, `UserAvatar`, `UserChip` | `@ap/ui`, `packages/ui/src/identity/` |
+| Avatar | `Avatar`, `UserAvatar`, `UserChip` | `@ap/ui`, `packages/ui/src/identity/` (compatibility re-exports) |
 | TextInput | `Input` | `@ap/ui` |
-| Progress indicator | `ProgressMeter` | `packages/ui/src/indicators/ProgressMeter.tsx` |
-| Status badge frame | `StatusBadgeFrame` | `packages/ui/src/badges/StatusBadgeFrame.tsx` |
+| Progress indicator | `ProgressMeter` | `packages/ui/src/indicators/ProgressMeter.tsx` (compatibility re-export of `@ap/ui`) |
+| Status badge frame | `StatusBadgeFrame` | `packages/ui/src/badges/StatusBadgeFrame.tsx` (compatibility re-export of `@ap/ui`) |
 | Managed System square mark | `ManagedSystemMark` | `packages/ui/src/badges/ManagedSystemMark.tsx` |
 | Loading rows and panel blocks | `SkeletonRows`, `SkeletonBlocks` | `@ap/ui` |
 | Keyboard shortcut hint | `KeyboardShortcut` | `@ap/ui` |
 | Workbench toolbar kicker | `ToolbarKicker` | `packages/ui/src/layout/ToolbarKicker.tsx` |
 | Picker option grid | `PickerOptionGrid` (VOC triage) | `apps/frontend/src/features/voc/components/triage/PickerOptionGrid.tsx` |
 
-Built under the same name: `LinkedEntityTrail`, `PermissionBlockedPanel`, `ManagedSystemPicker`, `AnalyticsAreaPicker`.
+Built under the same name: `LinkedEntityTrail`, `ManagedSystemPicker`, and `AnalyticsAreaPicker`. `PermissionBlockedPanel` is forwarded from `@ap/ui` through its local compatibility module.
 
 Never built: `IconButton`, `Table` / `DataTable`, `InboxList`, `ScopeFilterBar`, `ReporterSummaryBlock`, `ActionToolbar`, `ReviewerPicker`, `AuditTimeline`.
 
