@@ -5,6 +5,7 @@ import { GLOSSARY } from '@/lib/copy/glossary';
 import { CLUSTER_SUGGESTION_COPY as SUGGESTIONS } from '@/lib/copy/voc-cluster';
 import {
   WORKSPACE_SETTINGS_COVERAGE_COPY,
+  WORKSPACE_SETTINGS_SELF_APPROVAL_COPY,
   coverageBandFieldLabel,
 } from '@/lib/copy/workspace-settings';
 import {
@@ -79,12 +80,12 @@ const lockedSurveySettings: LockedSetting[] = [
 const lockedScopeSettings: LockedSetting[] = [
   {
     label: '개발자의 기본 Managed System 범위',
-    description: ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.developerDefaultScope,
+    description: WORKSPACE_SETTINGS_SELF_APPROVAL_COPY.developerDefaultScope,
     value: '내 담당 시스템만',
   },
   {
     label: 'all = 워크스페이스 전체',
-    description: ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.allScope,
+    description: WORKSPACE_SETTINGS_SELF_APPROVAL_COPY.allScope,
     value: '관리자만',
   },
 ];
@@ -274,7 +275,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const selfApprovalWarningLines =
     draft.permission_self_approval === 'forbidden'
       ? [
-          ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.pastRecordsKept,
+          WORKSPACE_SETTINGS_SELF_APPROVAL_COPY.pastRecordsKept,
           '활성 직접 승인 권한은 만료일까지 유지되며 갱신 시 새 정책 기준으로 평가됩니다.',
           '대기 중인 직접 승인 요청은 저장 시점부터 검토자가 배정되어야 하며 요청자에게 알림이 발송됩니다.',
           ADMIN_PERMISSIONS_COPY.selfDenyLiftForbidden,
@@ -315,7 +316,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
             editing={editing === 'permission_self_approval'}
             isDirty={selfApprovalDirty}
             label="권한 요청 직접 승인"
-            description={ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.settingDescription}
+            description={WORKSPACE_SETTINGS_SELF_APPROVAL_COPY.settingDescription}
             value={draft.permission_self_approval}
             savedValue={saved.permission_self_approval}
             onChange={(value) => updateDraft('permission_self_approval', value)}
@@ -331,7 +332,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           ))}
         </div>
         <p className="mt-2 text-xs text-text-muted">
-          {ADMIN_PERMISSIONS_COPY.selfApprovalPolicy.taskRequestNote}
+          {WORKSPACE_SETTINGS_SELF_APPROVAL_COPY.taskRequestNote}
         </p>
         {selfApprovalDirty && (
           <Callout

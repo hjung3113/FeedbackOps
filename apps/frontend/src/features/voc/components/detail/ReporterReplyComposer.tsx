@@ -43,6 +43,7 @@ import type { ApiError } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { VOC_REPLY_COPY } from '@/lib/copy/voc';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
@@ -191,7 +192,7 @@ export function ReporterReplyComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder={
           me?.actor.id === voc.reporter_id
-            ? '담당자에게 보낼 답장 내용을 입력하세요...'
+            ? VOC_REPLY_COPY.reporterPlaceholder
             : '제출자에게 보낼 답장 내용을 입력하세요...'
         }
         minHeight={84}

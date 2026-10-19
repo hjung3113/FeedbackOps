@@ -15,6 +15,17 @@ export const VOC_SEVERITY_DISCLAIMER =
 // (inbox list empty state and the Evidence VOC picker listbox).
 export const VOC_SEARCH_EMPTY_LABEL = '검색 결과가 없습니다.';
 
+export const VOC_CREATE_COPY = {
+  titleField: '제목',
+  descriptionField: '상세 설명',
+  managedSystemField: 'Managed System',
+  requiredFieldsPrefix: '필수 항목: ',
+} as const;
+
+export const VOC_REPLY_COPY = {
+  reporterPlaceholder: '담당자에게 보낼 답장 내용을 입력하세요...',
+} as const;
+
 export const VOC_AREA_FILTER_EMPTY_COPY = {
   title: '현재 조건에 맞는 VOC가 없습니다',
   body: (label: string) => `${label} 조건으로 표시 중입니다.`,

@@ -26,6 +26,7 @@ import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { useMe } from '@/lib/auth/useMe';
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatDateOnly } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
@@ -512,9 +513,7 @@ export function PermissionRequestDecisionForm({
             </span>
             <OutlineBadge>민감</OutlineBadge>
           </div>
-          <p className="text-xs leading-5 text-text-secondary">
-            {ADMIN_PERMISSIONS_COPY.selfApprovalCapture.intro}
-          </p>
+          <p className="text-xs leading-5 text-text-secondary">{captureCopy.intro}</p>
           <label
             className="flex flex-col gap-2 text-sm text-text-secondary"
             htmlFor="self-approval-policy-citation"
@@ -548,9 +547,9 @@ export function PermissionRequestDecisionForm({
             </span>
             <span>{captureCopy.recordedAs}</span>
             <span>
-              {captureCopy.approver}: {me.data?.actor.display_name ?? captureCopy.unknownActor}
+              {captureCopy.approver}: {me.data?.actor.display_name ?? GLOSSARY.unknownUser}
               {' · '}
-              {captureCopy.requester}: {actorName ?? captureCopy.unknownActor}
+              {captureCopy.requester}: {actorName ?? GLOSSARY.unknownUser}
             </span>
             <span>
               {captureCopy.permission}: {getCapabilityDisplayLabel(request.requested_capability)}
@@ -559,7 +558,7 @@ export function PermissionRequestDecisionForm({
               {captureCopy.scope}:{' '}
               {request.requested_managed_system_id
                 ? (managedSystemName ?? 'Managed System')
-                : captureCopy.allScope}
+                : ADMIN_PERMISSIONS_COPY.riskReview.allScope}
             </span>
             {request.requested_managed_system_id && !managedSystemName && (
               <span className="font-mono text-text-muted">

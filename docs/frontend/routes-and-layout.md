@@ -465,9 +465,9 @@ background refetch (same ID and revision) must preserve them. A successful revie
 refreshes to a new revision, which starts the next draft fresh. When a same-ID
 revision refetch resets a non-empty Admin draft, the decision area shows an inline
 reset notice and the discarded reason as read-only text. The notice covers every
-revision not caused by the viewer's own successful decision; the revision returned by that
-decision response is the only one that resets silently, including while the decision is
-still pending or after it failed. Starting a new decision
+revision not caused by the viewer's own successful decision. Every other revision
+shows the notice, including one that lands while the viewer's decision is pending or
+after it failed. Starting a new decision
 or selecting another request dismisses the notice.
 If a list refetch moves the selected request out of the active status tab, keep
 the URL selection and detail mounted; the existing stale-submit guard requires

@@ -146,4 +146,24 @@ describe('CreateClusterModal Managed System scope', () => {
       CLUSTER_CREATE_COPY.denied,
     );
   });
+
+  it('uses the mapped error when a permission code is returned without HTTP 403', async () => {
+    const { ApiError } = await import('@/lib/api');
+    mocks.createCluster.mockImplementation(
+      (_body: unknown, opts: { onError: (e: unknown) => void }) =>
+        opts.onError(new ApiError(404, { code: 'permission.denied', message: 'denied' })),
+    );
+    const { VocClusterListPage } = await import('@/routes/_authed/voc-clusters/index');
+    render(<VocClusterListPage />);
+
+    fireEvent.click(screen.getByTestId('cluster-create-button'));
+    fireEvent.change(screen.getByTestId('cluster-title-input'), { target: { value: '제목' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Managed System' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Billing Ops' }));
+    fireEvent.click(screen.getByTestId('create-cluster-submit'));
+
+    expect(await screen.findByTestId('create-cluster-error')).toHaveTextContent(
+      /^권한이 없습니다\.$/,
+    );
+  });
 });
