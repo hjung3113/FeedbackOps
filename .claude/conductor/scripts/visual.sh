@@ -668,7 +668,7 @@ main() {
       print_playwright_summary update
       local baseline_log
       baseline_log=$(mktemp) || fail 'could not create baseline report log' 2
-      if python3 "$SCRIPT_DIR/baseline-keep.py" --report --root "$ROOT" --output-dir "$ROOT/.review/baseline-keep-crops" >"$baseline_log" 2>&1; then
+      if python3 "$HOME/.agents/skills/issue-wave-conductor/scripts/baseline-keep.py" --prefix apps/frontend/ --report --root "$ROOT" --output-dir "$ROOT/.review/baseline-keep-crops" >"$baseline_log" 2>&1; then
         cat "$baseline_log"
       else
         cat "$baseline_log" >&2

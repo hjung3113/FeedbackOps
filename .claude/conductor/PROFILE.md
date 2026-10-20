@@ -67,8 +67,9 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
   --migrate-from <worktree>`. Then `scripts/verify-be.sh <worktree> <n> [module filters]`: full integration once per
   BE issue, touched modules after small fix rounds. `reset-rate-limits <n>` only when needed.
 - **Lint gate** after committing: `pnpm gate:fe-lint --base origin/develop`; classify each NEW with
-  `scripts/biome-cmp.sh` (introduced → `biome check --write --formatter-enabled=false --linter-enabled=false` or
-  `biome format --write`; pre-existing → allowlist in `scripts/gates/frontend-biome-allowlist.txt`).
+  `python3 "$ENGINE/biome-cmp.py" <worktree> <file>...` (base from `review_plan.base`; the file's `introduced`
+  list → `biome check --write --formatter-enabled=false --linter-enabled=false` or `biome format --write`;
+  pre-existing → allowlist in `scripts/gates/frontend-biome-allowlist.txt`).
 - Known FE load flakes (#634) pass when rerun alone; anything else is real.
 - **Final head (after the last fix round):** only what CI does not run: the mutation check on the fix (and the
   fix-diff check when required), `visual.sh run <touched specs>` (full when `packages/ui` changed),
@@ -76,9 +77,9 @@ Host checks in order; each must exit 0 before a commit. Every background verify 
   (`scripts/ci/gate.sh` static, unit, integration) is the gate of record for the rebased head; no full
   `verify-fe.sh`/`verify-be.sh` rerun after a fix or a rebase.
 - **Visual baselines.** Sub-threshold changes pass against stale baselines: regenerate deliberately with
-  `visual.sh update <filter...>`, which runs `baseline-keep.py` in report mode and writes before/after crops under
-  `.review/baseline-keep-crops/`; inspect the changed PNGs and crops first. `baseline-keep.py --root <worktree>
-  --revert '<regex>'` restores selected files; `--keep '<regex>'` keeps only those and restores the rest (`--region`,
+  `visual.sh update <filter...>`, which runs `$ENGINE/baseline-keep.py --prefix apps/frontend/` in report mode and
+  writes before/after crops under `.review/baseline-keep-crops/`; inspect the changed PNGs and crops first.
+  `python3 "$ENGINE/baseline-keep.py" --prefix apps/frontend/ --root <worktree> --revert '<regex>'` restores selected files; `--keep '<regex>'` keeps only those and restores the rest (`--region`,
   e.g. sidebar-only `0,0,300,960`, and `--name` qualify `--keep`). Pixel count alone never decides. Finish with
   `visual.sh stable <filter...> --runs 3`. On a PNG rebase conflict take develop's file and regenerate.
 - Drop the issue DB and its env file (`verify-db.sh drop <n>`) after the merge; `verify-db.sh down` at wave end.
@@ -219,8 +220,8 @@ issue is about that behaviour.
 | `scripts/verify-fe.sh <worktree>` / `verify-be.sh <worktree> <n> [filters]` | §Verify; logs in `$WAVE_STATE/verify-<wt>/` and `$WAVE_STATE/vbe-<n>/` | – |
 | `scripts/verify-db.sh up` / `create <n> [--migrate-from <checkout>]` / `drop <n>` / `reset-rate-limits <n>` / `has-preview-fixtures <n>` / `down` | throwaway Postgres on 5439; `drop` removes the env file; `has-preview-fixtures` reports the `[preview]` fixture cluster | – |
 | `scripts/visual.sh run` / `update` / `stable` / `capture` | visual harness; picks the checkout from the cwd (or `VISUAL_ROOT`); `capture --clean` trashes its spec | – |
-| `scripts/baseline-keep.py` | baseline keep/revert with crops | – |
-| `scripts/biome-cmp.sh <worktree> <file>...` | biome error categories on develop vs branch | – |
+| `python3 "$ENGINE/baseline-keep.py" --prefix apps/frontend/` | baseline keep/revert with crops | engine repo tests |
+| `python3 "$ENGINE/biome-cmp.py" <worktree> <file>...` | biome error categories on develop vs branch (`introduced` per file; last line JSON) | engine repo tests |
 | `python3 "$ENGINE/worker-hygiene.py" <worktree>` | fails on a new `biome-ignore`; reports whitespace-only churn | engine repo tests |
 | `python3 "$ENGINE/review-plan.py" <worktree>` | §Review plan; refuses uncommitted changes | engine repo tests |
 | `scripts/nav-perf.sh` (+ `nav-perf.mjs`, `nav-perf-summary.py`) | §Review perf. Times click → quiet (no fetch, nothing loading for 300 ms, cap 30 s) in ego-browser; one warm-up pass, then bases alternate for `--runs`; one admin persona per base (`--personas`, default `mock-admin-1,mock-admin-2`); 429 samples excluded; an error or inconclusive target exits 1 (`--reset-db` plus the one retry handle it); output log `<out>.log`; curls every target and `--start` once first; `--reset-db <n>` clears the rate limits immediately before every attempt; the browser + summary step is retried once (first log kept as `<out>.attempt1.log`). Noise floor ≤4 ms | – |
