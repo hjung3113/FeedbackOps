@@ -39,14 +39,14 @@ the FeedbackOps backend already implements together with permissions, audit, not
    checks and reads the platform grants. How Managed System relates to a platform business system,
    the role model and where admin screens go are open (platform #596, ready-for-human); until
    answered, this repo's permission module stays as is.
-6. **Maintenance mode.** Until it retires, this standalone app takes bug fixes and merge preparation
+6. **Maintenance mode.** The standalone app has no in-house users (owner, 2026-10-21), so it retires with the platform's first deployment and runs no parallel period. Until then, this standalone app takes bug fixes and merge preparation
    only. New product features are built on the platform side.
 
 ## Not implemented
 
 | Item | Reason | Reopen when |
 | --- | --- | --- |
-| R-1 reporter navigation and R-2 reporter home in the standalone shell (#1227) | Reporters will use the platform-global screens, so the standalone shell's operator nav no longer reaches them; the work would be discarded at the merge | The standalone app gets real in-house reporters before the platform ships (merge design §7 O1) |
+| R-1 reporter navigation and R-2 reporter home in the standalone shell (#1227) | Reporters will use the platform-global screens, so the standalone shell's operator nav no longer reaches them; the work would be discarded at the merge | The standalone app gets real in-house reporters before the platform ships (it has none as of 2026-10-21; in-house use starts on the platform) |
 | One source, two hosts (#1231) | Superseded by the merge: no standalone host and no cross-repo host contract for FeedbackOps | — |
 
 ## Consequences
