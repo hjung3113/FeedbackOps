@@ -1,5 +1,7 @@
 # FeedbackOps
 
+> **Moved (2026-10-21).** FeedbackOps now lives in [`hjung3113/analytics-platform`](https://github.com/hjung3113/analytics-platform) under `products/feedbackops/`, with its full history (analytics-platform#592, ADR-0072). This repository is frozen at `c73c55c5`; file issues and PRs there. It will be archived (analytics-platform#597).
+
 **The trail from "what we heard" to "what we did about it", kept first-class.**
 
 FeedbackOps is an internal, AD-authenticated operating console for a single Workspace. It closes the loop from voice-of-customer intake to documented outcome, so that the connection between a complaint and the work it caused is a stored relationship rather than something reconstructed by hand later.
