@@ -127,6 +127,7 @@ These record where the product deliberately differs from `docs/design-prototype/
 
 - [0070](0070-survey-starting-templates-and-definition-reuse.md) Survey starting templates and definition reuse — three built-in backend starters, same-system snapshot reuse and visible dialog selection shipped in #1073–#1075; amends 0039 and narrows 0059 D2. *Accepted and implemented*
 - [0071](0071-return-to-platform-parameter.md) Return-to-platform parameter — `platformReturn` search key on four routes, shown as a sidebar link only for origins in `PLATFORM_RETURN_ORIGINS` (served by `GET /me`). *Accepted*
+- [0072](0072-feedbackops-merges-into-analytics-platform.md) FeedbackOps merges into analytics-platform — all-user features become platform-global, operator screens one business system, the backend seeds the platform server; the standalone app is in maintenance mode until it retires. *Accepted*
 
 ## Status legend
 

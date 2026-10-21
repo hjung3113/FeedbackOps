@@ -7,6 +7,7 @@
 - Match existing docs and implementation patterns before inventing new structure.
 - Every changed line must trace to a user request, a documented invariant, or a failing verification.
 - If domain rules conflict with generic framework habits, follow the domain rules.
+- The standalone app is in maintenance mode while it merges into analytics-platform (ADR-0072): bug fixes and merge preparation only; new product features go to the platform.
 
 ## Finish Line And Stops
 
